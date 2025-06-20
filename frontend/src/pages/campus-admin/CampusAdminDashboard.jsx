@@ -1,0 +1,105 @@
+import React, { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
+import { useAuth } from '../../contexts/AuthContext'
+import { useNotification } from '../../contexts/NotificationContext'
+import Header from '../../components/common/Header'
+import Sidebar from '../../components/common/Sidebar'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
+import api from '../../services/api'
+
+const CampusAdminDashboard = () => {
+  const { user } = useAuth()
+  const { success, error } = useNotification()
+  const [stats, setStats] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchDashboardStats()
+  }, [])
+
+  const fetchDashboardStats = async () => {
+    try {
+      const response = await api.get('/campus-admin/dashboard')
+      setStats(response.data.data)
+    } catch (err) {
+      error('Failed to load dashboard data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return <LoadingSpinner size="lg" />
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Header />
+      <Sidebar />
+      
+      <div className="lg:pl-64">
+        <main className="py-6">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="mb-8"
+            >
+              <h1 className="text-3xl font-bold text-gray-900">
+                Campus Dashboard
+              </h1>
+              <p className="mt-2 text-gray-600">
+                Welcome back, {user?.name}! Here's your campus overview.
+              </p>
+            </motion.div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <div className="flex items-center">
+                  <div className="bg-blue-500 rounded-lg p-3 text-white text-2xl">
+                    👥
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Total Students</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {stats?.statistics?.total_students || 0}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <div className="flex items-center">
+                  <div className="bg-green-500 rounded-lg p-3 text-white text-2xl">
+                    📚
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Active Courses</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {stats?.statistics?.total_courses || 0}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <div className="flex items-center">
+                  <div className="bg-purple-500 rounded-lg p-3 text-white text-2xl">
+                    📊
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Average Score</p>
+                    <p className="text-2xl font-bold text-gray-900">78%</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  )
+}
+
+export default CampusAdminDashboard 
