@@ -1,12 +1,19 @@
 import axios from 'axios'
 
+// Fallback API URL if environment variable is not set
+const API_URL = import.meta.env.VITE_API_URL || 'https://versant-backend.onrender.com'
+console.log('API Service - VITE_API_URL:', import.meta.env.VITE_API_URL)
+console.log('API Service - Using API_URL:', API_URL)
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: API_URL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
 })
+
+console.log('API Service - Created axios instance with baseURL:', api.defaults.baseURL)
 
 // Request interceptor to add auth token
 api.interceptors.request.use(
@@ -16,9 +23,11 @@ api.interceptors.request.use(
       console.log('Sending Authorization header:', token)
       config.headers.Authorization = `Bearer ${token}`
     }
+    console.log('API Request:', config.method?.toUpperCase(), config.url)
     return config
   },
   (error) => {
+    console.error('API Request Error:', error)
     return Promise.reject(error)
   }
 )
@@ -26,9 +35,11 @@ api.interceptors.request.use(
 // Response interceptor to handle token refresh
 api.interceptors.response.use(
   (response) => {
+    console.log('API Response:', response.status, response.config.url)
     return response
   },
   async (error) => {
+    console.error('API Response Error:', error.response?.status, error.config?.url, error.message)
     const originalRequest = error.config
 
     if (error.response?.status === 401 && !originalRequest._retry) {
@@ -39,7 +50,7 @@ api.interceptors.response.use(
         console.log('Attempting token refresh with:', refreshToken)
         if (refreshToken && refreshToken !== 'null' && refreshToken !== 'undefined') {
           const response = await axios.post(
-            `${import.meta.env.VITE_API_URL}/auth/refresh`,
+            `${API_URL}/auth/refresh`,
             { refresh_token: refreshToken }
           )
           

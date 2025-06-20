@@ -21,47 +21,62 @@ export const AuthProvider = ({ children }) => {
       const token = localStorage.getItem('access_token')
       const storedUser = localStorage.getItem('user')
       console.log('AuthContext useEffect token:', token)
+      console.log('AuthContext storedUser:', storedUser)
       
       if (token && token !== 'null' && token !== 'undefined') {
         // First, try to restore user from localStorage as fallback
         if (storedUser) {
           try {
             const parsedUser = JSON.parse(storedUser)
+            console.log('Restoring user from localStorage:', parsedUser)
             setUser(parsedUser)
           } catch (e) {
             console.error('Failed to parse stored user:', e)
           }
         }
 
-        // Then try to get fresh user data from API
+        // Then try to get fresh user data from API with timeout
+        const apiCallPromise = authService.getCurrentUser()
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('API timeout')), 5000)
+        )
+
         try {
-          const userData = await authService.getCurrentUser()
+          const userData = await Promise.race([apiCallPromise, timeoutPromise])
           const freshUser = userData.data
+          console.log('Got fresh user data from API:', freshUser)
           setUser(freshUser)
           // Store the fresh user data
           localStorage.setItem('user', JSON.stringify(freshUser))
         } catch (error) {
           console.error('Failed to get current user:', error)
+          console.log('Error details:', error.message, error.response?.status)
+          
           // Only clear tokens if it's an authentication error (401, 403)
           if (error.response?.status === 401 || error.response?.status === 403) {
+            console.log('Authentication error, clearing session')
             localStorage.removeItem('access_token')
             localStorage.removeItem('refresh_token')
             localStorage.removeItem('user')
             setUser(null)
           } else {
-            // For network errors, keep the existing user state
-            console.warn('Network error during auth check, keeping existing session')
+            // For network errors, timeouts, or CORS issues, keep the existing user state
+            console.warn('Network/timeout error during auth check, keeping existing session')
             // If we don't have a user from localStorage, we might need to clear
             if (!storedUser) {
+              console.log('No stored user found, clearing session')
               localStorage.removeItem('access_token')
               localStorage.removeItem('refresh_token')
               setUser(null)
+            } else {
+              console.log('Keeping existing user session from localStorage')
             }
           }
         } finally {
           setLoading(false)
         }
       } else {
+        console.log('No token found, user not authenticated')
         setLoading(false)
       }
     }
