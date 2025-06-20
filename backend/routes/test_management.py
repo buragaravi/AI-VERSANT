@@ -9,7 +9,13 @@ from datetime import datetime
 import boto3
 from pydub import AudioSegment
 from gtts import gTTS
-import speech_recognition as sr
+# Make speech_recognition optional
+try:
+    import speech_recognition as sr
+    SPEECH_RECOGNITION_AVAILABLE = True
+except ImportError:
+    SPEECH_RECOGNITION_AVAILABLE = False
+    print("Warning: speech_recognition package not available. Audio transcription will not work.")
 from difflib import SequenceMatcher
 import json
 from mongo import mongo_db
@@ -100,6 +106,10 @@ def calculate_similarity_score(original_text, student_audio_text):
 def transcribe_audio(audio_file_path):
     """Transcribe audio file to text using speech recognition"""
     try:
+        if not SPEECH_RECOGNITION_AVAILABLE:
+            current_app.logger.warning("Speech recognition not available")
+            return ""
+        
         recognizer = sr.Recognizer()
         with sr.AudioFile(audio_file_path) as source:
             audio = recognizer.record(source)

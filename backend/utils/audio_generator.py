@@ -72,7 +72,12 @@ def calculate_similarity_score(original_text, student_audio_text):
 def transcribe_audio(audio_file_path):
     """Transcribe audio file to text using speech recognition"""
     try:
-        import speech_recognition as sr
+        # Try to import speech_recognition, but make it optional
+        try:
+            import speech_recognition as sr
+        except ImportError:
+            print("Warning: speech_recognition package not available. Audio transcription will not work.")
+            return ""
         
         recognizer = sr.Recognizer()
         with sr.AudioFile(audio_file_path) as source:
