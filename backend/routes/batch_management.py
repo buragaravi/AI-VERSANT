@@ -2,7 +2,8 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required
 from mongo import mongo_db
 from bson import ObjectId
-import pandas as pd
+import csv
+import openpyxl
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash
 import io
@@ -115,19 +116,32 @@ def _parse_student_file(file):
     
     try:
         if filename.endswith('.csv'):
-            df = pd.read_csv(io.StringIO(file.read().decode('utf-8-sig')))
+            # Read CSV file
+            content = file.read().decode('utf-8-sig')
+            csv_reader = csv.DictReader(io.StringIO(content))
+            rows = list(csv_reader)
         else:
-            df = pd.read_excel(file)
+            # Read Excel file
+            workbook = openpyxl.load_workbook(file, data_only=True)
+            worksheet = workbook.active
+            
+            # Get headers from first row
+            headers = []
+            for cell in worksheet[1]:
+                headers.append(str(cell.value).strip() if cell.value else '')
+            
+            # Get data rows
+            rows = []
+            for row in worksheet.iter_rows(min_row=2):
+                row_data = {}
+                for i, cell in enumerate(row):
+                    if i < len(headers):
+                        row_data[headers[i]] = str(cell.value).strip() if cell.value else ''
+                rows.append(row_data)
     except Exception as e:
         raise ValueError(f"Error reading file: {e}")
 
-    # Normalize column headers
-    df.columns = [str(col).strip() for col in df.columns]
-    
-    # Fill NaN values with empty strings for consistent processing
-    df = df.fillna('')
-    
-    return df
+    return rows
 
 @batch_management_bp.route('/validate-student-upload', methods=['POST'])
 @jwt_required()
@@ -139,10 +153,16 @@ def validate_student_upload():
         if not file or not campus_id:
             return jsonify({'success': False, 'message': 'A file and campus ID are required.'}), 400
 
-        df = _parse_student_file(file)
+        rows = _parse_student_file(file)
 
+        if not rows:
+            return jsonify({'success': False, 'message': 'File is empty or invalid.'}), 400
+
+        # Get column names from first row
+        columns = list(rows[0].keys()) if rows else []
+        
         required_fields = ['Course Name', 'Student Name', 'Roll Number', 'Email']
-        missing_fields = [field for field in required_fields if field not in df.columns]
+        missing_fields = [field for field in required_fields if field not in columns]
         if missing_fields:
             return jsonify({'success': False, 'message': f"Invalid file structure. Missing columns: {', '.join(missing_fields)}"}), 400
 
@@ -154,7 +174,7 @@ def validate_student_upload():
         valid_course_names = {course['name'] for course in campus_courses}
 
         preview_data = []
-        for index, row in df.iterrows():
+        for index, row in enumerate(rows):
             student_data = {
                 'course_name': str(row.get('Course Name', '')).strip(),
                 'student_name': str(row.get('Student Name', '')).strip(),
