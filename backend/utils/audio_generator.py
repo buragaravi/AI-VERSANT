@@ -1,12 +1,29 @@
 import os
 import uuid
-from gtts import gTTS
-from pydub import AudioSegment
 import boto3
 from config.aws_config import s3_client, S3_BUCKET_NAME
 
+# Make audio processing packages optional
+try:
+    from gtts import gTTS
+    GTTS_AVAILABLE = True
+except ImportError:
+    GTTS_AVAILABLE = False
+    print("Warning: gTTS package not available. Audio generation will not work.")
+
+try:
+    from pydub import AudioSegment
+    PYDUB_AVAILABLE = True
+except ImportError:
+    PYDUB_AVAILABLE = False
+    print("Warning: pydub package not available. Audio processing will not work.")
+
 def generate_audio_from_text(text, accent='en', speed=1.0):
     """Generate audio from text using gTTS with custom accent and speed"""
+    if not GTTS_AVAILABLE or not PYDUB_AVAILABLE:
+        print("Audio generation not available - missing required packages")
+        return None
+    
     try:
         # Create gTTS object with specified accent
         tts = gTTS(text=text, lang=accent, slow=(speed < 1.0))
