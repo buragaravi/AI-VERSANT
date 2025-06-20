@@ -50,10 +50,11 @@ api.interceptors.response.use(
           return api(originalRequest)
         }
       } catch (refreshError) {
+        // Don't automatically redirect, let the component handle it
+        console.error('Token refresh failed:', refreshError)
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
-        window.location.href = '/login'
-        alert('Session expired. Please log in again.')
+        // Remove the automatic redirect - let the AuthContext handle it
         return Promise.reject(refreshError)
       }
     }

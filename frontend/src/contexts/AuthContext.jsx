@@ -17,23 +17,56 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
-    console.log('AuthContext useEffect token:', token)
-    if (token && token !== 'null' && token !== 'undefined') {
-      authService.getCurrentUser()
-        .then(userData => {
-          setUser(userData)
-        })
-        .catch(() => {
-          localStorage.removeItem('access_token')
-          localStorage.removeItem('refresh_token')
-        })
-        .finally(() => {
+    const initializeAuth = async () => {
+      const token = localStorage.getItem('access_token')
+      const storedUser = localStorage.getItem('user')
+      console.log('AuthContext useEffect token:', token)
+      
+      if (token && token !== 'null' && token !== 'undefined') {
+        // First, try to restore user from localStorage as fallback
+        if (storedUser) {
+          try {
+            const parsedUser = JSON.parse(storedUser)
+            setUser(parsedUser)
+          } catch (e) {
+            console.error('Failed to parse stored user:', e)
+          }
+        }
+
+        // Then try to get fresh user data from API
+        try {
+          const userData = await authService.getCurrentUser()
+          const freshUser = userData.data
+          setUser(freshUser)
+          // Store the fresh user data
+          localStorage.setItem('user', JSON.stringify(freshUser))
+        } catch (error) {
+          console.error('Failed to get current user:', error)
+          // Only clear tokens if it's an authentication error (401, 403)
+          if (error.response?.status === 401 || error.response?.status === 403) {
+            localStorage.removeItem('access_token')
+            localStorage.removeItem('refresh_token')
+            localStorage.removeItem('user')
+            setUser(null)
+          } else {
+            // For network errors, keep the existing user state
+            console.warn('Network error during auth check, keeping existing session')
+            // If we don't have a user from localStorage, we might need to clear
+            if (!storedUser) {
+              localStorage.removeItem('access_token')
+              localStorage.removeItem('refresh_token')
+              setUser(null)
+            }
+          }
+        } finally {
           setLoading(false)
-        })
-    } else {
-      setLoading(false)
+        }
+      } else {
+        setLoading(false)
+      }
     }
+
+    initializeAuth()
   }, [])
 
   const login = async (username, password) => {
@@ -45,6 +78,7 @@ export const AuthProvider = ({ children }) => {
       console.log('AuthContext login userData:', userData)
       localStorage.setItem('access_token', access_token)
       localStorage.setItem('refresh_token', refresh_token)
+      localStorage.setItem('user', JSON.stringify(userData))
       setUser(userData)
       return userData
     } catch (err) {
@@ -63,6 +97,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
+      localStorage.removeItem('user')
       setUser(null)
       setError(null)
     }
