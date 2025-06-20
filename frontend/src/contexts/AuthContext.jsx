@@ -43,7 +43,13 @@ export const AuthProvider = ({ children }) => {
 
         try {
           const userData = await Promise.race([apiCallPromise, timeoutPromise])
-          const freshUser = userData.data
+          console.log('Raw userData response:', userData)
+          console.log('userData.data:', userData.data)
+          console.log('userData.data.data:', userData.data?.data)
+          
+          // The API returns {data: {user_data}, message, success}
+          // We need to extract the actual user data from userData.data
+          const freshUser = userData.data.data || userData.data
           console.log('Got fresh user data from API:', freshUser)
           setUser(freshUser)
           // Store the fresh user data
