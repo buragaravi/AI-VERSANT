@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from mongo import mongo_db
 from bson import ObjectId
-from config.constants import GRAMMAR_CATEGORIES, MODULES
+from config.constants import GRAMMAR_CATEGORIES, MODULES, LEVELS
 import logging
 from datetime import datetime
 

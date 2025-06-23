@@ -122,7 +122,14 @@ const Sidebar = () => {
       )}
 
       {/* Sidebar */}
-      <div className="fixed top-0 left-0 h-screen w-64 bg-white shadow-lg z-30">
+      <div
+        className={
+          `fixed top-0 left-0 h-screen w-64 bg-white shadow-lg z-40 transform transition-transform duration-300
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          lg:translate-x-0`
+        }
+        style={{ willChange: 'transform' }}
+      >
         <div className="flex items-center justify-center h-16 px-4 border-b border-gray-200">
           <img
             src="https://static.wixstatic.com/media/bfee2e_7d499a9b2c40442e85bb0fa99e7d5d37~mv2.png/v1/fill/w_203,h_111,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/logo1.png"

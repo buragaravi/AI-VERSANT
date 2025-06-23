@@ -161,14 +161,14 @@ const PracticeModules = () => {
 
 const MainView = ({ modules, onSelectModule }) => (
   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-    <h1 className="text-3xl font-bold text-gray-800 mb-8">Practice Modules</h1>
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+    <h1 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-8">Practice Modules</h1>
+    <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
       {modules.map(module => (
         <motion.div
           key={module.id}
           whileHover={!module.locked ? { scale: 1.05 } : {}}
           className={clsx(
-            "bg-white p-8 rounded-2xl shadow-lg flex flex-col items-center text-center relative",
+            "bg-white p-6 sm:p-8 rounded-2xl shadow-lg flex flex-col items-center text-center relative",
             {
               "cursor-pointer": !module.locked,
               "opacity-60 bg-gray-100 cursor-not-allowed": module.locked,
@@ -177,16 +177,16 @@ const MainView = ({ modules, onSelectModule }) => (
           onClick={() => onSelectModule(module)}
         >
           {module.locked && (
-            <div className="absolute top-4 right-4 bg-gray-300 p-2 rounded-full">
+            <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-gray-300 p-2 rounded-full">
               <Lock className="h-5 w-5 text-gray-600" />
             </div>
           )}
-          <module.icon className={clsx("h-20 w-20 mb-4", {
+          <module.icon className={clsx("h-16 w-16 sm:h-20 sm:w-20 mb-4", {
             "text-indigo-500": !module.locked,
             "text-gray-400": module.locked
           })} />
-          <h2 className="text-2xl font-semibold text-gray-800">{module.name}</h2>
-          <p className="text-gray-500 mt-2">Improve your {module.name.toLowerCase()} skills.</p>
+          <h2 className="text-xl sm:text-2xl font-semibold text-gray-800">{module.name}</h2>
+          <p className="text-gray-500 mt-2 text-sm sm:text-base">Improve your {module.name.toLowerCase()} skills.</p>
         </motion.div>
       ))}
     </div>
@@ -262,11 +262,11 @@ const GrammarCategoryView = ({ categories, onSelectCategory, onBack }) => (
 const ModuleListView = ({ category, modules, onSelectModule, onBack }) => (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
         <div className="flex items-center mb-8">
-            <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-200 mr-4"><ChevronLeft /></button>
-            <h1 className="text-3xl font-bold text-gray-800">{category.name} Modules</h1>
+            <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-200 mr-2 sm:mr-4"><ChevronLeft /></button>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">{category.name} Modules</h1>
         </div>
         {modules.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {modules.map(module => (
                     <motion.div
                         key={module._id}
@@ -275,14 +275,14 @@ const ModuleListView = ({ category, modules, onSelectModule, onBack }) => (
                         onClick={() => onSelectModule(module)}
                     >
                         <div>
-                            <h3 className="text-xl font-bold text-gray-800">{module.name}</h3>
-                            <p className="text-gray-500 mt-2 text-sm">A practice module to test your skills.</p>
+                            <h3 className="text-lg sm:text-xl font-bold text-gray-800">{module.name}</h3>
+                            <p className="text-gray-500 mt-2 text-xs sm:text-sm">A practice module to test your skills.</p>
                         </div>
                         <div className="mt-4">
                             <div className="w-full bg-gray-200 rounded-full h-2.5">
                                 <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${module.highest_score || 0}%` }}></div>
                             </div>
-                            <p className="text-right text-sm text-gray-600 mt-1">Highest Score: {Math.round(module.highest_score || 0)}%</p>
+                            <p className="text-right text-xs sm:text-sm text-gray-600 mt-1">Highest Score: {Math.round(module.highest_score || 0)}%</p>
                         </div>
                     </motion.div>
                 ))}
@@ -352,28 +352,25 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
         <div className="flex justify-between items-center mb-4">
-            <h1 className="text-3xl font-bold text-gray-800">{module.name}</h1>
-            <button onClick={onBack} className="text-sm font-medium text-gray-600 hover:text-indigo-600">
-                &larr; Back to Module List
-            </button>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 truncate">{module.name}</h1>
         </div>
         
-        <div className="bg-white rounded-2xl shadow-lg p-8">
+        <div className="bg-white rounded-2xl shadow-lg mx-auto p-4 sm:p-8 max-w-md w-full min-h-[350px] flex flex-col justify-center">
             <div className="text-center mb-6 text-sm font-semibold text-gray-500">
                 Question {currentQuestionIndex + 1} of {questions.length}
             </div>
 
             <div className="text-center">
-                <p className="text-xl text-gray-800 mb-8">{currentQuestion.question}</p>
+                <p className="text-lg sm:text-xl text-gray-800 mb-8 break-words">{currentQuestion.question}</p>
             </div>
 
             {currentQuestion.question_type === 'mcq' && (
-                <div className="space-y-4 max-w-lg mx-auto">
+                <div className="space-y-4 max-w-lg mx-auto w-full">
                     {Object.entries(currentQuestion.options).map(([key, value]) => (
                         <label 
                             key={key} 
                             className={clsx(
-                                "flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all",
+                                "flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all w-full",
                                 {
                                     'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-300': answers[currentQuestion.question_id] === key,
                                     'border-gray-200 hover:border-indigo-400': answers[currentQuestion.question_id] !== key,
