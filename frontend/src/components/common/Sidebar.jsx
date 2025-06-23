@@ -38,7 +38,7 @@ const Sidebar = () => {
           { name: 'Users', href: '/superadmin/users', icon: Users },
           { name: 'Campuses', href: '/superadmin/campuses', icon: Building },
           { name: 'Courses', href: '/superadmin/courses', icon: BookOpen },
-          { name: 'Tests', href: '/superadmin/tests', icon: FileText },
+          { name: 'Modules', href: '/superadmin/tests', icon: FileText },
           { name: 'Analytics', href: '/superadmin/analytics', icon: BarChart3 },
           { name: 'Settings', href: '/superadmin/settings', icon: Settings }
         ]
@@ -62,7 +62,7 @@ const Sidebar = () => {
       case 'student':
         return [
           ...baseItems,
-          { name: 'Practice Tests', href: '/student/practice', icon: FileText },
+          { name: 'Practice Modules', href: '/student/practice', icon: FileText },
           { name: 'Online Exams', href: '/student/exams', icon: Calendar },
           { name: 'Test History', href: '/student/history', icon: Activity },
           { name: 'Progress', href: '/student/progress', icon: Award }
@@ -83,7 +83,7 @@ const Sidebar = () => {
       color: 'bg-blue-600',
     },
     {
-      name: 'Create Test',
+      name: 'Create Module',
       href: '/superadmin/tests/create',
       icon: FilePlus,
       color: 'bg-green-600',
@@ -163,7 +163,7 @@ const Sidebar = () => {
                   <Users className="h-5 w-5 mr-2" /> Student Creation
                 </Link>
                 <Link to="/superadmin/tests/create" className="flex items-center px-3 py-2 rounded-md bg-green-50 text-green-700 hover:bg-green-100 font-medium transition">
-                  <FilePlus className="h-5 w-5 mr-2" /> Test Creation
+                  <FilePlus className="h-5 w-5 mr-2" /> Module Creation
                 </Link>
                 <Link to="/superadmin/campuses" className="flex items-center px-3 py-2 rounded-md bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium transition">
                   <Building2 className="h-5 w-5 mr-2" /> Administration
@@ -243,7 +243,7 @@ export const SuperAdminSidebar = () => {
             <Users className="h-5 w-5 mr-2" /> Student Creation
           </Link>
           <Link to="/superadmin/tests/create" className="flex items-center px-3 py-2 rounded-md bg-green-50 text-green-700 hover:bg-green-100 font-medium transition">
-            <FilePlus className="h-5 w-5 mr-2" /> Test Creation
+            <FilePlus className="h-5 w-5 mr-2" /> Module Creation
           </Link>
           <Link to="/superadmin/campuses" className="flex items-center px-3 py-2 rounded-md bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium transition">
             <Building2 className="h-5 w-5 mr-2" /> Administration

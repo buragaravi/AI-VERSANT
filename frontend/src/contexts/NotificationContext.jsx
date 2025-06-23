@@ -13,9 +13,15 @@ export const useNotification = () => {
 export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([])
 
-  const addNotification = (type, message) => {
+  const addNotification = (type, message, duration = 10000) => {
     const id = `${Date.now()}-${Math.random()}`
     setNotifications((prev) => [...prev, { id, type, message }])
+
+    if (duration) {
+      setTimeout(() => {
+        removeNotification(id)
+      }, duration)
+    }
   }
 
   const removeNotification = (id) => {

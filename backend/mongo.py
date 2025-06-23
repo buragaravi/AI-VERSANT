@@ -197,8 +197,44 @@ class MongoDB:
         )
 
     def delete_campus(self, campus_id):
-        """Delete a campus"""
-        return self.campuses.delete_one({"_id": ObjectId(campus_id)})
+        """Delete a campus and all associated data (courses, batches, students, admins)."""
+        try:
+            campus_object_id = ObjectId(campus_id)
+            campus = self.campuses.find_one({'_id': campus_object_id})
+
+            if not campus:
+                return {'success': False, 'message': 'Campus not found'}
+
+            # 1. Find all courses in the campus
+            courses = list(self.courses.find({'campus_id': campus_object_id}))
+            course_ids = [c['_id'] for c in courses]
+
+            # 2. Delete all batches in those courses
+            if course_ids:
+                self.batches.delete_many({'course_id': {'$in': course_ids}})
+
+            # 3. Delete all course admins for those courses
+            for course in courses:
+                if 'admin_id' in course and course['admin_id']:
+                    self.users.delete_one({'_id': course['admin_id']})
+
+            # 4. Delete all courses in the campus
+            if course_ids:
+                self.courses.delete_many({'_id': {'$in': course_ids}})
+            
+            # 5. Delete all students in the campus
+            self.users.delete_many({'campus_id': campus_object_id, 'role': 'student'})
+
+            # 6. Delete the campus admin
+            if 'admin_id' in campus and campus['admin_id']:
+                self.users.delete_one({'_id': campus['admin_id']})
+            
+            # 7. Delete the campus itself
+            result = self.campuses.delete_one({'_id': campus_object_id})
+            
+            return {'success': True, 'deleted_count': result.deleted_count}
+        except Exception as e:
+            raise Exception(f"Error deleting campus: {str(e)}")
 
     def insert_campus_with_admin(self, campus_name, admin_name, admin_email, admin_password_hash):
         """Create a campus and its admin user atomically"""
@@ -276,7 +312,25 @@ class MongoDB:
         )
 
     def delete_course(self, course_id):
-        return self.db.courses.delete_one({"_id": ObjectId(course_id)})
+        """Delete a course and all associated batches and student enrollments."""
+        try:
+            course_object_id = ObjectId(course_id)
+            
+            # 1. Delete all batches in the course
+            self.batches.delete_many({'course_id': course_object_id})
+            
+            # 2. Unassign all students from the course
+            self.users.update_many(
+                {'course_id': course_object_id},
+                {'$unset': {'course_id': ""}}
+            )
+            
+            # 3. Delete the course itself
+            result = self.courses.delete_one({'_id': course_object_id})
+            
+            return result
+        except Exception as e:
+            raise Exception(f"Error deleting course: {str(e)}")
 
     def get_user_counts_by_campus(self):
         pipeline = [

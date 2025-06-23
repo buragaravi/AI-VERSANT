@@ -11,7 +11,25 @@ MODULES = {
     'LISTENING': 'Listening',
     'SPEAKING': 'Speaking',
     'READING': 'Reading',
-    'WRITING': 'Writing'
+    'WRITING': 'Writing',
+    'GRAMMAR': 'Grammar',
+    'VOCABULARY': 'Vocabulary'
+}
+
+# Grammar Subcategories
+GRAMMAR_CATEGORIES = {
+    'NOUN': 'Noun',
+    'PRONOUN': 'Pronoun',
+    'ADJECTIVE': 'Adjective',
+    'VERB': 'Verb',
+    'ADVERB': 'Adverb',
+    'CONJUNCTION': 'Conjunction',
+    'QUESTION_TAG': 'Question Tag',
+    'PHRASE': 'Phrase',
+    'PHRASAL_VERB': 'Phrasal Verb',
+    'ARTICLE': 'Article',
+    'TENSE': 'Tense',
+    'PREPOSITION': 'Preposition'
 }
 
 # Difficulty Levels
@@ -25,6 +43,12 @@ LEVELS = {
 TEST_TYPES = {
     'PRACTICE': 'practice',
     'ONLINE_EXAM': 'online_exam'
+}
+
+# Question Types
+QUESTION_TYPES = {
+    'AUDIO': 'audio',
+    'MCQ': 'mcq'
 }
 
 # Status Values

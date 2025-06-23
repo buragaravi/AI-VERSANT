@@ -1,8 +1,13 @@
 import axios from 'axios'
 
-// Fallback API URL if environment variable is not set
-const API_URL = import.meta.env.VITE_API_URL || 'https://versant-backend.onrender.com'
+// Determine API URL based on environment
+// In development, use the Vite proxy (/api)
+// In production, use the full URL
+const isDevelopment = import.meta.env.DEV
+const API_URL = import.meta.env.VITE_API_URL || (isDevelopment ? '/api' : 'https://versant-backend.onrender.com')
+
 console.log('API Service - VITE_API_URL:', import.meta.env.VITE_API_URL)
+console.log('API Service - DEV mode:', isDevelopment)
 console.log('API Service - Using API_URL:', API_URL)
 
 const api = axios.create({
@@ -23,6 +28,13 @@ api.interceptors.request.use(
       console.log('Sending Authorization header:', token)
       config.headers.Authorization = `Bearer ${token}`
     }
+    
+    // If we are sending FormData, we need to let the browser set the Content-Type
+    // which will include the boundary.
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type']
+    }
+    
     console.log('API Request:', config.method?.toUpperCase(), config.url)
     return config
   },
@@ -92,6 +104,10 @@ export const updateCampus = async (campusId, campusData) => {
 
 export const deleteCampus = async (campusId) => {
   return api.delete(`/campus-management/${campusId}`);
+};
+
+export const getCampusDetails = async (campusId) => {
+  return api.get(`/campus-management/${campusId}/details`);
 };
 
 export const getCoursesByCampus = async (campusId) => {

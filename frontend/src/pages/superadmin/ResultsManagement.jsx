@@ -1,0 +1,112 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { motion } from 'framer-motion';
+import { useNotification } from '../../contexts/NotificationContext';
+import Header from '../../components/common/Header';
+import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
+import LoadingSpinner from '../../components/common/LoadingSpinner';
+import api from '../../services/api';
+import { BookOpen, User, Calendar, Percent, Filter } from 'lucide-react';
+
+const ResultsManagement = () => {
+    const [results, setResults] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [filters, setFilters] = useState({ module: '', test_type: '' });
+    const { error } = useNotification();
+
+    useEffect(() => {
+        const fetchResults = async () => {
+            try {
+                setLoading(true);
+                const res = await api.get('/test-management/results');
+                setResults(res.data.data);
+            } catch (err) {
+                error('Failed to fetch test results.');
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchResults();
+    }, [error]);
+
+    const filteredResults = useMemo(() => {
+        return results.filter(result => {
+            const moduleMatch = filters.module ? result.module_name === filters.module : true;
+            const typeMatch = filters.test_type ? result.test_type === filters.test_type : true;
+            return moduleMatch && typeMatch;
+        });
+    }, [results, filters]);
+
+    const moduleOptions = useMemo(() => [...new Set(results.map(r => r.module_name))], [results]);
+    const typeOptions = useMemo(() => [...new Set(results.map(r => r.test_type))], [results]);
+
+    const handleFilterChange = (e) => {
+        setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    return (
+        <div className="min-h-screen bg-gray-50 flex">
+            <SuperAdminSidebar />
+            <div className="flex-1 lg:pl-64">
+                <Header />
+                <main className="px-6 lg:px-10 py-12">
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                        <h1 className="text-3xl font-bold text-gray-900">Test Results</h1>
+                        <p className="mt-2 text-gray-600">View and analyze results from all student test submissions.</p>
+
+                        <div className="mt-8 bg-white rounded-2xl shadow-lg">
+                            <div className="p-6 border-b border-gray-200">
+                                <h3 className="text-xl font-semibold text-gray-800 flex items-center"><Filter className="mr-3 h-5 w-5 text-gray-400" /> Filters</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                                    <select name="module" value={filters.module} onChange={handleFilterChange} className="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                                        <option value="">All Modules</option>
+                                        {moduleOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                    </select>
+                                    <select name="test_type" value={filters.test_type} onChange={handleFilterChange} className="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                                        <option value="">All Types</option>
+                                        {typeOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div className="overflow-x-auto">
+                                {loading ? <LoadingSpinner /> : (
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Test Name</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Module</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted At</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {filteredResults.map(result => (
+                                                <tr key={result._id}>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <div className="text-sm font-medium text-gray-900">{result.student_name}</div>
+                                                        <div className="text-sm text-gray-500">{result.student_email}</div>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{result.test_name}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                                                            {result.module_name}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">{result.average_score.toFixed(2)}%</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{result.submitted_at}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+                        </div>
+                    </motion.div>
+                </main>
+            </div>
+        </div>
+    );
+};
+
+export default ResultsManagement; 

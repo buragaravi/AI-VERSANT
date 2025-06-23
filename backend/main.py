@@ -2,9 +2,13 @@ from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 import os
+from dotenv import load_dotenv
 from config.database import DatabaseConfig, init_db
 from config.aws_config import init_aws
 from config.constants import JWT_ACCESS_TOKEN_EXPIRES, JWT_REFRESH_TOKEN_EXPIRES
+from config.shared import bcrypt
+
+load_dotenv()
 
 def create_app():
     """Create and configure Flask application"""
@@ -20,6 +24,7 @@ def create_app():
     
     # Initialize extensions
     jwt = JWTManager(app)
+    bcrypt.init_app(app)
     
     # CORS configuration with Vercel domain included
     default_origins = 'http://localhost:3000,http://localhost:5173,https://pydah-ai-versant.vercel.app'

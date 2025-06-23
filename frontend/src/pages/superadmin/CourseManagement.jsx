@@ -1,236 +1,250 @@
-import React, { useEffect, useState } from "react"
-import { motion } from 'framer-motion'
-import Header from '../../components/common/Header'
-import SuperAdminSidebar from '../../components/common/SuperAdminSidebar'
-import { Edit, Trash2, Users, ChevronRight, ChevronDown } from 'lucide-react'
-import { getCourses, getBatchesForCourse, getBatchStudents } from '../../services/api'
-import LoadingSpinner from '../../components/common/LoadingSpinner'
+import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useNotification } from '../../contexts/NotificationContext';
+import Header from '../../components/common/Header';
+import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
+import LoadingSpinner from '../../components/common/LoadingSpinner';
+import api from '../../services/api';
+import { Book, PlusCircle, Search, Trash2, Edit, X, User, Mail, Key, Building } from 'lucide-react';
 
 const CourseManagement = () => {
-  const [courses, setCourses] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [selectedCourse, setSelectedCourse] = useState(null)
-  const [batches, setBatches] = useState([])
-  const [selectedBatch, setSelectedBatch] = useState(null)
-  const [students, setStudents] = useState([])
-  const [loadingBatches, setLoadingBatches] = useState(false)
-  const [loadingStudents, setLoadingStudents] = useState(false)
+    const [courses, setCourses] = useState([]);
+    const [campuses, setCampuses] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [selectedCourse, setSelectedCourse] = useState(null);
+    const [formData, setFormData] = useState({
+        campus_id: '',
+        course_name: '',
+        admin_name: '',
+        admin_email: '',
+        admin_password: ''
+    });
 
-  useEffect(() => {
-    const fetchCourses = async () => {
-      try {
-        setLoading(true)
-        const response = await getCourses()
-        if (response.data && response.data.success && Array.isArray(response.data.data)) {
-          setCourses(response.data.data)
-        } else {
-          setCourses([])
-          if (response.data && !response.data.success) {
-            setError(response.data.message || 'Failed to fetch courses');
-          }
+    const { success, error } = useNotification();
+
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            const [coursesRes, campusesRes] = await Promise.all([
+                api.get('/course-management/'),
+                api.get('/campus-management/')
+            ]);
+            setCourses(coursesRes.data.data);
+            setCampuses(campusesRes.data.data);
+        } catch (err) {
+            error('Failed to fetch data.');
+        } finally {
+            setLoading(false);
         }
-      } catch (err) {
-        setError('Failed to fetch courses')
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchCourses()
-  }, [])
+    };
 
-  const handleCourseClick = async (course) => {
-    if (selectedCourse && (course.id === selectedCourse.id)) {
-      setSelectedCourse(null)
-      setBatches([])
-      setSelectedBatch(null)
-      setStudents([])
-      return
-    }
+    useEffect(() => {
+        fetchData();
+    }, []);
 
-    setSelectedCourse(course)
-    setSelectedBatch(null)
-    setStudents([])
-    setLoadingBatches(true)
-    try {
-      const response = await getBatchesForCourse(course.id || course._id)
-      if (response.data && response.data.success) {
-        setBatches(response.data.data)
-      } else {
-        setBatches([])
-      }
-    } catch (err) {
-      console.error('Failed to fetch batches:', err)
-      setBatches([])
-    } finally {
-      setLoadingBatches(false)
-    }
-  }
+    const filteredCourses = useMemo(() => {
+        return courses.filter(course =>
+            (course.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+            (course.campus?.name.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+            (course.admin?.name.toLowerCase() || '').includes(searchTerm.toLowerCase())
+        );
+    }, [courses, searchTerm]);
 
-  const handleBatchClick = async (batch) => {
-    if (selectedBatch && (batch.id === selectedBatch.id)) {
-      setSelectedBatch(null)
-      setStudents([])
-      return
-    }
+    const handleInputChange = (e) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
 
-    setSelectedBatch(batch)
-    setLoadingStudents(true)
-    try {
-      const response = await getBatchStudents(batch.id)
-      if (response.data && response.data.success) {
-        setStudents(response.data.data)
-      } else {
-        setStudents([])
-      }
-    } catch (err) {
-      console.error('Failed to fetch students:', err)
-      setStudents([])
-    } finally {
-      setLoadingStudents(false)
-    }
-  }
+    const openModal = (course = null) => {
+        if (course) {
+            setIsEditMode(true);
+            setSelectedCourse(course);
+            setFormData({
+                course_name: course.name,
+                admin_name: course.admin.name,
+                admin_email: course.admin.email,
+                admin_password: '',
+                campus_id: course.campus.id
+            });
+        } else {
+            setIsEditMode(false);
+            setSelectedCourse(null);
+            setFormData({ campus_id: '', course_name: '', admin_name: '', admin_email: '', admin_password: '' });
+        }
+        setIsModalOpen(true);
+    };
 
-  const uniqueCourses = Array.from(new Map(courses.map(c => [(c.id || c._id), c])).values());
+    const closeModal = () => {
+        setIsModalOpen(false);
+    };
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <SuperAdminSidebar />
-      <div className="flex-1 lg:pl-64">
-        <Header />
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="mb-8"
-          >
-            <h1 className="text-3xl font-bold text-gray-900">
-              All Courses
-            </h1>
-            <p className="mt-2 text-gray-600">
-              View all courses across campuses and manage their batches.
-            </p>
-          </motion.div>
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            if (isEditMode) {
+                await api.put(`/course-management/${selectedCourse.id}`, formData);
+                success('Course updated successfully!');
+            } else {
+                await api.post(`/course-management/${formData.campus_id}`, formData);
+                success('Course created successfully!');
+            }
+            fetchData();
+            closeModal();
+        } catch (err) {
+            error(err.response?.data?.message || 'An error occurred.');
+        }
+    };
+    
+    const handleDelete = async (courseId) => {
+        if(window.confirm('Are you sure you want to delete this course? This is irreversible.')) {
+            try {
+                await api.delete(`/course-management/${courseId}`);
+                success('Course deleted successfully!');
+                fetchData();
+            } catch (err) {
+                error(err.response?.data?.message || 'Failed to delete course.');
+            }
+        }
+    };
 
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-gray-800">Course & Batch Explorer</h2>
+    return (
+        <div className="min-h-screen bg-gray-50 flex">
+            <SuperAdminSidebar />
+            <div className="flex-1 lg:pl-64">
+                <Header />
+                <main className="px-6 lg:px-10 py-12">
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                        <div className="flex justify-between items-center mb-8">
+                            <div>
+                                <h1 className="text-3xl font-bold text-gray-900">Course Management</h1>
+                                <p className="mt-2 text-gray-600">Manage all academic courses across campuses.</p>
+                            </div>
+                            <button onClick={() => openModal()} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold px-4 py-2 rounded-lg shadow-md hover:bg-indigo-700 transition">
+                                <PlusCircle size={20} />
+                                Add Course
+                            </button>
+                        </div>
+
+                        <div className="mt-8 bg-white rounded-2xl shadow-lg">
+                             <div className="p-6 border-b border-gray-200">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search by course, campus, or admin..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                    />
+                                </div>
+                            </div>
+                            
+                            <div className="overflow-x-auto">
+                                {loading ? <LoadingSpinner /> : (
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campus</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Admin</th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {filteredCourses.map(course => (
+                                                <tr key={course.id}>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{course.name}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{course.campus?.name || 'N/A'}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <div className="text-sm font-medium text-gray-900">{course.admin?.name || 'N/A'}</div>
+                                                        <div className="text-sm text-gray-500">{course.admin?.email || 'N/A'}</div>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                        <button onClick={() => openModal(course)} className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={18} /></button>
+                                                        <button onClick={() => handleDelete(course.id)} className="text-red-600 hover:text-red-900"><Trash2 size={18}/></button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+                        </div>
+                    </motion.div>
+                </main>
             </div>
-            {loading ? (
-              <div className="flex justify-center items-center py-8">
-                <LoadingSpinner />
-              </div>
-            ) : error ? (
-              <div className="text-red-500 text-center py-4">{error}</div>
-            ) : (
-              <div className="space-y-4">
-                {uniqueCourses.length === 0 ? (
-                  <div className="text-center text-gray-500 py-4">No courses found.</div>
-                ) : (
-                  uniqueCourses.map((course) => (
-                    <div key={course.id || course._id} className="border border-gray-200 rounded-lg overflow-hidden">
-                      {/* Course Header */}
-                      <div 
-                        className="p-4 cursor-pointer bg-gray-50 hover:bg-gray-100 flex items-center justify-between"
-                        onClick={() => handleCourseClick(course)}
-                      >
-                        <div className="flex items-center space-x-3">
-                          {selectedCourse && selectedCourse.id === (course.id || course._id) ? (
-                            <ChevronDown className="h-5 w-5 text-gray-600" />
-                          ) : (
-                            <ChevronRight className="h-5 w-5 text-gray-500" />
-                          )}
-                          <div>
-                            <span className="font-semibold text-lg text-gray-800">{course.name}</span>
-                            {course.campus && (
-                              <span className="ml-4 text-sm text-gray-500">Campus: <span className="font-medium text-gray-700">{course.campus.name}</span></span>
-                            )}
-                            {course.admin && (
-                              <span className="ml-4 text-sm text-gray-500">Admin: <span className="font-medium text-gray-700">{course.admin.name} ({course.admin.email})</span></span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex space-x-2">
-                          {/* Edit/Delete buttons can be added back if needed */}
-                        </div>
-                      </div>
-
-                      {/* Batches Section */}
-                      {selectedCourse && selectedCourse.id === (course.id || course._id) && (
-                        <div className="border-t border-gray-200 bg-white">
-                          <div className="p-4">
-                            <h3 className="text-md font-semibold text-gray-700 mb-3">Batches</h3>
-                            {loadingBatches ? (
-                              <div className="flex justify-center items-center py-4"><LoadingSpinner /></div>
-                            ) : batches.length === 0 ? (
-                              <div className="text-center text-gray-500 py-4 text-sm">No batches found for this course.</div>
-                            ) : (
-                              <div className="space-y-3">
-                                {batches.map((batch) => (
-                                  <div key={batch.id} className="border border-gray-200 rounded-lg bg-gray-50 overflow-hidden">
-                                    {/* Batch Header */}
-                                    <div 
-                                      className="p-3 cursor-pointer hover:bg-gray-100 flex items-center justify-between"
-                                      onClick={() => handleBatchClick(batch)}
-                                    >
-                                      <div className="flex items-center space-x-3">
-                                        {selectedBatch && selectedBatch.id === batch.id ? (
-                                          <ChevronDown className="h-4 w-4 text-gray-600" />
-                                        ) : (
-                                          <ChevronRight className="h-4 w-4 text-gray-500" />
-                                        )}
-                                        <div>
-                                          <span className="font-medium text-gray-800">{batch.name}</span>
-                                          <span className="ml-3 text-sm text-gray-500">
-                                            Students: {batch.student_count || 0}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {/* Students Section */}
-                                    {selectedBatch && selectedBatch.id === batch.id && (
-                                      <div className="border-t border-gray-200 bg-white">
-                                        <div className="p-3">
-                                          <h4 className="text-sm font-semibold text-gray-700 mb-2">Students</h4>
-                                          {loadingStudents ? (
-                                            <div className="flex justify-center items-center py-2"><LoadingSpinner /></div>
-                                          ) : students.length === 0 ? (
-                                            <div className="text-center text-gray-500 py-2 text-sm">No students found in this batch.</div>
-                                          ) : (
-                                            <div className="space-y-2">
-                                              {students.map((student) => (
-                                                <div key={student.id} className="flex items-center justify-between p-2 bg-gray-50 rounded border">
-                                                  <div>
-                                                    <span className="font-medium text-sm">{student.name}</span>
-                                                    <span className="ml-3 text-xs text-gray-500">Roll: {student.roll_number}</span>
-                                                    <span className="ml-3 text-xs text-gray-500">{student.email}</span>
-                                                  </div>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
+            <AnimatePresence>
+                {isModalOpen && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }} className="bg-white rounded-lg shadow-xl w-full max-w-md p-8">
+                           <div className="flex justify-between items-center mb-6">
+                             <h2 className="text-2xl font-bold text-gray-800">{isEditMode ? 'Edit Course' : 'Create Course'}</h2>
+                             <button onClick={closeModal}><X className="text-gray-500 hover:text-gray-800"/></button>
+                           </div>
+                            <form onSubmit={handleSubmit}>
+                                <div className="space-y-4">
+                                    {!isEditMode && (
+                                        <SelectField label="Campus" name="campus_id" value={formData.campus_id} onChange={handleInputChange} options={campuses} icon={<Building size={18} />} />
                                     )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))
+                                    <InputField label="Course Name" name="course_name" value={formData.course_name} onChange={handleInputChange} icon={<Book size={18}/>} />
+                                    <InputField label="Admin Name" name="admin_name" value={formData.admin_name} onChange={handleInputChange} icon={<User size={18}/>} />
+                                    <InputField label="Admin Email" name="admin_email" type="email" value={formData.admin_email} onChange={handleInputChange} icon={<Mail size={18}/>} disabled={isEditMode} />
+                                    <InputField label="Admin Password" name="admin_password" type="password" value={formData.admin_password} onChange={handleInputChange} icon={<Key size={18}/>} placeholder={isEditMode ? 'Leave blank to keep current password' : ''}/>
+                                </div>
+                                <div className="mt-8 flex justify-end">
+                                    <button type="button" onClick={closeModal} className="mr-3 bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300">Cancel</button>
+                                    <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700" disabled={!isEditMode && !formData.campus_id}>{isEditMode ? 'Update' : 'Create'}</button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </motion.div>
                 )}
-              </div>
-            )}
-          </div>
+            </AnimatePresence>
         </div>
-      </div>
-    </div>
-  )
-}
+    );
+};
 
-export default CourseManagement
+const InputField = ({ label, name, type = 'text', value, onChange, icon, placeholder, disabled=false }) => (
+    <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <div className="relative">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">{icon}</span>
+            <input 
+                type={type} 
+                name={name} 
+                value={value} 
+                onChange={onChange}
+                placeholder={placeholder}
+                disabled={disabled}
+                required={!disabled && name !== 'admin_password'}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100" 
+            />
+        </div>
+    </div>
+);
+
+const SelectField = ({ label, name, value, onChange, options, icon }) => (
+    <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <div className="relative">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">{icon}</span>
+            <select 
+                name={name} 
+                value={value} 
+                onChange={onChange}
+                required
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 appearance-none"
+            >
+                <option value="">Select a {label}</option>
+                {options.map(option => (
+                    <option key={option.id} value={option.id}>{option.name}</option>
+                ))}
+            </select>
+        </div>
+    </div>
+);
+
+
+export default CourseManagement;

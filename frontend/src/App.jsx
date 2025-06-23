@@ -19,6 +19,8 @@ import TestManagement from './pages/superadmin/TestManagement'
 import SystemAnalytics from './pages/superadmin/SystemAnalytics'
 import BatchManagement from './pages/superadmin/BatchManagement'
 import StudentManagement from './pages/superadmin/StudentManagement'
+import ResultsManagement from './pages/superadmin/ResultsManagement'
+import BatchDetails from './pages/superadmin/BatchDetails'
 
 // Campus Admin Pages
 import CampusAdminDashboard from './pages/campus-admin/CampusAdminDashboard'
@@ -32,7 +34,7 @@ import StudentProgress from './pages/course-admin/StudentProgress'
 
 // Student Pages
 import StudentDashboard from './pages/student/StudentDashboard'
-import PracticeTests from './pages/student/PracticeTests'
+import PracticeModules from './pages/student/PracticeModules'
 import OnlineExams from './pages/student/OnlineExams'
 import TestHistory from './pages/student/TestHistory'
 import ProgressTracker from './pages/student/ProgressTracker'
@@ -64,14 +66,18 @@ function App() {
                   element={
                     <ProtectedRoute allowedRoles={['super_admin']}>
                       <Routes>
-                        <Route path="/" element={<SuperAdminDashboard />} />
-                        <Route path="/campuses" element={<CampusManagement />} />
-                        <Route path="/courses" element={<CourseManagement />} />
-                        <Route path="/users" element={<UserManagement />} />
-                        <Route path="/tests" element={<TestManagement />} />
-                        <Route path="/analytics" element={<SystemAnalytics />} />
-                        <Route path="/batch-creation" element={<BatchManagement />} />
-                        <Route path="/students/:batchId" element={<StudentManagement />} />
+                        <Route path="/" element={<Navigate to="dashboard" replace />} />
+                        <Route path="dashboard" element={<SuperAdminDashboard />} />
+                        <Route path="users" element={<ProtectedRoute allowedRoles={['super_admin']}><UserManagement /></ProtectedRoute>} />
+                        <Route path="campuses" element={<ProtectedRoute allowedRoles={['super_admin']}><CampusManagement /></ProtectedRoute>} />
+                        <Route path="courses" element={<ProtectedRoute allowedRoles={['super_admin']}><CourseManagement /></ProtectedRoute>} />
+                        <Route path="batches" element={<ProtectedRoute allowedRoles={['super_admin']}><BatchManagement /></ProtectedRoute>} />
+                        <Route path="batches/:batchId" element={<ProtectedRoute allowedRoles={['super_admin']}><BatchDetails /></ProtectedRoute>} />
+                        <Route path="students" element={<ProtectedRoute allowedRoles={['super_admin']}><StudentManagement /></ProtectedRoute>} />
+                        <Route path="results" element={<ProtectedRoute allowedRoles={['super_admin']}><ResultsManagement /></ProtectedRoute>} />
+                        <Route path="tests" element={<TestManagement />} />
+                        <Route path="tests/create" element={<TestManagement />} />
+                        <Route path="analytics" element={<SystemAnalytics />} />
                       </Routes>
                     </ProtectedRoute>
                   }
@@ -112,7 +118,7 @@ function App() {
                     <ProtectedRoute allowedRoles={['student']}>
                       <Routes>
                         <Route path="/" element={<StudentDashboard />} />
-                        <Route path="/practice" element={<PracticeTests />} />
+                        <Route path="/practice" element={<PracticeModules />} />
                         <Route path="/exams" element={<OnlineExams />} />
                         <Route path="/history" element={<TestHistory />} />
                         <Route path="/progress" element={<ProgressTracker />} />

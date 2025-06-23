@@ -38,6 +38,14 @@ def login():
             }), 401
         
         # Verify password
+        if 'password_hash' not in user:
+            import sys
+            print(f"CRITICAL: User document missing 'password_hash'. User object: {user}", file=sys.stderr)
+            return jsonify({
+                'success': False,
+                'message': 'Login failed: Critical server error - missing user credentials.'
+            }), 500
+
         if not bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
             return jsonify({
                 'success': False,
