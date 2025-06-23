@@ -10,7 +10,6 @@ from config.constants import ROLES
 from datetime import datetime
 import pytz
 import io
-import pandas as pd
 from utils.email_service import send_email, render_template
 from config.shared import bcrypt
 
@@ -136,8 +135,22 @@ def create_batch():
         new_batch_id = mongo_db.batches.insert_one(batch_doc).inserted_id
 
         # Process student file
-        df = pd.read_excel(file)
-        students_data = df.to_dict('records')
+        workbook = openpyxl.load_workbook(file, data_only=True)
+        worksheet = workbook.active
+        
+        # Get headers from first row
+        headers = []
+        for cell in worksheet[1]:
+            headers.append(str(cell.value).strip() if cell.value else '')
+        
+        # Get data rows
+        students_data = []
+        for row in worksheet.iter_rows(min_row=2):
+            row_data = {}
+            for i, cell in enumerate(row):
+                if i < len(headers):
+                    row_data[headers[i]] = str(cell.value).strip() if cell.value else ''
+            students_data.append(row_data)
 
         created_students = []
         for student in students_data:
