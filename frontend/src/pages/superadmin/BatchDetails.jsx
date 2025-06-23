@@ -150,32 +150,46 @@ const BatchDetails = () => {
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-2xl shadow-lg">
-                                <div className="p-6 flex justify-between items-center">
-                                    <h3 className="text-xl font-semibold flex items-center gap-2">
-                                        <Users />
-                                        Students in this Batch ({students.length})
-                                    </h3>
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-200">
-                                        <thead className="bg-gray-50">
-                                            <tr>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student Name</th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll Number</th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white divide-y divide-gray-200">
-                                            {students.map(student => (
-                                                <tr key={student.id}>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{student.name}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{student.roll_number}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{student.email}</td>
+                            <div className="bg-white rounded-2xl shadow-lg flex justify-center">
+                                <div className="w-full max-w-4xl">
+                                    <div className="p-6 flex justify-between items-center">
+                                        <h3 className="text-xl font-semibold flex items-center gap-2">
+                                            <Users />
+                                            Students in this Batch ({students.length})
+                                        </h3>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="min-w-full divide-y divide-gray-200 rounded-xl overflow-hidden">
+                                            <thead className="bg-gradient-to-r from-indigo-500 to-blue-500">
+                                                <tr>
+                                                    <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">Student Name</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">Roll Number</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">Email</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">Campus</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider">Course</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody>
+                                                {students.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan="5" className="px-6 py-8 text-center text-gray-400 text-lg font-medium bg-gray-50">No students found in this batch.</td>
+                                                    </tr>
+                                                ) : (
+                                                    students.map((student, idx) => (
+                                                        <tr key={student.id} className={
+                                                            `transition-colors ${idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'} hover:bg-blue-50`
+                                                        }>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-800">{student.name}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{student.roll_number}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-700">{student.email}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{student.campus_name}</td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{student.course_name}</td>
+                                                        </tr>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
                         </motion.div>

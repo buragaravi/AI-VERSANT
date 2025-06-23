@@ -398,7 +398,14 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
                 <div className="space-y-6">
                     <div>
                         <label htmlFor="batchName" className="block text-sm font-medium text-amber-800 mb-1">Batch Name</label>
-                        <input type="text" id="batchName" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 bg-amber-50" />
+                        <input
+                            type="text"
+                            id="batchName"
+                            value={formData.name}
+                            onChange={(e) => setFormData(prev => ({...prev, name: e.target.value}))}
+                            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition text-gray-900"
+                            placeholder="e.g., Spring 2024 Morning"
+                        />
                     </div>
                     <div>
                         <h4 className="text-sm font-medium text-amber-800 mb-2">Select Campuses</h4>

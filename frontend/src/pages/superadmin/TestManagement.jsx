@@ -211,12 +211,12 @@ const TestListView = ({ tests, loading, setView, onViewTest, onDeleteTest }) => 
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Test Management</h1>
-          <p className="mt-2 text-gray-600">Browse, manage, and create new tests.</p>
+          <h1 className="text-3xl font-bold text-gray-800">Test Management</h1>
+          <p className="mt-2 text-gray-500">Browse, manage, and create new tests.</p>
         </div>
         <button 
           onClick={() => setView('create')}
-          className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105"
+          className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105"
         >
           <Plus className="h-5 w-5 mr-2"/>
           Create Test
@@ -224,63 +224,65 @@ const TestListView = ({ tests, loading, setView, onViewTest, onDeleteTest }) => 
       </div>
 
       <div className="bg-white rounded-2xl shadow-lg">
-        <div className="p-6 flex justify-between items-center">
-          <h3 className="text-xl font-semibold">All Created Tests</h3>
-          <button onClick={clearFilters} className="text-sm font-medium text-indigo-600 hover:text-indigo-700 hover:underline">Clear Filters</button>
+        <div className="p-6 flex justify-between items-center border-b border-gray-200">
+          <h3 className="text-xl font-semibold text-gray-800">All Created Tests</h3>
+          <button onClick={clearFilters} className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline">Clear Filters</button>
         </div>
         <div className="overflow-x-auto">
           {loading ? <LoadingSpinner /> : (
-            <table className="min-w-full divide-y divide-gray-200 table-fixed">
-              <thead className="bg-gray-50 align-top">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-100">
                 <tr>
-                  <th scope="col" className="w-1/6 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Test Name</th>
-                  <th scope="col" className="w-1/12 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                  <th scope="col" className="w-1/12 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Module
-                    <select name="module" value={filters.module} onChange={handleFilterChange} className="mt-1 block w-full border-gray-200 rounded-md shadow-sm text-xs font-normal normal-case focus:ring-indigo-500 focus:border-indigo-500">
+                  <th scope="col" className="w-1/6 px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Test Name</th>
+                  <th scope="col" className="w-1/12 px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
+                  <th scope="col" className="w-1/12 px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    <span className="block mb-1">Module</span>
+                    <select name="module" value={filters.module} onChange={handleFilterChange} className="w-full border-gray-300 rounded-md shadow-sm text-xs font-normal normal-case focus:ring-indigo-500 focus:border-indigo-500 bg-gray-700 text-white">
                       <option value="">All</option>
                       {moduleOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                   </th>
-                  <th scope="col" className="w-1/12 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Level
-                    <select name="level" value={filters.level} onChange={handleFilterChange} className="mt-1 block w-full border-gray-200 rounded-md shadow-sm text-xs font-normal normal-case focus:ring-indigo-500 focus:border-indigo-500">
+                  <th scope="col" className="w-1/12 px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    <span className="block mb-1">Level</span>
+                    <select name="level" value={filters.level} onChange={handleFilterChange} className="w-full border-gray-300 rounded-md shadow-sm text-xs font-normal normal-case focus:ring-indigo-500 focus:border-indigo-500 bg-gray-700 text-white">
                       <option value="">All</option>
                       {levelOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                   </th>
-                  <th scope="col" className="w-1/6 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Campus
-                    <select name="campus" value={filters.campus} onChange={handleFilterChange} className="mt-1 block w-full border-gray-200 rounded-md shadow-sm text-xs font-normal normal-case focus:ring-indigo-500 focus:border-indigo-500">
+                  <th scope="col" className="w-1/6 px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    <span className="block mb-1">Campus</span>
+                    <select name="campus" value={filters.campus} onChange={handleFilterChange} className="w-full border-gray-300 rounded-md shadow-sm text-xs font-normal normal-case focus:ring-indigo-500 focus:border-indigo-500 bg-gray-700 text-white">
                       <option value="">All</option>
                       {campusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                   </th>
-                  <th scope="col" className="w-1/6 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Batch</th>
-                  <th scope="col" className="w-1/12 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Questions</th>
-                  <th scope="col" className="w-1/12 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                    <select name="status" value={filters.status} onChange={handleFilterChange} className="mt-1 block w-full border-gray-200 rounded-md shadow-sm text-xs font-normal normal-case focus:ring-indigo-500 focus:border-indigo-500">
+                  <th scope="col" className="w-1/6 px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Batch</th>
+                  <th scope="col" className="w-1/6 px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Courses</th>
+                  <th scope="col" className="w-1/12 px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Questions</th>
+                  <th scope="col" className="w-1/12 px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    <span className="block mb-1">Status</span>
+                    <select name="status" value={filters.status} onChange={handleFilterChange} className="w-full border-gray-300 rounded-md shadow-sm text-xs font-normal normal-case focus:ring-indigo-500 focus:border-indigo-500 bg-gray-700 text-white">
                       <option value="">All</option>
                       {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                   </th>
-                  <th scope="col" className="w-1/12 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
-                  <th scope="col" className="w-1/12 relative px-6 py-3"><span className="sr-only">Actions</span></th>
+                  <th scope="col" className="w-1/12 px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Created At</th>
+                  <th scope="col" className="w-1/12 relative px-6 py-4"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredTests.map((test) => (
-                  <tr key={test._id} className="hover:bg-gray-50">
+                {filteredTests.map((test, index) => (
+                  <tr key={test._id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50 hover:bg-indigo-50'}>
                     <td className="px-6 py-4 whitespace-normal break-words text-sm font-medium text-gray-900">{test.name}</td>
                     <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500 capitalize">{test.test_type}</td>
                     <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500 capitalize">{test.module_name}</td>
                     <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500 capitalize">{test.level_name || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500">{test.campus_name || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500">{test.batches}</td>
-                    <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500">{test.question_count}</td>
+                    <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500">{test.courses}</td>
+                    <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500 text-center">{test.question_count}</td>
                     <td className="px-6 py-4 whitespace-normal break-words text-sm">
-                      <span className={clsx('px-2 inline-flex text-xs leading-5 font-semibold rounded-full', {
+                      <span className={clsx('px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full', {
                         'bg-green-100 text-green-800': test.status === 'active',
                         'bg-yellow-100 text-yellow-800': test.status === 'processing',
                         'bg-red-100 text-red-800': test.status === 'failed',
@@ -291,9 +293,9 @@ const TestListView = ({ tests, loading, setView, onViewTest, onDeleteTest }) => 
                     <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500">{test.created_at}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center space-x-2">
-                        <button onClick={() => onViewTest(test._id)} className="text-indigo-600 hover:text-indigo-900 p-1" title="View Test"><Eye className="h-5 w-5"/></button>
-                        <button className="text-gray-500 hover:text-gray-800 p-1" title="Edit Test (soon)"><Edit className="h-5 w-5"/></button>
-                        <button onClick={() => onDeleteTest(test._id)} className="text-red-600 hover:text-red-900 p-1" title="Delete Test"><Trash2 className="h-5 w-5"/></button>
+                        <button onClick={() => onViewTest(test._id)} className="text-indigo-600 hover:text-indigo-900 p-1 rounded-full hover:bg-gray-200" title="View Test"><Eye className="h-5 w-5"/></button>
+                        <button className="text-gray-400 cursor-not-allowed p-1 rounded-full" title="Edit Test (soon)"><Edit className="h-5 w-5"/></button>
+                        <button onClick={() => onDeleteTest(test._id)} className="text-red-600 hover:text-red-800 p-1 rounded-full hover:bg-gray-200" title="Delete Test"><Trash2 className="h-5 w-5"/></button>
                       </div>
                     </td>
                   </tr>
@@ -311,7 +313,7 @@ const TestPreviewView = ({ test, onBack }) => {
   if (!test) {
     return (
       <div className="text-center p-8">
-        <h2 className="text-lg font-semibold text-gray-700">No test data to display.</h2>
+        <h2 className="text-lg font-semibold text-gray-800">No test data to display.</h2>
         <p className="text-gray-500">There might have been an issue loading the test details.</p>
         <button onClick={onBack} className="mt-4 bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600">
           Return to List
@@ -337,7 +339,7 @@ const TestPreviewView = ({ test, onBack }) => {
             <span className="flex items-center"><FileQuestion className="w-4 h-4 mr-1.5" /> Questions: {test.questions?.length || 0}</span>
           </div>
         </div>
-        <button onClick={onBack} className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors">
+        <button onClick={onBack} className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors">
           <ChevronLeft className="h-5 w-5 mr-1" /> Back to List
         </button>
       </div>
@@ -417,10 +419,10 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Create a New Test</h1>
-          <p className="mt-2 text-gray-600">Follow the steps to configure and launch a test.</p>
+          <h1 className="text-3xl font-bold text-gray-800">Create a New Test</h1>
+          <p className="mt-2 text-gray-500">Follow the steps to configure and launch a test.</p>
         </div>
-        <button onClick={() => setView('list')} className="text-sm font-medium text-gray-600 hover:text-indigo-600">
+        <button onClick={() => setView('list')} className="text-sm font-medium text-gray-500 hover:text-blue-500">
           &larr; Back to Test List
         </button>
       </div>
@@ -428,7 +430,7 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
         <div className="mb-8">
           <div className="w-full bg-gray-200 rounded-full h-2.5">
             <motion.div 
-              className="bg-indigo-600 h-2.5 rounded-full" 
+              className="bg-blue-500 h-2.5 rounded-full" 
               animate={{ width: `${((step - 1) / 3) * 100}%` }}
               transition={{ duration: 0.5 }}
             />
@@ -497,54 +499,54 @@ const Step1TestDetails = ({ nextStep, updateTestData, testData }) => {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <div className="flex items-center space-x-3">
-          <div className="bg-indigo-500 p-2 rounded-full text-white">
+          <div className="bg-blue-500 p-2 rounded-full text-white">
             <Briefcase className="h-6 w-6"/>
           </div>
           <h2 className="text-2xl font-semibold text-gray-800">Test Details</h2>
         </div>
         <div className="w-full">
-          <label htmlFor="testName" className="block text-sm font-medium text-gray-700 mb-1">Test Name</label>
+          <label htmlFor="testName" className="block text-sm font-medium text-gray-800 mb-1">Test Name</label>
           <input
             type="text"
             id="testName"
             {...register('testName', { required: 'Test name is required' })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition"
+            className="mt-1 block w-full rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition bg-gray-700 text-white border-gray-600 placeholder-gray-400"
             placeholder="e.g. Mid-term English Proficiency"
           />
           {errors.testName && <p className="text-red-500 text-xs mt-1">{errors.testName.message}</p>}
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700">Test Type</label>
+          <label className="block text-sm font-medium text-gray-800">Test Type</label>
           <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <label className={clsx('relative flex p-4 border rounded-lg cursor-pointer hover:bg-indigo-50 transition', {
-              'bg-indigo-50 border-indigo-600 ring-2 ring-indigo-500': testType === 'Practice'
+            <label className={clsx('relative flex p-4 border rounded-lg cursor-pointer hover:bg-blue-50 transition', {
+              'bg-blue-50 border-blue-500 ring-2 ring-blue-500': testType === 'Practice'
             })}>
               <input type="radio" {...register('testType')} value="Practice" className="sr-only" />
               <div className="flex-1">
-                <span className="font-medium text-gray-900">Practice Module</span>
+                <span className="font-medium text-gray-800">Practice Module</span>
                 <p className="text-sm text-gray-500">Low-stakes module for student practice.</p>
               </div>
-              {testType === 'Practice' && <CheckCircle className="h-5 w-5 text-indigo-600 absolute top-2 right-2" />}
+              {testType === 'Practice' && <CheckCircle className="h-5 w-5 text-blue-500 absolute top-2 right-2" />}
             </label>
-            <label className={clsx('relative flex p-4 border rounded-lg cursor-pointer hover:bg-indigo-50 transition', {
-              'bg-indigo-50 border-indigo-600 ring-2 ring-indigo-500': testType === 'Online'
+            <label className={clsx('relative flex p-4 border rounded-lg cursor-pointer hover:bg-blue-50 transition', {
+              'bg-blue-50 border-blue-500 ring-2 ring-blue-500': testType === 'Online'
             })}>
               <input type="radio" {...register('testType')} value="Online" className="sr-only" />
               <div className="flex-1">
-                <span className="font-medium text-gray-900">Online Exam</span>
+                <span className="font-medium text-gray-800">Online Exam</span>
                 <p className="text-sm text-gray-500">Formal, graded assessment.</p>
               </div>
-              {testType === 'Online' && <CheckCircle className="h-5 w-5 text-indigo-600 absolute top-2 right-2" />}
+              {testType === 'Online' && <CheckCircle className="h-5 w-5 text-blue-500 absolute top-2 right-2" />}
             </label>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label htmlFor="module" className="block text-sm font-medium text-gray-700 mb-1">Module</label>
+            <label htmlFor="module" className="block text-sm font-medium text-gray-800 mb-1">Module</label>
             <select
               id="module"
               {...register('module', { required: 'Please select a module.' })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition"
+              className="mt-1 block w-full rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition bg-gray-700 text-white border-gray-600"
             >
               <option value="">Select Module</option>
               {modules.map(module => (
@@ -555,11 +557,11 @@ const Step1TestDetails = ({ nextStep, updateTestData, testData }) => {
           </div>
           {selectedModule === 'GRAMMAR' ? (
             <div>
-              <label htmlFor="subcategory" className="block text-sm font-medium text-gray-700 mb-1">Grammar Category</label>
+              <label htmlFor="subcategory" className="block text-sm font-medium text-gray-800 mb-1">Grammar Category</label>
               <select
                 id="subcategory"
                 {...register('subcategory', { required: 'Please select a category.' })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition"
+                className="mt-1 block w-full rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition bg-gray-700 text-white border-gray-600"
               >
                 <option value="">Select Category</option>
                 {grammarCategories.map(cat => (
@@ -570,11 +572,11 @@ const Step1TestDetails = ({ nextStep, updateTestData, testData }) => {
             </div>
           ) : selectedModule !== 'VOCABULARY' ? (
             <div>
-              <label htmlFor="level" className="block text-sm font-medium text-gray-700 mb-1">Level</label>
+              <label htmlFor="level" className="block text-sm font-medium text-gray-800 mb-1">Level</label>
               <select
                 id="level"
                 {...register('level', { required: 'Please select a level.' })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition"
+                className="mt-1 block w-full rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition bg-gray-700 text-white border-gray-600"
               >
                 <option value="">Select Level</option>
                 {levels.map(level => (
@@ -586,7 +588,7 @@ const Step1TestDetails = ({ nextStep, updateTestData, testData }) => {
           ) : null}
         </div>
         <div className="flex justify-end pt-4">
-          <button type="submit" className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105">
+          <button type="submit" className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105">
             Next: Select Audience <ChevronRight className="h-5 w-5 ml-2" />
           </button>
         </div>
@@ -706,8 +708,8 @@ const Step2AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-        <div className="flex items-center space-x-3 border-b pb-4">
-          <div className="bg-indigo-500 p-2 rounded-full text-white">
+        <div className="flex items-center space-x-3 border-b pb-4 border-gray-200">
+          <div className="bg-blue-500 p-2 rounded-full text-white">
             <Users className="h-6 w-6"/>
           </div>
           <h2 className="text-2xl font-semibold text-gray-800">Select Audience</h2>
@@ -716,12 +718,12 @@ const Step2AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Column 1: Campus */}
           <div className="space-y-4">
-            <h3 className="font-semibold text-lg text-gray-700">1. Select Campus</h3>
+            <h3 className="font-semibold text-lg text-gray-800">1. Select Campus</h3>
             {loadingStates.campuses ? <LoadingSpinner/> : (
               <>
                 <select 
                   {...register('campus_id', { required: 'Please select a campus' })}
-                  className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition"
+                  className="w-full p-2 border border-gray-200 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 transition"
                 >
                   <option value="" disabled>Choose a campus</option>
                   {campuses.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
@@ -733,7 +735,7 @@ const Step2AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
 
           {/* Column 2: Batches */}
           <div className={clsx("space-y-4", { 'opacity-50': !selectedCampusId })}>
-            <h3 className="font-semibold text-lg text-gray-700">2. Select Batches</h3>
+            <h3 className="font-semibold text-lg text-gray-800">2. Select Batches</h3>
             {loadingStates.batches ? <LoadingSpinner/> : (
               batches.length > 0 ? (
                 <Controller
@@ -741,7 +743,7 @@ const Step2AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
                   control={control}
                   rules={{ required: 'Please select at least one batch.' }}
                   render={({ field }) => (
-                    <div className="space-y-2 max-h-60 overflow-y-auto border rounded-md p-2">
+                    <div className="space-y-2 max-h-60 overflow-y-auto border rounded-md p-2 border-gray-200">
                       {batches.map(batch => (
                         <CheckboxCard
                           key={batch.value}
@@ -766,7 +768,7 @@ const Step2AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
 
           {/* Column 3: Courses */}
           <div className={clsx("space-y-4", { 'opacity-50': !selectedBatchIds || selectedBatchIds.length === 0 })}>
-            <h3 className="font-semibold text-lg text-gray-700">3. Select Courses</h3>
+            <h3 className="font-semibold text-lg text-gray-800">3. Select Courses</h3>
             {loadingStates.courses ? <LoadingSpinner/> : (
               courses.length > 0 ? (
                 <Controller
@@ -774,7 +776,7 @@ const Step2AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
                   control={control}
                   rules={{ required: 'Please select at least one course.' }}
                   render={({ field }) => (
-                    <div className="space-y-2 max-h-60 overflow-y-auto border rounded-md p-2">
+                    <div className="space-y-2 max-h-60 overflow-y-auto border rounded-md p-2 border-gray-200">
                       {courses.map(course => (
                         <CheckboxCard
                           key={course.value}
@@ -798,11 +800,11 @@ const Step2AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
           </div>
         </div>
         
-        <div className="flex justify-between items-center pt-8 border-t mt-8">
-          <button type="button" onClick={prevStep} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors">
+        <div className="flex justify-between items-center pt-8 border-t mt-8 border-gray-200">
+          <button type="button" onClick={prevStep} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors">
             <ChevronLeft className="h-5 w-5 mr-1" /> Back
           </button>
-          <button type="submit" className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105">
+          <button type="submit" className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105">
             Next: Upload Questions <ChevronRight className="h-5 w-5 ml-2" />
           </button>
         </div>
@@ -818,7 +820,7 @@ const CheckboxCard = ({ id, label, checked, onChange }) => {
       className={clsx(
         'flex items-center p-3 w-full rounded-md cursor-pointer transition-all duration-200 ease-in-out border',
         {
-          'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-200': checked,
+          'bg-blue-100 border-blue-500 ring-1 ring-blue-500': checked,
           'bg-white hover:bg-gray-50 border-gray-200': !checked,
         }
       )}
@@ -828,9 +830,9 @@ const CheckboxCard = ({ id, label, checked, onChange }) => {
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+        className="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
       />
-      <span className={clsx('ml-3 text-sm font-medium', {'text-indigo-900': checked, 'text-gray-700': !checked})}>
+      <span className={clsx('ml-3 text-sm font-medium', {'text-blue-900': checked, 'text-gray-800': !checked})}>
         {label}
       </span>
     </label>
@@ -1106,13 +1108,13 @@ Answer: C`
       )}
       <div className="space-y-6">
         <div className="flex items-center space-x-3">
-          <div className="bg-indigo-500 p-2 rounded-full text-white">
+          <div className="bg-blue-500 p-2 rounded-full text-white">
             <FileQuestion className="h-6 w-6"/>
           </div>
           <div>
             <h2 className="text-2xl font-semibold text-gray-800">Upload Questions</h2>
             {isMcqModule && (
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="text-sm text-gray-500 mt-1">
                 This module uses MCQ format. Questions should include options A, B, C, D and the correct answer.
               </p>
             )}
@@ -1134,7 +1136,7 @@ Answer: C`
         )}
         
         <div className="flex items-center space-x-4">
-          <label className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors">
+          <label className="inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors">
             <Upload className="h-5 w-5 mr-2 text-gray-500" />
             Upload from File
             <input 
@@ -1144,20 +1146,20 @@ Answer: C`
               accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" 
             />
           </label>
-          <button onClick={downloadTemplate} type="button" className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 hover:underline">
+          <button onClick={downloadTemplate} type="button" className="inline-flex items-center text-sm text-blue-500 hover:text-blue-700 hover:underline">
             <FileText className="h-4 w-4 mr-1" /> Download Template
           </button>
         </div>
         
         <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-500">
             <strong>Supported formats:</strong> CSV (.csv), Excel (.xlsx, .xls)
           </p>
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="text-sm text-gray-500 mt-1">
             <strong>Required columns:</strong> "question" (or "Question") - Instructions column is optional
           </p>
           {isMcqModule && (
-            <p className="text-sm text-blue-600 mt-1">
+            <p className="text-sm text-blue-500 mt-1">
               <strong>Note:</strong> For MCQ modules, put the entire question with options and answer in the question column
             </p>
           )}
@@ -1166,14 +1168,14 @@ Answer: C`
         <div className="mt-4 space-y-4 max-h-[400px] overflow-y-auto p-1">
           {questions.map((q, index) => (
             <motion.div key={index} layout className="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg border border-gray-200 shadow-sm">
-              <span className="text-indigo-600 font-semibold">{index + 1}.</span>
+              <span className="text-blue-500 font-semibold">{index + 1}.</span>
               <div className="flex-grow space-y-2">
                 {isMcqModule ? (
                   <textarea
                     placeholder="Enter MCQ question with options and answer..."
                     value={q.question}
                     onChange={(e) => handleQuestionChange(index, 'question', e.target.value)}
-                    className="w-full h-32 border-gray-300 rounded-md shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+                    className="w-full h-32 border-gray-200 rounded-md shadow-sm sm:text-sm focus:ring-blue-500 focus:border-blue-500 font-mono"
                   />
                 ) : (
                   <input
@@ -1181,7 +1183,7 @@ Answer: C`
                     placeholder="Enter question text..."
                     value={q.question}
                     onChange={(e) => handleQuestionChange(index, 'question', e.target.value)}
-                    className="w-full border-gray-300 rounded-md shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full border-gray-200 rounded-md shadow-sm sm:text-sm focus:ring-blue-500 focus:border-blue-500"
                   />
                 )}
                 <input
@@ -1189,7 +1191,7 @@ Answer: C`
                   placeholder="Instructions for student (optional)..."
                   value={q.instructions}
                   onChange={(e) => handleQuestionChange(index, 'instructions', e.target.value)}
-                  className="w-full border-gray-300 rounded-md shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full border-gray-200 rounded-md shadow-sm sm:text-sm focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <button type="button" onClick={() => handleRemoveQuestion(index)} className="p-2 text-gray-400 hover:text-red-600 rounded-full transition-colors">
@@ -1199,15 +1201,15 @@ Answer: C`
           ))}
         </div>
         
-        <button type="button" onClick={handleAddQuestion} className="mt-4 inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800">
+        <button type="button" onClick={handleAddQuestion} className="mt-4 inline-flex items-center text-sm font-medium text-blue-500 hover:text-blue-700">
           <Plus className="h-5 w-5 mr-1" /> Add Question Manually
         </button>
         
         <div className="flex justify-between items-center pt-4">
-          <button type="button" onClick={prevStep} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors">
+          <button type="button" onClick={prevStep} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors">
             <ChevronLeft className="h-5 w-5 mr-1" /> Back
           </button>
-          <button type="button" onClick={onSubmit} className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105">
+          <button type="button" onClick={onSubmit} className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105">
             Next: {isMcqModule ? 'Review & Create' : 'Configure Audio'} <ChevronRight className="h-5 w-5 ml-2" />
           </button>
         </div>
@@ -1259,7 +1261,7 @@ const QuestionPreviewModal = ({ questionsToPreview, onClose, onConfirm }) => {
             </button>
             <button
               onClick={onConfirm}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
               disabled={newQuestionsCount === 0}
             >
               Add {newQuestionsCount} New Questions
@@ -1343,53 +1345,53 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {loading && <LoadingSpinner message={isMcqModule ? "Creating MCQ module..." : "Generating audio and creating test..."} />}
         <div className="flex items-center space-x-3">
-          <div className="bg-indigo-500 p-2 rounded-full text-white">
+          <div className="bg-blue-500 p-2 rounded-full text-white">
             <Sparkles className="h-6 w-6"/>
           </div>
           <h2 className="text-2xl font-semibold text-gray-800">Final Confirmation</h2>
         </div>
         
         <div className="bg-gray-50 border border-gray-200 p-6 rounded-lg space-y-4">
-          <h3 className="font-semibold text-lg text-gray-900 border-b border-gray-300 pb-3 mb-4">Test Summary</h3>
+          <h3 className="font-semibold text-lg text-gray-800 border-b border-gray-200 pb-3 mb-4">Test Summary</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
-            <div><strong className="text-gray-600 block">Name:</strong><p className="text-gray-800">{testData.testName}</p></div>
-            <div><strong className="text-gray-600 block">Type:</strong><p className="text-gray-800">{testData.testType}</p></div>
-            <div><strong className="text-gray-600 block">Module:</strong><p className="text-gray-800">{testData.module}</p></div>
+            <div><strong className="text-gray-500 block">Name:</strong><p className="text-gray-800">{testData.testName}</p></div>
+            <div><strong className="text-gray-500 block">Type:</strong><p className="text-gray-800">{testData.testType}</p></div>
+            <div><strong className="text-gray-500 block">Module:</strong><p className="text-gray-800">{testData.module}</p></div>
             {testData.subcategory ? (
-              <div><strong className="text-gray-600 block">Category:</strong><p className="text-gray-800">{testData.subcategory}</p></div>
+              <div><strong className="text-gray-500 block">Category:</strong><p className="text-gray-800">{testData.subcategory}</p></div>
             ) : testData.level ? (
-              <div><strong className="text-gray-600 block">Level:</strong><p className="text-gray-800">{testData.level}</p></div>
+              <div><strong className="text-gray-500 block">Level:</strong><p className="text-gray-800">{testData.level}</p></div>
             ) : null}
-            <div><strong className="text-gray-600 block">Campus:</strong><p className="text-gray-800">{testData.campus?.label}</p></div>
-            <div><strong className="text-gray-600 block">Batches:</strong><p className="text-gray-800">{testData.batches?.map(b => b.label).join(', ')}</p></div>
-            <div><strong className="text-gray-600 block">Courses:</strong><p className="text-gray-800">{testData.courses?.map(c => c.label).join(', ')}</p></div>
-            <div className="col-span-full"><strong className="text-gray-600 block">Total Questions:</strong><p className="text-gray-800">{testData.questions?.length}</p></div>
+            <div><strong className="text-gray-500 block">Campus:</strong><p className="text-gray-800">{testData.campus?.label}</p></div>
+            <div><strong className="text-gray-500 block">Batches:</strong><p className="text-gray-800">{testData.batches?.map(b => b.label).join(', ')}</p></div>
+            <div><strong className="text-gray-500 block">Courses:</strong><p className="text-gray-800">{testData.courses?.map(c => c.label).join(', ')}</p></div>
+            <div className="col-span-full"><strong className="text-gray-500 block">Total Questions:</strong><p className="text-gray-800">{testData.questions?.length}</p></div>
           </div>
         </div>
 
         {!isMcqModule && (
           <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Audio Configuration</h3>
+            <h3 className="text-lg font-medium text-gray-800 mb-2">Audio Configuration</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Voice Accent</label>
+                <label className="block text-sm font-medium text-gray-800 mb-1">Voice Accent</label>
                 <Controller
                   name="accent"
                   control={control}
                   render={({ field }) => (
-                    <select {...field} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition">
+                    <select {...field} className="mt-1 block w-full rounded-md border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition">
                       {accentOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </select>
                   )}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Speech Speed</label>
+                <label className="block text-sm font-medium text-gray-800 mb-1">Speech Speed</label>
                 <Controller
                   name="speed"
                   control={control}
                   render={({ field }) => (
-                    <select {...field} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition">
+                    <select {...field} className="mt-1 block w-full rounded-md border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition">
                       {speedOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </select>
                   )}
@@ -1400,10 +1402,10 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
         )}
         
         <div className="flex justify-between items-center pt-4">
-          <button type="button" onClick={prevStep} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors">
+          <button type="button" onClick={prevStep} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors">
             <ChevronLeft className="h-5 w-5 mr-1" /> Back
           </button>
-          <button type="submit" disabled={loading} className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-green-400 disabled:cursor-not-allowed transition-transform transform hover:scale-105">
+          <button type="submit" disabled={loading} className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed transition-transform transform hover:scale-105">
             <CheckCircle className="h-6 w-6 mr-2" />
             {loading ? 'Processing...' : (isMcqModule ? 'Create MCQ Module' : 'Confirm and Generate Audio')}
           </button>

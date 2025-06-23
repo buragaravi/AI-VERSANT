@@ -930,7 +930,7 @@ def get_test(test_id):
 @jwt_required()
 @require_superadmin
 def get_all_tests():
-    """Get all created tests for the super admin list view."""
+    """Get all created tests with detailed information."""
     try:
         pipeline = [
             {
@@ -938,7 +938,7 @@ def get_all_tests():
                     'from': 'campuses',
                     'localField': 'campus_ids',
                     'foreignField': '_id',
-                    'as': 'campus_details'
+                    'as': 'campus_info'
                 }
             },
             {
@@ -946,50 +946,78 @@ def get_all_tests():
                     'from': 'batches',
                     'localField': 'batch_ids',
                     'foreignField': '_id',
-                    'as': 'batch_details'
+                    'as': 'batch_info'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'courses',
+                    'localField': 'course_ids',
+                    'foreignField': '_id',
+                    'as': 'course_info'
                 }
             },
             {
                 '$project': {
+                    '_id': 1,
                     'name': 1,
                     'test_type': 1,
                     'status': 1,
                     'created_at': 1,
+                    'question_count': {'$size': '$questions'},
                     'module_id': 1,
                     'level_id': 1,
                     'subcategory': 1,
-                    'campus_name': {'$arrayElemAt': ['$campus_details.name', 0]},
-                    'batch_names': '$batch_details.name',
-                    'question_count': {'$size': '$questions'}
+                    'campus_names': '$campus_info.name',
+                    'batches': '$batch_info.name',
+                    'courses': '$course_info.name'
                 }
             },
-            {
-                '$sort': {'created_at': -1}
-            }
+            {'$sort': {'created_at': -1}}
         ]
+
         tests = list(mongo_db.tests.aggregate(pipeline))
-        
-        ist_zone = tz.gettz('Asia/Kolkata')
 
+        tests_data = []
         for test in tests:
-            test['_id'] = str(test['_id'])
-            
-            if 'created_at' in test:
-                utc_time = test['created_at'].replace(tzinfo=timezone.utc)
-                ist_time = utc_time.astimezone(ist_zone)
-                test['created_at'] = ist_time.strftime('%Y-%m-%d %H:%M:%S')
+            created_at_utc = test.get('created_at', datetime.now(timezone.utc))
+            if created_at_utc.tzinfo is None:
+                created_at_utc = created_at_utc.replace(tzinfo=timezone.utc)
+            local_tz = tz.gettz('Asia/Kolkata')
+            created_at_local = created_at_utc.astimezone(local_tz)
 
-            test['module_name'] = MODULES.get(test.get('module_id'), 'N/A')
-            if test.get('module_id') == 'GRAMMAR':
-                test['level_name'] = GRAMMAR_CATEGORIES.get(test.get('subcategory'), 'N/A')
+            # Map module and level names using constants
+            module_id = test.get('module_id')
+            level_id = test.get('level_id')
+            subcategory = test.get('subcategory')
+            module_name = MODULES.get(module_id, 'N/A')
+            if module_id == 'GRAMMAR' and subcategory:
+                level_name = GRAMMAR_CATEGORIES.get(subcategory, 'N/A')
             else:
-                test['level_name'] = LEVELS.get(test.get('level_id'), 'N/A')
-            test['batches'] = ', '.join(test.get('batch_names', [])) or 'N/A'
+                level_name = LEVELS.get(level_id, 'N/A') if level_id else 'N/A'
 
-        return jsonify({'success': True, 'data': tests}), 200
+            campus_names = ', '.join(test.get('campus_names', []))
+            batches = ', '.join(test.get('batches', []))
+            courses = ', '.join(test.get('courses', []))
+
+            tests_data.append({
+                '_id': str(test['_id']),
+                'name': test.get('name'),
+                'test_type': test.get('test_type'),
+                'status': test.get('status'),
+                'question_count': test.get('question_count'),
+                'module_name': module_name,
+                'level_name': level_name,
+                'campus_name': campus_names,
+                'batches': batches,
+                'courses': courses,
+                'created_at': created_at_local.strftime('%Y-%m-%d %H:%M:%S')
+            })
+
+        return jsonify({'success': True, 'data': tests_data}), 200
     except Exception as e:
-        current_app.logger.error(f"Error fetching all tests: {e}")
-        return jsonify({'success': False, 'message': f'An unexpected error occurred: {e}'}), 500
+        current_app.logger.error(f"Error fetching all tests: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @test_management_bp.route('/tests/<test_id>', methods=['GET'])
 @jwt_required()
@@ -1088,59 +1116,100 @@ def check_test_name():
 @jwt_required()
 @require_superadmin
 def get_all_results():
-    """Get all test results for the super admin, with filtering."""
+    """
+    Get all test results with detailed student, campus, course, and batch info.
+    """
     try:
         pipeline = [
+            # 1. Lookup student details from 'users' collection
             {
                 '$lookup': {
                     'from': 'users',
                     'localField': 'student_id',
                     'foreignField': '_id',
-                    'as': 'student_details'
+                    'as': 'studentInfo'
+                }
+            },
+            # 2. Unwind the studentInfo array
+            {
+                '$unwind': '$studentInfo'
+            },
+            # 3. Lookup campus details
+            {
+                '$lookup': {
+                    'from': 'campuses',
+                    'localField': 'studentInfo.campus_id',
+                    'foreignField': '_id',
+                    'as': 'campusInfo'
                 }
             },
             {
-                '$unwind': '$student_details'
+                '$unwind': {'path': '$campusInfo', 'preserveNullAndEmptyArrays': True}
             },
+            # 4. Lookup course details
+            {
+                '$lookup': {
+                    'from': 'courses',
+                    'localField': 'studentInfo.course_id',
+                    'foreignField': '_id',
+                    'as': 'courseInfo'
+                }
+            },
+            {
+                '$unwind': {'path': '$courseInfo', 'preserveNullAndEmptyArrays': True}
+            },
+            # 5. Lookup batch details
+            {
+                '$lookup': {
+                    'from': 'batches',
+                    'localField': 'studentInfo.batch_id',
+                    'foreignField': '_id',
+                    'as': 'batchInfo'
+                }
+            },
+            {
+                '$unwind': {'path': '$batchInfo', 'preserveNullAndEmptyArrays': True}
+            },
+            # 6. Lookup test details
             {
                 '$lookup': {
                     'from': 'tests',
                     'localField': 'test_id',
                     'foreignField': '_id',
-                    'as': 'test_details'
+                    'as': 'testInfo'
                 }
             },
             {
-                '$unwind': '$test_details'
+                '$unwind': '$testInfo'
             },
+            # 7. Project the final fields
             {
                 '$project': {
                     '_id': 1,
-                    'student_name': '$student_details.name',
-                    'student_email': '$student_details.email',
-                    'test_name': '$test_details.name',
-                    'module_id': '$test_details.module_id',
-                    'average_score': 1,
-                    'submitted_at': 1,
-                    'test_type': 1
+                    'student_name': '$studentInfo.name',
+                    'student_email': '$studentInfo.email',
+                    'roll_number': '$studentInfo.roll_number',
+                    'campus_name': '$campusInfo.name',
+                    'course_name': '$courseInfo.name',
+                    'batch_name': '$batchInfo.name',
+                    'test_name': '$testInfo.test_name',
+                    'test_type': '$testInfo.test_type',
+                    'module_name': '$testInfo.module_name',
+                    'score': 1,
+                    'submitted_at': {
+                        '$dateToString': {
+                            'format': '%Y-%m-%d %H:%M:%S',
+                            'date': '$submitted_at'
+                        }
+                    }
                 }
-            },
-            { '$sort': { 'submitted_at': -1 } }
+            }
         ]
         
-        results = list(mongo_db.db.test_results.aggregate(pipeline))
+        results = list(mongo_db.student_test_attempts.aggregate(pipeline))
         
-        ist_zone = tz.gettz('Asia/Kolkata')
-        for r in results:
-            r['_id'] = str(r['_id'])
-            r['module_name'] = MODULES.get(r.get('module_id'), 'N/A')
-            if 'submitted_at' in r:
-                utc_time = r['submitted_at'].replace(tzinfo=timezone.utc)
-                ist_time = utc_time.astimezone(ist_zone)
-                r['submitted_at'] = ist_time.strftime('%Y-%m-%d %H:%M:%S')
-
-        return jsonify({'success': True, 'data': results})
+        return jsonify({'success': True, 'data': results}), 200
         
     except Exception as e:
         current_app.logger.error(f"Error fetching all results: {e}", exc_info=True)
-        return jsonify({'success': False, 'message': 'An error occurred while fetching results.'}), 500 
+        return jsonify({'success': False, 'message': f'An unexpected error occurred: {e}'}), 500 

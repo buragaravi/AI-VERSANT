@@ -441,6 +441,7 @@ const ResultView = ({ result, onBack }) => {
     
     const { correct_answers, total_questions, average_score, results } = result;
     const scorePercentage = average_score || 0;
+    const correctOnly = results ? results.filter(item => item.is_correct) : [];
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto">
@@ -465,38 +466,24 @@ const ResultView = ({ result, onBack }) => {
             </div>
 
             <div className="mt-10">
-                <h2 className="text-2xl font-bold text-gray-800 mb-6">Review Your Answers</h2>
-                <div className="space-y-4">
-                    {results && results.map((item, index) => (
-                        <div key={index} className={clsx(
-                            "bg-white p-6 rounded-xl shadow-lg border-l-4",
-                            {
-                                'border-green-500': item.is_correct,
-                                'border-red-500': !item.is_correct
-                            }
-                        )}>
-                            <p className="font-semibold text-gray-800 mb-2">{index + 1}. {item.question}</p>
-                            <div className="text-sm space-y-2 mt-4">
-                                <div className="flex items-center">
-                                    <span className="font-semibold w-32">Your Answer:</span>
-                                    <span className={clsx(
-                                        "px-3 py-1 rounded-full text-white",
-                                        {
-                                            "bg-green-500": item.is_correct,
-                                            "bg-red-500": !item.is_correct
-                                        }
-                                    )}>{item.student_answer || 'Not Answered'}</span>
-                                </div>
-                                {!item.is_correct && (
-                                    <div className="flex items-center">
-                                        <span className="font-semibold w-32">Correct Answer:</span>
-                                        <span className="px-3 py-1 rounded-full bg-green-200 text-green-800">{item.correct_answer}</span>
+                {correctOnly.length > 0 ? (
+                    <>
+                        <h2 className="text-2xl font-bold text-gray-800 mb-6">Correctly Answered Questions</h2>
+                        <div className="space-y-4">
+                            {correctOnly.map((item, index) => (
+                                <div key={index} className="bg-white p-6 rounded-xl shadow-lg border-l-4 border-green-500">
+                                    <p className="font-semibold text-gray-800 mb-2">{item.question}</p>
+                                    <div className="text-sm mt-2">
+                                        <span className="font-semibold">Your Answer: </span>
+                                        <span className="px-3 py-1 rounded-full bg-green-500 text-white">{item.student_answer}</span>
                                     </div>
-                                )}
-                            </div>
+                                </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
+                    </>
+                ) : (
+                    <div className="text-center text-gray-500 text-lg">No correct answers this time. Keep practicing!</div>
+                )}
             </div>
 
             <div className="text-center mt-10">

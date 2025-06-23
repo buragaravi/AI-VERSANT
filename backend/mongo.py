@@ -111,6 +111,53 @@ class MongoDB:
         """Find all students in a course"""
         return list(self.students.find({"course_id": ObjectId(course_id)}))
     
+    def get_students_by_batch(self, batch_id):
+        """Get all students for a specific batch with populated campus and course info."""
+        try:
+            batch_object_id = ObjectId(batch_id)
+            pipeline = [
+                {
+                    '$match': {'batch_id': batch_object_id}
+                },
+                {
+                    '$lookup': {
+                        'from': 'campuses',
+                        'localField': 'campus_id',
+                        'foreignField': '_id',
+                        'as': 'campus_info'
+                    }
+                },
+                {
+                    '$unwind': '$campus_info'
+                },
+                {
+                    '$lookup': {
+                        'from': 'courses',
+                        'localField': 'course_id',
+                        'foreignField': '_id',
+                        'as': 'course_info'
+                    }
+                },
+                {
+                    '$unwind': {'path': '$course_info', 'preserveNullAndEmptyArrays': True}
+                },
+                {
+                    '$project': {
+                        '_id': 0,
+                        'id': {'$toString': '$_id'},
+                        'name': '$name',
+                        'email': '$email',
+                        'roll_number': '$roll_number',
+                        'campus_name': '$campus_info.name',
+                        'course_name': '$course_info.name',
+                    }
+                }
+            ]
+            students = list(self.students.aggregate(pipeline))
+            return students
+        except Exception as e:
+            raise Exception(f"Error getting students by batch: {str(e)}")
+    
     def insert_test(self, test_data):
         """Insert a new test"""
         try:
@@ -187,6 +234,70 @@ class MongoDB:
     def get_all_campuses(self):
         """Get all campuses"""
         return list(self.campuses.find())
+
+    def get_courses_by_campus(self, campus_id):
+        """Get all courses for a specific campus."""
+        try:
+            campus_object_id = ObjectId(campus_id)
+            courses_cursor = self.courses.find({'campus_id': campus_object_id})
+            
+            courses_list = []
+            for course in courses_cursor:
+                course_data = {
+                    'id': str(course['_id']),
+                    'name': course.get('name'),
+                    'campus_id': str(course.get('campus_id'))
+                }
+                
+                # Optionally, fetch student count for each course
+                student_count = self.users.count_documents({
+                    'course_id': course['_id'],
+                    'role': 'student'
+                })
+                course_data['student_count'] = student_count
+                
+                courses_list.append(course_data)
+                
+            return courses_list
+        except Exception as e:
+            raise Exception(f"Error getting courses by campus: {str(e)}")
+
+    def get_batches_by_course(self, course_id):
+        """Get all batches for a specific course with student counts."""
+        try:
+            # First, find the course to get its campus_id
+            course_object_id = ObjectId(course_id)
+            course = self.courses.find_one({'_id': course_object_id})
+            if not course:
+                return [] # Or raise an error, depending on desired behavior
+
+            campus_id = course.get('campus_id')
+            if not campus_id:
+                return []
+
+            # Now, find all batches that belong to that campus
+            batches_cursor = self.batches.find({'campus_id': campus_id})
+            
+            batches_list = []
+            for batch in batches_cursor:
+                batch_data = {
+                    'id': str(batch['_id']),
+                    'name': batch.get('name'),
+                    'course_id': str(batch.get('course_id'))
+                }
+                
+                # Get student count for each batch
+                student_count = self.users.count_documents({
+                    'batch_id': batch['_id'],
+                    'role': 'student'
+                })
+                batch_data['student_count'] = student_count
+                
+                batches_list.append(batch_data)
+                
+            return batches_list
+        except Exception as e:
+            raise Exception(f"Error getting batches by course: {str(e)}")
 
     def update_campus(self, campus_id, update_data):
         """Update campus data (name or admin_id)"""

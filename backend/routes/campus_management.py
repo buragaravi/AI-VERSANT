@@ -155,4 +155,14 @@ def delete_campus(campus_id):
 
         return jsonify({'success': True, 'message': 'Campus and all associated data deleted successfully'}), 200
     except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@campus_management_bp.route('/<campus_id>/courses', methods=['GET'])
+@jwt_required()
+def get_campus_courses(campus_id):
+    """Get all courses for a specific campus."""
+    try:
+        courses = mongo_db.get_courses_by_campus(campus_id)
+        return jsonify({'success': True, 'data': courses}), 200
+    except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500 

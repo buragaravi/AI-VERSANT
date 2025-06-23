@@ -507,53 +507,36 @@ def upload_students_to_batch():
 @batch_management_bp.route('/batch/<batch_id>/students', methods=['GET'])
 @jwt_required()
 def get_batch_students(batch_id):
+    """Get all students and detailed info for a specific batch."""
     try:
-        course_id = request.args.get('course_id')
-        
-        query = {'batch_id': ObjectId(batch_id)}
-        if course_id:
-            try:
-                query['course_id'] = ObjectId(course_id)
-            except Exception:
-                return jsonify({'success': False, 'message': 'Invalid course_id format'}), 400
-
-        # Get batch information first
         batch = mongo_db.batches.find_one({'_id': ObjectId(batch_id)})
         if not batch:
             return jsonify({'success': False, 'message': 'Batch not found'}), 404
 
-        # Get campus and course information
-        campus = mongo_db.campuses.find_one({'_id': {'$in': batch['campus_ids']}})
-        courses = list(mongo_db.courses.find({'_id': {'$in': batch['course_ids']}}))
-
-        # Get students
-        students = list(mongo_db.students.find(query))
-        student_list = []
-        for student in students:
-            student_list.append({
-                'id': str(student['_id']),
-                'name': student['name'],
-                'roll_number': student['roll_number'],
-                'email': student['email'],
-                'mobile_number': student['mobile_number'],
-                'course_id': str(student['course_id']),
-                'campus_id': str(student['campus_id'])
-            })
+        # Fetch campus and course names for the batch header
+        campus_ids = batch.get('campus_ids', [])
+        course_ids = batch.get('course_ids', [])
+        
+        campuses = list(mongo_db.campuses.find({'_id': {'$in': campus_ids}}))
+        courses = list(mongo_db.courses.find({'_id': {'$in': course_ids}}))
 
         batch_info = {
             'id': str(batch['_id']),
-            'name': batch['name'],
-            'campus_name': campus['name'] if campus else 'Unknown Campus',
-            'course_name': ', '.join(c['name'] for c in courses) if courses else 'No Courses'
+            'name': batch.get('name'),
+            'campus_name': ', '.join([c['name'] for c in campuses]),
+            'course_name': ', '.join([c['name'] for c in courses])
         }
+
+        # Fetch students with populated info using the new method
+        students_with_details = mongo_db.get_students_by_batch(batch_id)
 
         return jsonify({
             'success': True,
-            'data': student_list,
+            'data': students_with_details,
             'batch_info': batch_info
         }), 200
     except Exception as e:
-        current_app.logger.error(f"Error fetching batch students: {str(e)}")
+        current_app.logger.error(f"Error fetching batch students: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @batch_management_bp.route('/student/<student_id>', methods=['GET'])

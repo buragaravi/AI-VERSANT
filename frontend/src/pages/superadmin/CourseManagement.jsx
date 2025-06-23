@@ -5,7 +5,7 @@ import Header from '../../components/common/Header';
 import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
-import { Book, PlusCircle, Search, Trash2, Edit, X, User, Mail, Key, Building } from 'lucide-react';
+import { Book, PlusCircle, Search, Trash2, Edit, X, User, Mail, Key, Building, ChevronDown, ChevronUp, Briefcase } from 'lucide-react';
 
 const CourseManagement = () => {
     const [courses, setCourses] = useState([]);
@@ -22,6 +22,9 @@ const CourseManagement = () => {
         admin_email: '',
         admin_password: ''
     });
+    const [expandedCourse, setExpandedCourse] = useState(null);
+    const [batches, setBatches] = useState([]);
+    const [loadingBatches, setLoadingBatches] = useState(false);
 
     const { success, error } = useNotification();
 
@@ -44,6 +47,25 @@ const CourseManagement = () => {
     useEffect(() => {
         fetchData();
     }, []);
+
+    const toggleCourseExpansion = async (courseId) => {
+        if (expandedCourse === courseId) {
+            setExpandedCourse(null);
+            setBatches([]);
+        } else {
+            setExpandedCourse(courseId);
+            setLoadingBatches(true);
+            try {
+                const res = await api.get(`/course-management/${courseId}/batches`);
+                setBatches(res.data.data);
+            } catch (err) {
+                error('Failed to fetch batches for this course.');
+                setBatches([]);
+            } finally {
+                setLoadingBatches(false);
+            }
+        }
+    };
 
     const filteredCourses = useMemo(() => {
         return courses.filter(course =>
@@ -154,18 +176,64 @@ const CourseManagement = () => {
                                         </thead>
                                         <tbody className="bg-white divide-y divide-gray-200">
                                             {filteredCourses.map(course => (
-                                                <tr key={course.id}>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{course.name}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{course.campus?.name || 'N/A'}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="text-sm font-medium text-gray-900">{course.admin?.name || 'N/A'}</div>
-                                                        <div className="text-sm text-gray-500">{course.admin?.email || 'N/A'}</div>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                        <button onClick={() => openModal(course)} className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={18} /></button>
-                                                        <button onClick={() => handleDelete(course.id)} className="text-red-600 hover:text-red-900"><Trash2 size={18}/></button>
-                                                    </td>
-                                                </tr>
+                                                <React.Fragment key={course.id}>
+                                                    <tr className="cursor-pointer hover:bg-gray-50" onClick={() => toggleCourseExpansion(course.id)}>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <div className="flex items-center">
+                                                                <span className="text-sm font-medium text-gray-900">{course.name}</span>
+                                                                <div className="ml-2">
+                                                                    {expandedCourse === course.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{course.campus?.name || 'N/A'}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <div className="text-sm font-medium text-gray-900">{course.admin?.name || 'N/A'}</div>
+                                                            <div className="text-sm text-gray-500">{course.admin?.email || 'N/A'}</div>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                            <button onClick={(e) => { e.stopPropagation(); openModal(course); }} className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={18} /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(course.id); }} className="text-red-600 hover:text-red-900"><Trash2 size={18}/></button>
+                                                        </td>
+                                                    </tr>
+                                                    <AnimatePresence>
+                                                        {expandedCourse === course.id && (
+                                                            <motion.tr
+                                                                initial={{ opacity: 0, height: 0 }}
+                                                                animate={{ opacity: 1, height: 'auto' }}
+                                                                exit={{ opacity: 0, height: 0 }}
+                                                            >
+                                                                <td colSpan="4" className="p-0">
+                                                                    <div className="bg-gray-100 p-4">
+                                                                        {loadingBatches ? <LoadingSpinner size="sm" /> :
+                                                                            batches.length > 0 ? (
+                                                                                <div>
+                                                                                    <h4 className="text-md font-semibold mb-2 text-gray-700">Batches</h4>
+                                                                                    <ul className="space-y-2">
+                                                                                        {batches.map(batch => (
+                                                                                            <li key={batch.id} className="bg-white p-3 rounded-md shadow-sm flex justify-between items-center">
+                                                                                                <div className="flex items-center">
+                                                                                                    <Briefcase size={16} className="mr-2 text-purple-500"/>
+                                                                                                    <span className="text-sm font-medium text-gray-800">{batch.name}</span>
+                                                                                                </div>
+                                                                                                <div className="flex items-center text-sm text-gray-600">
+                                                                                                    <Users size={14} className="mr-1 text-gray-400"/>
+                                                                                                    <span>{batch.student_count} Students</span>
+                                                                                                </div>
+                                                                                            </li>
+                                                                                        ))}
+                                                                                    </ul>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className="text-center py-4 text-gray-500">No batches found for this course.</div>
+                                                                            )
+                                                                        }
+                                                                    </div>
+                                                                </td>
+                                                            </motion.tr>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </React.Fragment>
                                             ))}
                                         </tbody>
                                     </table>

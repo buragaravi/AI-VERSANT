@@ -184,4 +184,14 @@ def delete_course(course_id):
             return jsonify({'success': False, 'message': 'No course deleted'}), 404
         return jsonify({'success': True, 'message': 'Course deleted'}), 200
     except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@course_management_bp.route('/<course_id>/batches', methods=['GET'])
+@jwt_required()
+def get_course_batches(course_id):
+    """Get all batches for a specific course."""
+    try:
+        batches = mongo_db.get_batches_by_course(course_id)
+        return jsonify({'success': True, 'data': batches}), 200
+    except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500 

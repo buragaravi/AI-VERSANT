@@ -8,6 +8,77 @@ from datetime import datetime
 
 student_bp = Blueprint('student', __name__)
 
+@student_bp.route('/profile', methods=['GET'])
+@jwt_required()
+def get_student_profile():
+    """Fetches the detailed profile for the currently logged-in student."""
+    try:
+        current_user_id = get_jwt_identity()
+        user_object_id = ObjectId(current_user_id)
+
+        pipeline = [
+            {'$match': {'_id': user_object_id}},
+            {
+                '$lookup': {
+                    'from': 'students',
+                    'localField': '_id',
+                    'foreignField': 'user_id',
+                    'as': 'student_details'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'campuses',
+                    'localField': 'campus_id',
+                    'foreignField': '_id',
+                    'as': 'campus_details'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'courses',
+                    'localField': 'course_id',
+                    'foreignField': '_id',
+                    'as': 'course_details'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'batches',
+                    'localField': 'batch_id',
+                    'foreignField': '_id',
+                    'as': 'batch_details'
+                }
+            },
+            {'$unwind': {'path': '$student_details', 'preserveNullAndEmptyArrays': True}},
+            {'$unwind': {'path': '$campus_details', 'preserveNullAndEmptyArrays': True}},
+            {'$unwind': {'path': '$course_details', 'preserveNullAndEmptyArrays': True}},
+            {'$unwind': {'path': '$batch_details', 'preserveNullAndEmptyArrays': True}},
+            {
+                '$project': {
+                    '_id': 0,
+                    'name': '$name',
+                    'email': '$email',
+                    'role': '$role',
+                    'roll_number': '$student_details.roll_number',
+                    'campus': '$campus_details.name',
+                    'course': '$course_details.name',
+                    'batch': '$batch_details.name'
+                }
+            }
+        ]
+
+        profile_data = list(mongo_db.users.aggregate(pipeline))
+
+        if not profile_data:
+            return jsonify({'success': False, 'message': 'Student profile not found.'}), 404
+
+        return jsonify({'success': True, 'data': profile_data[0]}), 200
+
+    except Exception as e:
+        logging.error(f"Error fetching student profile for user_id {get_jwt_identity()}: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'An error occurred while fetching your profile.'}), 500
+
 @student_bp.route('/modules', methods=['GET'])
 @jwt_required()
 def get_available_modules():
@@ -404,3 +475,370 @@ def submit_student_test():
     except Exception as e:
         logging.error(f"Error submitting test for student {get_jwt_identity()}: {e}", exc_info=True)
         return jsonify({'success': False, 'message': 'An internal server error occurred.'}), 500 
+
+@student_bp.route('/test-history', methods=['GET'])
+@jwt_required()
+def get_test_history():
+    """Get student's test history with detailed results"""
+    try:
+        current_user_id = get_jwt_identity()
+        
+        pipeline = [
+            {
+                '$match': {
+                    'student_id': ObjectId(current_user_id)
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'tests',
+                    'localField': 'test_id',
+                    'foreignField': '_id',
+                    'as': 'test_details'
+                }
+            },
+            {
+                '$unwind': '$test_details'
+            },
+            {
+                '$project': {
+                    '_id': 1,
+                    'test_name': '$test_details.name',
+                    'module_id': '$test_details.module_id',
+                    'subcategory': 1,
+                    'level_id': '$test_details.level_id',
+                    'average_score': 1,
+                    'correct_answers': 1,
+                    'total_questions': 1,
+                    'submitted_at': 1,
+                    'test_type': 1
+                }
+            },
+            { '$sort': { 'submitted_at': -1 } }
+        ]
+        
+        results = list(mongo_db.db.test_results.aggregate(pipeline))
+        
+        # Convert ObjectIds to strings and add module names
+        for result in results:
+            result['_id'] = str(result['_id'])
+            result['module_name'] = MODULES.get(result.get('module_id'), 'Unknown')
+            result['level_name'] = LEVELS.get(result.get('level_id'), 'Unknown')
+            if 'submitted_at' in result:
+                result['submitted_at'] = result['submitted_at'].isoformat()
+        
+        return jsonify({
+            'success': True,
+            'data': results
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error fetching test history for student {get_jwt_identity()}: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Failed to fetch test history.'}), 500
+
+@student_bp.route('/practice-results', methods=['GET'])
+@jwt_required()
+def get_practice_results():
+    """Get detailed practice module results for student"""
+    try:
+        current_user_id = get_jwt_identity()
+        
+        # Get all practice test results
+        pipeline = [
+            {
+                '$match': {
+                    'student_id': ObjectId(current_user_id),
+                    'test_type': 'practice'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'tests',
+                    'localField': 'test_id',
+                    'foreignField': '_id',
+                    'as': 'test_details'
+                }
+            },
+            {
+                '$unwind': '$test_details'
+            },
+            {
+                '$group': {
+                    '_id': {
+                        'module_id': '$test_details.module_id',
+                        'subcategory': '$subcategory'
+                    },
+                    'module_name': { '$first': '$test_details.module_id' },
+                    'subcategory_name': { '$first': '$subcategory' },
+                    'total_attempts': { '$sum': 1 },
+                    'highest_score': { '$max': '$average_score' },
+                    'average_score': { '$avg': '$average_score' },
+                    'total_questions_attempted': { '$sum': '$total_questions' },
+                    'total_correct_answers': { '$sum': '$correct_answers' },
+                    'last_attempt': { '$max': '$submitted_at' },
+                    'results': { '$push': '$$ROOT' }
+                }
+            },
+            {
+                '$sort': { 'module_name': 1, 'subcategory_name': 1 }
+            }
+        ]
+        
+        results = list(mongo_db.db.test_results.aggregate(pipeline))
+        
+        # Process results
+        for result in results:
+            result['module_name'] = MODULES.get(result['module_name'], 'Unknown')
+            result['accuracy'] = (result['total_correct_answers'] / result['total_questions_attempted'] * 100) if result['total_questions_attempted'] > 0 else 0
+            result['last_attempt'] = result['last_attempt'].isoformat() if result['last_attempt'] else None
+        
+        return jsonify({
+            'success': True,
+            'data': results
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error fetching practice results for student {get_jwt_identity()}: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Failed to fetch practice results.'}), 500
+
+@student_bp.route('/grammar-detailed-results', methods=['GET'])
+@jwt_required()
+def get_grammar_detailed_results():
+    """Get detailed grammar practice results by subcategory"""
+    try:
+        current_user_id = get_jwt_identity()
+        
+        pipeline = [
+            {
+                '$match': {
+                    'student_id': ObjectId(current_user_id),
+                    'module_id': 'GRAMMAR',
+                    'test_type': 'practice'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'tests',
+                    'localField': 'test_id',
+                    'foreignField': '_id',
+                    'as': 'test_details'
+                }
+            },
+            {
+                '$unwind': '$test_details'
+            },
+            {
+                '$group': {
+                    '_id': '$subcategory',
+                    'subcategory_name': { '$first': '$subcategory' },
+                    'total_attempts': { '$sum': 1 },
+                    'highest_score': { '$max': '$average_score' },
+                    'average_score': { '$avg': '$average_score' },
+                    'total_questions': { '$sum': '$total_questions' },
+                    'total_correct': { '$sum': '$correct_answers' },
+                    'last_attempt': { '$max': '$submitted_at' },
+                    'attempts': {
+                        '$push': {
+                            'test_name': '$test_details.name',
+                            'score': '$average_score',
+                            'correct_answers': '$correct_answers',
+                            'total_questions': '$total_questions',
+                            'submitted_at': '$submitted_at',
+                            'result_id': '$_id'
+                        }
+                    }
+                }
+            },
+            {
+                '$sort': { 'subcategory_name': 1 }
+            }
+        ]
+        
+        results = list(mongo_db.db.test_results.aggregate(pipeline))
+        
+        # Process results
+        for result in results:
+            result['subcategory_display_name'] = GRAMMAR_CATEGORIES.get(result['subcategory_name'], result['subcategory_name'])
+            result['accuracy'] = (result['total_correct'] / result['total_questions'] * 100) if result['total_questions'] > 0 else 0
+            result['last_attempt'] = result['last_attempt'].isoformat() if result['last_attempt'] else None
+            result['status'] = 'completed' if result['highest_score'] >= 60 else 'needs_improvement'
+            
+            # Sort attempts by date
+            result['attempts'].sort(key=lambda x: x['submitted_at'], reverse=True)
+            
+            # Convert ObjectIds to strings
+            for attempt in result['attempts']:
+                attempt['result_id'] = str(attempt['result_id'])
+                attempt['submitted_at'] = attempt['submitted_at'].isoformat()
+        
+        return jsonify({
+            'success': True,
+            'data': results
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error fetching grammar detailed results for student {get_jwt_identity()}: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Failed to fetch grammar results.'}), 500
+
+@student_bp.route('/vocabulary-detailed-results', methods=['GET'])
+@jwt_required()
+def get_vocabulary_detailed_results():
+    """Get detailed vocabulary practice results"""
+    try:
+        current_user_id = get_jwt_identity()
+        
+        pipeline = [
+            {
+                '$match': {
+                    'student_id': ObjectId(current_user_id),
+                    'module_id': 'VOCABULARY',
+                    'test_type': 'practice'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'tests',
+                    'localField': 'test_id',
+                    'foreignField': '_id',
+                    'as': 'test_details'
+                }
+            },
+            {
+                '$unwind': '$test_details'
+            },
+            {
+                '$group': {
+                    '_id': '$test_details.level_id',
+                    'level_name': { '$first': '$test_details.level_id' },
+                    'total_attempts': { '$sum': 1 },
+                    'highest_score': { '$max': '$average_score' },
+                    'average_score': { '$avg': '$average_score' },
+                    'total_questions': { '$sum': '$total_questions' },
+                    'total_correct': { '$sum': '$correct_answers' },
+                    'last_attempt': { '$max': '$submitted_at' },
+                    'attempts': {
+                        '$push': {
+                            'test_name': '$test_details.name',
+                            'score': '$average_score',
+                            'correct_answers': '$correct_answers',
+                            'total_questions': '$total_questions',
+                            'submitted_at': '$submitted_at',
+                            'result_id': '$_id'
+                        }
+                    }
+                }
+            },
+            {
+                '$sort': { 'level_name': 1 }
+            }
+        ]
+        
+        results = list(mongo_db.db.test_results.aggregate(pipeline))
+        
+        # Process results
+        for result in results:
+            result['level_display_name'] = LEVELS.get(result['level_name'], result['level_name'])
+            result['accuracy'] = (result['total_correct'] / result['total_questions'] * 100) if result['total_questions'] > 0 else 0
+            result['last_attempt'] = result['last_attempt'].isoformat() if result['last_attempt'] else None
+            result['status'] = 'completed' if result['highest_score'] >= 60 else 'needs_improvement'
+            
+            # Sort attempts by date
+            result['attempts'].sort(key=lambda x: x['submitted_at'], reverse=True)
+            
+            # Convert ObjectIds to strings
+            for attempt in result['attempts']:
+                attempt['result_id'] = str(attempt['result_id'])
+                attempt['submitted_at'] = attempt['submitted_at'].isoformat()
+        
+        return jsonify({
+            'success': True,
+            'data': results
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error fetching vocabulary detailed results for student {get_jwt_identity()}: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Failed to fetch vocabulary results.'}), 500
+
+@student_bp.route('/progress-summary', methods=['GET'])
+@jwt_required()
+def get_progress_summary():
+    """Get comprehensive progress summary for student"""
+    try:
+        current_user_id = get_jwt_identity()
+        
+        # Get overall statistics
+        total_results = mongo_db.db.test_results.count_documents({
+            'student_id': ObjectId(current_user_id),
+            'test_type': 'practice'
+        })
+        
+        # Get module-wise statistics
+        pipeline = [
+            {
+                '$match': {
+                    'student_id': ObjectId(current_user_id),
+                    'test_type': 'practice'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'tests',
+                    'localField': 'test_id',
+                    'foreignField': '_id',
+                    'as': 'test_details'
+                }
+            },
+            {'$unwind': '$test_details'},
+            {
+                '$group': {
+                    '_id': '$test_details.module_id',
+                    'module_name': { '$first': '$test_details.module_id' },
+                    'total_attempts': { '$sum': 1 },
+                    'highest_score': { '$max': '$average_score' },
+                    'average_score': { '$avg': '$average_score' },
+                    'total_questions': { '$sum': '$total_questions' },
+                    'total_correct': { '$sum': '$correct_answers' },
+                    'last_attempt': { '$max': '$submitted_at' }
+                }
+            }
+        ]
+        
+        module_stats = list(mongo_db.db.test_results.aggregate(pipeline))
+        
+        # Process module statistics
+        for stat in module_stats:
+            stat['module_display_name'] = MODULES.get(stat['module_name'], 'Unknown')
+            stat['accuracy'] = (stat['total_correct'] / stat['total_questions'] * 100) if stat['total_questions'] > 0 else 0
+            stat['last_attempt'] = stat['last_attempt'].isoformat() if stat['last_attempt'] else None
+            stat['progress_percentage'] = min(100, (stat['highest_score'] / 100) * 100)
+            # Convert ObjectId in _id to string if present
+            if isinstance(stat.get('_id'), ObjectId):
+                stat['_id'] = str(stat['_id'])
+        
+        # Get recent activity
+        recent_activity = list(mongo_db.db.test_results.find({
+            'student_id': ObjectId(current_user_id)
+        }).sort('submitted_at', -1).limit(10))
+        
+        for activity in recent_activity:
+            activity['_id'] = str(activity['_id'])
+            activity['submitted_at'] = activity['submitted_at'].isoformat()
+            # Convert any ObjectId fields in activity to string
+            for k, v in activity.items():
+                if isinstance(v, ObjectId):
+                    activity[k] = str(v)
+        
+        summary = {
+            'total_practice_tests': total_results,
+            'modules': module_stats,
+            'recent_activity': recent_activity
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': summary
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error fetching progress summary for student {get_jwt_identity()}: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Failed to fetch progress summary.'}), 500 

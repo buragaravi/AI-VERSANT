@@ -5,7 +5,7 @@ import Header from '../../components/common/Header';
 import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
-import { Building, PlusCircle, Search, Trash2, Edit, X, User, Mail, Key } from 'lucide-react';
+import { Building, PlusCircle, Search, Trash2, Edit, X, User, Mail, Key, ChevronDown, ChevronUp, BookOpen, Users } from 'lucide-react';
 
 const CampusManagement = () => {
     const [campuses, setCampuses] = useState([]);
@@ -21,6 +21,9 @@ const CampusManagement = () => {
         admin_email: '',
         admin_password: ''
     });
+    const [expandedCampus, setExpandedCampus] = useState(null);
+    const [courses, setCourses] = useState([]);
+    const [loadingCourses, setLoadingCourses] = useState(false);
 
     const { success, error, info } = useNotification();
 
@@ -39,6 +42,25 @@ const CampusManagement = () => {
     useEffect(() => {
         fetchCampuses();
     }, []);
+
+    const toggleCampusExpansion = async (campusId) => {
+        if (expandedCampus === campusId) {
+            setExpandedCampus(null);
+            setCourses([]);
+        } else {
+            setExpandedCampus(campusId);
+            setLoadingCourses(true);
+            try {
+                const res = await api.get(`/campus-management/${campusId}/courses`);
+                setCourses(res.data.data);
+            } catch (err) {
+                error('Failed to fetch courses for this campus.');
+                setCourses([]);
+            } finally {
+                setLoadingCourses(false);
+            }
+        }
+    };
 
     const filteredCampuses = useMemo(() => {
         return campuses.filter(campus =>
@@ -150,19 +172,64 @@ const CampusManagement = () => {
                                         </thead>
                                         <tbody className="bg-white divide-y divide-gray-200">
                                             {filteredCampuses.map(campus => (
-                                                <tr key={campus.id}>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="text-sm font-medium text-gray-900">{campus.name}</div>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="text-sm font-medium text-gray-900">{campus.admin?.name || 'N/A'}</div>
-                                                        <div className="text-sm text-gray-500">{campus.admin?.email || 'N/A'}</div>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                        <button onClick={() => openModal(campus)} className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={18} /></button>
-                                                        <button onClick={() => handleDelete(campus.id)} className="text-red-600 hover:text-red-900"><Trash2 size={18}/></button>
-                                                    </td>
-                                                </tr>
+                                                <React.Fragment key={campus.id}>
+                                                    <tr className="cursor-pointer hover:bg-gray-50" onClick={() => toggleCampusExpansion(campus.id)}>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <div className="flex items-center">
+                                                                <div className="text-sm font-medium text-gray-900">{campus.name}</div>
+                                                                <div className="ml-2">
+                                                                    {expandedCampus === campus.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <div className="text-sm font-medium text-gray-900">{campus.admin?.name || 'N/A'}</div>
+                                                            <div className="text-sm text-gray-500">{campus.admin?.email || 'N/A'}</div>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                            <button onClick={(e) => { e.stopPropagation(); openModal(campus); }} className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={18} /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(campus.id); }} className="text-red-600 hover:text-red-900"><Trash2 size={18}/></button>
+                                                        </td>
+                                                    </tr>
+                                                    <AnimatePresence>
+                                                        {expandedCampus === campus.id && (
+                                                            <motion.tr
+                                                                initial={{ opacity: 0, height: 0 }}
+                                                                animate={{ opacity: 1, height: 'auto' }}
+                                                                exit={{ opacity: 0, height: 0 }}
+                                                                transition={{ duration: 0.3 }}
+                                                            >
+                                                                <td colSpan="3" className="p-0">
+                                                                    <div className="bg-gray-100 p-4">
+                                                                        {loadingCourses ? <LoadingSpinner size="sm"/> :
+                                                                            courses.length > 0 ? (
+                                                                                <div>
+                                                                                    <h4 className="text-md font-semibold mb-2 text-gray-700">Courses</h4>
+                                                                                    <ul className="space-y-2">
+                                                                                        {courses.map(course => (
+                                                                                            <li key={course.id} className="bg-white p-3 rounded-md shadow-sm flex justify-between items-center">
+                                                                                                <div className="flex items-center">
+                                                                                                    <BookOpen size={16} className="mr-2 text-blue-500"/>
+                                                                                                    <span className="text-sm font-medium text-gray-800">{course.name}</span>
+                                                                                                </div>
+                                                                                                <div className="flex items-center text-sm text-gray-600">
+                                                                                                    <Users size={14} className="mr-1 text-gray-400"/>
+                                                                                                    <span>{course.student_count} Students</span>
+                                                                                                </div>
+                                                                                            </li>
+                                                                                        ))}
+                                                                                    </ul>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className="text-center py-4 text-gray-500">No courses found for this campus.</div>
+                                                                            )
+                                                                        }
+                                                                    </div>
+                                                                </td>
+                                                            </motion.tr>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </React.Fragment>
                                             ))}
                                         </tbody>
                                     </table>

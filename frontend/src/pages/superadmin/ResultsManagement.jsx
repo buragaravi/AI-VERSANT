@@ -5,12 +5,18 @@ import Header from '../../components/common/Header';
 import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
-import { BookOpen, User, Calendar, Percent, Filter } from 'lucide-react';
+import { BookOpen, User, Calendar, Percent, Filter, Building, Briefcase, GraduationCap } from 'lucide-react';
 
 const ResultsManagement = () => {
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filters, setFilters] = useState({ module: '', test_type: '' });
+    const [filters, setFilters] = useState({ 
+        module: '', 
+        test_type: '',
+        campus: '',
+        course: '',
+        batch: ''
+    });
     const { error } = useNotification();
 
     useEffect(() => {
@@ -32,12 +38,18 @@ const ResultsManagement = () => {
         return results.filter(result => {
             const moduleMatch = filters.module ? result.module_name === filters.module : true;
             const typeMatch = filters.test_type ? result.test_type === filters.test_type : true;
-            return moduleMatch && typeMatch;
+            const campusMatch = filters.campus ? result.campus_name === filters.campus : true;
+            const courseMatch = filters.course ? result.course_name === filters.course : true;
+            const batchMatch = filters.batch ? result.batch_name === filters.batch : true;
+            return moduleMatch && typeMatch && campusMatch && courseMatch && batchMatch;
         });
     }, [results, filters]);
 
     const moduleOptions = useMemo(() => [...new Set(results.map(r => r.module_name))], [results]);
     const typeOptions = useMemo(() => [...new Set(results.map(r => r.test_type))], [results]);
+    const campusOptions = useMemo(() => [...new Set(results.map(r => r.campus_name).filter(Boolean))], [results]);
+    const courseOptions = useMemo(() => [...new Set(results.map(r => r.course_name).filter(Boolean))], [results]);
+    const batchOptions = useMemo(() => [...new Set(results.map(r => r.batch_name).filter(Boolean))], [results]);
 
     const handleFilterChange = (e) => {
         setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -56,7 +68,7 @@ const ResultsManagement = () => {
                         <div className="mt-8 bg-white rounded-2xl shadow-lg">
                             <div className="p-6 border-b border-gray-200">
                                 <h3 className="text-xl font-semibold text-gray-800 flex items-center"><Filter className="mr-3 h-5 w-5 text-gray-400" /> Filters</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-4">
                                     <select name="module" value={filters.module} onChange={handleFilterChange} className="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                                         <option value="">All Modules</option>
                                         {moduleOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -64,6 +76,18 @@ const ResultsManagement = () => {
                                     <select name="test_type" value={filters.test_type} onChange={handleFilterChange} className="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                                         <option value="">All Types</option>
                                         {typeOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                    </select>
+                                    <select name="campus" value={filters.campus} onChange={handleFilterChange} className="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                                        <option value="">All Campuses</option>
+                                        {campusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                    </select>
+                                    <select name="course" value={filters.course} onChange={handleFilterChange} className="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                                        <option value="">All Courses</option>
+                                        {courseOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                    </select>
+                                    <select name="batch" value={filters.batch} onChange={handleFilterChange} className="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                                        <option value="">All Batches</option>
+                                        {batchOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                                     </select>
                                 </div>
                             </div>
@@ -74,8 +98,10 @@ const ResultsManagement = () => {
                                         <thead className="bg-gray-50">
                                             <tr>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campus</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Batch</th>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Test Name</th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Module</th>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted At</th>
                                             </tr>
@@ -85,15 +111,13 @@ const ResultsManagement = () => {
                                                 <tr key={result._id}>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <div className="text-sm font-medium text-gray-900">{result.student_name}</div>
-                                                        <div className="text-sm text-gray-500">{result.student_email}</div>
+                                                        <div className="text-sm text-gray-500">{result.roll_number || result.student_email}</div>
                                                     </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{result.campus_name || 'N/A'}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{result.course_name || 'N/A'}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{result.batch_name || 'N/A'}</td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{result.test_name}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                                                            {result.module_name}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">{result.average_score.toFixed(2)}%</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">{result.score?.toFixed(2) || 0.00}%</td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{result.submitted_at}</td>
                                                 </tr>
                                             ))}

@@ -21,6 +21,7 @@ import BatchManagement from './pages/superadmin/BatchManagement'
 import StudentManagement from './pages/superadmin/StudentManagement'
 import ResultsManagement from './pages/superadmin/ResultsManagement'
 import BatchDetails from './pages/superadmin/BatchDetails'
+import PracticeAnalytics from './pages/superadmin/PracticeAnalytics'
 
 // Campus Admin Pages
 import CampusAdminDashboard from './pages/campus-admin/CampusAdminDashboard'
@@ -38,6 +39,7 @@ import PracticeModules from './pages/student/PracticeModules'
 import OnlineExams from './pages/student/OnlineExams'
 import TestHistory from './pages/student/TestHistory'
 import ProgressTracker from './pages/student/ProgressTracker'
+import StudentProfile from './pages/student/Profile'
 
 // Components
 import ProtectedRoute from './components/common/ProtectedRoute'
@@ -75,6 +77,7 @@ function App() {
                         <Route path="batches/:batchId" element={<ProtectedRoute allowedRoles={['super_admin']}><BatchDetails /></ProtectedRoute>} />
                         <Route path="students" element={<ProtectedRoute allowedRoles={['super_admin']}><StudentManagement /></ProtectedRoute>} />
                         <Route path="results" element={<ProtectedRoute allowedRoles={['super_admin']}><ResultsManagement /></ProtectedRoute>} />
+                        <Route path="practice-analytics" element={<ProtectedRoute allowedRoles={['super_admin']}><PracticeAnalytics /></ProtectedRoute>} />
                         <Route path="tests" element={<TestManagement />} />
                         <Route path="tests/create" element={<TestManagement />} />
                         <Route path="analytics" element={<SystemAnalytics />} />
@@ -122,6 +125,7 @@ function App() {
                         <Route path="/exams" element={<OnlineExams />} />
                         <Route path="/history" element={<TestHistory />} />
                         <Route path="/progress" element={<ProgressTracker />} />
+                        <Route path="/profile" element={<StudentProfile />} />
                       </Routes>
                     </ProtectedRoute>
                   }

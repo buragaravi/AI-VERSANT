@@ -21,6 +21,7 @@ const SuperAdminSidebar = () => {
     { name: 'Batch Management', path: '/superadmin/batches', icon: Briefcase },
     { name: 'Module Creation', path: '/superadmin/tests/create', icon: PlusSquare },
     { name: 'Results', path: '/superadmin/results', icon: BarChart3 },
+    { name: 'Practice Analytics', path: '/superadmin/practice-analytics', icon: BarChart3 },
     { name: 'Student Management', path: '/superadmin/students', icon: GraduationCap },
     { name: 'System Analytics', path: '/superadmin/analytics', icon: LineChart }
   ]

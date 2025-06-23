@@ -314,4 +314,361 @@ def create_online_exam():
         return jsonify({
             'success': False,
             'message': f'Failed to create online exam: {str(e)}'
+        }), 500
+
+@superadmin_bp.route('/student-practice-results', methods=['GET'])
+@jwt_required()
+def get_student_practice_results():
+    """Get detailed practice results for all students"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') != ROLES['SUPER_ADMIN']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+        
+        # Get query parameters
+        module_filter = request.args.get('module')
+        campus_filter = request.args.get('campus')
+        student_filter = request.args.get('student')
+        
+        # Build match conditions
+        match_conditions = {'test_type': 'practice'}
+        if module_filter:
+            match_conditions['module_id'] = module_filter
+        
+        pipeline = [
+            {'$match': match_conditions},
+            {
+                '$lookup': {
+                    'from': 'users',
+                    'localField': 'student_id',
+                    'foreignField': '_id',
+                    'as': 'student_details'
+                }
+            },
+            {'$unwind': '$student_details'},
+            {
+                '$lookup': {
+                    'from': 'tests',
+                    'localField': 'test_id',
+                    'foreignField': '_id',
+                    'as': 'test_details'
+                }
+            },
+            {'$unwind': '$test_details'},
+            {
+                '$lookup': {
+                    'from': 'students',
+                    'localField': 'student_id',
+                    'foreignField': 'user_id',
+                    'as': 'student_profile'
+                }
+            },
+            {'$unwind': '$student_profile'},
+            {
+                '$lookup': {
+                    'from': 'campuses',
+                    'localField': 'student_profile.campus_id',
+                    'foreignField': '_id',
+                    'as': 'campus_details'
+                }
+            },
+            {'$unwind': '$campus_details'},
+            {
+                '$group': {
+                    '_id': {
+                        'student_id': '$student_id',
+                        'module_id': '$test_details.module_id',
+                        'subcategory': '$subcategory'
+                    },
+                    'student_name': {'$first': '$student_details.name'},
+                    'student_email': {'$first': '$student_details.email'},
+                    'campus_name': {'$first': '$campus_details.name'},
+                    'module_name': {'$first': '$test_details.module_id'},
+                    'subcategory_name': {'$first': '$subcategory'},
+                    'total_attempts': {'$sum': 1},
+                    'highest_score': {'$max': '$average_score'},
+                    'average_score': {'$avg': '$average_score'},
+                    'total_questions': {'$sum': '$total_questions'},
+                    'total_correct': {'$sum': '$correct_answers'},
+                    'last_attempt': {'$max': '$submitted_at'},
+                    'attempts': {
+                        '$push': {
+                            'test_name': '$test_details.name',
+                            'score': '$average_score',
+                            'correct_answers': '$correct_answers',
+                            'total_questions': '$total_questions',
+                            'submitted_at': '$submitted_at',
+                            'result_id': '$_id'
+                        }
+                    }
+                }
+            },
+            {'$sort': {'student_name': 1, 'module_name': 1}}
+        ]
+        
+        # Apply additional filters
+        if campus_filter:
+            pipeline.insert(0, {'$match': {'campus_name': campus_filter}})
+        if student_filter:
+            pipeline.insert(0, {'$match': {'$or': [
+                {'student_name': {'$regex': student_filter, '$options': 'i'}},
+                {'student_email': {'$regex': student_filter, '$options': 'i'}}
+            ]}})
+        
+        results = list(mongo_db.db.test_results.aggregate(pipeline))
+        
+        # Process results
+        for result in results:
+            result['module_display_name'] = MODULES.get(result['module_name'], 'Unknown')
+            result['accuracy'] = (result['total_correct'] / result['total_questions'] * 100) if result['total_questions'] > 0 else 0
+            result['last_attempt'] = result['last_attempt'].isoformat() if result['last_attempt'] else None
+            result['status'] = 'completed' if result['highest_score'] >= 60 else 'needs_improvement'
+            
+            # Sort attempts by date
+            result['attempts'].sort(key=lambda x: x['submitted_at'], reverse=True)
+            
+            # Convert ObjectIds to strings
+            for attempt in result['attempts']:
+                attempt['result_id'] = str(attempt['result_id'])
+                attempt['submitted_at'] = attempt['submitted_at'].isoformat()
+        
+        return jsonify({
+            'success': True,
+            'data': results
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get student practice results: {str(e)}'
+        }), 500
+
+@superadmin_bp.route('/grammar-analytics', methods=['GET'])
+@jwt_required()
+def get_grammar_analytics():
+    """Get detailed grammar practice analytics"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') != ROLES['SUPER_ADMIN']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+        
+        pipeline = [
+            {
+                '$match': {
+                    'module_id': 'GRAMMAR',
+                    'test_type': 'practice'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'tests',
+                    'localField': 'test_id',
+                    'foreignField': '_id',
+                    'as': 'test_details'
+                }
+            },
+            {'$unwind': '$test_details'},
+            {
+                '$group': {
+                    '_id': '$subcategory',
+                    'subcategory_name': {'$first': '$subcategory'},
+                    'total_attempts': {'$sum': 1},
+                    'total_students': {'$addToSet': '$student_id'},
+                    'average_score': {'$avg': '$average_score'},
+                    'highest_score': {'$max': '$average_score'},
+                    'lowest_score': {'$min': '$average_score'},
+                    'total_questions': {'$sum': '$total_questions'},
+                    'total_correct': {'$sum': '$correct_answers'},
+                    'completion_rate': {
+                        '$avg': {
+                            '$cond': [
+                                {'$gte': ['$average_score', 60]},
+                                1,
+                                0
+                            ]
+                        }
+                    }
+                }
+            },
+            {'$sort': {'subcategory_name': 1}}
+        ]
+        
+        results = list(mongo_db.db.test_results.aggregate(pipeline))
+        
+        # Process results
+        for result in results:
+            result['subcategory_display_name'] = GRAMMAR_CATEGORIES.get(result['subcategory_name'], result['subcategory_name'])
+            result['total_students'] = len(result['total_students'])
+            result['accuracy'] = (result['total_correct'] / result['total_questions'] * 100) if result['total_questions'] > 0 else 0
+            result['completion_rate'] = result['completion_rate'] * 100
+        
+        return jsonify({
+            'success': True,
+            'data': results
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get grammar analytics: {str(e)}'
+        }), 500
+
+@superadmin_bp.route('/vocabulary-analytics', methods=['GET'])
+@jwt_required()
+def get_vocabulary_analytics():
+    """Get detailed vocabulary practice analytics"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') != ROLES['SUPER_ADMIN']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+        
+        pipeline = [
+            {
+                '$match': {
+                    'module_id': 'VOCABULARY',
+                    'test_type': 'practice'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'tests',
+                    'localField': 'test_id',
+                    'foreignField': '_id',
+                    'as': 'test_details'
+                }
+            },
+            {'$unwind': '$test_details'},
+            {
+                '$group': {
+                    '_id': '$test_details.level_id',
+                    'level_name': {'$first': '$test_details.level_id'},
+                    'total_attempts': {'$sum': 1},
+                    'total_students': {'$addToSet': '$student_id'},
+                    'average_score': {'$avg': '$average_score'},
+                    'highest_score': {'$max': '$average_score'},
+                    'lowest_score': {'$min': '$average_score'},
+                    'total_questions': {'$sum': '$total_questions'},
+                    'total_correct': {'$sum': '$correct_answers'},
+                    'completion_rate': {
+                        '$avg': {
+                            '$cond': [
+                                {'$gte': ['$average_score', 60]},
+                                1,
+                                0
+                            ]
+                        }
+                    }
+                }
+            },
+            {'$sort': {'level_name': 1}}
+        ]
+        
+        results = list(mongo_db.db.test_results.aggregate(pipeline))
+        
+        # Process results
+        for result in results:
+            result['level_display_name'] = LEVELS.get(result['level_name'], result['level_name'])
+            result['total_students'] = len(result['total_students'])
+            result['accuracy'] = (result['total_correct'] / result['total_questions'] * 100) if result['total_questions'] > 0 else 0
+            result['completion_rate'] = result['completion_rate'] * 100
+        
+        return jsonify({
+            'success': True,
+            'data': results
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get vocabulary analytics: {str(e)}'
+        }), 500
+
+@superadmin_bp.route('/practice-overview', methods=['GET'])
+@jwt_required()
+def get_practice_overview():
+    """Get overview of all practice module usage"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') != ROLES['SUPER_ADMIN']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+        
+        # Overall statistics
+        total_practice_tests = mongo_db.db.test_results.count_documents({'test_type': 'practice'})
+        total_students_practicing = len(mongo_db.db.test_results.distinct('student_id', {'test_type': 'practice'}))
+        
+        # Module-wise statistics
+        pipeline = [
+            {'$match': {'test_type': 'practice'}},
+            {
+                '$lookup': {
+                    'from': 'tests',
+                    'localField': 'test_id',
+                    'foreignField': '_id',
+                    'as': 'test_details'
+                }
+            },
+            {'$unwind': '$test_details'},
+            {
+                '$group': {
+                    '_id': '$test_details.module_id',
+                    'module_name': {'$first': '$test_details.module_id'},
+                    'total_attempts': {'$sum': 1},
+                    'unique_students': {'$addToSet': '$student_id'},
+                    'average_score': {'$avg': '$average_score'},
+                    'completion_rate': {
+                        '$avg': {
+                            '$cond': [
+                                {'$gte': ['$average_score', 60]},
+                                1,
+                                0
+                            ]
+                        }
+                    }
+                }
+            }
+        ]
+        
+        module_stats = list(mongo_db.db.test_results.aggregate(pipeline))
+        
+        # Process module statistics
+        for stat in module_stats:
+            stat['module_display_name'] = MODULES.get(stat['module_name'], 'Unknown')
+            stat['unique_students'] = len(stat['unique_students'])
+            stat['completion_rate'] = stat['completion_rate'] * 100
+        
+        overview = {
+            'total_practice_tests': total_practice_tests,
+            'total_students_practicing': total_students_practicing,
+            'modules': module_stats
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': overview
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get practice overview: {str(e)}'
         }), 500 

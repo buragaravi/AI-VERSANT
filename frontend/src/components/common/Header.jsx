@@ -48,18 +48,11 @@ const Header = () => {
                 <p className="text-gray-500 capitalize">{user?.role?.replace('_', ' ')}</p>
               </div>
               <Link
-                to="/profile"
+                to={user?.role === 'student' ? '/student/profile' : '/profile'}
                 className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                 onClick={() => setUserMenuOpen(false)}
               >
                 Your Profile
-              </Link>
-              <Link
-                to="/settings"
-                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                onClick={() => setUserMenuOpen(false)}
-              >
-                Settings
               </Link>
               <button
                 onClick={handleLogout}
