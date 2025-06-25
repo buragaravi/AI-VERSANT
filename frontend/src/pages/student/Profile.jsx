@@ -5,7 +5,7 @@ import Header from '../../components/common/Header';
 import StudentSidebar from './StudentSidebar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
-import { User, Mail, Hash, Building, BookOpen, Users, Briefcase, ArrowLeft } from 'lucide-react';
+import { User, Mail, Hash, Building, BookOpen, Users, Briefcase, ArrowLeft, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const ProfileCard = ({ icon, title, value }) => (
@@ -87,6 +87,7 @@ const StudentProfile = () => {
                                 <ProfileCard icon={<Building />} title="Campus" value={profile.campus} />
                                 <ProfileCard icon={<BookOpen />} title="Course" value={profile.course} />
                                 <ProfileCard icon={<Users />} title="Batch" value={profile.batch} />
+                                <ProfileCard icon={<Phone />} title="Mobile Number" value={profile.mobile_number} />
                             </div>
                         </div>
                     </motion.div>

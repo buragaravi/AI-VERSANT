@@ -369,6 +369,7 @@ def validate_student_upload():
         # Fetch existing data for validation
         existing_roll_numbers = set(s['roll_number'] for s in mongo_db.students.find({}, {'roll_number': 1}))
         existing_emails = set(u['email'] for u in mongo_db.users.find({}, {'email': 1}))
+        existing_mobile_numbers = set(u.get('mobile_number', '') for u in mongo_db.users.find({'mobile_number': {'$exists': True, '$ne': ''}}, {'mobile_number': 1}))
         
         # Get campus info for validation
         campus = mongo_db.campuses.find_one({'_id': ObjectId(campus_id)})
@@ -396,6 +397,8 @@ def validate_student_upload():
                 errors.append('Roll number already exists.')
             if student_data['email'] in existing_emails:
                 errors.append('Email already exists.')
+            if student_data['mobile_number'] and student_data['mobile_number'] in existing_mobile_numbers:
+                errors.append('Mobile number already exists.')
             if student_data['campus_name'] != campus['name']:
                 errors.append(f"Campus '{student_data['campus_name']}' doesn't match selected campus '{campus['name']}'.")
             if student_data['course_name'] not in valid_course_names:
@@ -577,20 +580,40 @@ def update_student(student_id):
         if not student:
             return jsonify({'success': False, 'message': 'Student not found'}), 404
 
+        # Uniqueness check for email and mobile_number (across all users except this one)
+        email = data.get('email', student['email'])
+        mobile_number = data.get('mobile_number', student['mobile_number'])
+        user = mongo_db.users.find_one({'_id': student['user_id']})
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+
+        existing_user = mongo_db.users.find_one({
+            '_id': {'$ne': user['_id']},
+            '$or': [
+                {'email': email},
+                {'mobile_number': mobile_number}
+            ]
+        })
+        if existing_user:
+            if existing_user['email'] == email:
+                return jsonify({'success': False, 'message': 'Email already exists'}), 400
+            return jsonify({'success': False, 'message': 'Mobile number already exists'}), 400
+
         # Update student collection
         student_update = {
             'name': data.get('name', student['name']),
             'roll_number': data.get('roll_number', student['roll_number']),
-            'email': data.get('email', student['email']),
-            'mobile_number': data.get('mobile_number', student['mobile_number']),
+            'email': email,
+            'mobile_number': mobile_number,
         }
         mongo_db.students.update_one({'_id': ObjectId(student_id)}, {'$set': student_update})
 
         # Update user collection
         user_update = {
             'name': data.get('name', student['name']),
-            'email': data.get('email', student['email']),
-            'username': data.get('roll_number', student['roll_number'])
+            'email': email,
+            'username': data.get('roll_number', student['roll_number']),
+            'mobile_number': mobile_number
         }
         mongo_db.users.update_one({'_id': student['user_id']}, {'$set': user_update})
 
@@ -677,6 +700,22 @@ def create_batch_with_students():
                 })
                 if not course:
                     errors.append(f"Course '{student['course_name']}' not found in campus '{student['campus_name']}' for student '{student.get('student_name', 'N/A')}'.")
+                    continue
+
+                # Check for existing user with same roll number, email, or mobile number
+                existing_user = mongo_db.users.find_one({
+                    '$or': [
+                        {'username': student['roll_number']},
+                        {'email': student['email']}
+                    ]
+                })
+                if existing_user:
+                    errors.append(f"Student with roll number '{student['roll_number']}' or email '{student['email']}' already exists.")
+                    continue
+
+                # Check for duplicate mobile number if provided
+                if student.get('mobile_number') and mongo_db.users.find_one({'mobile_number': student['mobile_number']}):
+                    errors.append(f"Student with mobile number '{student['mobile_number']}' already exists.")
                     continue
 
                 username = student['roll_number']
@@ -782,8 +821,20 @@ def add_students_to_batch(batch_id):
                     errors.append(f"Course '{student['course_name']}' is not valid for this batch for student '{student.get('student_name', 'N/A')}'.")
                     continue
 
-                if mongo_db.users.find_one({'$or': [{'username': student['roll_number']}, {'email': student['email']}]}):
+                # Check for existing user with same roll number, email, or mobile number
+                existing_user = mongo_db.users.find_one({
+                    '$or': [
+                        {'username': student['roll_number']},
+                        {'email': student['email']}
+                    ]
+                })
+                if existing_user:
                     errors.append(f"Student with roll number '{student['roll_number']}' or email '{student['email']}' already exists.")
+                    continue
+
+                # Check for duplicate mobile number if provided
+                if student.get('mobile_number') and mongo_db.users.find_one({'mobile_number': student['mobile_number']}):
+                    errors.append(f"Student with mobile number '{student['mobile_number']}' already exists.")
                     continue
 
                 username = student['roll_number']

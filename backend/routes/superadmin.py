@@ -671,4 +671,87 @@ def get_practice_overview():
         return jsonify({
             'success': False,
             'message': f'Failed to get practice overview: {str(e)}'
-        }), 500 
+        }), 500
+
+@superadmin_bp.route('/student-assigned-modules', methods=['GET'])
+@jwt_required()
+def get_student_assigned_modules():
+    """Get all tests assigned to a student, with attempt data if available, or status 'Pending' if not attempted. Each test is a separate row."""
+    try:
+        student_email = request.args.get('student')
+        batch_id = request.args.get('batch')
+        if not student_email or not batch_id:
+            return jsonify({'success': False, 'message': 'Missing student email or batch id'}), 400
+
+        # Find the student user and student profile
+        user = mongo_db.users.find_one({'email': student_email})
+        student = mongo_db.students.find_one({'user_id': user['_id']}) if user else None
+        if not user or not student:
+            return jsonify({'success': False, 'message': 'Student not found'}), 404
+
+        # Get all tests assigned to this batch, campus, or course
+        assigned_tests = list(mongo_db.tests.find({
+            'test_type': 'practice',
+            '$or': [
+                {'batch_ids': ObjectId(batch_id)},
+                {'campus_ids': student['campus_id']},
+                {'course_ids': student['course_id']}
+            ]
+        }))
+
+        # Get all attempts/results for this student
+        attempts = list(mongo_db.db.test_results.find({
+            'student_id': user['_id'],
+            'test_type': 'practice'
+        }))
+        # Map attempts by test_id
+        attempts_by_test = {}
+        for att in attempts:
+            tid = att.get('test_id')
+            if tid not in attempts_by_test:
+                attempts_by_test[tid] = []
+            attempts_by_test[tid].append(att)
+
+        # Merge: for each assigned test, show attempt data if exists, else Pending
+        result = []
+        for idx, test in enumerate(assigned_tests):
+            tid = test['_id']
+            test_name = test.get('name') or f"Test {idx+1}"
+            test_info = {
+                'test_id': str(tid),
+                'test_name': test_name,
+                'module_id': str(test['module_id']),
+                'module_display_name': MODULES.get(test['module_id'], 'Unknown'),
+                'level_id': test.get('level_id'),
+                'level_display_name': LEVELS.get(test.get('level_id'), 'Unknown'),
+                'assigned': True
+            }
+            if tid in attempts_by_test:
+                # There are attempts for this test
+                test_attempts = attempts_by_test[tid]
+                scores = [att.get('average_score', 0) for att in test_attempts]
+                test_info['status'] = 'completed'
+                test_info['attempts'] = [
+                    {
+                        'score': att.get('average_score', 0),
+                        'correct_answers': att.get('correct_answers', 0),
+                        'total_questions': att.get('total_questions', 0),
+                        'submitted_at': att.get('submitted_at').isoformat() if att.get('submitted_at') else None,
+                        'result_id': str(att.get('_id'))
+                    }
+                    for att in test_attempts
+                ]
+                test_info['total_attempts'] = len(test_attempts)
+                test_info['best_score'] = max(scores) if scores else 0
+                test_info['avg_score'] = sum(scores)/len(scores) if scores else 0
+            else:
+                test_info['status'] = 'pending'
+                test_info['attempts'] = []
+                test_info['total_attempts'] = 0
+                test_info['best_score'] = 0
+                test_info['avg_score'] = 0
+            result.append(test_info)
+
+        return jsonify({'success': True, 'data': result}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to get assigned modules: {str(e)}'}), 500 

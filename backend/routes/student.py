@@ -60,6 +60,7 @@ def get_student_profile():
                     'name': '$name',
                     'email': '$email',
                     'role': '$role',
+                    'mobile_number': '$mobile_number',
                     'roll_number': '$student_details.roll_number',
                     'campus': '$campus_details.name',
                     'course': '$course_details.name',

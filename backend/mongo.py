@@ -148,6 +148,7 @@ class MongoDB:
                         'name': '$name',
                         'email': '$email',
                         'roll_number': '$roll_number',
+                        'mobile_number': '$mobile_number',
                         'campus_name': '$campus_info.name',
                         'course_name': '$course_info.name',
                     }

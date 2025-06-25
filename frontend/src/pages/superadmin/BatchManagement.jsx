@@ -266,7 +266,7 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
         const selectedCampus = campuses.find(c => c.id === formData.campus_ids[0]);
         const selectedCourses = courses.filter(c => formData.course_ids.includes(c.id));
         
-        const headers = ['Campus Name', 'Course Name', 'Student Name', 'Roll Number', 'Email'];
+        const headers = ['Campus Name', 'Course Name', 'Student Name', 'Roll Number', 'Email', 'Mobile Number'];
         
         let csvRows = [];
         csvRows.push(headers); // Header row
@@ -277,13 +277,14 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
                 course.name,
                 `Student ${index + 1}`,
                 `ROLL${String(index + 1).padStart(3, '0')}`,
-                `student${index + 1}@example.com`
+                `student${index + 1}@example.com`,
+                `123456789${index + 1}`
             ];
             csvRows.push(exampleRow);
         });
 
         // Convert array of arrays to CSV string with CRLF line endings
-        let csvString = csvRows.map(row => row.join(',')).join('\r\n');
+        let csvString = csvRows.map(row => row.map(val => `"${val}"`).join(',')).join('\r\n');
 
         const encodedUri = "data:text/csv;charset=utf-8," + encodeURIComponent(csvString);
         
@@ -464,9 +465,10 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
                             <ul className="text-sm text-amber-700 space-y-1">
                                 <li>• The template includes your selected campus and courses</li>
                                 <li>• Keep the Campus Name and Course Name exactly as shown in the template</li>
-                                <li>• Fill in Student Name, Roll Number, and Email for each student</li>
+                                <li>• Fill in Student Name, Roll Number, Email, and Mobile Number for each student</li>
                                 <li>• Roll numbers must be unique across the system</li>
                                 <li>• Email addresses must be unique and valid</li>
+                                <li>• Mobile numbers must be unique and valid</li>
                                 <li>• You can add multiple students for the same course</li>
                             </ul>
                         </div>
@@ -476,7 +478,7 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
                         <div className="flex flex-col items-center justify-center text-amber-700">
                             <FileUp className="mx-auto h-12 w-12 text-amber-400" />
                             <p className="mt-2 text-sm font-medium">Drag 'n' drop a CSV file here, or click to select</p>
-                            <p className="text-xs text-amber-600 mt-1">Supports CSV files with Campus Name, Course Name, Student Name, Roll Number, and Email columns</p>
+                            <p className="text-xs text-amber-600 mt-1">Supports CSV files with Campus Name, Course Name, Student Name, Roll Number, Email, and Mobile Number columns</p>
                         </div>
                     </div>
                    

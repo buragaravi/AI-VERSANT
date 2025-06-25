@@ -55,7 +55,7 @@ def create_super_admin():
         })
         
         # Hash the password and store as 'password_hash'
-        password = "Versant@2024".encode('utf-8')
+        password = "Versant@2025".encode('utf-8')
         hashed_password = bcrypt.hashpw(password, bcrypt.gensalt())
         super_admin_data["password_hash"] = hashed_password.decode('utf-8')
         

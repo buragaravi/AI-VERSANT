@@ -331,6 +331,7 @@ const UserDetails = ({ user, type, onUserUpdate, onUserDelete }) => {
                 {user.courseName && <DetailItem isEditing={false} icon={<BookOpen size={20} />} label="Course" value={user.courseName || user.course_name} />}
                 {user.batch_name && <DetailItem isEditing={false} icon={<Users size={20} />} label="Batch" value={user.batch_name} />}
                 <DetailItem isEditing={isEditing} icon={<KeyRound size={20}/>} label="Password" name="password" type="password" value={isEditing ? (editData.password || '') : user.password} onChange={handleInputChange} placeholder="Leave blank to keep unchanged" />
+                {user.role === 'student' && <DetailItem isEditing={isEditing} icon={<Phone size={20} />} label="Mobile Number" name="mobile_number" value={editData.mobile_number} onChange={handleInputChange} />}
             </div>
         </motion.div>
     )
