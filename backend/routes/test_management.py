@@ -55,13 +55,12 @@ def require_superadmin(f):
     def decorated_function(*args, **kwargs):
         current_user_id = get_jwt_identity()
         user = mongo_db.find_user_by_id(current_user_id)
-        
-        if not user or user.get('role') != ROLES['SUPER_ADMIN']:
+        allowed_roles = [ROLES.get('SUPER_ADMIN', 'super_admin'), 'superadmin']
+        if not user or user.get('role') not in allowed_roles:
             return jsonify({
                 'success': False,
                 'message': 'Access denied. Super admin privileges required.'
             }), 403
-        
         return f(*args, **kwargs)
     return decorated_function
 
