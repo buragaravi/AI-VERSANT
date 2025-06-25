@@ -1,61 +1,42 @@
-from config.database import DatabaseConfig
+from config.database_cloud import DatabaseConfig
 from bson import ObjectId
-import traceback
+import json
 
-def check_db():
-    """Check the current state of the database"""
+def check_database():
+    """Check database connection and collections"""
     try:
-        print("Getting database configuration...")
-        print(f"MongoDB URI: {DatabaseConfig.MONGODB_URI}")
-        print(f"Database Name: {DatabaseConfig.DATABASE_NAME}")
+        # Get database connection
+        db = DatabaseConfig.get_database()
         
-        print("\nConnecting to database...")
-        client = DatabaseConfig.get_client()
-        print("Got client, testing connection...")
-        client.admin.command('ping')
-        print("Connection test successful")
+        print("🔄 Checking database connection...")
         
-        db = client[DatabaseConfig.DATABASE_NAME]
-        print(f"Connected to database: {db.name}")
+        # Test connection
+        db.command('ping')
+        print("✅ Database connection successful")
         
-        # Check users
-        print("\n=== Users ===")
-        users = list(db.users.find())
-        print(f"Found {len(users)} users")
-        for user in users:
-            print(f"ID: {user['_id']}")
-            print(f"Username: {user.get('username')}")
-            print(f"Email: {user.get('email')}")
-            print(f"Role: {user.get('role')}")
-            print(f"Name: {user.get('name')}")
-            print(f"Is Active: {user.get('is_active')}")
-            print("---")
+        # List all collections
+        collections = db.list_collection_names()
+        print(f"📊 Found {len(collections)} collections:")
         
-        # Check campuses
-        print("\n=== Campuses ===")
-        campuses = list(db.campuses.find())
-        print(f"Found {len(campuses)} campuses")
-        for campus in campuses:
-            print(f"ID: {campus['_id']}")
-            print(f"Name: {campus.get('name')}")
-            print(f"Admin ID: {campus.get('admin_id')}")
-            print("---")
+        for collection_name in collections:
+            try:
+                collection = db[collection_name]
+                count = collection.count_documents({})
+                print(f"   - {collection_name}: {count} documents")
+            except Exception as e:
+                print(f"   - {collection_name}: Error counting documents - {e}")
         
-        # Check courses
-        print("\n=== Courses ===")
-        courses = list(db.courses.find())
-        print(f"Found {len(courses)} courses")
-        for course in courses:
-            print(f"ID: {course['_id']}")
-            print(f"Name: {course.get('name')}")
-            print(f"Campus ID: {course.get('campus_id')}")
-            print(f"Admin ID: {course.get('admin_id')}")
-            print("---")
-
+        # Check for superadmin user
+        superadmin = db.users.find_one({"username": "superadmin"})
+        if superadmin:
+            print("✅ Superadmin user exists")
+        else:
+            print("⚠️ Superadmin user not found")
+        
+        print("🎉 Database check completed successfully!")
+        
     except Exception as e:
-        print(f"Error checking database: {str(e)}")
-        print("Traceback:")
-        traceback.print_exc()
+        print(f"❌ Error checking database: {e}")
 
 if __name__ == "__main__":
-    check_db() 
+    check_database() 

@@ -11,7 +11,7 @@ class DatabaseConfig:
     
     @staticmethod
     def get_client():
-        """Get MongoDB client instance with optimized connection settings"""
+        """Get MongoDB client instance with optimized connection settings for cloud deployment"""
         try:
             client_options = {
                 'connectTimeoutMS': 30000,
@@ -25,9 +25,30 @@ class DatabaseConfig:
                 'w': 'majority',
                 'appName': 'Versant',
                 'directConnection': False,
-                'retryReads': True
+                'retryReads': True,
+                # SSL/TLS configuration for cloud deployment
+                'tls': True,
+                'tlsAllowInvalidCertificates': False,
+                'tlsAllowInvalidHostnames': False,
+                'tlsInsecure': False,
+                # Additional connection options for better stability
+                'heartbeatFrequencyMS': 10000,
+                'maxConnecting': 2,
+                'compressors': ['zlib'],
+                'zlibCompressionLevel': 6
             }
-            return MongoClient(DatabaseConfig.MONGODB_URI, **client_options)
+            
+            # Parse the URI and add SSL parameters if not present
+            uri = DatabaseConfig.MONGODB_URI
+            
+            # Add SSL parameters to the connection string if not already present
+            if 'ssl=true' not in uri.lower() and 'tls=true' not in uri.lower():
+                if '?' in uri:
+                    uri += '&ssl=true&tls=true'
+                else:
+                    uri += '?ssl=true&tls=true'
+            
+            return MongoClient(uri, **client_options)
         except Exception as e:
             print(f"❌ Error creating MongoDB client: {e}")
             raise e

@@ -3,7 +3,7 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 import os
 from dotenv import load_dotenv
-from config.database import DatabaseConfig, init_db
+from config.database_cloud import DatabaseConfig, init_db
 from config.aws_config import init_aws
 from config.constants import JWT_ACCESS_TOKEN_EXPIRES, JWT_REFRESH_TOKEN_EXPIRES
 from config.shared import bcrypt
@@ -39,6 +39,7 @@ def create_app():
     except Exception as e:
         print(f"❌ Database initialization failed: {e}")
         print("💡 Please check your MongoDB connection and try again")
+        # Don't raise the exception to allow the app to start for debugging
     
     try:
         init_aws()
@@ -124,7 +125,6 @@ if __name__ == '__main__':
     debug = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
     
     print(f"🚀 Starting VERSANT API on port {port}")
-    print(f"📊 MongoDB URI: {DatabaseConfig.MONGODB_URI}")
     print(f"🔧 Debug mode: {debug}")
     
     app.run(host='0.0.0.0', port=port, debug=debug) 

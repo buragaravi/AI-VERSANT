@@ -1,4 +1,4 @@
-from config.database import DatabaseConfig
+from config.database_cloud import DatabaseConfig
 from bson import ObjectId
 import json
 from datetime import datetime
@@ -23,46 +23,52 @@ class MongoDB:
     
     def _create_indexes(self):
         """Create database indexes for better query performance"""
-        # Users collection indexes
-        self.users.create_index("username", unique=True)
-        self.users.create_index("email", unique=True)
-        self.users.create_index("role")
-        self.users.create_index("campus_id")
-        self.users.create_index("course_id")
-        self.users.create_index("batch_id")
-        
-        # Students collection indexes
-        self.students.create_index("user_id", unique=True)
-        self.students.create_index("roll_number", unique=True)
-        self.students.create_index("campus_id")
-        self.students.create_index("course_id")
-        self.students.create_index("batch_id")
-        
-        # Tests collection indexes
-        self.tests.create_index("module_id")
-        self.tests.create_index("level_id")
-        self.tests.create_index("created_by")
-        self.tests.create_index("test_type")
-        self.tests.create_index("status")
-        
-        # Online exams collection indexes
-        self.online_exams.create_index("test_id")
-        self.online_exams.create_index("status")
-        self.online_exams.create_index("start_date")
-        self.online_exams.create_index("end_date")
-        
-        # Student test attempts indexes
-        self.student_test_attempts.create_index("student_id")
-        self.student_test_attempts.create_index("test_id")
-        self.student_test_attempts.create_index("exam_id")
-        self.student_test_attempts.create_index("status")
-        self.student_test_attempts.create_index("started_at")
-        
-        # Student progress indexes
-        self.student_progress.create_index("student_id")
-        self.student_progress.create_index("module_id")
-        self.student_progress.create_index("level_id")
-        self.student_progress.create_index([("student_id", 1), ("module_id", 1), ("level_id", 1)], unique=True)
+        try:
+            # Users collection indexes
+            self.users.create_index("username", unique=True)
+            self.users.create_index("email", unique=True)
+            self.users.create_index("role")
+            self.users.create_index("campus_id")
+            self.users.create_index("course_id")
+            self.users.create_index("batch_id")
+            
+            # Students collection indexes
+            self.students.create_index("user_id", unique=True)
+            self.students.create_index("roll_number", unique=True)
+            self.students.create_index("campus_id")
+            self.students.create_index("course_id")
+            self.students.create_index("batch_id")
+            
+            # Tests collection indexes
+            self.tests.create_index("module_id")
+            self.tests.create_index("level_id")
+            self.tests.create_index("created_by")
+            self.tests.create_index("test_type")
+            self.tests.create_index("status")
+            
+            # Online exams collection indexes
+            self.online_exams.create_index("test_id")
+            self.online_exams.create_index("status")
+            self.online_exams.create_index("start_date")
+            self.online_exams.create_index("end_date")
+            
+            # Student test attempts indexes
+            self.student_test_attempts.create_index("student_id")
+            self.student_test_attempts.create_index("test_id")
+            self.student_test_attempts.create_index("exam_id")
+            self.student_test_attempts.create_index("status")
+            self.student_test_attempts.create_index("started_at")
+            
+            # Student progress indexes
+            self.student_progress.create_index("student_id")
+            self.student_progress.create_index("module_id")
+            self.student_progress.create_index("level_id")
+            self.student_progress.create_index([("student_id", 1), ("module_id", 1), ("level_id", 1)], unique=True)
+            
+            print("✅ MongoDB indexes created successfully")
+        except Exception as e:
+            print(f"⚠️ Warning: Could not create some indexes: {e}")
+            # Continue without failing the entire initialization
     
     def insert_user(self, user_data):
         """Insert a new user"""
