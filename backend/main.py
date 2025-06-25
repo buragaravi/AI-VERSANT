@@ -3,7 +3,7 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 import os
 from dotenv import load_dotenv
-from config.database_cloud import DatabaseConfig, init_db
+from config.database_simple import DatabaseConfig, init_db
 from config.aws_config import init_aws
 from config.constants import JWT_ACCESS_TOKEN_EXPIRES, JWT_REFRESH_TOKEN_EXPIRES
 from config.shared import bcrypt

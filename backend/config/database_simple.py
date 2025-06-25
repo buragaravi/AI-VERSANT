@@ -11,46 +11,29 @@ class DatabaseConfig:
     
     @staticmethod
     def get_client():
-        """Get MongoDB client instance with cloud-optimized settings"""
+        """Get MongoDB client instance with minimal, reliable settings"""
         try:
             if not DatabaseConfig.MONGODB_URI:
                 raise ValueError("MONGODB_URI environment variable is not set")
             
-            # Cloud-optimized client options (using valid PyMongo parameters)
+            # Simple, reliable client options
             client_options = {
-                'connectTimeoutMS': 60000,  # Increased timeout for cloud
-                'socketTimeoutMS': 60000,
-                'serverSelectionTimeoutMS': 60000,
-                'maxPoolSize': 50,  # Increased pool size for cloud
-                'minPoolSize': 5,
-                'maxIdleTimeMS': 30000,
-                'waitQueueTimeoutMS': 60000,
+                'connectTimeoutMS': 30000,
+                'socketTimeoutMS': 30000,
+                'serverSelectionTimeoutMS': 30000,
+                'maxPoolSize': 10,
                 'retryWrites': True,
                 'w': 'majority',
-                'appName': 'Versant-Cloud',
-                'directConnection': False,
-                'retryReads': True,
-                # SSL/TLS configuration (using correct parameter names)
-                'tls': True,
-                'tlsAllowInvalidCertificates': False,
-                'tlsAllowInvalidHostnames': False,
-                'tlsInsecure': False,
-                # Connection stability
-                'heartbeatFrequencyMS': 10000,
-                'maxConnecting': 5,
-                'compressors': ['zlib'],
-                'zlibCompressionLevel': 6
+                'appName': 'Versant'
             }
             
-            # Ensure SSL parameters are in the connection string
+            # Ensure required parameters are in the connection string
             uri = DatabaseConfig.MONGODB_URI
             
             # Add required parameters for cloud deployment
             required_params = [
                 'retryWrites=true',
-                'w=majority',
-                'ssl=true',
-                'tls=true'
+                'w=majority'
             ]
             
             # Add parameters if not present
@@ -61,7 +44,7 @@ class DatabaseConfig:
                     else:
                         uri += f'?{param}'
             
-            print(f"🔗 Connecting to MongoDB with URI: {uri[:50]}...")
+            print(f"🔗 Connecting to MongoDB...")
             
             return MongoClient(uri, **client_options)
             
@@ -84,24 +67,14 @@ class DatabaseConfig:
 def init_db():
     """Initialize database connection and create indexes"""
     try:
-        print("🔄 Initializing MongoDB connection for cloud deployment...")
+        print("🔄 Initializing MongoDB connection...")
         
         client = DatabaseConfig.get_client()
         db = client[DatabaseConfig.DATABASE_NAME]
         
-        # Test connection with retry logic
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                client.admin.command('ping')
-                print("✅ MongoDB connection successful")
-                break
-            except Exception as e:
-                if attempt == max_retries - 1:
-                    raise e
-                print(f"⚠️ Connection attempt {attempt + 1} failed, retrying...")
-                import time
-                time.sleep(2 ** attempt)  # Exponential backoff
+        # Test connection
+        client.admin.command('ping')
+        print("✅ MongoDB connection successful")
         
         # Create indexes for better performance
         print("🔄 Creating database indexes...")

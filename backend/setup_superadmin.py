@@ -12,7 +12,7 @@ import bcrypt
 # Add the current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from config.database_cloud import DatabaseConfig
+from config.database_simple import DatabaseConfig
 from mongo import MongoDB
 
 load_dotenv()

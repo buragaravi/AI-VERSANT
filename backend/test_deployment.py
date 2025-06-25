@@ -41,7 +41,7 @@ def test_mongodb_connection():
     try:
         print("🔄 Testing MongoDB connection...")
         
-        from config.database_cloud import DatabaseConfig, init_db
+        from config.database_simple import DatabaseConfig, init_db
         
         # Test the connection
         init_db()

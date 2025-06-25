@@ -1,4 +1,4 @@
-from config.database_cloud import DatabaseConfig
+from config.database_simple import DatabaseConfig
 from bson import ObjectId
 import json
 

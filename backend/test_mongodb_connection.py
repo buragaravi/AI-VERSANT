@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script to verify MongoDB connection with cloud configuration
+Test script to verify MongoDB connection with simple configuration
 """
 import os
 import sys
@@ -12,12 +12,12 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv()
 
 def test_mongodb_connection():
-    """Test MongoDB connection with the cloud configuration"""
+    """Test MongoDB connection with the simple configuration"""
     try:
         print("🔄 Testing MongoDB connection...")
         
-        # Import the cloud database configuration
-        from config.database_cloud import DatabaseConfig, init_db
+        # Import the simple database configuration
+        from config.database_simple import DatabaseConfig, init_db
         
         # Test the connection
         init_db()
