@@ -1,13 +1,28 @@
 import os
 from pymongo import MongoClient
 from dotenv import load_dotenv
+from urllib.parse import urlparse
 
 load_dotenv()
 
 class DatabaseConfig:
     # Updated MongoDB URI with connection options to fix timeout issues
     MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb+srv://teja:teja0000@versant.ia46v3i.mongodb.net/versant_final?retryWrites=true&w=majority&appName=Versant&connectTimeoutMS=30000&socketTimeoutMS=30000&serverSelectionTimeoutMS=30000')
-    DATABASE_NAME = 'versant_final'
+    
+    @staticmethod
+    def get_database_name():
+        """Extract database name from MongoDB URI"""
+        if not DatabaseConfig.MONGODB_URI:
+            return 'versant_final'  # fallback default
+        
+        try:
+            # Parse the URI to extract database name
+            parsed_uri = urlparse(DatabaseConfig.MONGODB_URI)
+            # The path will be like '/database_name?params'
+            db_name = parsed_uri.path.strip('/').split('?')[0]
+            return db_name if db_name else 'versant_final'
+        except Exception:
+            return 'versant_final'  # fallback default
     
     @staticmethod
     def get_client():
@@ -57,7 +72,9 @@ class DatabaseConfig:
     def get_database():
         """Get database instance"""
         client = DatabaseConfig.get_client()
-        return client[DatabaseConfig.DATABASE_NAME]
+        db_name = DatabaseConfig.get_database_name()
+        print(f"📊 Using database: {db_name}")
+        return client[db_name]
     
     @staticmethod
     def get_collection(collection_name):
@@ -69,7 +86,8 @@ def init_db():
     """Initialize database connection and create indexes"""
     try:
         client = DatabaseConfig.get_client()
-        db = client[DatabaseConfig.DATABASE_NAME]
+        db_name = DatabaseConfig.get_database_name()
+        db = client[db_name]
         
         # Test connection
         client.admin.command('ping')

@@ -12,6 +12,7 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   console.log('ProtectedRoute - Loading:', loading)
   console.log('ProtectedRoute - IsAuthenticated:', isAuthenticated)
   console.log('ProtectedRoute - Allowed roles:', allowedRoles)
+  console.log('ProtectedRoute - User role:', user?.role)
 
   // Show loading spinner while checking authentication
   if (loading) {
@@ -31,6 +32,7 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     console.log('ProtectedRoute - User role not allowed, redirecting to appropriate dashboard')
     // Redirect to appropriate dashboard based on user role
     const roleRoutes = {
+      superadmin: '/superadmin',
       super_admin: '/superadmin',
       campus_admin: '/campus-admin',
       course_admin: '/course-admin',

@@ -30,12 +30,16 @@ const Login = () => {
         success('Login successful!')
         // Redirect based on user role
         const roleRoutes = {
+          superadmin: '/superadmin',
           super_admin: '/superadmin',
           campus_admin: '/campus-admin',
           course_admin: '/course-admin',
           student: '/student',
         }
+        console.log('User role:', user.role)
+        console.log('Available routes:', roleRoutes)
         const redirectPath = location.state?.from?.pathname || roleRoutes[user.role] || '/'
+        console.log('Redirecting to:', redirectPath)
         navigate(redirectPath, { replace: true })
       }
     } catch (err) {

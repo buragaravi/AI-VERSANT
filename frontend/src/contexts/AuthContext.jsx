@@ -46,10 +46,8 @@ export const AuthProvider = ({ children }) => {
           console.log('Raw userData response:', userData)
           console.log('userData.data:', userData.data)
           console.log('userData.data.data:', userData.data?.data)
-          
-          // The API returns {data: {user_data}, message, success}
-          // We need to extract the actual user data from userData.data
-          const freshUser = userData.data.data || userData.data
+          // Robust extraction: handle all possible backend response shapes
+          const freshUser = userData.data?.user || userData.data?.data || userData.data || userData
           console.log('Got fresh user data from API:', freshUser)
           setUser(freshUser)
           // Store the fresh user data
@@ -95,7 +93,10 @@ export const AuthProvider = ({ children }) => {
       setLoading(true)
       setError(null)
       const response = await authService.login(username, password)
-      const { user: userData, access_token, refresh_token } = response.data.data
+      // Robust extraction: handle all possible backend response shapes
+      const userData = response.data?.user || response.data?.data?.user || response.data?.data || response.data
+      const access_token = response.data?.access_token || response.data?.data?.access_token
+      const refresh_token = response.data?.refresh_token || response.data?.data?.refresh_token
       console.log('AuthContext login userData:', userData)
       localStorage.setItem('access_token', access_token)
       localStorage.setItem('refresh_token', refresh_token)

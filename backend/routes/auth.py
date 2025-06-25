@@ -3,6 +3,8 @@ from flask_jwt_extended import create_access_token, create_refresh_token, jwt_re
 import bcrypt
 from mongo import mongo_db
 from config.constants import ROLES
+import traceback
+import sys
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -10,9 +12,13 @@ auth_bp = Blueprint('auth', __name__)
 def login():
     """User login endpoint"""
     try:
+        print("🔍 Login attempt started", file=sys.stderr)
+        
         data = request.get_json()
+        print(f"📝 Request data: {data}", file=sys.stderr)
         
         if not data or not data.get('username') or not data.get('password'):
+            print("❌ Missing username or password", file=sys.stderr)
             return jsonify({
                 'success': False,
                 'message': 'Username and password are required'
@@ -21,17 +27,23 @@ def login():
         username = data['username']
         password = data['password']
         
+        print(f"🔍 Looking up user: {username}", file=sys.stderr)
+        
         # Find user by username
         user = mongo_db.find_user_by_username(username)
         
         if not user:
+            print(f"❌ User not found: {username}", file=sys.stderr)
             return jsonify({
                 'success': False,
                 'message': 'Invalid username or password'
             }), 401
         
+        print(f"✅ User found: {user.get('_id')}", file=sys.stderr)
+        
         # Check if user is active
         if not user.get('is_active', True):
+            print(f"❌ User account deactivated: {username}", file=sys.stderr)
             return jsonify({
                 'success': False,
                 'message': 'Account is deactivated'
@@ -39,20 +51,25 @@ def login():
         
         # Verify password
         if 'password_hash' not in user:
-            import sys
-            print(f"CRITICAL: User document missing 'password_hash'. User object: {user}", file=sys.stderr)
+            print(f"❌ CRITICAL: User document missing 'password_hash'. User object: {user}", file=sys.stderr)
             return jsonify({
                 'success': False,
                 'message': 'Login failed: Critical server error - missing user credentials.'
             }), 500
 
+        print(f"🔍 Verifying password for user: {username}", file=sys.stderr)
+        
         if not bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+            print(f"❌ Password verification failed for user: {username}", file=sys.stderr)
             return jsonify({
                 'success': False,
                 'message': 'Invalid username or password'
             }), 401
         
+        print(f"✅ Password verified for user: {username}", file=sys.stderr)
+        
         # Create tokens
+        print(f"🔑 Creating tokens for user: {username}", file=sys.stderr)
         access_token = create_access_token(identity=str(user['_id']))
         refresh_token = create_refresh_token(identity=str(user['_id']))
         
@@ -61,12 +78,14 @@ def login():
             'id': str(user['_id']),
             'username': user['username'],
             'email': user['email'],
-            'name': user['name'],
+            'name': user.get('name', f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()),
             'role': user['role'],
             'campus_id': str(user['campus_id']) if user.get('campus_id') else None,
             'course_id': str(user['course_id']) if user.get('course_id') else None,
             'batch_id': str(user['batch_id']) if user.get('batch_id') else None
         }
+        
+        print(f"✅ Login successful for user: {username}", file=sys.stderr)
         
         return jsonify({
             'success': True,
@@ -79,6 +98,8 @@ def login():
         }), 200
         
     except Exception as e:
+        print(f"❌ Login error: {str(e)}", file=sys.stderr)
+        print(f"❌ Traceback: {traceback.format_exc()}", file=sys.stderr)
         return jsonify({
             'success': False,
             'message': f'Login failed: {str(e)}'

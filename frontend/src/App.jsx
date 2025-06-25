@@ -66,18 +66,18 @@ function App() {
                 <Route
                   path="/superadmin/*"
                   element={
-                    <ProtectedRoute allowedRoles={['super_admin']}>
+                    <ProtectedRoute allowedRoles={['superadmin', 'super_admin']}>
                       <Routes>
                         <Route path="/" element={<Navigate to="dashboard" replace />} />
                         <Route path="dashboard" element={<SuperAdminDashboard />} />
-                        <Route path="users" element={<ProtectedRoute allowedRoles={['super_admin']}><UserManagement /></ProtectedRoute>} />
-                        <Route path="campuses" element={<ProtectedRoute allowedRoles={['super_admin']}><CampusManagement /></ProtectedRoute>} />
-                        <Route path="courses" element={<ProtectedRoute allowedRoles={['super_admin']}><CourseManagement /></ProtectedRoute>} />
-                        <Route path="batches" element={<ProtectedRoute allowedRoles={['super_admin']}><BatchManagement /></ProtectedRoute>} />
-                        <Route path="batches/:batchId" element={<ProtectedRoute allowedRoles={['super_admin']}><BatchDetails /></ProtectedRoute>} />
-                        <Route path="students" element={<ProtectedRoute allowedRoles={['super_admin']}><StudentManagement /></ProtectedRoute>} />
-                        <Route path="results" element={<ProtectedRoute allowedRoles={['super_admin']}><ResultsManagement /></ProtectedRoute>} />
-                        <Route path="practice-analytics" element={<ProtectedRoute allowedRoles={['super_admin']}><PracticeAnalytics /></ProtectedRoute>} />
+                        <Route path="users" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><UserManagement /></ProtectedRoute>} />
+                        <Route path="campuses" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><CampusManagement /></ProtectedRoute>} />
+                        <Route path="courses" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><CourseManagement /></ProtectedRoute>} />
+                        <Route path="batches" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><BatchManagement /></ProtectedRoute>} />
+                        <Route path="batches/:batchId" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><BatchDetails /></ProtectedRoute>} />
+                        <Route path="students" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><StudentManagement /></ProtectedRoute>} />
+                        <Route path="results" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><ResultsManagement /></ProtectedRoute>} />
+                        <Route path="practice-analytics" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><PracticeAnalytics /></ProtectedRoute>} />
                         <Route path="tests" element={<TestManagement />} />
                         <Route path="tests/create" element={<TestManagement />} />
                         <Route path="analytics" element={<SystemAnalytics />} />
