@@ -81,24 +81,23 @@ const BatchDetails = () => {
     };
 
     const handleConfirmUpload = async () => {
-        const validStudents = previewData.filter(student => student.errors.length === 0);
-        if (validStudents.length === 0) {
-            error("No valid students to upload.");
+        if (!originalFile) {
+            error("No file selected for upload.");
             return;
         }
-
         setIsSubmitting(true);
         try {
-            const response = await api.post(`/batch-management/${batchId}/add-students`, {
-                students: validStudents,
+            const formData = new FormData();
+            formData.append('student_file', originalFile);
+            const response = await api.post(`/batch-management/${batchId}/add-students`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
             });
-
             if (response.data.success || response.status === 207) {
                 success(response.data.message || "Students added successfully.");
                 setCreatedStudents(response.data.data.created_students);
                 setIsCredentialsModalOpen(true);
                 setIsUploadModalOpen(false);
-                fetchBatchDetails(); // Refresh student list
+                fetchBatchDetails();
             } else {
                 error(response.data.message || 'Failed to add students.');
             }
