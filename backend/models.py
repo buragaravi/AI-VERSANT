@@ -33,33 +33,24 @@ class User:
         }
 
 class Student:
-    def __init__(self, user_id, roll_number, name, campus_id, course_id, batch_id,
-                 academic_year, department, branch, year, status='active'):
-        self.user_id = ObjectId(user_id)
-        self.roll_number = roll_number
+    def __init__(self, name, email, batch_course_instance_id, roll_number=None, mobile=None, **kwargs):
         self.name = name
-        self.campus_id = ObjectId(campus_id)
-        self.course_id = ObjectId(course_id)
-        self.batch_id = ObjectId(batch_id)
-        self.academic_year = academic_year
-        self.department = department
-        self.branch = branch
-        self.year = year
-        self.status = status
-    
+        self.email = email
+        self.batch_course_instance_id = batch_course_instance_id
+        self.roll_number = roll_number
+        self.mobile = mobile
+        self.created_at = datetime.utcnow()
+        # Ignore course_id, use batch_course_instance_id only
+        # ... other fields ...
+
     def to_dict(self):
         return {
-            'user_id': self.user_id,
-            'roll_number': self.roll_number,
             'name': self.name,
-            'campus_id': self.campus_id,
-            'course_id': self.course_id,
-            'batch_id': self.batch_id,
-            'academic_year': self.academic_year,
-            'department': self.department,
-            'branch': self.branch,
-            'year': self.year,
-            'status': self.status
+            'email': self.email,
+            'batch_course_instance_id': self.batch_course_instance_id,
+            'roll_number': self.roll_number,
+            'mobile': self.mobile,
+            'created_at': self.created_at
         }
 
 class Module:
@@ -216,4 +207,19 @@ class Course:
             'campus_id': self.campus_id,
             'admin_id': self.admin_id,
             'created_at': self.created_at
-        } 
+        }
+
+# BatchCourseInstance model (MongoDB collection)
+class BatchCourseInstance:
+    def __init__(self, db):
+        self.collection = db.batch_course_instances
+
+    def find_or_create(self, batch_id, course_id):
+        instance = self.collection.find_one({'batch_id': batch_id, 'course_id': course_id})
+        if instance:
+            return instance['_id']
+        result = self.collection.insert_one({'batch_id': batch_id, 'course_id': course_id})
+        return result.inserted_id
+
+    def get_by_id(self, instance_id):
+        return self.collection.find_one({'_id': instance_id}) 

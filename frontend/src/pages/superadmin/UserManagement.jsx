@@ -10,7 +10,10 @@ import { Users, Building, BookOpen, ChevronRight, X, ArrowLeft, Mail, Phone, Key
 const StatCard = ({ title, count, icon, color, onClick }) => (
     <motion.div
         onClick={onClick}
-        className={`p-6 rounded-2xl shadow-lg cursor-pointer text-white ${color}`}
+        className={`p-6 rounded-2xl shadow-lg cursor-pointer border transition-all duration-200
+            ${color}
+            text-black
+        `}
         whileHover={{ scale: 1.03, y: -5 }}
         transition={{ type: 'spring', stiffness: 300 }}
     >
@@ -22,7 +25,7 @@ const StatCard = ({ title, count, icon, color, onClick }) => (
             <div className="p-3 bg-white bg-opacity-20 rounded-xl">{icon}</div>
         </div>
         <div className="mt-4 flex items-center justify-end text-sm opacity-80">
-            View All <ChevronRight className="ml-1 h-4 w-4" />
+            View All <ChevronRight className="ml-1 h-4 w-4 text-black" />
         </div>
     </motion.div>
 );
@@ -74,9 +77,15 @@ const UserManagement = () => {
 
     const handleSelectUser = async (user) => {
         setSelectedUser(user);
-        setFullUserData(null); 
+        setFullUserData(null);
+        const userId = user._id || user.id;
+        if (!userId || userId === 'undefined' || userId === 'null' || userId === null) {
+            error("This user does not have a valid ID. Cannot fetch full details.");
+            setFullUserData(user);
+            return;
+        }
         try {
-            const res = await api.get(`/user-management/${user._id}`);
+            const res = await api.get(`/user-management/${userId}`);
             setFullUserData(res.data.data);
         } catch (err) {
             error("Failed to fetch user's full details.");
@@ -99,9 +108,9 @@ const UserManagement = () => {
     };
 
     const cardDetails = {
-        campus: { title: "Campus Admins", icon: <Building size={28} />, color: "bg-gradient-to-br from-blue-500 to-indigo-600", dataKey: "campus" },
-        course: { title: "Course Admins", icon: <BookOpen size={28} />, color: "bg-gradient-to-br from-green-500 to-emerald-600", dataKey: "course" },
-        student: { title: "Students", icon: <Users size={28} />, color: "bg-gradient-to-br from-purple-500 to-violet-600", dataKey: "student" },
+        campus: { title: "Campus Admins", icon: <Building size={28} />, color: "bg-gradient-to-r from-emerald-400 to-emerald-600 border-emerald-600", dataKey: "campus" },
+        course: { title: "Course Admins", icon: <BookOpen size={28} />, color: "bg-gradient-to-r from-emerald-200 to-emerald-400 border-emerald-400", dataKey: "course" },
+        student: { title: "Students", icon: <Users size={28} />, color: "bg-gradient-to-r from-teal-100 to-emerald-200 border-emerald-200", dataKey: "student" },
     };
 
     const handleUserUpdate = (updatedUser) => {
@@ -143,10 +152,10 @@ const UserManagement = () => {
             <SuperAdminSidebar />
             <div className="flex-1 lg:pl-64">
                 <Header />
-                <main className="px-6 lg:px-10 py-12">
+                <main className="px-6 lg:px-10 py-12 bg-background min-h-screen">
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-                        <h1 className="text-4xl font-extrabold text-gray-900 mb-2 tracking-tight">User Management</h1>
-                        <p className="text-gray-600 mb-10 text-lg">A centralized hub for managing all user roles.</p>
+                        <h1 className="text-4xl font-extrabold text-headline mb-2 tracking-tight">User Management</h1>
+                        <p className="text-paragraph mb-10 text-lg">A centralized hub for managing all user roles.</p>
                         
                         {loading ? <LoadingSpinner /> : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -200,22 +209,22 @@ const UserListModal = ({ closeModal, content, selectedUser, onSelectUser, fullUs
                 initial={{ scale: 0.9, opacity: 0 }} 
                 animate={{ scale: 1, opacity: 1 }} 
                 exit={{ scale: 0.9, opacity: 0 }} 
-                className="bg-white rounded-2xl shadow-xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden"
+                className="bg-secondary rounded-2xl shadow-xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden border border-stroke"
             >
-               <div className="flex justify-between items-center p-5 border-b bg-gray-50 rounded-t-2xl">
-                 <h2 className="text-2xl font-bold text-gray-800">{title}</h2>
-                 <button onClick={closeModal} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><X className="text-gray-600"/></button>
+               <div className="flex justify-between items-center p-5 border-b bg-background rounded-t-2xl border-stroke">
+                 <h2 className="text-2xl font-bold text-headline">{title}</h2>
+                 <button onClick={closeModal} className="p-2 rounded-full hover:bg-highlight transition-colors"><X className="text-tertiary"/></button>
                </div>
                <div className="flex-1 flex overflow-hidden">
-                    <div className="w-1/3 border-r overflow-y-auto p-4">
+                    <div className="w-1/3 border-r overflow-y-auto p-4 border-stroke bg-background">
                         <div className="relative mb-4">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-tertiary" size={20} />
                             <input
                                 type="text"
                                 placeholder="Search by name or email..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                                className="w-full pl-10 pr-4 py-2 border border-stroke rounded-lg focus:ring-2 focus:ring-highlight outline-none transition bg-secondary text-headline"
                             />
                         </div>
                         <ul className="space-y-2">
@@ -223,18 +232,18 @@ const UserListModal = ({ closeModal, content, selectedUser, onSelectUser, fullUs
                                 <li 
                                     key={user.id || user._id || user.email} 
                                     onClick={() => onSelectUser(user)} 
-                                    className={`p-3 flex items-center justify-between rounded-lg cursor-pointer transition-colors ${selectedUser && (selectedUser.id === user.id || selectedUser._id === user._id) ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
+                                    className={`p-3 flex items-center justify-between rounded-lg cursor-pointer transition-colors ${selectedUser && (selectedUser.id === user.id || selectedUser._id === user._id) ? 'bg-highlight text-headline' : 'hover:bg-tertiary/10'}`}
                                 >
-                                        <div>
-                                        <p className="font-semibold text-gray-800">{user.name}</p>
-                                            <p className="text-sm text-gray-500">{user.email}</p>
-                                        </div>
-                                        <ChevronRight className="text-gray-400" />
-                                    </li>
-                                ))}
+                                    <div>
+                                        <p className="font-semibold text-black">{user.name}</p>
+                                        <p className="text-sm text-black">{user.email}</p>
+                                    </div>
+                                    <ChevronRight className="text-tertiary" />
+                                </li>
+                            ))}
                         </ul>
                     </div>
-                    <div className="w-2/3 overflow-y-auto p-8">
+                    <div className="w-2/3 overflow-y-auto p-8 bg-background">
                         <AnimatePresence mode="wait">
                            {selectedUser ? (
                                 fullUserData ? (
@@ -247,9 +256,9 @@ const UserListModal = ({ closeModal, content, selectedUser, onSelectUser, fullUs
                                     />
                                 ) : <LoadingSpinner />
                            ) : (
-                                <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
-                                    <Users size={48} className="mb-4" />
-                                    <h3 className="text-xl font-semibold">Select a user</h3>
+                                <div className="flex flex-col items-center justify-center h-full text-center text-paragraph">
+                                    <Users size={48} className="mb-4 text-tertiary" />
+                                    <h3 className="text-xl font-semibold text-paragraph">Select a user</h3>
                                     <p>User details will be displayed here.</p>
                                 </div>
                         )}
@@ -326,32 +335,51 @@ const UserDetails = ({ user, type, onUserUpdate, onUserDelete }) => {
                 <DetailItem isEditing={isEditing} icon={<Users size={20} />} label="Name" name="name" value={editData.name} onChange={handleInputChange} />
                 <DetailItem isEditing={isEditing} icon={<Mail size={20} />} label="Email" name="email" value={editData.email} onChange={handleInputChange} />
                 <DetailItem isEditing={isEditing} icon={<Users size={20} />} label="Username" name="username" value={editData.username || ''} onChange={handleInputChange} placeholder="Enter username" />
-                {user.role === 'student' && <DetailItem isEditing={isEditing} icon={<Milestone size={20} />} label="Roll Number" name="roll_number" value={editData.roll_number} onChange={handleInputChange} />}
+                {user.role === 'student' && (
+                    <DetailItem
+                        isEditing={isEditing}
+                        icon={<Milestone size={20} />} 
+                        label="Roll Number" 
+                        name="roll_number" 
+                        value={editData.roll_number !== undefined && editData.roll_number !== null && String(editData.roll_number).trim() !== '' ? editData.roll_number : ''}
+                        onChange={handleInputChange}
+                    />
+                )}
                 {user.campusName && <DetailItem isEditing={false} icon={<Building size={20} />} label="Campus" value={user.campusName} />}
                 {user.courseName && <DetailItem isEditing={false} icon={<BookOpen size={20} />} label="Course" value={user.courseName || user.course_name} />}
                 {user.batch_name && <DetailItem isEditing={false} icon={<Users size={20} />} label="Batch" value={user.batch_name} />}
-                <DetailItem isEditing={isEditing} icon={<KeyRound size={20}/>} label="Password" name="password" type="password" value={isEditing ? (editData.password || '') : user.password} onChange={handleInputChange} placeholder="Leave blank to keep unchanged" />
+                <DetailItem isEditing={isEditing} icon={<KeyRound size={20}/>} label="Password" name="password" type="password" value={isEditing ? (editData.password || '') : (user.password !== undefined && user.password !== null && String(user.password).trim() !== '' ? user.password : '')} onChange={handleInputChange} placeholder="Leave blank to keep unchanged" />
                 {user.role === 'student' && <DetailItem isEditing={isEditing} icon={<Phone size={20} />} label="Mobile Number" name="mobile_number" value={editData.mobile_number} onChange={handleInputChange} />}
             </div>
         </motion.div>
     )
 }
 
-const DetailItem = ({ isEditing, icon, label, ...props }) => (
-    <div className="flex items-center p-4 bg-gray-50 rounded-xl">
-        <div className="p-3 bg-gray-200 text-gray-600 rounded-full mr-4">{icon}</div>
-        <div className="flex-1">
-            <p className="text-sm text-gray-500 font-medium">{label}</p>
-            {isEditing ? (
-                <input
-                    {...props}
-                    className="w-full bg-transparent text-lg text-gray-800 font-semibold outline-none"
-                />
-            ) : (
-                <p className={`font-semibold text-lg text-gray-800 ${props.label === 'Password' ? 'font-mono text-sm' : ''}`}>{props.value || 'N/A'}</p>
-            )}
+const DetailItem = ({ isEditing, icon, label, ...props }) => {
+    // Special handling for password masking
+    const isPassword = label === 'Password';
+    const hasPassword = props.value !== undefined && props.value !== null && String(props.value).trim() !== '';
+    return (
+        <div className="flex items-center p-4 bg-background rounded-xl border border-stroke">
+            <div className="p-3 bg-tertiary text-secondary rounded-full mr-4">{icon}</div>
+            <div className="flex-1">
+                <p className="text-sm font-medium text-black">{label}</p>
+                {isEditing ? (
+                    <input
+                        {...props}
+                        className="w-full bg-transparent text-lg font-semibold outline-none border-b border-highlight focus:border-tertiary transition text-black"
+                    />
+                ) : (
+                    <p className={`font-semibold text-lg text-black ${isPassword ? 'font-mono text-sm' : ''}`}>
+                        {isPassword
+                            ? (hasPassword ? '••••••••' : 'N/A')
+                            : (hasPassword ? props.value : 'N/A')
+                        }
+                    </p>
+                )}
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 export default UserManagement; 

@@ -3,17 +3,23 @@ import { motion } from 'framer-motion'
 import { useForm, Controller } from 'react-hook-form'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNotification } from '../../contexts/NotificationContext'
+import { useLocation } from 'react-router-dom'
 import Header from '../../components/common/Header'
 import SuperAdminSidebar from '../../components/common/SuperAdminSidebar'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import api from '../../services/api'
-import { Upload, Plus, Trash2, ChevronLeft, ChevronRight, FileText, CheckCircle, Briefcase, Users, FileQuestion, Sparkles, Eye, Edit, MoreVertical, Play, Pause, AlertTriangle } from 'lucide-react'
+import { Upload, Plus, Trash2, ChevronLeft, ChevronRight, FileText, CheckCircle, Briefcase, Users, FileQuestion, Sparkles, Eye, Edit, MoreVertical, Play, Pause, AlertTriangle, ChevronDown } from 'lucide-react'
 import { MultiSelect } from 'react-multi-select-component'
 import clsx from 'clsx'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
+import { uploadModuleQuestions, getRandomQuestionsFromBank, createTestFromBank, getAllTests, getStudentCount } from '../../services/api'
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import Modal from '../../components/common/Modal';
 
 const TestManagement = () => {
+  const location = useLocation()
   const [view, setView] = useState('list')
   const [currentTestId, setCurrentTestId] = useState(null)
   const [tests, setTests] = useState([])
@@ -24,6 +30,15 @@ const TestManagement = () => {
   const pollingIntervalRef = useRef(null)
   const [selectedTest, setSelectedTest] = useState(null)
   const [isPreviewLoading, setIsPreviewLoading] = useState(false)
+  const [baseName, setBaseName] = useState('')
+  const [sequence, setSequence] = useState(1)
+
+  // Check if we're on the question-bank-upload route and set view accordingly
+  useEffect(() => {
+    if (location.pathname === '/superadmin/question-bank-upload') {
+      setView('module-upload')
+    }
+  }, [location.pathname])
 
   const fetchTests = useCallback(async () => {
     try {
@@ -155,6 +170,8 @@ const TestManagement = () => {
           return <div className="flex justify-center items-center h-screen"><LoadingSpinner /></div>;
         }
         return <TestPreviewView test={selectedTest} onBack={handleBackToList} />
+      case 'module-upload':
+        return <ModuleQuestionUpload onBack={() => setView('list')} />
       case 'list':
       default:
         return <TestListView tests={tests} loading={loading} setView={setView} onViewTest={handleViewTest} onDeleteTest={handleDeleteTest} />
@@ -162,8 +179,8 @@ const TestManagement = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <SuperAdminSidebar />
+    <div className="min-h-screen bg-background flex">
+      <SuperAdminSidebar onModuleUpload={() => setView('module-upload')} />
       <div className="flex-1 lg:pl-64">
         <Header />
         <main className="px-6 lg:px-10 py-12">
@@ -310,6 +327,12 @@ const TestListView = ({ tests, loading, setView, onViewTest, onDeleteTest }) => 
 }
 
 const TestPreviewView = ({ test, onBack }) => {
+  const { success, error } = useNotification();
+  const [notifying, setNotifying] = useState(false);
+  const [notifyModalOpen, setNotifyModalOpen] = useState(false);
+  const [notifyResults, setNotifyResults] = useState([]);
+  const [notifyLoading, setNotifyLoading] = useState(false);
+
   if (!test) {
     return (
       <div className="text-center p-8">
@@ -322,44 +345,101 @@ const TestPreviewView = ({ test, onBack }) => {
     );
   }
 
+  // Helper to format date/time
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-IN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  };
+
+  // Notify students handler
+  const handleNotifyStudents = async () => {
+    setNotifyModalOpen(true);
+    setNotifyLoading(true);
+    setNotifyResults([]);
+    try {
+      const res = await api.post(`/test-management/notify-students/${test._id}`);
+      if (res.data && res.data.results) {
+        setNotifyResults(res.data.results);
+        success('Notification process completed!');
+      } else {
+        error('No results returned from notification API.');
+      }
+    } catch (e) {
+      error('Failed to send notification.');
+    } finally {
+      setNotifyLoading(false);
+    }
+  };
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">{test.name}</h1>
-          <div className="flex items-center space-x-4 mt-2 text-gray-500">
-            <span className="flex items-center"><Briefcase className="w-4 h-4 mr-1.5" /> Type: {test.test_type}</span>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">{test.name}</h1>
+          <div className="flex flex-wrap items-center gap-4 text-gray-500 text-base">
+            <span className="flex items-center"><Briefcase className="w-4 h-4 mr-1.5" /> <span className="font-semibold">Type:</span> {test.test_type}</span>
             <span className={clsx("flex items-center", {
               'text-green-600': test.status === 'active',
               'text-yellow-600': test.status === 'processing',
               'text-red-600': test.status === 'failed'
             })}>
-              <CheckCircle className="w-4 h-4 mr-1.5" /> Status: <span className="font-semibold">{test.status}</span>
+              <CheckCircle className="w-4 h-4 mr-1.5" /> <span className="font-semibold">Status:</span> <span className="font-semibold">{test.status}</span>
             </span>
-            <span className="flex items-center"><FileQuestion className="w-4 h-4 mr-1.5" /> Questions: {test.questions?.length || 0}</span>
+            <span className="flex items-center"><FileQuestion className="w-4 h-4 mr-1.5" /> <span className="font-semibold">Questions:</span> {test.questions?.length || 0}</span>
+            {test.test_type === 'online' && (
+              <>
+                {test.startDateTime && (
+                  <span className="flex items-center"><span className="font-semibold text-gray-700 ml-2">Start:</span> {formatDateTime(test.startDateTime)}</span>
+                )}
+                {test.endDateTime && (
+                  <span className="flex items-center"><span className="font-semibold text-gray-700 ml-2">End:</span> {formatDateTime(test.endDateTime)}</span>
+                )}
+              </>
+            )}
           </div>
         </div>
-        <button onClick={onBack} className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors">
-          <ChevronLeft className="h-5 w-5 mr-1" /> Back to List
-        </button>
+        <div className="flex flex-col md:flex-row gap-2 md:gap-4 mt-4 md:mt-0">
+          <button onClick={onBack} className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors">
+            <ChevronLeft className="h-5 w-5 mr-1" /> Back to List
+          </button>
+          <button
+            onClick={handleNotifyStudents}
+            disabled={notifying}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
+          >
+            {notifying ? 'Notifying...' : 'Notify Students'}
+          </button>
+        </div>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-8">
         {test.questions && test.questions.map((q, index) => (
-          <div key={q.question_id || index} className="bg-gray-50 rounded-lg p-6 border border-gray-200">
+          <div key={q.question_id || index} className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm">
             <h3 className="font-semibold text-lg text-gray-800 mb-4">Question {index + 1}</h3>
-            <p className="text-gray-700 mb-4">{q.question}</p>
-
+            <p className="text-gray-700 mb-4 whitespace-pre-line">{q.question}</p>
             {q.question_type === 'mcq' ? (
-              <div className="space-y-2 text-sm">
-                <h4 className="font-semibold text-gray-600">Options:</h4>
-                <ul className="list-disc list-inside pl-4 space-y-1 text-gray-700">
+              <div className="space-y-2 text-base">
+                <h4 className="font-semibold text-gray-600 mb-1">Options:</h4>
+                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 list-none pl-0">
                   {Object.entries(q.options).map(([key, value]) => (
-                    <li key={key}><strong>{key}:</strong> {value}</li>
+                    <li key={key} className={clsx('rounded border px-4 py-2', {
+                      'bg-green-50 border-green-400 font-bold text-green-700': q.correct_answer === key,
+                      'bg-gray-50 border-gray-200': q.correct_answer !== key
+                    })}>
+                      <span className="font-semibold">{key}:</span> {value}
+                    </li>
                   ))}
                 </ul>
                 <div className="pt-2">
-                   <p className="font-semibold text-gray-600">Answer: <span className="font-bold text-green-600">{q.correct_answer}</span></p>
+                  <p className="font-semibold text-gray-600">Answer: <span className="font-bold text-green-600">{q.correct_answer}</span></p>
                 </div>
               </div>
             ) : q.audio_presigned_url ? (
@@ -373,6 +453,58 @@ const TestPreviewView = ({ test, onBack }) => {
           </div>
         ))}
       </div>
+
+      {/* Notify Students Modal */}
+      {notifyModalOpen && (
+        <Modal onClose={() => setNotifyModalOpen(false)} title="Notify Students">
+          <div className="mb-4">
+            <h3 className="font-semibold text-lg mb-2">Notification Status</h3>
+            {notifyLoading ? (
+              <div className="text-blue-600">Sending notifications...</div>
+            ) : (
+              <table className="min-w-full text-sm border rounded">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Name</th>
+                    <th className="px-3 py-2 text-left">Email</th>
+                    <th className="px-3 py-2 text-left">Test Status</th>
+                    <th className="px-3 py-2 text-left">Notification</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {notifyResults.map((s, idx) => (
+                    <tr key={s.email} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="px-3 py-2">{s.name}</td>
+                      <td className="px-3 py-2">{s.email}</td>
+                      <td className="px-3 py-2">
+                        {s.test_status === 'completed' ? (
+                          <span className="text-green-600 font-semibold">Completed</span>
+                        ) : (
+                          <span className="text-yellow-600 font-semibold">Pending</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        {s.notify_status === 'sent' && <span className="text-green-700">Sent</span>}
+                        {s.notify_status === 'skipped' && <span className="text-gray-500">Skipped</span>}
+                        {s.notify_status === 'pending' && <span className="text-blue-500">Pending</span>}
+                        {s.notify_status === 'failed' && <span className="text-red-600">Failed</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {!notifyLoading && notifyResults.length > 0 && (
+              <div className="mt-4 text-sm">
+                <span className="font-semibold">Summary:</span> {notifyResults.filter(r => r.notify_status === 'sent').length} notified, {notifyResults.filter(r => r.notify_status === 'skipped').length} skipped (already completed), {notifyResults.filter(r => r.notify_status === 'failed').length} failed.
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end">
+            <button onClick={() => setNotifyModalOpen(false)} className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Close</button>
+          </div>
+        </Modal>
+      )}
     </motion.div>
   )
 }
@@ -381,7 +513,7 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
   const [step, setStep] = useState(1)
   const [testData, setTestData] = useState({
     testName: '',
-    testType: 'Practice',
+    testType: '', // Start empty, force selection
     module: null,
     level: null,
     subcategory: null,
@@ -389,11 +521,11 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
     batches: [],
     courses: [],
     questions: [],
-    accent: 'en-US', // Default Accent
-    speed: 1.0, // Default Speed
+    accent: 'en-US',
+    speed: 1.0,
   })
 
-  const nextStep = () => setStep(prev => prev < 4 ? prev + 1 : prev)
+  const nextStep = () => setStep(prev => prev < 6 ? prev + 1 : prev)
   const prevStep = () => setStep(prev => prev > 1 ? prev - 1 : prev)
 
   const updateTestData = (data) => {
@@ -403,15 +535,19 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
   const renderStep = () => {
     switch (step) {
       case 1:
-        return <Step1TestDetails nextStep={nextStep} updateTestData={updateTestData} testData={testData} />
+        return <Step4AudienceSelection nextStep={nextStep} updateTestData={updateTestData} testData={testData} />;
       case 2:
-        return <Step2AudienceSelection nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />
+        return <Step2TestType nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
       case 3:
-        return <Step3QuestionUpload nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />
+        return <Step1TestDetails nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
       case 4:
-        return <Step4ConfirmAndGenerate prevStep={prevStep} testData={testData} onTestCreated={onTestCreated} />
+        return <Step3TestName nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
+      case 5:
+        return <Step5QuestionUpload nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
+      case 6:
+        return <Step4ConfirmAndGenerate prevStep={prevStep} testData={testData} onTestCreated={onTestCreated} />;
       default:
-        return <Step1TestDetails nextStep={nextStep} updateTestData={updateTestData} testData={testData} />
+        return <Step4AudienceSelection nextStep={nextStep} updateTestData={updateTestData} testData={testData} />;
     }
   }
 
@@ -431,11 +567,20 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
           <div className="w-full bg-gray-200 rounded-full h-2.5">
             <motion.div 
               className="bg-blue-500 h-2.5 rounded-full" 
-              animate={{ width: `${((step - 1) / 3) * 100}%` }}
+              animate={{ width: `${((step - 1) / 5) * 100}%` }}
               transition={{ duration: 0.5 }}
             />
           </div>
-          <p className="text-right text-sm text-gray-500 mt-2">Step {step} of 4</p>
+          <p className="text-right text-sm text-gray-500 mt-2">
+            Step {step} of 6: {
+              step === 1 ? 'Select Campus, Batch, and Course' :
+              step === 2 ? 'Select Test Type' :
+              step === 3 ? 'Select Module and Level' :
+              step === 4 ? 'Enter Test Name' :
+              step === 5 ? 'Upload Questions' :
+              step === 6 ? 'Final Confirmation' : ''
+            }
+          </p>
         </div>
         {renderStep()}
       </div>
@@ -443,7 +588,7 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
   )
 }
 
-const Step1TestDetails = ({ nextStep, updateTestData, testData }) => {
+const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }) => {
   const { register, handleSubmit, watch, formState: { errors } } = useForm({
     defaultValues: {
       testName: testData.testName,
@@ -478,17 +623,9 @@ const Step1TestDetails = ({ nextStep, updateTestData, testData }) => {
   }, [error])
 
   const onSubmit = async (data) => {
-    try {
-      const res = await api.post('/test-management/check-test-name', { name: data.testName });
-      if (res.data.exists) {
-        error(`A test with the name '${data.testName}' already exists.`);
-        return;
-      }
-      updateTestData(data)
-      nextStep()
-    } catch (err) {
-      error("Failed to verify test name. Please try again.");
-    }
+    // Only update test data and go to next step, do not check test name here
+    updateTestData(data)
+    nextStep()
   }
 
   if (loading) {
@@ -502,18 +639,7 @@ const Step1TestDetails = ({ nextStep, updateTestData, testData }) => {
           <div className="bg-blue-500 p-2 rounded-full text-white">
             <Briefcase className="h-6 w-6"/>
           </div>
-          <h2 className="text-2xl font-semibold text-gray-800">Test Details</h2>
-        </div>
-        <div className="w-full">
-          <label htmlFor="testName" className="block text-sm font-medium text-gray-800 mb-1">Test Name</label>
-          <input
-            type="text"
-            id="testName"
-            {...register('testName', { required: 'Test name is required' })}
-            className="mt-1 block w-full rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition bg-gray-700 text-white border-gray-600 placeholder-gray-400"
-            placeholder="e.g. Mid-term English Proficiency"
-          />
-          {errors.testName && <p className="text-red-500 text-xs mt-1">{errors.testName.message}</p>}
+          <h2 className="text-2xl font-bold mb-4">Select Module and Level</h2>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-800">Test Type</label>
@@ -589,6 +715,283 @@ const Step1TestDetails = ({ nextStep, updateTestData, testData }) => {
         </div>
         <div className="flex justify-end pt-4">
           <button type="submit" className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105">
+            Next: Select Test Type <ChevronRight className="h-5 w-5 ml-2" />
+          </button>
+        </div>
+      </form>
+    </motion.div>
+  )
+}
+
+const Step2TestType = ({ nextStep, prevStep, updateTestData, testData }) => {
+  const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm({
+    defaultValues: {
+      testType: testData.testType,
+    }
+  })
+  const { error } = useNotification()
+
+  const testType = watch('testType')
+
+  const onSubmit = (data) => {
+    updateTestData({ testType: data.testType })
+    nextStep()
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+        <div className="flex items-center space-x-3 border-b pb-4 border-gray-200">
+          <div className="bg-blue-500 p-2 rounded-full text-white">
+            <Briefcase className="h-6 w-6"/>
+          </div>
+          <h2 className="text-2xl font-bold mb-4">Select Test Type</h2>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div>
+            <label className="block text-sm font-medium text-gray-800">Test Type</label>
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label className={clsx('relative flex p-4 border rounded-lg cursor-pointer hover:bg-blue-50 transition', {
+                'bg-blue-50 border-blue-500 ring-2 ring-blue-500': testType === 'Practice'
+              })}>
+                <input type="radio" {...register('testType')} value="Practice" className="sr-only" />
+                <div className="flex-1">
+                  <span className="font-medium text-gray-800">Practice Module</span>
+                  <p className="text-sm text-gray-500">Low-stakes module for student practice.</p>
+                </div>
+                {testType === 'Practice' && <CheckCircle className="h-5 w-5 text-blue-500 absolute top-2 right-2" />}
+              </label>
+              <label className={clsx('relative flex p-4 border rounded-lg cursor-pointer hover:bg-blue-50 transition', {
+                'bg-blue-50 border-blue-500 ring-2 ring-blue-500': testType === 'Online'
+              })}>
+                <input type="radio" {...register('testType')} value="Online" className="sr-only" />
+                <div className="flex-1">
+                  <span className="font-medium text-gray-800">Online Exam</span>
+                  <p className="text-sm text-gray-500">Formal, graded assessment.</p>
+                </div>
+                {testType === 'Online' && <CheckCircle className="h-5 w-5 text-blue-500 absolute top-2 right-2" />}
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex justify-between items-center pt-8 border-t mt-8 border-gray-200">
+          <button type="button" onClick={prevStep} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors">
+            <ChevronLeft className="h-5 w-5 mr-1" /> Back
+          </button>
+          <button type="submit" className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105">
+            Next: Select Test Name <ChevronRight className="h-5 w-5 ml-2" />
+          </button>
+        </div>
+      </form>
+    </motion.div>
+  )
+}
+
+const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
+  const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm({
+    defaultValues: {
+      testName: testData.testName,
+      startDateTime: testData.startDateTime || '',
+      endDateTime: testData.endDateTime || '',
+    }
+  })
+  const { error } = useNotification()
+  const [baseName, setBaseName] = useState('')
+  const [sequence, setSequence] = useState(1)
+  const [existingTestNames, setExistingTestNames] = useState([]);
+  const [loadingNames, setLoadingNames] = useState(true);
+  const [modules, setModules] = useState([]);
+  const [levels, setLevels] = useState([]);
+  const [grammarCategories, setGrammarCategories] = useState([]);
+  const [loadingMeta, setLoadingMeta] = useState(true);
+
+  const testName = watch('testName')
+  const testType = testData.testType?.toLowerCase();
+
+  // Use testData.startDateTime and testData.endDateTime as the source of truth
+  const startDateTime = testData.startDateTime ? new Date(testData.startDateTime) : null;
+  const endDateTime = testData.endDateTime ? new Date(testData.endDateTime) : null;
+
+  // Update testData immediately when date changes
+  const handleStartDateChange = (date) => {
+    updateTestData({ startDateTime: date ? date.toISOString() : '' });
+  };
+  const handleEndDateChange = (date) => {
+    updateTestData({ endDateTime: date ? date.toISOString() : '' });
+  };
+
+  const onSubmit = async (data) => {
+    try {
+      const res = await api.post('/test-management/check-test-name', {
+        name: data.testName,
+        module: testData.module,
+        level: testData.level,
+        campus: testData.campus?.value,
+        batches: testData.batches?.map(b => b.value),
+        courses: testData.courses?.map(c => c.value),
+      });
+      if (res.data.exists) {
+        error(`A test with the name '${data.testName}' already exists for the selected module, level, campus, batch, and course.`);
+        return;
+      }
+      if (testType === 'online') {
+        if (!testData.startDateTime || !testData.endDateTime) {
+          error('Start and End date/time are required for Online Exam.');
+          return;
+        }
+        updateTestData({ testName: data.testName });
+      } else {
+        updateTestData({ testName: data.testName })
+      }
+      nextStep()
+    } catch (err) {
+      error("Failed to verify test name. Please try again.");
+    }
+  }
+
+  useEffect(() => {
+    const fetchTestNames = async () => {
+      try {
+        const res = await getAllTests();
+        setExistingTestNames(res.data.data.map(t => t.name));
+      } catch (e) {
+        setExistingTestNames([]);
+      } finally {
+        setLoadingNames(false);
+      }
+    };
+    fetchTestNames();
+  }, []);
+
+  useEffect(() => {
+    const fetchMeta = async () => {
+      try {
+        const res = await api.get('/test-management/get-test-data');
+        setModules(res.data.data.modules || []);
+        setLevels(res.data.data.levels || []);
+        setGrammarCategories(res.data.data.grammar_categories || []);
+      } catch (err) {
+        setModules([]); setLevels([]); setGrammarCategories([]);
+      } finally {
+        setLoadingMeta(false);
+      }
+    };
+    fetchMeta();
+  }, []);
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+        <div className="flex items-center space-x-3 border-b pb-4 border-gray-200">
+          <div className="bg-blue-500 p-2 rounded-full text-white">
+            <Briefcase className="h-6 w-6"/>
+          </div>
+          <h2 className="text-2xl font-bold mb-4">Enter Test Name</h2>
+        </div>
+        {/* Selections Summary */}
+        <div className="mb-6 bg-gray-50 border border-gray-200 p-4 rounded-lg">
+          <h3 className="font-semibold text-gray-700 mb-2">Selections So Far:</h3>
+          {loadingMeta ? (
+            <div className="text-gray-500 text-sm">Loading selections...</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+              <div><strong className="text-gray-500 block">Campus:</strong><span className="text-gray-800">{testData.campus?.label || 'N/A'}</span></div>
+              <div><strong className="text-gray-500 block">Batches:</strong><span className="text-gray-800">{testData.batches?.map(b => b.label).join(', ') || 'N/A'}</span></div>
+              <div><strong className="text-gray-500 block">Courses:</strong><span className="text-gray-800">{testData.courses?.map(c => c.label).join(', ') || 'N/A'}</span></div>
+              <div><strong className="text-gray-500 block">Test Type:</strong><span className="text-gray-800">{testData.testType || 'N/A'}</span></div>
+              <div><strong className="text-gray-500 block">Module:</strong><span className="text-gray-800">{modules.find(m => m.id === testData.module)?.name || testData.module || 'N/A'}</span></div>
+              {testData.module === 'GRAMMAR' && testData.subcategory ? (
+                <div><strong className="text-gray-500 block">Grammar Category:</strong><span className="text-gray-800">{grammarCategories.find(cat => cat.id === testData.subcategory)?.name || testData.subcategory}</span></div>
+              ) : testData.module !== 'VOCABULARY' && testData.level ? (
+                <div><strong className="text-gray-500 block">Level:</strong><span className="text-gray-800">{levels.find(l => l.id === testData.level)?.name || testData.level}</span></div>
+              ) : null}
+            </div>
+          )}
+        </div>
+        {/* Test Name Input and Already Uploaded Names */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div>
+            <label htmlFor="testName" className="block text-sm font-medium text-gray-800">Test Name</label>
+            <input
+              type="text"
+              id="testName"
+              {...register('testName', { required: 'Test name is required' })}
+              className="mt-1 block w-full rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition bg-gray-700 text-white border-gray-600 placeholder-gray-400"
+              placeholder="e.g. Mid-term English Proficiency"
+            />
+            {errors.testName && <p className="text-red-500 text-xs mt-1">{errors.testName.message}</p>}
+            <div className="mt-4">
+              <div className="font-semibold text-gray-700 mb-1">Already Uploaded Test Names:</div>
+              {loadingNames ? (
+                <div className="text-gray-500 text-sm">Loading...</div>
+              ) : (
+                <div className="max-h-32 overflow-y-auto border border-gray-300 rounded bg-gray-50 p-2 text-sm text-gray-800">
+                  {existingTestNames.length === 0 ? (
+                    <div className="text-gray-400">No tests found.</div>
+                  ) : (
+                    <ul>
+                      {existingTestNames.map((name, idx) => (
+                        <li key={idx} className="truncate">{name}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Start/End DateTime for Online Test */}
+          {testType === 'online' && (
+            <div className="space-y-4">
+              <label className="block text-sm font-medium text-gray-800">Start Date & Time</label>
+              <DatePicker
+                selected={startDateTime}
+                onChange={handleStartDateChange}
+                showTimeSelect
+                timeFormat="HH:mm"
+                timeIntervals={15}
+                dateFormat="dd-MM-yyyy HH:mm"
+                placeholderText="Select start date & time"
+                minDate={new Date()}
+                className="mt-1 block w-full rounded-lg shadow focus:border-blue-600 focus:ring-2 focus:ring-blue-500 sm:text-base bg-white text-gray-900 border border-blue-300 placeholder-gray-400 transition"
+                calendarClassName="rounded-lg border-blue-300 shadow-lg"
+                popperClassName="z-50"
+              />
+              <label className="block text-sm font-medium text-gray-800">End Date & Time</label>
+              <DatePicker
+                selected={endDateTime}
+                onChange={handleEndDateChange}
+                showTimeSelect
+                timeFormat="HH:mm"
+                timeIntervals={15}
+                dateFormat="dd-MM-yyyy HH:mm"
+                placeholderText="Select end date & time"
+                minDate={startDateTime || new Date()}
+                className="mt-1 block w-full rounded-lg shadow focus:border-blue-600 focus:ring-2 focus:ring-blue-500 sm:text-base bg-white text-gray-900 border border-blue-300 placeholder-gray-400 transition"
+                calendarClassName="rounded-lg border-blue-300 shadow-lg"
+                popperClassName="z-50"
+              />
+            </div>
+          )}
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700">Test Duration (minutes)</label>
+          <input
+            type="number"
+            min="1"
+            value={testData.duration || ''}
+            onChange={e => updateTestData({ ...testData, duration: e.target.value })}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            required={testData.testType === 'Online'}
+            placeholder="Enter duration in minutes"
+          />
+        </div>
+        <div className="flex justify-between items-center pt-8 border-t mt-8 border-gray-200">
+          <button type="button" onClick={prevStep} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors">
+            <ChevronLeft className="h-5 w-5 mr-1" /> Back
+          </button>
+          <button type="submit" className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105">
             Next: Select Audience <ChevronRight className="h-5 w-5 ml-2" />
           </button>
         </div>
@@ -597,7 +1000,7 @@ const Step1TestDetails = ({ nextStep, updateTestData, testData }) => {
   )
 }
 
-const Step2AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }) => {
+const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }) => {
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm({
     defaultValues: {
       campus_id: testData.campus?.value || '',
@@ -710,9 +1113,9 @@ const Step2AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         <div className="flex items-center space-x-3 border-b pb-4 border-gray-200">
           <div className="bg-blue-500 p-2 rounded-full text-white">
-            <Users className="h-6 w-6"/>
+            <Briefcase className="h-6 w-6"/>
           </div>
-          <h2 className="text-2xl font-semibold text-gray-800">Select Audience</h2>
+          <h2 className="text-2xl font-bold mb-4">Select Audience</h2>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -839,7 +1242,7 @@ const CheckboxCard = ({ id, label, checked, onChange }) => {
   );
 }
 
-const Step3QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) => {
+const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) => {
   const [questions, setQuestions] = useState(testData.questions || [])
   const [previewQuestions, setPreviewQuestions] = useState([])
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
@@ -1274,6 +1677,26 @@ const QuestionPreviewModal = ({ questionsToPreview, onClose, onConfirm }) => {
 };
 
 const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
+  const [studentCount, setStudentCount] = useState(null);
+  const [studentList, setStudentList] = useState([]);
+  useEffect(() => {
+    const fetchStudentCount = async () => {
+      try {
+        const res = await getStudentCount({
+          campus: testData.campus?.value,
+          batches: testData.batches?.map(b => b.value),
+          courses: testData.courses?.map(c => c.value),
+        });
+        setStudentCount(res.data.count);
+        setStudentList(res.data.students || []);
+      } catch {
+        setStudentCount('N/A');
+        setStudentList([]);
+      }
+    };
+    fetchStudentCount();
+  }, [testData.campus, testData.batches, testData.courses]);
+
   const { success, error } = useNotification()
   const [loading, setLoading] = useState(false)
   const { control, handleSubmit } = useForm({
@@ -1285,6 +1708,24 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
 
   // Check if this is an MCQ module
   const isMcqModule = testData.module && ['GRAMMAR', 'VOCABULARY'].includes(testData.module)
+
+  // Helper to format date/time
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-IN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  };
+
+  // Validation for online test
+  const isOnline = testData.testType?.toLowerCase() === 'online';
+  const missingDate = isOnline && (!testData.startDateTime || !testData.endDateTime);
 
   const accentOptions = [
     { value: 'en-US', label: 'English (US)' },
@@ -1303,28 +1744,44 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
     try {
       const payload = {
         test_name: testData.testName,
-        test_type: testData.testType,
+        test_type: testData.testType?.toLowerCase(),
         module_id: testData.module,
-        level_id: testData.level,
-        subcategory: testData.subcategory,
         campus_id: testData.campus?.value,
-        batch_ids: testData.batches.map(b => b.value),
         course_ids: testData.courses.map(c => c.value),
+        batch_ids: testData.batches.map(b => b.value),
         questions: testData.questions,
-        audio_config: {
-          accent: data.accent,
-          speed: data.speed,
+        audio_config: isMcqModule ? {} : { accent: data.accent, speed: data.speed },
+      };
+      if (testData.testType?.toLowerCase() === 'online') {
+        // Always send ISO strings for startDateTime and endDateTime
+        if (!testData.startDateTime || !testData.endDateTime) {
+          error('Start and end date/time are required for online tests.');
+          setLoading(false);
+          return;
         }
+        payload.startDateTime = new Date(testData.startDateTime).toISOString();
+        payload.endDateTime = new Date(testData.endDateTime).toISOString();
+        payload.duration = Number(testData.duration);
       }
+      if (testData.module === 'GRAMMAR') {
+        payload.subcategory = testData.subcategory;
+        payload.level_id = null;
+      } else if (testData.module === 'VOCABULARY') {
+        payload.subcategory = null;
+        payload.level_id = null;
+      } else {
+        payload.level_id = testData.level;
+        payload.subcategory = null;
+      }
+      // Debug log
+      console.log('Submitting test creation payload:', payload);
       const res = await api.post('/test-management/create-test', payload)
       const newTestId = res.data?.data?.test_id;
-      
       if (isMcqModule) {
         success("MCQ module created successfully!")
       } else {
         success("Test creation started! Audio generation is in progress.")
       }
-      
       if (onTestCreated) onTestCreated(newTestId)
     } catch(err) {
       const errorMessage = err.response?.data?.message || "An unexpected error occurred while creating the test."
@@ -1348,9 +1805,13 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
           <div className="bg-blue-500 p-2 rounded-full text-white">
             <Sparkles className="h-6 w-6"/>
           </div>
-          <h2 className="text-2xl font-semibold text-gray-800">Final Confirmation</h2>
+          <h2 className="text-2xl font-bold mb-4">Final Confirmation</h2>
         </div>
-        
+        {missingDate && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <strong>Start and end date/time are required for online tests.</strong>
+          </div>
+        )}
         <div className="bg-gray-50 border border-gray-200 p-6 rounded-lg space-y-4">
           <h3 className="font-semibold text-lg text-gray-800 border-b border-gray-200 pb-3 mb-4">Test Summary</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
@@ -1365,10 +1826,44 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
             <div><strong className="text-gray-500 block">Campus:</strong><p className="text-gray-800">{testData.campus?.label}</p></div>
             <div><strong className="text-gray-500 block">Batches:</strong><p className="text-gray-800">{testData.batches?.map(b => b.label).join(', ')}</p></div>
             <div><strong className="text-gray-500 block">Courses:</strong><p className="text-gray-800">{testData.courses?.map(c => c.label).join(', ')}</p></div>
+            {isOnline && (
+              <>
+                <div><strong className="text-gray-500 block">Start Date & Time:</strong><p className="text-gray-800">{formatDateTime(testData.startDateTime)}</p></div>
+                <div><strong className="text-gray-500 block">End Date & Time:</strong><p className="text-gray-800">{formatDateTime(testData.endDateTime)}</p></div>
+              </>
+            )}
+            <div><strong className="text-gray-500 block">Student Count:</strong><p className="text-gray-800">{studentCount === null ? 'Loading...' : studentCount}</p></div>
             <div className="col-span-full"><strong className="text-gray-500 block">Total Questions:</strong><p className="text-gray-800">{testData.questions?.length}</p></div>
           </div>
+          {/* Student List Table */}
+          <div className="mt-6">
+            <h4 className="font-semibold text-gray-700 mb-2">Students who will get access:</h4>
+            <div className="max-h-48 overflow-y-auto border border-gray-200 rounded bg-white">
+              {studentList.length === 0 ? (
+                <div className="text-gray-500 text-sm p-4">No students found for the selected criteria.</div>
+              ) : (
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-medium text-gray-600">Name</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-600">Email</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-600">Roll Number</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {studentList.map((s) => (
+                      <tr key={s.id} className="even:bg-gray-50">
+                        <td className="px-4 py-2 text-gray-800">{s.name}</td>
+                        <td className="px-4 py-2 text-gray-800">{s.email}</td>
+                        <td className="px-4 py-2 text-gray-800">{s.roll_number}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
         </div>
-
         {!isMcqModule && (
           <div>
             <h3 className="text-lg font-medium text-gray-800 mb-2">Audio Configuration</h3>
@@ -1405,7 +1900,7 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
           <button type="button" onClick={prevStep} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors">
             <ChevronLeft className="h-5 w-5 mr-1" /> Back
           </button>
-          <button type="submit" disabled={loading} className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed transition-transform transform hover:scale-105">
+          <button type="submit" disabled={loading || missingDate} className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed transition-transform transform hover:scale-105">
             <CheckCircle className="h-6 w-6 mr-2" />
             {loading ? 'Processing...' : (isMcqModule ? 'Create MCQ Module' : 'Confirm and Generate Audio')}
           </button>
@@ -1414,5 +1909,298 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
     </motion.div>
   )
 }
+
+// ModuleQuestionUpload component
+const ModuleQuestionUpload = ({ onBack }) => {
+  const [selectedModule, setSelectedModule] = useState(null);
+  const [levelId, setLevelId] = useState('');
+  const [questions, setQuestions] = useState([]);
+  const [modules, setModules] = useState([]);
+  const [levels, setLevels] = useState([]);
+  const [currentStep, setCurrentStep] = useState('modules'); // 'modules' or 'levels'
+  const { success, error } = useNotification();
+  const [loading, setLoading] = useState(false);
+  const [notifyModalOpen, setNotifyModalOpen] = useState(false);
+  const [notifyResults, setNotifyResults] = useState([]);
+  const [notifyLoading, setNotifyLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        const res = await api.get('/test-management/get-test-data');
+        setModules(res.data.data.modules || []);
+        setLevels(res.data.data.levels || []);
+      } catch (err) {
+        error('Failed to fetch modules and levels');
+      }
+    };
+    fetchOptions();
+  }, [error]);
+
+  const handleModuleSelect = (module) => {
+    setSelectedModule(module);
+    setCurrentStep('levels');
+  };
+
+  const handleBackToModules = () => {
+    setSelectedModule(null);
+    setLevelId('');
+    setCurrentStep('modules');
+  };
+
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    const fileExtension = file.name.toLowerCase().split('.').pop();
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        let parsedQuestions = [];
+        if (fileExtension === 'csv') {
+          const result = Papa.parse(e.target.result, { header: true, skipEmptyLines: true });
+          parsedQuestions = result.data.map(row => ({
+            question: row.question || row.Question || '',
+            instructions: row.instructions || row.Instructions || '',
+          }));
+        } else {
+          const workbook = XLSX.read(e.target.result, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+          parsedQuestions = jsonData.map(row => ({
+            question: row.question || row.Question || '',
+            instructions: row.instructions || row.Instructions || '',
+          }));
+        }
+        setQuestions(parsedQuestions.filter(q => q && q.question && q.question.trim() !== ''));
+        success(`Loaded ${parsedQuestions.length} questions.`);
+      } catch (err) {
+        error('Failed to parse file.');
+      }
+    };
+    if (fileExtension === 'csv') {
+      reader.readAsText(file, 'UTF-8');
+    } else {
+      reader.readAsArrayBuffer(file);
+    }
+    event.target.value = null;
+  };
+
+  const handleUpload = async () => {
+    if (!selectedModule || !levelId || questions.length === 0) {
+      error('Please select module, level, and upload questions.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await uploadModuleQuestions(selectedModule.id, levelId, questions);
+      success('Questions uploaded to module bank!');
+      setQuestions([]);
+      // Reset to modules view after successful upload
+      setSelectedModule(null);
+      setLevelId('');
+      setCurrentStep('modules');
+    } catch (err) {
+      error('Failed to upload questions.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleNotifyStudents = async () => {
+    setNotifyModalOpen(true);
+    setNotifyLoading(true);
+    try {
+      // Simulate fetching students for this module/level (use backend logic as in test assignment)
+      // You may need to call a backend endpoint to get students for this module/level
+      // For now, call /test-management/student-count with selectedModule, levelId, etc.
+      const res = await api.post('/test-management/student-count', {
+        campus: null, // or selected campus if available
+        batches: [], // or selected batches if available
+        courses: [], // or selected courses if available
+        module_id: selectedModule?.id,
+        level_id: levelId,
+      });
+      const students = res.data.students || [];
+      // For each student, check their test status (pending/completed) if needed
+      // For now, mark all as pending
+      setNotifyResults(students.map(s => ({
+        name: s.name,
+        email: s.email,
+        roll_number: s.roll_number,
+        test_status: 'pending',
+        notify_status: 'pending',
+      })));
+    } catch (e) {
+      error('Failed to fetch students for notification.');
+      setNotifyResults([]);
+    } finally {
+      setNotifyLoading(false);
+    }
+  };
+
+  // Render modules selection view
+  if (currentStep === 'modules') {
+    // Sort modules: Grammar, Vocabulary, then others
+    const moduleOrder = ['Grammar', 'Vocabulary', 'Listening', 'Speaking', 'Reading', 'Writing'];
+    const sortedModules = [
+      ...moduleOrder
+        .map(name => modules.find(m => m.name.toLowerCase() === name.toLowerCase()))
+        .filter(Boolean),
+      ...modules.filter(m => !moduleOrder.map(n => n.toLowerCase()).includes(m.name.toLowerCase())),
+    ];
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+      <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-800">Select Module for Question Upload</h1>
+          <button onClick={onBack} className="text-sm font-medium text-gray-500 hover:text-green-600">&larr; Back</button>
+      </div>
+        
+      <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Available Modules</h2>
+            <p className="text-gray-600 mb-6">Click on a module to proceed with question upload for that module.</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {sortedModules.map((module) => (
+              <motion.div
+                key={module.id}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="bg-gradient-to-br from-green-50 to-green-100 border border-green-300 rounded-xl p-6 cursor-pointer hover:shadow-lg transition-all duration-200 hover:border-green-500"
+                onClick={() => handleModuleSelect(module)}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="bg-green-600 p-2 rounded-lg">
+                    <FileQuestion className="h-6 w-6 text-white" />
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-green-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">{module.name}</h3>
+                <p className="text-sm text-gray-600">Click to upload questions for this module</p>
+              </motion.div>
+            ))}
+          </div>
+          
+          {modules.length === 0 && (
+            <div className="text-center py-12">
+              <FileQuestion className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">No modules available</p>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    );
+  }
+
+  // Render levels selection and upload view
+  // For Grammar module, show grammar-specific levels
+  const grammarLevels = [
+    { id: 'noun', name: 'Noun' },
+    { id: 'verb', name: 'Verb' },
+    { id: 'adjective', name: 'Adjective' },
+    { id: 'adverb', name: 'Adverb' },
+    { id: 'preposition', name: 'Preposition' },
+    { id: 'conjunction', name: 'Conjunction' },
+    { id: 'interjection', name: 'Interjection' },
+    { id: 'pronoun', name: 'Pronoun' },
+  ];
+  const isGrammar = selectedModule && selectedModule.name.toLowerCase() === 'grammar';
+  const levelOptions = isGrammar ? grammarLevels : levels;
+
+  // Dropdown animation state
+  const selectedLevel = levelOptions.find(l => l.id === levelId);
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+      <div className="flex justify-between items-center mb-8">
+          <div>
+          <h1 className="text-3xl font-bold text-gray-800">Upload Questions</h1>
+          <p className="text-gray-600 mt-2">Module: <span className="font-semibold text-green-700">{selectedModule?.name}</span></p>
+          </div>
+        <button onClick={handleBackToModules} className="text-sm font-medium text-gray-500 hover:text-green-600 transition-colors">&larr; Back to Modules</button>
+        </div>
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.98 }} 
+        animate={{ opacity: 1, scale: 1 }} 
+        transition={{ duration: 0.4 }}
+        className="bg-gradient-to-br from-green-50 to-white rounded-2xl shadow-xl border border-green-200 p-8 max-w-3xl mx-auto"
+      >
+        {/* Level Dropdown */}
+        <div className="mb-8 flex flex-col md:flex-row md:items-center md:space-x-8 space-y-4 md:space-y-0">
+          <div className="w-full md:w-1/2">
+            <label className="block text-sm font-semibold text-gray-800 mb-2">Select Level</label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setDropdownOpen(o => !o)}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border-2 transition-all duration-200 bg-white text-gray-800 font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-green-200 ${dropdownOpen ? 'border-green-600' : 'border-green-300 hover:border-green-500'}`}
+              >
+                <span>{selectedLevel ? selectedLevel.name : 'Select Level'}</span>
+                <motion.span animate={{ rotate: dropdownOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                  <ChevronDown className="h-5 w-5 text-green-600" />
+                </motion.span>
+              </button>
+              {dropdownOpen && (
+                <motion.ul
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute z-10 mt-2 w-full bg-white border border-green-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                >
+                  {levelOptions.map(l => (
+                    <li
+                      key={l.id}
+                      onClick={() => { setLevelId(l.id); setDropdownOpen(false); }}
+                      className={`px-4 py-2 cursor-pointer hover:bg-green-50 transition-colors ${levelId === l.id ? 'bg-green-100 text-green-700 font-semibold' : 'text-gray-800'}`}
+                    >
+                      {l.name}
+                    </li>
+                  ))}
+                </motion.ul>
+              )}
+        </div>
+        </div>
+          {/* File Upload */}
+          <div className="w-full md:w-1/2">
+            <label className="block text-sm font-semibold text-gray-800 mb-2">Upload Questions (CSV/XLSX)</label>
+            <label className="flex items-center gap-2 px-4 py-3 rounded-lg bg-green-50 border-2 border-green-300 hover:bg-green-100 hover:border-green-500 cursor-pointer transition-all duration-200 shadow-sm font-medium text-green-700">
+              <Upload className="h-5 w-5 mr-2 text-green-600" />
+              <span>Choose File</span>
+              <input
+                type="file"
+                accept=".csv,.xlsx"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </label>
+            <span className="block mt-2 text-xs text-gray-500">{questions.length === 0 ? 'No file chosen' : `${questions.length} questions loaded.`}</span>
+          </div>
+        </div>
+        <hr className="my-6 border-green-100" />
+        {/* Questions Status & Upload Button */}
+        <div className="flex flex-col items-center space-y-4">
+          <p className="text-gray-700">
+            {questions.length > 0 ? (
+              <span className="text-green-700 font-medium">{questions.length} questions ready to upload.</span>
+            ) : (
+              <span className="text-gray-500">No questions loaded yet. Please upload a file.</span>
+            )}
+          </p>
+          <motion.button
+            whileHover={{ scale: questions.length > 0 && levelId ? 1.04 : 1, boxShadow: questions.length > 0 && levelId ? '0 4px 16px 0 rgba(22, 163, 74, 0.15)' : 'none' }}
+            whileTap={{ scale: questions.length > 0 && levelId ? 0.98 : 1 }}
+            onClick={handleUpload}
+            disabled={loading || !levelId || questions.length === 0}
+            className={`w-full md:w-auto px-8 py-3 rounded-lg font-semibold transition-all duration-200 text-white ${loading || !levelId || questions.length === 0 ? 'bg-gray-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-lg'}`}
+          >
+            {loading ? 'Uploading...' : 'Upload to Module Bank'}
+          </motion.button>
+      </div>
+      </motion.div>
+    </motion.div>
+  );
+};
 
 export default TestManagement 

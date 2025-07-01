@@ -792,35 +792,133 @@ def create_batch_with_students():
 @jwt_required()
 def add_students_to_batch(batch_id):
     try:
+        # Support both file upload (preferred) and JSON (legacy)
+        if 'student_file' in request.files:
+            file = request.files['student_file']
+            batch_obj_id = ObjectId(batch_id)
+            batch = mongo_db.batches.find_one({'_id': batch_obj_id})
+            if not batch:
+                return jsonify({'success': False, 'message': 'Batch not found.'}), 404
+            campus_ids = batch.get('campus_ids', [])
+            course_ids = batch.get('course_ids', [])
+            if not campus_ids or not course_ids:
+                return jsonify({'success': False, 'message': 'Batch is missing campus or course info.'}), 400
+            campus_id = campus_ids[0]  # Assume single campus per batch
+            # Parse and validate file
+            rows = _parse_student_file(file)
+            if not rows:
+                return jsonify({'success': False, 'message': 'File is empty or invalid.'}), 400
+            # Get campus and course info
+            campus = mongo_db.campuses.find_one({'_id': campus_id})
+            valid_course_names = set(c['name'] for c in mongo_db.courses.find({'_id': {'$in': course_ids}}))
+            # Fetch existing data for validation
+            existing_roll_numbers = set(s['roll_number'] for s in mongo_db.students.find({}, {'roll_number': 1}))
+            existing_emails = set(u['email'] for u in mongo_db.users.find({}, {'email': 1}))
+            existing_mobile_numbers = set(u.get('mobile_number', '') for u in mongo_db.users.find({'mobile_number': {'$exists': True, '$ne': ''}}, {'mobile_number': 1}))
+            preview_data = []
+            for row in rows:
+                student_data = {
+                    'campus_name': str(row.get('Campus Name', '')).strip(),
+                    'course_name': str(row.get('Course Name', '')).strip(),
+                    'student_name': str(row.get('Student Name', '')).strip(),
+                    'roll_number': str(row.get('Roll Number', '')).strip(),
+                    'email': str(row.get('Email', '')).strip().lower(),
+                    'mobile_number': str(row.get('Mobile Number', '')).strip(),
+                }
+                errors = []
+                if not all([student_data['campus_name'], student_data['course_name'], student_data['student_name'], student_data['roll_number'], student_data['email']]):
+                    errors.append('Missing required fields.')
+                if student_data['roll_number'] in existing_roll_numbers:
+                    errors.append('Roll number already exists.')
+                if student_data['email'] in existing_emails:
+                    errors.append('Email already exists.')
+                if student_data['mobile_number'] and student_data['mobile_number'] in existing_mobile_numbers:
+                    errors.append('Mobile number already exists.')
+                if student_data['campus_name'] != campus['name']:
+                    errors.append(f"Campus '{student_data['campus_name']}' doesn't match batch campus '{campus['name']}'.")
+                if student_data['course_name'] not in valid_course_names:
+                    errors.append(f"Course '{student_data['course_name']}' not found in this batch.")
+                student_data['errors'] = errors
+                preview_data.append(student_data)
+            # Only add students with no errors
+            created_students_details = []
+            errors = []
+            for student in preview_data:
+                if student['errors']:
+                    errors.append(f"{student['student_name']}: {', '.join(student['errors'])}")
+                    continue
+                try:
+                    course = mongo_db.courses.find_one({'name': student['course_name'], '_id': {'$in': course_ids}})
+                    username = student['roll_number']
+                    password = f"{student['student_name'].split()[0][:4].lower()}{student['roll_number'][-4:]}"
+                    password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+                    user_doc = {
+                        'username': username,
+                        'email': student['email'],
+                        'password_hash': password_hash,
+                        'role': ROLES['STUDENT'],
+                        'name': student['student_name'],
+                        'mobile_number': student.get('mobile_number', ''),
+                        'campus_id': campus_id,
+                        'course_id': course['_id'],
+                        'batch_id': batch_obj_id,
+                        'is_active': True,
+                        'created_at': datetime.now(pytz.utc),
+                        'mfa_enabled': False
+                    }
+                    user_id = mongo_db.users.insert_one(user_doc).inserted_id
+                    student_doc = {
+                        'user_id': user_id,
+                        'name': student['student_name'],
+                        'roll_number': student['roll_number'],
+                        'email': student['email'],
+                        'mobile_number': student.get('mobile_number', ''),
+                        'campus_id': campus_id,
+                        'course_id': course['_id'],
+                        'batch_id': batch_obj_id,
+                        'created_at': datetime.now(pytz.utc)
+                    }
+                    mongo_db.students.insert_one(student_doc)
+                    created_students_details.append({
+                        "student_name": student['student_name'],
+                        "email": student['email'],
+                        "username": username,
+                        "password": password
+                    })
+                    # Send welcome email
+                    try:
+                        html_content = render_template('student_credentials.html', name=student['student_name'], username=username, email=student['email'], password=password, login_url="https://pydah-ai-versant.vercel.app/login")
+                        send_email(to_email=student['email'], to_name=student['student_name'], subject="Welcome to VERSANT - Your Student Credentials", html_content=html_content)
+                    except Exception as e:
+                        errors.append(f"Failed to send email to {student['email']}: {e}")
+                except Exception as student_error:
+                    errors.append(f"An error occurred for student {student.get('student_name', 'N/A')}: {str(student_error)}")
+            if errors:
+                return jsonify({'success': bool(created_students_details), 'message': f"Process completed with {len(errors)} errors.", 'data': {'created_students': created_students_details}, 'errors': errors}), 207
+            return jsonify({'success': True, 'message': f"Successfully added {len(created_students_details)} students to the batch.", 'data': {'created_students': created_students_details}}), 201
+        # Fallback: legacy JSON method
         data = request.get_json()
-        students_data = data.get('students', [])
-
+        students_data = data.get('students', []) if data else []
         if not students_data:
             return jsonify({'success': False, 'message': 'Student data are required.'}), 400
-        
         batch_obj_id = ObjectId(batch_id)
         batch = mongo_db.batches.find_one({'_id': batch_obj_id})
         if not batch:
             return jsonify({'success': False, 'message': 'Batch not found.'}), 404
-
         valid_campus_ids = batch.get('campus_ids', [])
         valid_course_ids = batch.get('course_ids', [])
-
         created_students_details = []
         errors = []
-        
         for student in students_data:
             try:
                 campus = mongo_db.campuses.find_one({'name': student['campus_name']})
                 if not campus or campus['_id'] not in valid_campus_ids:
                     errors.append(f"Campus '{student['campus_name']}' is not valid for this batch for student '{student.get('student_name', 'N/A')}'.")
                     continue
-                
                 course = mongo_db.courses.find_one({'name': student['course_name'], 'campus_id': campus['_id']})
                 if not course or course['_id'] not in valid_course_ids:
                     errors.append(f"Course '{student['course_name']}' is not valid for this batch for student '{student.get('student_name', 'N/A')}'.")
                     continue
-
                 # Check for existing user with same roll number, email, or mobile number
                 existing_user = mongo_db.users.find_one({
                     '$or': [
@@ -831,16 +929,13 @@ def add_students_to_batch(batch_id):
                 if existing_user:
                     errors.append(f"Student with roll number '{student['roll_number']}' or email '{student['email']}' already exists.")
                     continue
-
                 # Check for duplicate mobile number if provided
                 if student.get('mobile_number') and mongo_db.users.find_one({'mobile_number': student['mobile_number']}):
                     errors.append(f"Student with mobile number '{student['mobile_number']}' already exists.")
                     continue
-
                 username = student['roll_number']
                 password = f"{student['student_name'].split()[0][:4].lower()}{student['roll_number'][-4:]}"
                 password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
-
                 user_doc = {
                     'username': username,
                     'email': student['email'],
@@ -856,7 +951,6 @@ def add_students_to_batch(batch_id):
                     'mfa_enabled': False
                 }
                 user_id = mongo_db.users.insert_one(user_doc).inserted_id
-
                 student_doc = {
                     'user_id': user_id,
                     'name': student['student_name'],
@@ -869,31 +963,23 @@ def add_students_to_batch(batch_id):
                     'created_at': datetime.now(pytz.utc)
                 }
                 mongo_db.students.insert_one(student_doc)
-
                 created_students_details.append({
                     "student_name": student['student_name'],
                     "email": student['email'],
                     "username": username,
                     "password": password
                 })
-
+                # Send welcome email
+                try:
+                    html_content = render_template('student_credentials.html', name=student['student_name'], username=username, email=student['email'], password=password, login_url="https://pydah-ai-versant.vercel.app/login")
+                    send_email(to_email=student['email'], to_name=student['student_name'], subject="Welcome to VERSANT - Your Student Credentials", html_content=html_content)
+                except Exception as e:
+                    errors.append(f"Failed to send email to {student['email']}: {e}")
             except Exception as student_error:
                 errors.append(f"An error occurred for student {student.get('student_name', 'N/A')}: {str(student_error)}")
-        
         if errors:
-            return jsonify({
-                'success': bool(created_students_details),
-                'message': f"Process completed with {len(errors)} errors.", 
-                'data': {'created_students': created_students_details}, 
-                'errors': errors
-            }), 207
-        
-        return jsonify({
-            'success': True, 
-            'message': f"Successfully added {len(created_students_details)} students to the batch.", 
-            'data': {'created_students': created_students_details}
-        }), 201
-
+            return jsonify({'success': bool(created_students_details), 'message': f"Process completed with {len(errors)} errors.", 'data': {'created_students': created_students_details}, 'errors': errors}), 207
+        return jsonify({'success': True, 'message': f"Successfully added {len(created_students_details)} students to the batch.", 'data': {'created_students': created_students_details}}), 201
     except Exception as e:
         current_app.logger.error(f"Error adding students to batch: {e}")
         return jsonify({'success': False, 'message': f'An unexpected error occurred: {str(e)}'}), 500

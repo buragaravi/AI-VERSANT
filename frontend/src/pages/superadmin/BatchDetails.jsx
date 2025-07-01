@@ -186,324 +186,151 @@ const BatchDetails = () => {
     }
 
     return (
-        <>
-            <div className="min-h-screen bg-gray-50 flex">
-                <SuperAdminSidebar />
-                <div className="flex-1 lg:pl-64">
-                    <Header />
-                    <main className="px-6 lg:px-10 py-12">
-                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                            <div className="flex justify-between items-center mb-8">
-                                <div>
-                                    <Link to="/superadmin/batches" className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-2">
-                                        <ArrowLeft size={16} />
-                                        Back to Batches
-                                    </Link>
-                                    <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">{batchInfo?.name}</h1>
-                                    <p className="mt-1 text-lg text-gray-600">
-                                        {batchInfo?.campus_name} &bull; {batchInfo?.course_name}
-                                    </p>
-                                </div>
-                                <div className="flex gap-3">
-                                    <button
-                                        onClick={() => setIsModulesModalOpen(true)}
-                                        className="inline-flex items-center justify-center px-4 py-2 border border-blue-300 text-sm font-medium rounded-md shadow-sm text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                    >
-                                        <BarChart2 className="mr-2 h-5 w-5" />
-                                        Assigned Modules
-                                    </button>
-                                    <button
-                                        onClick={handleDownloadTemplate}
-                                        className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                    >
-                                        <Download className="mr-2 h-5 w-5" />
-                                        Download Template
-                                    </button>
-                                    <button
-                                        onClick={() => document.getElementById('student-upload-input').click()}
-                                        className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                    >
-                                        <Upload className="mr-2 h-5 w-5" />
-                                        Add Students
-                                    </button>
-                                    <input
-                                        type="file"
-                                        id="student-upload-input"
-                                        className="hidden"
-                                        onChange={(e) => handleFileDrop(e.target.files)}
-                                        accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
-                                    />
-                                </div>
+        <div className="min-h-screen bg-background flex">
+            <SuperAdminSidebar />
+            <div className="flex-1 lg:pl-64">
+                <Header />
+                <main className="px-6 lg:px-10 py-12">
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                        <div className="flex justify-between items-center mb-8">
+                            <div>
+                                <Link to="/superadmin/batches" className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-2">
+                                    <ArrowLeft size={16} />
+                                    Back to Batches
+                                </Link>
+                                <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">{batchInfo?.name}</h1>
+                                <p className="mt-1 text-lg text-gray-600">
+                                    {batchInfo?.campus_name} &bull; {batchInfo?.course_name}
+                                </p>
                             </div>
-
-                            <div className="bg-white rounded-2xl shadow-lg flex justify-center">
-                                <div className="w-full max-w-6xl">
-                                    <div className="p-6 flex justify-between items-center">
-                                        <h3 className="text-xl font-semibold flex items-center gap-2">
-                                            <Users />
-                                            Students in this Batch ({students.length})
-                                        </h3>
-                                    </div>
-                                    <div className="overflow-x-auto">
-                                        <table className="min-w-full divide-y divide-gray-200 rounded-xl overflow-hidden mt-6">
-                                            <thead className="bg-gradient-to-r from-blue-700 to-black">
-                                                <tr>
-                                                    <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Student Name</th>
-                                                    <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Roll Number</th>
-                                                    <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Email</th>
-                                                    <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Mobile</th>
-                                                    <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Campus</th>
-                                                    <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Course</th>
-                                                    <th className="px-4 py-2 text-center text-xs font-bold text-white uppercase tracking-wider">Actions</th>
-                                                    <th className="px-4 py-2 text-center text-xs font-bold text-white uppercase tracking-wider">Modules</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {students.length === 0 ? (
-                                                    <tr><td colSpan="8" className="text-center text-gray-500 py-8">No students found.</td></tr>
-                                                ) : students.map((student, idx) => (
-                                                    <tr key={student.id} className={idx % 2 === 0 ? 'bg-blue-50' : 'bg-white'}>
-                                                        <td className="px-4 py-2 text-sm font-bold text-blue-900">{student.name}</td>
-                                                        <td className="px-4 py-2 text-sm text-black">{student.roll_number}</td>
-                                                        <td className="px-4 py-2 text-sm text-blue-700">{student.email}</td>
-                                                        <td className="px-4 py-2 text-sm text-blue-600">{student.mobile_number}</td>
-                                                        <td className="px-4 py-2 text-sm text-black">{student.campus_name}</td>
-                                                        <td className="px-4 py-2 text-sm text-black">{student.course_name}</td>
-                                                        <td className="px-4 py-2 text-center">
-                                                            <button onClick={() => handleEditStudent(student)} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 mr-2"><Edit size={14}/> Edit</button>
-                                                            <button onClick={() => handleDeleteStudent(student.id)} className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200"><Trash2 size={14}/> Delete</button>
-                                                        </td>
-                                                        <td className="px-4 py-2 text-center">
-                                                            <button onClick={() => { setSelectedStudent(student); setIsStudentModulesModalOpen(true); }} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-700 text-white rounded hover:bg-blue-900"><ListChecks size={14}/> View Modules</button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-                    </main>
-                </div>
-            </div>
-            
-            {/* Edit Student Modal */}
-            <AnimatePresence>
-                {isEditModalOpen && (
-                    <motion.div 
-                        className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                    >
-                        <motion.div 
-                            initial={{ y: -50, opacity: 0 }} 
-                            animate={{ y: 0, opacity: 1 }} 
-                            exit={{ y: 50, opacity: 0 }} 
-                            className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-200"
-                        >
-                            <div className="p-6 border-b border-gray-200">
-                                <div className="flex justify-between items-center">
-                                    <h2 className="text-2xl font-bold text-gray-800">Edit Student</h2>
-                                    <button onClick={() => setIsEditModalOpen(false)} className="p-2 rounded-full hover:bg-gray-100">
-                                        <X className="text-gray-600"/>
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div className="p-6 space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
-                                    <input
-                                        type="text"
-                                        value={editFormData.name}
-                                        onChange={(e) => setEditFormData(prev => ({...prev, name: e.target.value}))}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                        placeholder="Student Name"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Roll Number</label>
-                                    <input
-                                        type="text"
-                                        value={editFormData.roll_number}
-                                        onChange={(e) => setEditFormData(prev => ({...prev, roll_number: e.target.value}))}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                        placeholder="Roll Number"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                                    <input
-                                        type="email"
-                                        value={editFormData.email}
-                                        onChange={(e) => setEditFormData(prev => ({...prev, email: e.target.value}))}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                        placeholder="Email"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number</label>
-                                    <input
-                                        type="text"
-                                        value={editFormData.mobile_number}
-                                        onChange={(e) => setEditFormData(prev => ({...prev, mobile_number: e.target.value}))}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                        placeholder="Mobile Number"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="px-6 py-4 bg-gray-50 rounded-b-2xl flex justify-end gap-3">
-                                <button 
-                                    onClick={() => setIsEditModalOpen(false)}
-                                    className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition"
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setIsModulesModalOpen(true)}
+                                    className="inline-flex items-center justify-center px-4 py-2 border border-blue-300 text-sm font-medium rounded-md shadow-sm text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                                 >
-                                    Cancel
+                                    <BarChart2 className="mr-2 h-5 w-5" />
+                                    Assigned Modules
                                 </button>
-                                <button 
-                                    onClick={handleUpdateStudent}
-                                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex items-center gap-2"
+                                <button
+                                    onClick={handleDownloadTemplate}
+                                    className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                 >
-                                    <Save size={16} />
-                                    Save Changes
+                                    <Download className="mr-2 h-5 w-5" />
+                                    Download Template
                                 </button>
+                                <button
+                                    onClick={() => document.getElementById('student-upload-input').click()}
+                                    className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                >
+                                    <Upload className="mr-2 h-5 w-5" />
+                                    Add Students
+                                </button>
+                                <input
+                                    type="file"
+                                    id="student-upload-input"
+                                    className="hidden"
+                                    onChange={(e) => handleFileDrop(e.target.files)}
+                                    accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                                />
                             </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-            
-            {isUploadModalOpen && (
-                <UploadPreviewModal
-                    isOpen={isUploadModalOpen}
-                    onClose={() => setIsUploadModalOpen(false)}
-                    previewData={previewData}
-                    onConfirm={handleConfirmUpload}
-                    isSubmitting={isSubmitting}
-                    fileName={originalFile?.name}
-                    onDownloadTemplate={handleDownloadTemplate}
-                />
-            )}
-            {isCredentialsModalOpen && (
-                <CredentialsDisplayModal
-                    isOpen={isCredentialsModalOpen}
-                    onClose={() => setIsCredentialsModalOpen(false)}
-                    credentials={createdStudents}
-                    entityName="Students"
-                />
-            )}
-            {/* Assigned Modules Modal (stub) */}
-            <AnimatePresence>
-                {isModulesModalOpen && (
-                    <motion.div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                        <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-blue-200">
-                            <div className="p-6 border-b flex justify-between items-center">
-                                <h2 className="text-2xl font-bold text-blue-900">Assigned Modules (Coming Soon)</h2>
-                                <button onClick={() => setIsModulesModalOpen(false)} className="p-2 rounded-full hover:bg-gray-100"><X className="text-gray-600"/></button>
-                            </div>
-                            <div className="p-6">
-                                <p className="text-gray-600">This will show all assigned modules for students in this batch, with filters and analytics.</p>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-            {/* Per-Student Modules Modal (analytics) */}
-            <AnimatePresence>
-                {isStudentModulesModalOpen && selectedStudent && (
-                    <motion.div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                        <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-blue-200">
-                            <div className="p-6 border-b flex justify-between items-center">
-                                <h2 className="text-2xl font-bold text-blue-900 flex items-center gap-2"><ListChecks className="text-blue-600"/> {selectedStudent.name}'s Modules</h2>
-                                <button onClick={() => setIsStudentModulesModalOpen(false)} className="p-2 rounded-full hover:bg-gray-100"><X className="text-gray-600"/></button>
-                            </div>
-                            <div className="p-6 min-h-[200px]">
-                                {studentModulesLoading ? (
-                                    <div className="flex justify-center items-center h-32"><LoadingSpinner /></div>
-                                ) : studentModulesError ? (
-                                    <div className="text-red-600 text-center">{studentModulesError}</div>
-                                ) : (
-                                    <table className="min-w-full divide-y divide-gray-200 rounded-xl overflow-hidden">
+                        </div>
+
+                        <div className="bg-white rounded-2xl shadow-lg flex justify-center">
+                            <div className="w-full max-w-6xl">
+                                <div className="p-6 flex justify-between items-center">
+                                    <h3 className="text-xl font-semibold flex items-center gap-2">
+                                        <Users />
+                                        Students in this Batch ({students.length})
+                                    </h3>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200 rounded-xl overflow-hidden mt-6">
                                         <thead className="bg-gradient-to-r from-blue-700 to-black">
                                             <tr>
-                                                <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Module</th>
-                                                <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Attempts</th>
-                                                <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Best %</th>
-                                                <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Avg %</th>
-                                                <th className="px-4 py-2 text-center text-xs font-bold text-white uppercase tracking-wider">Status</th>
-                                                <th className="px-4 py-2 text-center text-xs font-bold text-white uppercase tracking-wider">Action</th>
+                                                <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Student Name</th>
+                                                <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Roll Number</th>
+                                                <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Email</th>
+                                                <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Mobile</th>
+                                                <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Campus</th>
+                                                <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Course</th>
+                                                <th className="px-4 py-2 text-center text-xs font-bold text-white uppercase tracking-wider">Actions</th>
+                                                <th className="px-4 py-2 text-center text-xs font-bold text-white uppercase tracking-wider">Modules</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {studentModulesData.length === 0 ? (
-                                                <tr><td colSpan="6" className="text-center text-gray-500 py-8">No modules assigned.</td></tr>
-                                            ) : studentModulesData.map((row, idx) => (
-                                                <tr key={row.test_id} className={idx % 2 === 0 ? 'bg-blue-50' : 'bg-white'}>
-                                                    <td className="px-4 py-2 text-sm font-bold text-blue-900">{row.module_display_name} - {row.test_name}</td>
-                                                    <td className="px-4 py-2 text-sm text-black">{row.total_attempts > 0 ? row.total_attempts : '-'}</td>
-                                                    <td className="px-4 py-2 text-sm font-bold text-blue-700">{row.total_attempts > 0 ? row.best_score.toFixed(1) : '-'}</td>
-                                                    <td className="px-4 py-2 text-sm text-blue-600">{row.total_attempts > 0 ? row.avg_score.toFixed(1) : '-'}</td>
+                                            {students.length === 0 ? (
+                                                <tr><td colSpan="8" className="text-center text-gray-500 py-8">No students found.</td></tr>
+                                            ) : students.map((student, idx) => (
+                                                <tr key={student.id} className={idx % 2 === 0 ? 'bg-blue-50' : 'bg-white'}>
+                                                    <td className="px-4 py-2 text-sm font-bold text-blue-900">{student.name}</td>
+                                                    <td className="px-4 py-2 text-sm text-black">{student.roll_number}</td>
+                                                    <td className="px-4 py-2 text-sm text-blue-700">{student.email}</td>
+                                                    <td className="px-4 py-2 text-sm text-blue-600">{student.mobile_number}</td>
+                                                    <td className="px-4 py-2 text-sm text-black">{student.campus_name}</td>
+                                                    <td className="px-4 py-2 text-sm text-black">{student.course_name}</td>
                                                     <td className="px-4 py-2 text-center">
-                                                        {row.status === 'completed' ? (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded-full text-xs font-semibold"><CheckCircle size={14}/> Completed</span>
-                                                        ) : (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-200 text-gray-700 rounded-full text-xs font-semibold"><XCircle size={14}/> Pending</span>
-                                                        )}
+                                                        <button onClick={() => handleEditStudent(student)} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 mr-2"><Edit size={14}/> Edit</button>
+                                                        <button onClick={() => handleDeleteStudent(student.id)} className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200"><Trash2 size={14}/> Delete</button>
                                                     </td>
                                                     <td className="px-4 py-2 text-center">
-                                                        {row.status === 'completed' ? (
-                                                            <button onClick={() => { setSelectedModule(row); setIsModuleResultsModalOpen(true); }} className="px-3 py-1.5 bg-blue-700 text-white rounded-lg hover:bg-blue-900 text-xs font-semibold">View Results</button>
-                                                        ) : (
-                                                            <span className="text-xs text-gray-500">-</span>
-                                                        )}
+                                                        <button onClick={() => { setSelectedStudent(student); setIsStudentModulesModalOpen(true); }} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-700 text-white rounded hover:bg-blue-900"><ListChecks size={14}/> View Modules</button>
                                                     </td>
                                                 </tr>
                                             ))}
                                         </tbody>
                                     </table>
-                                )}
+                                </div>
                             </div>
-                        </motion.div>
+                        </div>
                     </motion.div>
-                )}
-            </AnimatePresence>
-            {/* Module Results Modal (detailed) */}
-            <AnimatePresence>
-                {isModuleResultsModalOpen && selectedModule && (
-                    <motion.div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                        <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-xl border border-blue-200">
-                            <div className="p-6 border-b flex justify-between items-center">
-                                <h2 className="text-2xl font-bold text-blue-900 flex items-center gap-2"><BarChart2 className="text-blue-600"/> {selectedModule.module_display_name} Results</h2>
-                                <button onClick={() => setIsModuleResultsModalOpen(false)} className="p-2 rounded-full hover:bg-gray-100"><X className="text-gray-600"/></button>
-                            </div>
-                            <div className="p-6 min-h-[200px]">
-                                {selectedModule && selectedModule.attempts && selectedModule.attempts.length > 0 ? (
-                                    selectedModule.attempts.map((attempt, idx) => (
-                                        <tr key={idx} className={idx % 2 === 0 ? 'bg-blue-50' : 'bg-white'}>
-                                            <td className="px-4 py-2 text-sm font-bold text-blue-900">Attempt {idx + 1}</td>
-                                            <td className="px-4 py-2 text-sm text-black">{attempt.submitted_at ? new Date(attempt.submitted_at).toLocaleString() : '-'}</td>
-                                            <td className="px-4 py-2 text-sm font-bold text-blue-700">{attempt.score?.toFixed(1) ?? '-'}</td>
-                                            <td className="px-4 py-2 text-sm text-blue-600">{attempt.correct_answers ?? '-'} / {attempt.total_questions ?? '-'}</td>
-                                            <td className="px-4 py-2 text-center">
-                                                {attempt.score >= 60 ? (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded-full text-xs font-semibold"><CheckCircle size={14}/> Passed</span>
-                                                ) : (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-200 text-gray-700 rounded-full text-xs font-semibold"><XCircle size={14}/> Incomplete</span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr><td colSpan="5" className="text-center text-gray-500 py-8">No attempts found for this test.</td></tr>
-                                )}
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </>
+                </main>
+            </div>
+            {/* Student Modules Modal */}
+            {isStudentModulesModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+                <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full relative">
+                  <button onClick={() => setIsStudentModulesModalOpen(false)} className="absolute top-3 right-3 text-gray-500 hover:text-red-600 text-xl">&times;</button>
+                  <h2 className="text-2xl font-bold mb-4">Assigned Modules for {selectedStudent?.name}</h2>
+                  {studentModulesLoading ? (
+                    <div className="flex justify-center items-center h-32"><LoadingSpinner /></div>
+                  ) : studentModulesError ? (
+                    <div className="text-red-600 text-center">{studentModulesError}</div>
+                  ) : (
+                    <div className="overflow-x-auto max-h-96">
+                      {studentModulesData.length === 0 ? (
+                        <div className="text-gray-500 text-center py-8">No modules assigned.</div>
+                      ) : (
+                        <table className="min-w-full divide-y divide-gray-200 rounded-xl overflow-hidden">
+                          <thead className="bg-blue-700">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Module</th>
+                              <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Level</th>
+                              <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Test Name</th>
+                              <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Status</th>
+                              <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Attempts</th>
+                              <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Best Score</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {studentModulesData.map((mod, idx) => (
+                              <tr key={mod.test_id || idx} className={idx % 2 === 0 ? 'bg-blue-50' : 'bg-white'}>
+                                <td className="px-4 py-2 text-sm">{mod.module_display_name}</td>
+                                <td className="px-4 py-2 text-sm">{mod.level_display_name}</td>
+                                <td className="px-4 py-2 text-sm">{mod.test_name}</td>
+                                <td className="px-4 py-2 text-sm capitalize">{mod.status}</td>
+                                <td className="px-4 py-2 text-sm">{mod.total_attempts}</td>
+                                <td className="px-4 py-2 text-sm">{mod.best_score}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+        </div>
     );
 };
 

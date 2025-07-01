@@ -3,6 +3,10 @@ from flask_jwt_extended import jwt_required
 from mongo import mongo_db
 from bson import ObjectId
 from flask import current_app
+from bson.errors import InvalidId
+from config.shared import bcrypt
+from utils.email_service import send_email, render_template
+from config.constants import MODULES, LEVELS, GRAMMAR_CATEGORIES
 
 user_management_bp = Blueprint('user_management', __name__)
 
@@ -106,7 +110,7 @@ def get_all_admins():
 @user_management_bp.route('/students', methods=['GET'])
 @jwt_required()
 def get_all_students():
-    """Get a list of all students with their details."""
+    """Get a list of all students with their details and module/level progress."""
     try:
         pipeline = [
             {
@@ -143,6 +147,7 @@ def get_all_students():
                     'email': 1,
                     'username': 1,
                     'created_at': 1,
+                    'roll_number': { '$ifNull': ['$roll_number', ''] },
                     'campus_name': { '$arrayElemAt': ['$campus_details.name', 0] },
                     'course_name': { '$arrayElemAt': ['$course_details.name', 0] },
                     'batch_name': { '$arrayElemAt': ['$batch_details.name', 0] }
@@ -152,11 +157,59 @@ def get_all_students():
         students = list(mongo_db.users.aggregate(pipeline))
         for s in students:
             s['_id'] = str(s['_id'])
-            # Ensure keys exist before trying to access them
             if 'campus_name' not in s: s['campus_name'] = 'N/A'
             if 'course_name' not in s: s['course_name'] = 'N/A'
             if 'batch_name' not in s: s['batch_name'] = 'N/A'
-            
+            if 'roll_number' not in s: s['roll_number'] = ''
+
+            # Fetch student progress
+            progress = list(mongo_db.student_progress.find({'student_id': ObjectId(s['_id'])}))
+            # Fetch student record for lock/unlock info
+            student_record = mongo_db.students.find_one({'user_id': ObjectId(s['_id'])})
+            authorized_levels = set(student_record.get('authorized_levels', [])) if student_record else set()
+            authorized_modules = set(student_record.get('authorized_modules', [])) if student_record else set()
+            # Group progress by module and level
+            progress_by_module_level = {}
+            for p in progress:
+                module_id = str(p.get('module_id'))
+                level_id = str(p.get('level_id'))
+                percentage = p.get('highest_score', 0)
+                progress_by_module_level[(module_id, level_id)] = percentage
+            # Always include all modules and all levels
+            modules_list = []
+            for module_id, module_name in MODULES.items():
+                levels = []
+                module_locked = False if (not authorized_modules or module_id in authorized_modules) else True
+                if module_id == 'GRAMMAR':
+                    for level_id, level_name in GRAMMAR_CATEGORIES.items():
+                        percentage = progress_by_module_level.get((module_id, level_id), 0)
+                        level_locked = False if (not authorized_levels or level_id in authorized_levels) else True
+                        levels.append({
+                            'level_id': level_id,
+                            'level_name': level_name,
+                            'percentage': percentage,
+                            'locked': level_locked
+                        })
+                else:
+                    for level_id, level_name in LEVELS.items():
+                        percentage = progress_by_module_level.get((module_id, level_id), 0)
+                        level_locked = False if (not authorized_levels or level_id in authorized_levels) else True
+                        levels.append({
+                            'level_id': level_id,
+                            'level_name': level_name,
+                            'percentage': percentage,
+                            'locked': level_locked
+                        })
+                modules_list.append({
+                    'module_id': module_id,
+                    'module_name': module_name,
+                    'levels': levels,
+                    'locked': module_locked
+                })
+            s['modules'] = modules_list
+        # Debug print for the first student's modules/levels
+        if students:
+            print('DEBUG STUDENT MODULES:', students[0]['name'], students[0]['modules'])
         return jsonify({'success': True, 'data': students})
     except Exception as e:
         current_app.logger.error(f"Error getting all students: {str(e)}")
@@ -167,10 +220,15 @@ def get_all_students():
 def get_user(user_id):
     """Get a single user's details by their ID."""
     try:
-        user = mongo_db.users.find_one({'_id': ObjectId(user_id)})
+        if not user_id or user_id in ['undefined', 'null', 'None']:
+            return jsonify({'success': False, 'message': 'Invalid or missing user_id'}), 400
+        try:
+            user_object_id = ObjectId(user_id)
+        except (InvalidId, TypeError):
+            return jsonify({'success': False, 'message': 'Invalid user_id format'}), 400
+        user = mongo_db.users.find_one({'_id': user_object_id})
         if not user:
             return jsonify({'success': False, 'message': 'User not found'}), 404
-        
         user['_id'] = str(user['_id'])
         if 'campus_id' in user:
             user['campus_id'] = str(user['campus_id'])
@@ -178,7 +236,9 @@ def get_user(user_id):
             user['course_id'] = str(user['course_id'])
         if 'batch_id' in user:
             user['batch_id'] = str(user['batch_id'])
-
+        # Always include roll_number for students
+        if user.get('role') == 'student':
+            user['roll_number'] = user.get('roll_number', '')
         return jsonify({'success': True, 'data': user}), 200
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -193,15 +253,38 @@ def update_user(user_id):
             return jsonify({'success': False, 'message': 'No data provided'}), 400
 
         update_fields = {k: v for k, v in data.items() if k not in ['_id', 'created_at', 'password']}
-        
+        password_changed = False
+        new_password = None
         if 'password' in data and data['password']:
-            from app import bcrypt
             update_fields['password'] = bcrypt.generate_password_hash(data['password']).decode('utf-8')
+            password_changed = True
+            new_password = data['password']
 
         result = mongo_db.users.update_one({'_id': ObjectId(user_id)}, {'$set': update_fields})
 
         if result.matched_count == 0:
             return jsonify({'success': False, 'message': 'User not found'}), 404
+
+        # Send reset password email if password was changed
+        if password_changed:
+            user = mongo_db.users.find_one({'_id': ObjectId(user_id)})
+            if user:
+                name = user.get('name', 'User')
+                email = user.get('email')
+                login_url = "https://pydah-ai-versant.vercel.app/login"
+                html_content = render_template(
+                    'reset_password_notification.html',
+                    name=name,
+                    email=email,
+                    password=new_password,
+                    login_url=login_url
+                )
+                send_email(
+                    to_email=email,
+                    to_name=name,
+                    subject="Your VERSANT password has been reset",
+                    html_content=html_content
+                )
 
         return jsonify({'success': True, 'message': 'User updated successfully'}), 200
     except Exception as e:

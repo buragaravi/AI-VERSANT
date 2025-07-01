@@ -52,7 +52,7 @@ const PracticeAnalytics = () => {
     }, []);
 
     return (
-        <div className="min-h-screen bg-gray-50 flex">
+        <div className="min-h-screen bg-background flex">
             <SuperAdminSidebar />
             <div className="flex-1 lg:pl-64">
                 <Header />

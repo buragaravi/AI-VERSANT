@@ -16,12 +16,12 @@ import CampusManagement from './pages/superadmin/CampusManagement'
 import CourseManagement from './pages/superadmin/CourseManagement'
 import UserManagement from './pages/superadmin/UserManagement'
 import TestManagement from './pages/superadmin/TestManagement'
-import SystemAnalytics from './pages/superadmin/SystemAnalytics'
 import BatchManagement from './pages/superadmin/BatchManagement'
 import StudentManagement from './pages/superadmin/StudentManagement'
 import ResultsManagement from './pages/superadmin/ResultsManagement'
 import BatchDetails from './pages/superadmin/BatchDetails'
 import PracticeAnalytics from './pages/superadmin/PracticeAnalytics'
+import QuestionBankUpload from './pages/superadmin/QuestionBankUpload'
 
 // Campus Admin Pages
 import CampusAdminDashboard from './pages/campus-admin/CampusAdminDashboard'
@@ -40,6 +40,8 @@ import OnlineExams from './pages/student/OnlineExams'
 import TestHistory from './pages/student/TestHistory'
 import ProgressTracker from './pages/student/ProgressTracker'
 import StudentProfile from './pages/student/Profile'
+import OnlineExamTaking from './pages/student/OnlineExamTaking'
+import TestResult from './pages/student/TestResult'
 
 // Components
 import ProtectedRoute from './components/common/ProtectedRoute'
@@ -80,7 +82,7 @@ function App() {
                         <Route path="practice-analytics" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><PracticeAnalytics /></ProtectedRoute>} />
                         <Route path="tests" element={<TestManagement />} />
                         <Route path="tests/create" element={<TestManagement />} />
-                        <Route path="analytics" element={<SystemAnalytics />} />
+                        <Route path="question-bank-upload" element={<QuestionBankUpload />} />
                       </Routes>
                     </ProtectedRoute>
                   }
@@ -126,6 +128,8 @@ function App() {
                         <Route path="/history" element={<TestHistory />} />
                         <Route path="/progress" element={<ProgressTracker />} />
                         <Route path="/profile" element={<StudentProfile />} />
+                        <Route path="/exam/:examId" element={<OnlineExamTaking />} />
+                        <Route path="/test-result/:resultId" element={<TestResult />} />
                       </Routes>
                     </ProtectedRoute>
                   }

@@ -40,6 +40,9 @@ import functools
 import string
 import random
 from dateutil import tz
+from pymongo import DESCENDING
+from collections import defaultdict
+from utils.email_service import send_email, render_template
 
 test_management_bp = Blueprint('test_management', __name__)
 
@@ -287,13 +290,17 @@ def create_test():
         data = request.get_json()
 
         # Validate required fields
-        required_fields = ['test_name', 'test_type', 'campus_id', 'course_ids', 'questions', 'audio_config']
+        required_fields = ['test_name', 'test_type', 'campus_id', 'course_ids', 'batch_ids', 'questions', 'audio_config']
         if not all(field in data for field in required_fields):
             return jsonify({'success': False, 'message': 'Missing required fields.'}), 400
-
-        # Further validation
         if not data['questions']:
             return jsonify({'success': False, 'message': 'At least one question is required.'}), 400
+        if not data['batch_ids'] or not isinstance(data['batch_ids'], list) or len(data['batch_ids']) == 0:
+            return jsonify({'success': False, 'message': 'At least one batch must be selected.'}), 400
+        if not data['course_ids'] or not isinstance(data['course_ids'], list) or len(data['course_ids']) == 0:
+            return jsonify({'success': False, 'message': 'At least one course must be selected.'}), 400
+        if not data['campus_id']:
+            return jsonify({'success': False, 'message': 'A campus must be selected.'}), 400
 
         # Check if this is an MCQ module
         is_mcq = is_mcq_module(data.get('module_id'))
@@ -340,12 +347,7 @@ def create_test():
                 })
 
         # Use batch_ids from the payload if provided, otherwise fallback to all batches for the selected courses
-        batch_ids = [ObjectId(bid) for bid in data.get('batch_ids', [])]
-        if not batch_ids:
-            # Fallback: fetch all batches for the selected courses (legacy behavior)
-            course_obj_ids = [ObjectId(cid) for cid in data['course_ids']]
-            batches = list(mongo_db.batches.find({'course_ids': {'$in': course_obj_ids}}))
-            batch_ids = [b['_id'] for b in batches]
+        batch_ids = [ObjectId(bid) for bid in data['batch_ids']]
 
         # Check for existing test name
         if mongo_db.tests.find_one({'name': data['test_name']}):
@@ -368,7 +370,16 @@ def create_test():
             'status': 'active' if is_mcq else 'processing', # MCQ tests are immediately active
             'is_active': True if is_mcq else False  # MCQ tests don't need audio generation
         }
-        
+
+        # Add start/end date and time for online tests
+        if data['test_type'].lower() == 'online':
+            start_dt = data.get('startDateTime')
+            end_dt = data.get('endDateTime')
+            if not start_dt or not end_dt:
+                return jsonify({'success': False, 'message': 'Start and end date/time are required for online tests.'}), 400
+            test_doc['startDateTime'] = start_dt
+            test_doc['endDateTime'] = end_dt
+
         # Add level or subcategory based on module
         if module_id == 'GRAMMAR':
             if not data.get('subcategory'):
@@ -829,24 +840,29 @@ def get_test_result(result_id):
     """Get detailed test result"""
     try:
         current_user_id = get_jwt_identity()
-        
-        result = mongo_db.test_results.find_one({
+        result = mongo_db.db.test_results.find_one({
             '_id': ObjectId(result_id),
             'student_id': current_user_id
         })
-        
         if not result:
             return jsonify({
                 'success': False,
                 'message': 'Test result not found'
             }), 404
-        
+        # Ensure MCQ results have all necessary fields
+        for q in result.get('results', []):
+            if q.get('question_type') == 'mcq':
+                q.setdefault('question', '')
+                q.setdefault('options', {})
+                q.setdefault('correct_answer', '')
+                q.setdefault('student_answer', '')
+                q.setdefault('is_correct', False)
         return jsonify({
             'success': True,
             'data': result
         }), 200
-        
     except Exception as e:
+        current_app.logger.error(f"Failed to get test result: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
             'message': f'Failed to get test result: {str(e)}'
@@ -1191,10 +1207,11 @@ def get_all_results():
                     'campus_name': '$campusInfo.name',
                     'course_name': '$courseInfo.name',
                     'batch_name': '$batchInfo.name',
-                    'test_name': '$testInfo.test_name',
+                    'test_name': '$testInfo.name',
                     'test_type': '$testInfo.test_type',
-                    'module_name': '$testInfo.module_name',
-                    'score': 1,
+                    'module_name': '$testInfo.module_id',
+                    'score': '$average_score',
+                    'time_taken': 1,
                     'submitted_at': {
                         '$dateToString': {
                             'format': '%Y-%m-%d %H:%M:%S',
@@ -1211,4 +1228,356 @@ def get_all_results():
         
     except Exception as e:
         current_app.logger.error(f"Error fetching all results: {e}", exc_info=True)
-        return jsonify({'success': False, 'message': f'An unexpected error occurred: {e}'}), 500 
+        return jsonify({'success': False, 'message': f'An unexpected error occurred: {e}'}), 500
+
+def get_last_sequence_number(base_name, module_id, level_id=None):
+    query = {'name': {'$regex': f'^{base_name}-\\d+$'}, 'module_id': module_id}
+    if level_id:
+        query['level_id'] = level_id
+    last_test = mongo_db.tests.find(query).sort('created_at', DESCENDING).limit(1)
+    if last_test.count() > 0:
+        import re
+        match = re.search(r'-(\d+)$', last_test[0]['name'])
+        if match:
+            return int(match.group(1))
+    return 0
+
+@test_management_bp.route('/get-last-sequence', methods=['GET'])
+@jwt_required()
+def get_last_sequence():
+    base_name = request.args.get('base_name')
+    module_id = request.args.get('module_id')
+    level_id = request.args.get('level_id')
+    if not base_name or not module_id:
+        return jsonify({'success': False, 'message': 'base_name and module_id are required.'}), 400
+    seq = get_last_sequence_number(base_name, module_id, level_id)
+    return jsonify({'success': True, 'last_sequence': seq}), 200
+
+@test_management_bp.route('/bulk-create-tests', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def bulk_create_tests():
+    try:
+        data = request.get_json()
+        base_name = data.get('base_name')
+        module_id = data.get('module_id')
+        level_id = data.get('level_id')
+        test_type = data.get('test_type')
+        campus_id = data.get('campus_id')
+        course_ids = data.get('course_ids')
+        batch_ids = data.get('batch_ids')
+        audio_config = data.get('audio_config')
+        questions = data.get('questions')
+        if not all([base_name, module_id, test_type, campus_id, course_ids, batch_ids, audio_config, questions]):
+            return jsonify({'success': False, 'message': 'Missing required fields.'}), 400
+        # Split questions into chunks of 20
+        def chunks(lst, n):
+            for i in range(0, len(lst), n):
+                yield lst[i:i + n]
+        last_seq = get_last_sequence_number(base_name, module_id, level_id)
+        created_tests = []
+        for idx, chunk in enumerate(chunks(questions, 20), start=1):
+            seq_num = last_seq + idx
+            test_name = f"{base_name}-{seq_num}"
+            payload = {
+                'test_name': test_name,
+                'test_type': test_type,
+                'module_id': module_id,
+                'level_id': level_id,
+                'campus_id': campus_id,
+                'course_ids': course_ids,
+                'batch_ids': batch_ids,
+                'audio_config': audio_config,
+                'questions': chunk
+            }
+            # Reuse create_test logic
+            with current_app.test_request_context(json=payload):
+                resp = create_test()
+                if resp[1] not in (200, 202):
+                    return resp
+                created_tests.append(test_name)
+        return jsonify({'success': True, 'message': f'Created {len(created_tests)} tests.', 'tests': created_tests}), 201
+    except Exception as e:
+        current_app.logger.error(f"Error in bulk_create_tests: {e}")
+        return jsonify({'success': False, 'message': f'Bulk creation failed: {e}'}), 500
+
+# --- MODULE QUESTION BANK ENDPOINTS ---
+
+@test_management_bp.route('/module-question-bank/upload', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def upload_module_questions():
+    try:
+        data = request.get_json()
+        module_id = data.get('module_id')
+        level_id = data.get('level_id')
+        questions = data.get('questions')
+        if not module_id or not level_id or not questions:
+            return jsonify({'success': False, 'message': 'module_id, level_id, and questions are required.'}), 400
+        # Store each question in a question_bank collection
+        inserted = []
+        for q in questions:
+            doc = {
+                'module_id': module_id,
+                'level_id': level_id,
+                'question': q.get('question'),
+                'instructions': q.get('instructions', ''),
+                'used_in_tests': [], # Track test_ids where used
+                'used_count': 0,
+                'last_used': None,
+                'created_at': datetime.utcnow()
+            }
+            # Support sublevel/subcategory for grammar
+            if 'subcategory' in q:
+                doc['subcategory'] = q['subcategory']
+            mongo_db.question_bank.insert_one(doc)
+            inserted.append(doc['question'])
+        return jsonify({'success': True, 'message': f'Uploaded {len(inserted)} questions to module bank.'}), 201
+    except Exception as e:
+        current_app.logger.error(f"Error uploading module questions: {e}")
+        return jsonify({'success': False, 'message': f'Upload failed: {e}'}), 500
+
+@test_management_bp.route('/module-question-bank/random', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def get_random_questions():
+    try:
+        data = request.get_json()
+        module_id = data.get('module_id')
+        level_id = data.get('level_id')
+        count = int(data.get('count', 20))
+        if not module_id or not level_id:
+            return jsonify({'success': False, 'message': 'module_id and level_id are required.'}), 400
+        # Find all questions for this module/level
+        all_questions = list(mongo_db.question_bank.find({'module_id': module_id, 'level_id': level_id}))
+        if not all_questions:
+            return jsonify({'success': False, 'message': 'No questions found for this module/level.'}), 404
+        # Find questions least used in tests
+        all_questions.sort(key=lambda q: len(q.get('used_in_tests', [])))
+        selected = []
+        used_counts = defaultdict(int)
+        for q in all_questions:
+            used_counts[len(q.get('used_in_tests', []))] += 1
+        # Select questions with least usage first
+        for q in all_questions:
+            if len(selected) < count:
+                selected.append(q)
+        # Warn if repeats will occur
+        min_used = len(all_questions[0].get('used_in_tests', []))
+        will_repeat = len(all_questions) < count or min_used > 0
+        return jsonify({'success': True, 'questions': selected, 'will_repeat': will_repeat, 'min_used': min_used}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching random questions: {e}")
+        return jsonify({'success': False, 'message': f'Random fetch failed: {e}'}), 500
+
+# --- TEST CREATION (USING QUESTION BANK) ---
+
+@test_management_bp.route('/create-test-from-bank', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def create_test_from_bank():
+    try:
+        data = request.get_json()
+        test_name = data.get('test_name')
+        module_id = data.get('module_id')
+        level_id = data.get('level_id')
+        test_type = data.get('test_type')
+        campus_id = data.get('campus_id')
+        course_ids = data.get('course_ids')
+        batch_ids = data.get('batch_ids')
+        audio_config = data.get('audio_config')
+        question_count = int(data.get('question_count', 20))
+        if not all([test_name, module_id, level_id, test_type, campus_id, course_ids, batch_ids, audio_config]):
+            return jsonify({'success': False, 'message': 'Missing required fields.'}), 400
+        # Fetch random questions
+        resp = get_random_questions()
+        if resp[1] != 200:
+            return resp
+        questions = resp[0].json['questions'][:question_count]
+        # Mark these questions as used in this test
+        test_id = generate_unique_test_id()
+        for q in questions:
+            mongo_db.question_bank.update_one({'_id': q['_id']}, {'$push': {'used_in_tests': test_id}})
+        # Create test as before, but with these questions
+        test_doc = {
+            'test_id': test_id,
+            'name': test_name,
+            'test_type': test_type.lower(),
+            'module_id': module_id,
+            'level_id': level_id,
+            'campus_ids': [ObjectId(campus_id)],
+            'course_ids': [ObjectId(cid) for cid in course_ids],
+            'batch_ids': [ObjectId(bid) for bid in batch_ids],
+            'questions': questions,
+            'audio_config': audio_config,
+            'created_by': ObjectId(get_jwt_identity()),
+            'created_at': datetime.utcnow(),
+            'status': 'active',
+            'is_active': True
+        }
+        mongo_db.tests.insert_one(test_doc)
+        return jsonify({'success': True, 'message': 'Test created from question bank.', 'test_id': test_id}), 201
+    except Exception as e:
+        current_app.logger.error(f"Error creating test from bank: {e}")
+        return jsonify({'success': False, 'message': f'Create from bank failed: {e}'}), 500
+
+@test_management_bp.route('/student-count', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def student_count():
+    """Return the count and list of students for the selected campus, batches, and courses (strict AND logic)."""
+    try:
+        data = request.get_json()
+        campus = data.get('campus')
+        batches = data.get('batches', [])
+        courses = data.get('courses', [])
+        query = {}
+        if campus:
+            query['campus_id'] = ObjectId(campus)
+        if batches:
+            query['batch_id'] = {'$in': [ObjectId(b) for b in batches]}
+        if courses:
+            query['course_id'] = {'$in': [ObjectId(c) for c in courses]}
+        # Only include students who match ALL filters (campus, batch, and course)
+        students = list(mongo_db.students.find(query))
+        # Filter again in Python to ensure strict AND logic
+        filtered_students = []
+        for s in students:
+            if (not campus or str(s.get('campus_id')) == str(campus)) and \
+               (not batches or str(s.get('batch_id')) in [str(b) for b in batches]) and \
+               (not courses or str(s.get('course_id')) in [str(c) for c in courses]):
+                filtered_students.append(s)
+        student_list = []
+        for s in filtered_students:
+            student_list.append({
+                'id': str(s.get('_id')),
+                'name': s.get('name'),
+                'roll_number': s.get('roll_number'),
+                'email': s.get('email'),
+                'mobile_number': s.get('mobile_number'),
+            })
+        return jsonify({'count': len(student_list), 'students': student_list})
+    except Exception as e:
+        current_app.logger.error(f"Error fetching student count/list: {e}")
+        return jsonify({'count': 0, 'students': [], 'error': str(e)}), 500
+
+@test_management_bp.route('/notify-students/<test_id>', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def notify_students(test_id):
+    """
+    Notify all students assigned to a test by email with test details.
+    Only students who have not completed the test (no result) will be notified.
+    Returns a list of all students with their notification and test status.
+    """
+    try:
+        # Fetch test details
+        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
+        if not test:
+            return jsonify({'success': False, 'message': 'Test not found.'}), 404
+
+        # Fetch all assigned students
+        from routes.student import get_students_for_test_ids
+        student_list = get_students_for_test_ids([test_id])
+        if not student_list:
+            return jsonify({'success': False, 'message': 'No students found for this test.'}), 404
+
+        # Fetch all results for this test
+        results = list(mongo_db.db.test_results.find({'test_id': ObjectId(test_id)}))
+        completed_emails = set()
+        for r in results:
+            # Try to get email from student_id
+            student = mongo_db.students.find_one({'_id': r.get('student_id')})
+            if student and student.get('email'):
+                completed_emails.add(student['email'])
+
+        # Prepare email content
+        test_type = test.get('test_type', '').capitalize()
+        module = test.get('module_id', 'N/A')
+        test_name = test.get('name', 'N/A')
+        start_dt = test.get('startDateTime')
+        end_dt = test.get('endDateTime')
+        is_online = test.get('test_type', '').lower() == 'online'
+        question_count = len(test.get('questions', []))
+
+        # Render email template
+        html_content = render_template('emails/test_notification.html',
+            test_name=test_name,
+            test_type=test_type,
+            module=module,
+            start_dt=start_dt,
+            end_dt=end_dt,
+            is_online=is_online,
+            question_count=question_count
+        )
+        subject = f"New {test_type} Test Assigned: {test_name}"
+
+        notify_results = []
+        for student in student_list:
+            email = student['email']
+            already_completed = email in completed_emails
+            status = 'skipped' if already_completed else 'pending'
+            notify_status = {
+                'email': email,
+                'name': student.get('name', 'Student'),
+                'test_status': 'completed' if already_completed else 'pending',
+                'notify_status': status
+            }
+            if not already_completed:
+                try:
+                    send_email(
+                        to_email=email,
+                        to_name=student.get('name', 'Student'),
+                        subject=subject,
+                        html_content=html_content
+                    )
+                    notify_status['notify_status'] = 'sent'
+                except Exception as e:
+                    notify_status['notify_status'] = 'failed'
+                    notify_status['error'] = str(e)
+            notify_results.append(notify_status)
+        return jsonify({'success': True, 'results': notify_results}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to send notification: {e}'}), 500
+
+@test_management_bp.route('/question-bank/fetch-for-test', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def fetch_questions_for_test():
+    data = request.get_json()
+    module_id = data.get('module_id')
+    level_id = data.get('level_id')
+    subcategory = data.get('subcategory')  # For grammar
+    n = int(data.get('count', 20))
+    query = {'module_id': module_id, 'level_id': level_id}
+    if module_id == 'GRAMMAR' and subcategory:
+        query['subcategory'] = subcategory
+    questions = list(mongo_db.question_bank.find(query).sort([
+        ('used_count', 1),
+        ('last_used', 1)
+    ]).limit(n))
+    for q in questions:
+        q['_id'] = str(q['_id'])
+    return jsonify({'success': True, 'questions': questions}), 200
+
+@test_management_bp.route('/question-bank/check-duplicates', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def check_question_duplicates():
+    data = request.get_json()
+    module_id = data.get('module_id')
+    level_id = data.get('level_id')
+    questions = data.get('questions', [])
+    duplicates = {}
+    for idx, qtext in enumerate(questions):
+        exists = mongo_db.question_bank.find_one({
+            'module_id': module_id,
+            'level_id': level_id,
+            '$or': [
+                {'question_text': qtext},
+                {'question': qtext}
+            ]
+        })
+        if exists:
+            duplicates[idx] = True
+    return jsonify({'success': True, 'duplicates': duplicates}), 200 

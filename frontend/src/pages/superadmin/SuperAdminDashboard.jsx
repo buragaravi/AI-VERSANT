@@ -137,26 +137,11 @@ const SuperAdminDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-background flex">
       <SuperAdminSidebar />
       <div className="flex-1 lg:pl-64">
         <Header />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Welcome Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="mb-8"
-          >
-            <h1 className="text-3xl font-bold text-gray-900">
-              Welcome back, {user?.name}!
-            </h1>
-            <p className="mt-2 text-gray-600">
-              Here's what's happening with your VERSANT system today.
-            </p>
-          </motion.div>
-
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
           {/* Statistics Cards */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -168,17 +153,14 @@ const SuperAdminDashboard = () => {
               <Link
                 key={index}
                 to={card.link}
-                className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6"
+                className="rounded-xl bg-secondary border border-border shadow-md p-6 flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:border-highlight group animate-fade-in"
               >
-                <div className="flex items-center">
-                  <div className={`${card.color} rounded-lg p-3 text-white text-2xl`}>
-                    {card.icon}
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">{card.title}</p>
-                    <p className="text-2xl font-bold text-gray-900">{card.value}</p>
-                  </div>
+                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 mb-4 shadow group-hover:shadow-lg transition-all duration-300">
+                  <span className="text-white text-2xl">{card.icon}</span>
                 </div>
+                <p className="text-lg font-bold text-text mb-1 transition-colors duration-200 group-hover:text-highlight">{card.title}</p>
+                <p className="text-3xl font-extrabold text-text mb-2 transition-colors duration-200 group-hover:text-highlight">{card.value}</p>
+                <span className="text-sm text-text opacity-70 group-hover:opacity-100 transition-opacity duration-200">View All</span>
               </Link>
             ))}
           </motion.div>
@@ -190,25 +172,19 @@ const SuperAdminDashboard = () => {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="mb-8"
           >
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
+            <h2 className="text-xl font-semibold text-text mb-4">Quick Actions</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {quickActions.map((action, index) => (
                 <Link
                   key={index}
                   to={action.link}
-                  className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border-l-4 border-blue-500"
+                  className="rounded-xl bg-secondary border-l-4 border-highlight shadow-md p-6 flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:border-highlight group animate-fade-in"
                 >
-                  <div className="flex items-center mb-4">
-                    <div className={`${action.color} rounded-lg p-2 text-white text-xl`}>
-                      {action.icon}
-                    </div>
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-highlight mb-4 shadow group-hover:shadow-lg transition-all duration-300">
+                    <span className="text-buttontext text-2xl">{action.icon}</span>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    {action.title}
-                  </h3>
-                  <p className="text-gray-600 text-sm">
-                    {action.description}
-                  </p>
+                  <h3 className="text-lg font-semibold text-text mb-1 transition-colors duration-200 group-hover:text-highlight">{action.title}</h3>
+                  <p className="text-text text-sm opacity-80 group-hover:opacity-100 transition-opacity duration-200">{action.description}</p>
                 </Link>
               ))}
             </div>
@@ -219,9 +195,9 @@ const SuperAdminDashboard = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
-            className="bg-white rounded-lg shadow-md p-6"
+            className="bg-secondary border border-border rounded-lg shadow-md p-6"
           >
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Recent Activity</h2>
+            <h2 className="text-xl font-semibold text-text mb-4">Recent Activity</h2>
             <div className="space-y-4">
               {[
                 { action: 'New user registered', time: '2 minutes ago', type: 'user' },
@@ -229,12 +205,12 @@ const SuperAdminDashboard = () => {
                 { action: 'New campus added', time: '1 hour ago', type: 'campus' },
                 { action: 'System backup completed', time: '2 hours ago', type: 'system' }
               ].map((activity, index) => (
-                <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                <div key={index} className="flex items-center justify-between py-2 border-b border-border last:border-b-0">
                   <div className="flex items-center">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                    <span className="text-gray-900">{activity.action}</span>
+                    <div className="w-2 h-2 bg-tertiary rounded-full mr-3"></div>
+                    <span className="text-text">{activity.action}</span>
                   </div>
-                  <span className="text-sm text-gray-500">{activity.time}</span>
+                  <span className="text-sm text-text">{activity.time}</span>
                 </div>
               ))}
             </div>

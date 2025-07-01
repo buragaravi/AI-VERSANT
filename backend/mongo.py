@@ -2,6 +2,7 @@ from config.database_simple import DatabaseConfig
 from bson import ObjectId
 import json
 from datetime import datetime
+from models import BatchCourseInstance
 
 class MongoDB:
     def __init__(self):
@@ -17,6 +18,8 @@ class MongoDB:
         self.campuses = self.db.campuses
         self.batches = self.db.batches
         self.courses = self.db.courses
+        self.batch_course_instances = BatchCourseInstance(self.db)
+        self.question_bank = self.db.question_bank
         
         # Create indexes for better performance
         self._create_indexes()
@@ -272,36 +275,23 @@ class MongoDB:
     def get_batches_by_course(self, course_id):
         """Get all batches for a specific course with student counts."""
         try:
-            # First, find the course to get its campus_id
             course_object_id = ObjectId(course_id)
-            course = self.courses.find_one({'_id': course_object_id})
-            if not course:
-                return [] # Or raise an error, depending on desired behavior
-
-            campus_id = course.get('campus_id')
-            if not campus_id:
-                return []
-
-            # Now, find all batches that belong to that campus
-            batches_cursor = self.batches.find({'campus_id': campus_id})
-            
+            # Find all batches where course_ids contains the course_id
+            batches_cursor = self.batches.find({'course_ids': course_object_id})
             batches_list = []
             for batch in batches_cursor:
                 batch_data = {
                     'id': str(batch['_id']),
                     'name': batch.get('name'),
-                    'course_id': str(batch.get('course_id'))
+                    'course_ids': [str(cid) for cid in batch.get('course_ids', [])]
                 }
-                
                 # Get student count for each batch
                 student_count = self.users.count_documents({
                     'batch_id': batch['_id'],
                     'role': 'student'
                 })
                 batch_data['student_count'] = student_count
-                
                 batches_list.append(batch_data)
-                
             return batches_list
         except Exception as e:
             raise Exception(f"Error getting batches by course: {str(e)}")
@@ -477,6 +467,22 @@ class MongoDB:
             if isinstance(item['_id'].get('course_id'), ObjectId):
                 item['_id']['course_id'] = str(item['_id']['course_id'])
         return result
+
+    def find_or_create_batch_course_instance(self, batch_id, course_id):
+        return self.batch_course_instances.find_or_create(batch_id, course_id)
+
+    def get_batch_course_instance(self, instance_id):
+        return self.batch_course_instances.get_by_id(instance_id)
+
+    def get_instance_ids_by_batch(self, batch_id):
+        return [i['_id'] for i in self.db.batch_course_instances.find({'batch_id': batch_id})]
+
+    def get_instance_ids_by_course(self, course_id):
+        return [i['_id'] for i in self.db.batch_course_instances.find({'course_id': course_id})]
+
+    def get_instance_ids_by_campus(self, campus_id):
+        batch_ids = [b['_id'] for b in self.batches.find({'campus_id': campus_id})]
+        return [i['_id'] for i in self.db.batch_course_instances.find({'batch_id': {'$in': batch_ids}})]
 
 # Global MongoDB instance
 mongo_db = MongoDB() 

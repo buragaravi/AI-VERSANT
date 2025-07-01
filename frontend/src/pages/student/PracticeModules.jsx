@@ -302,6 +302,9 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [loading, setLoading] = useState(true);
     const { error: showError, success } = useNotification();
+    const [cheatWarning, setCheatWarning] = useState(false);
+    const [cheatCount, setCheatCount] = useState(0);
+    const examRef = useRef(null);
 
     useEffect(() => {
         const fetchModuleDetails = async () => {
@@ -321,6 +324,41 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
             fetchModuleDetails();
         }
     }, [module, showError]);
+
+    useEffect(() => {
+        // Anti-cheating: Prevent tab switching
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') {
+                setCheatWarning(true);
+                setCheatCount(prev => prev + 1);
+                // Optionally, auto-submit after N violations
+                // if (cheatCount + 1 >= 2) handleSubmit();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        // Prevent copy/cut/paste and text selection
+        const preventAction = (e) => e.preventDefault();
+        const examNode = examRef.current;
+        if (examNode) {
+            examNode.addEventListener('copy', preventAction);
+            examNode.addEventListener('cut', preventAction);
+            examNode.addEventListener('paste', preventAction);
+            examNode.addEventListener('contextmenu', preventAction);
+            examNode.addEventListener('selectstart', preventAction);
+        }
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            if (examNode) {
+                examNode.removeEventListener('copy', preventAction);
+                examNode.removeEventListener('cut', preventAction);
+                examNode.removeEventListener('paste', preventAction);
+                examNode.removeEventListener('contextmenu', preventAction);
+                examNode.removeEventListener('selectstart', preventAction);
+            }
+        };
+    }, [cheatCount]);
 
     const handleAnswerChange = (questionId, answer) => {
         setAnswers(prev => ({ ...prev, [questionId]: answer }));
@@ -354,8 +392,12 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
         <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 truncate">{module.name}</h1>
         </div>
-        
-        <div className="bg-white rounded-2xl shadow-lg mx-auto p-4 sm:p-8 max-w-md w-full min-h-[350px] flex flex-col justify-center">
+        {cheatWarning && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-4 text-center">
+            <strong>Tab switching or leaving the exam is not allowed!</strong> ({cheatCount} warning{cheatCount > 1 ? 's' : ''})
+          </div>
+        )}
+        <div ref={examRef} className="bg-white rounded-2xl shadow-lg mx-auto p-4 sm:p-8 max-w-md w-full min-h-[350px] flex flex-col justify-center select-none">
             <div className="text-center mb-6 text-sm font-semibold text-gray-500">
                 Question {currentQuestionIndex + 1} of {questions.length}
             </div>

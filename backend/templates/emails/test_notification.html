@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>New Test Notification</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f8fafc; color: #222; }
+    .container { background: #fff; border-radius: 8px; padding: 32px; max-width: 600px; margin: 32px auto; box-shadow: 0 2px 8px #e0e7ef; }
+    .header { font-size: 1.5em; color: #2563eb; font-weight: bold; margin-bottom: 16px; }
+    .section { margin-bottom: 18px; }
+    .label { color: #64748b; font-weight: 500; }
+    .value { color: #22223b; font-weight: 600; }
+    .highlight { color: #059669; font-weight: bold; }
+    .footer { margin-top: 32px; color: #64748b; font-size: 0.95em; }
+    .details-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .details-table td { padding: 6px 0; }
+    .details-table .label { width: 40%; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">A New Test Has Been Assigned to You!</div>
+    <div class="section">
+      <span class="label">Test Name:</span> <span class="value">{{ test_name }}</span>
+    </div>
+    <table class="details-table">
+      <tr>
+        <td class="label">Type:</td>
+        <td class="value">{{ test_type }}</td>
+      </tr>
+      <tr>
+        <td class="label">Module:</td>
+        <td class="value">{{ module }}</td>
+      </tr>
+      <tr>
+        <td class="label">Total Questions:</td>
+        <td class="value">{{ question_count }}</td>
+      </tr>
+      {% if is_online %}
+      <tr>
+        <td class="label">Start Date & Time:</td>
+        <td class="value">{{ start_dt }}</td>
+      </tr>
+      <tr>
+        <td class="label">End Date & Time:</td>
+        <td class="value">{{ end_dt }}</td>
+      </tr>
+      {% endif %}
+    </table>
+    <div class="section" style="margin-top: 18px;">
+      <span class="highlight">Please log in to the VERSANT System to view and attempt your test.</span>
+    </div>
+    <div class="footer">
+      If you have any questions, please contact your campus administrator.<br>
+      <br>
+      Good luck!<br>
+      <b>VERSANT System Team</b>
+    </div>
+  </div>
+</body>
+</html> 

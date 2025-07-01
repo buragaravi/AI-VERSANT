@@ -10,6 +10,7 @@ import { BookOpen, User, Calendar, Percent, Filter, Building, Briefcase, Graduat
 const ResultsManagement = () => {
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [errorMsg, setErrorMsg] = useState("");
     const [filters, setFilters] = useState({ 
         module: '', 
         test_type: '',
@@ -23,10 +24,14 @@ const ResultsManagement = () => {
         const fetchResults = async () => {
             try {
                 setLoading(true);
-                const res = await api.get('/test-management/results');
-                setResults(res.data.data);
+                setErrorMsg("");
+                const practiceRes = await api.get('/superadmin/student-practice-results');
+                const onlineRes = await api.get('/superadmin/student-online-results');
+                setResults([...(practiceRes.data.data || []), ...(onlineRes.data.data || [])]);
             } catch (err) {
+                setErrorMsg('Failed to fetch test results. Please check your login status and try again.');
                 error('Failed to fetch test results.');
+                console.error('Error fetching results:', err);
             } finally {
                 setLoading(false);
             }
@@ -56,17 +61,17 @@ const ResultsManagement = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex">
+        <div className="min-h-screen bg-background flex">
             <SuperAdminSidebar />
             <div className="flex-1 lg:pl-64">
                 <Header />
                 <main className="px-6 lg:px-10 py-12">
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                        <h1 className="text-3xl font-bold text-gray-900">Test Results</h1>
-                        <p className="mt-2 text-gray-600">View and analyze results from all student test submissions.</p>
+                        <h1 className="text-3xl font-bold text-headline">Test Results</h1>
+                        <p className="mt-2 text-paragraph">View and analyze results from all student test submissions.</p>
 
-                        <div className="mt-8 bg-white rounded-2xl shadow-lg">
-                            <div className="p-6 border-b border-gray-200">
+                        <div className="mt-8 bg-secondary rounded-2xl shadow-lg">
+                            <div className="p-6 border-b border-stroke">
                                 <h3 className="text-xl font-semibold text-gray-800 flex items-center"><Filter className="mr-3 h-5 w-5 text-gray-400" /> Filters</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-4">
                                     <select name="module" value={filters.module} onChange={handleFilterChange} className="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
@@ -93,7 +98,11 @@ const ResultsManagement = () => {
                             </div>
                             
                             <div className="overflow-x-auto">
-                                {loading ? <LoadingSpinner /> : (
+                                {loading ? <LoadingSpinner /> : errorMsg ? (
+                                    <div className="text-red-600 text-center py-8 font-semibold">{errorMsg}</div>
+                                ) : filteredResults.length === 0 ? (
+                                    <div className="text-gray-500 text-center py-8">No results found.</div>
+                                ) : (
                                     <table className="min-w-full divide-y divide-gray-200">
                                         <thead className="bg-gray-50">
                                             <tr>
@@ -102,7 +111,9 @@ const ResultsManagement = () => {
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Batch</th>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Test Name</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time Taken</th>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted At</th>
                                             </tr>
                                         </thead>
@@ -117,7 +128,17 @@ const ResultsManagement = () => {
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{result.course_name || 'N/A'}</td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{result.batch_name || 'N/A'}</td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{result.test_name}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800 capitalize">{result.test_type}</td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">{result.score?.toFixed(2) || 0.00}%</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                                                        {result.time_taken ? (
+                                                            <span>
+                                                                {Math.floor(result.time_taken / 60)}m {result.time_taken % 60}s
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-gray-400">N/A</span>
+                                                        )}
+                                                    </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{result.submitted_at}</td>
                                                 </tr>
                                             ))}

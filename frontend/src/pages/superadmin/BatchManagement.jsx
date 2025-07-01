@@ -11,7 +11,7 @@ import { useNavigate, Link } from 'react-router-dom';
 
 const BatchCard = ({ batch, onDelete, onEdit }) => (
     <motion.div 
-        className="bg-white rounded-2xl shadow-lg overflow-hidden"
+        className="bg-secondary rounded-2xl shadow-lg overflow-hidden"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
@@ -20,27 +20,27 @@ const BatchCard = ({ batch, onDelete, onEdit }) => (
         <div className="p-6">
             <div className="flex justify-between items-start">
                 <div>
-                    <h3 className="text-xl font-bold text-gray-800">{batch.name}</h3>
+                    <h3 className="text-xl font-bold text-black">{batch.name}</h3>
                     <div className="mt-2 flex flex-wrap gap-2">
-                        {batch.campuses.map(c => <span key={c.id} className="text-xs font-semibold bg-blue-100 text-blue-800 px-2 py-1 rounded-full">{c.name}</span>)}
-                        {batch.courses.map(c => <span key={c.id} className="text-xs font-semibold bg-green-100 text-green-800 px-2 py-1 rounded-full">{c.name}</span>)}
+                        {batch.campuses.map(c => <span key={c.id} className="text-xs font-semibold bg-highlight text-black px-2 py-1 rounded-full">{c.name}</span>)}
+                        {batch.courses.map(c => <span key={c.id} className="text-xs font-semibold bg-tertiary text-black px-2 py-1 rounded-full">{c.name}</span>)}
                     </div>
                 </div>
                 <div className="flex items-center gap-1">
-                    <button onClick={() => onEdit(batch)} className="p-2 rounded-full text-gray-500 hover:bg-yellow-100 hover:text-yellow-600 transition-colors">
+                    <button onClick={() => onEdit(batch)} className="p-2 rounded-full text-highlight hover:bg-highlight hover:text-highlight transition-colors">
                         <Edit size={18} />
                     </button>
-                    <button onClick={() => onDelete(batch.id)} className="p-2 rounded-full text-gray-500 hover:bg-red-100 hover:text-red-600 transition-colors">
+                    <button onClick={() => onDelete(batch.id)} className="p-2 rounded-full text-highlight hover:bg-highlight hover:text-highlight transition-colors">
                         <Trash2 size={18} />
                     </button>
                 </div>
             </div>
             <div className="mt-6 flex justify-between items-center">
-                <div className="flex items-center gap-2 text-gray-600">
+                <div className="flex items-center gap-2 text-black">
                     <Users size={16} />
                     <span className="text-sm font-medium">{batch.student_count} Students</span>
                 </div>
-                <Link to={`/superadmin/batches/${batch.id}`} className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">View Details</Link>
+                <Link to={`/superadmin/batches/${batch.id}`} className="text-sm font-semibold text-highlight hover:text-highlight">View Details</Link>
             </div>
         </div>
     </motion.div>
@@ -78,42 +78,42 @@ const CredentialsDisplayModal = ({ credentials, batchName, onClose }) => {
                 initial={{ y: -50, opacity: 0 }} 
                 animate={{ y: 0, opacity: 1 }} 
                 exit={{ y: 50, opacity: 0 }} 
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-gray-200"
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-stroke"
             >
                 <div className="p-6 border-b">
                     <div className="flex justify-between items-center">
-                        <h2 className="text-2xl font-bold text-gray-800">Student Credentials for "{batchName}"</h2>
-                        <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100"><X className="text-gray-600"/></button>
+                        <h2 className="text-2xl font-bold text-black">Student Credentials for "{batchName}"</h2>
+                        <button onClick={onClose} className="p-2 rounded-full hover:bg-highlight"><X className="text-black"/></button>
                     </div>
-                     <p className="text-sm text-red-600 mt-2 font-semibold">For security reasons, this is the only time you will see these passwords. Please download and store them securely.</p>
+                     <p className="text-sm text-black mt-2 font-semibold">For security reasons, this is the only time you will see these passwords. Please download and store them securely.</p>
                 </div>
                 
                 <div className="p-6 max-h-[60vh] overflow-y-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                    <table className="min-w-full divide-y divide-stroke">
+                        <thead className="bg-highlight">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student Name</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Password</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Student Name</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Username</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Password</th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white divide-y divide-stroke">
                             {credentials.map((cred, index) => (
                                 <tr key={index}>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm font-medium text-gray-900">{cred.student_name}</div>
-                                        <div className="text-sm text-gray-500">{cred.email}</div>
+                                        <div className="text-sm font-medium text-black">{cred.student_name}</div>
+                                        <div className="text-sm text-black">{cred.email}</div>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{cred.username}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono bg-gray-100 rounded-md">{cred.password}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{cred.username}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono bg-highlight rounded-md text-black">{cred.password}</td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
 
-                <div className="px-6 py-4 bg-gray-50 rounded-b-2xl flex justify-end">
-                    <button onClick={handleDownload} className="flex items-center gap-2 bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg shadow-md hover:bg-blue-700 transition">
+                <div className="px-6 py-4 bg-highlight rounded-b-2xl flex justify-end">
+                    <button onClick={handleDownload} className="flex items-center gap-2 bg-highlight text-black font-semibold px-4 py-2 rounded-lg shadow-md hover:bg-highlight hover:text-highlight transition">
                         <Download size={18} />
                         Download Credentials
                     </button>
@@ -122,6 +122,31 @@ const CredentialsDisplayModal = ({ credentials, batchName, onClose }) => {
         </motion.div>
     );
 };
+
+const StudentPreviewModal = ({ students, onClose }) => (
+    <motion.div 
+        className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+    >
+        <motion.div 
+            initial={{ y: -50, opacity: 0 }} 
+            animate={{ y: 0, opacity: 1 }} 
+            exit={{ y: 50, opacity: 0 }} 
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-stroke text-center"
+        >
+            <div className="p-8 border-b flex flex-col items-center justify-center gap-2">
+                <h2 className="text-2xl font-bold text-black mb-2">File Validated!</h2>
+                <div className="text-5xl font-extrabold text-black mb-2">{students.length}</div>
+                <div className="text-lg text-black">students ready to be added</div>
+            </div>
+            <div className="px-8 py-6 bg-highlight rounded-b-2xl flex justify-center">
+                <button onClick={onClose} className="bg-highlight text-black font-semibold px-6 py-2 rounded-lg shadow hover:bg-highlight hover:text-highlight transition">Close</button>
+            </div>
+        </motion.div>
+    </motion.div>
+);
 
 const BatchManagement = () => {
     const [batches, setBatches] = useState([]);
@@ -188,7 +213,7 @@ const BatchManagement = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex">
+        <div className="min-h-screen bg-background flex">
             <SuperAdminSidebar />
             <div className="flex-1 lg:pl-64">
                 <Header />
@@ -196,23 +221,23 @@ const BatchManagement = () => {
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                         <div className="flex justify-between items-center mb-8">
                             <div>
-                                <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Batch Management</h1>
-                                <p className="mt-2 text-lg text-gray-600">Create, manage, and populate student batches.</p>
+                                <h1 className="text-4xl font-extrabold text-black tracking-tight">Batch Management</h1>
+                                <p className="mt-2 text-lg text-black">Create, manage, and populate student batches.</p>
                             </div>
-                            <button onClick={openModal} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold px-5 py-3 rounded-xl shadow-lg hover:bg-indigo-700 transition-transform hover:scale-105">
+                            <button onClick={openModal} className="flex items-center gap-2 bg-highlight text-paragraph font-semibold px-5 py-3 rounded-xl shadow-lg hover:bg-highlight hover:text-highlight transition-transform hover:scale-105">
                                 <PlusCircle size={20} />
                                 Create Batch
                             </button>
                         </div>
 
                         <div className="mb-8 relative">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-paragraph" />
                             <input
                                 type="text"
                                 placeholder="Search by batch name..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow"
+                                className="w-full pl-12 pr-4 py-3 border border-stroke rounded-xl shadow-sm focus:ring-2 focus:ring-highlight focus:border-highlight transition-shadow text-black"
                             />
                         </div>
                         
@@ -227,9 +252,9 @@ const BatchManagement = () => {
                         )}
                          {!loading && filteredBatches.length === 0 && (
                             <div className="text-center py-20">
-                                <Layers size={48} className="mx-auto text-gray-400" />
-                                <h3 className="mt-4 text-lg font-semibold text-gray-800">No batches found</h3>
-                                <p className="mt-1 text-gray-500">Create a new batch to get started.</p>
+                                <Layers size={48} className="mx-auto text-paragraph" />
+                                <h3 className="mt-4 text-lg font-semibold text-black">No batches found</h3>
+                                <p className="mt-1 text-black">Create a new batch to get started.</p>
                             </div>
                         )}
                     </motion.div>
@@ -254,6 +279,7 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
     const { success, error } = useNotification();
     const [createdCredentials, setCreatedCredentials] = useState(null);
     const navigate = useNavigate();
+    const [showPreviewModal, setShowPreviewModal] = useState(false);
 
     const handleDownloadTemplate = () => {
         // Check if campus and courses are selected
@@ -323,7 +349,7 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
         } else { setCourses([]); }
     }, [formData.campus_ids, error]);
     
-    const handleCampusToggle = (id) => setFormData(prev => ({...prev, campus_ids: prev.campus_ids.includes(id) ? prev.campus_ids.filter(c => c !== id) : [...prev.campus_ids, id], course_ids:[]}));
+    const handleCampusToggle = (id) => setFormData(prev => ({...prev, campus_ids: prev.campus_ids[0] === id ? [] : [id], course_ids:[]}));
     const handleCourseToggle = (id) => setFormData(prev => ({...prev, course_ids: prev.course_ids.includes(id) ? prev.course_ids.filter(c => c !== id) : [...prev.course_ids, id]}));
 
     const onDrop = useCallback(async (acceptedFiles) => {
@@ -331,19 +357,15 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
             error("Please go back and select a campus before uploading a file.");
             return;
         }
-
         const file = acceptedFiles[0];
         setFormData(prev => ({ ...prev, student_file: file }));
         const uploadData = new FormData();
         uploadData.append('file', file);
-        
-        // The validation endpoint currently supports one campus at a time.
-        // We will use the first selected campus for validation.
         uploadData.append('campus_id', formData.campus_ids[0]);
-        
         try {
             const res = await api.post('/batch-management/validate-student-upload', uploadData);
             setPreviewData(res.data.data);
+            setShowPreviewModal(true);
             success("File validated successfully!");
         } catch (err) {
             error(err.response?.data?.message || 'File validation failed.');
@@ -391,6 +413,10 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
         return <CredentialsDisplayModal credentials={createdCredentials} batchName={formData.name} onClose={handleCloseCredentials} />
     }
     
+    if (showPreviewModal && previewData) {
+        return <StudentPreviewModal students={previewData} onClose={() => setShowPreviewModal(false)} />;
+    }
+    
     const steps = [
         // Step 1: Batch Details
         {
@@ -398,21 +424,23 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
             content: (
                 <div className="space-y-6">
                     <div>
-                        <label htmlFor="batchName" className="block text-sm font-medium text-amber-800 mb-1">Batch Name</label>
+                        <label htmlFor="batchName" className="block text-sm font-semibold text-black mb-1">Batch Name</label>
                         <input
                             type="text"
                             id="batchName"
                             value={formData.name}
                             onChange={(e) => setFormData(prev => ({...prev, name: e.target.value}))}
-                            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition text-gray-900"
+                            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-highlight focus:border-highlight transition text-black placeholder-gray-400"
                             placeholder="e.g., Spring 2024 Morning"
                         />
                     </div>
                     <div>
-                        <h4 className="text-sm font-medium text-amber-800 mb-2">Select Campuses</h4>
+                        <h4 className="text-sm font-semibold text-black mb-2">Select Campus</h4>
                         <div className="grid grid-cols-2 gap-2">
                             {campuses.map(c => (
-                                <button key={c.id} onClick={() => handleCampusToggle(c.id)} className={`p-3 text-left rounded-lg transition ${formData.campus_ids.includes(c.id) ? 'bg-amber-500 text-white' : 'bg-amber-100 hover:bg-amber-200 text-amber-800'}`}>
+                                <button key={c.id} onClick={() => handleCampusToggle(c.id)}
+                                    className={`p-3 text-center rounded-lg border transition font-semibold text-black ${formData.campus_ids[0] === c.id ? 'bg-highlight border-highlight shadow-lg' : 'bg-gray-100 border-gray-300 hover:bg-highlight/20'}`}
+                                >
                                     {c.name}
                                 </button>
                             ))}
@@ -420,10 +448,12 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
                     </div>
                     {formData.campus_ids.length > 0 && (
                         <div>
-                           <h4 className="text-sm font-medium text-amber-800 mb-2">Select Courses</h4>
+                           <h4 className="text-sm font-semibold text-black mb-2">Select Courses</h4>
                             <div className="grid grid-cols-2 gap-2">
                                 {courses.map(c => (
-                                    <button key={c.id} onClick={() => handleCourseToggle(c.id)} className={`p-3 text-left rounded-lg transition ${formData.course_ids.includes(c.id) ? 'bg-amber-500 text-white' : 'bg-amber-100 hover:bg-amber-200 text-amber-800'}`}>
+                                    <button key={c.id} onClick={() => handleCourseToggle(c.id)}
+                                        className={`p-3 text-center rounded-lg border transition font-semibold text-black ${formData.course_ids.includes(c.id) ? 'bg-highlight border-highlight shadow-lg' : 'bg-gray-100 border-gray-300 hover:bg-highlight/20'}`}
+                                    >
                                         {c.name}
                                     </button>
                                 ))}
@@ -439,7 +469,7 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
             content: (
                 <div className="space-y-4">
                      <div className="flex justify-between items-center">
-                        <div className="text-sm text-amber-700">
+                        <div className="text-sm text-highlight">
                             {formData.campus_ids.length === 0 || formData.course_ids.length === 0 ? 
                                 "Please select campus and courses first to download template" : 
                                 "Template will include selected campus and courses"
@@ -450,8 +480,8 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
                             disabled={formData.campus_ids.length === 0 || formData.course_ids.length === 0}
                             className={`flex items-center gap-2 text-sm font-semibold transition-colors ${
                                 formData.campus_ids.length === 0 || formData.course_ids.length === 0
-                                    ? 'text-amber-400 cursor-not-allowed'
-                                    : 'text-amber-600 hover:text-amber-800'
+                                    ? 'text-highlight cursor-not-allowed'
+                                    : 'text-highlight hover:text-highlight'
                             }`}
                         >
                             <Download size={16} />
@@ -460,9 +490,9 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
                     </div>
                     
                     {formData.campus_ids.length > 0 && formData.course_ids.length > 0 && (
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                            <h4 className="font-semibold text-amber-800 mb-2">Template Instructions:</h4>
-                            <ul className="text-sm text-amber-700 space-y-1">
+                        <div className="bg-stroke border border-highlight rounded-lg p-4">
+                            <h4 className="font-semibold text-highlight mb-2">Template Instructions:</h4>
+                            <ul className="text-sm text-highlight space-y-1">
                                 <li>• The template includes your selected campus and courses</li>
                                 <li>• Keep the Campus Name and Course Name exactly as shown in the template</li>
                                 <li>• Fill in Student Name, Roll Number, Email, and Mobile Number for each student</li>
@@ -473,27 +503,14 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
                             </ul>
                         </div>
                     )}
-                    <div {...getRootProps()} className={`p-10 border-2 border-dashed rounded-xl text-center cursor-pointer transition ${isDragActive ? 'bg-amber-100 border-amber-500' : 'bg-amber-50 border-amber-300 hover:border-amber-400'}`}>
+                    <div {...getRootProps()} className={`p-10 border-2 border-dashed rounded-xl text-center cursor-pointer transition ${isDragActive ? 'bg-stroke border-highlight' : 'bg-stroke hover:border-highlight'}`}>
                         <input {...getInputProps()} />
-                        <div className="flex flex-col items-center justify-center text-amber-700">
-                            <FileUp className="mx-auto h-12 w-12 text-amber-400" />
+                        <div className="flex flex-col items-center justify-center text-highlight">
+                            <FileUp className="mx-auto h-12 w-12 text-highlight" />
                             <p className="mt-2 text-sm font-medium">Drag 'n' drop a CSV file here, or click to select</p>
-                            <p className="text-xs text-amber-600 mt-1">Supports CSV files with Campus Name, Course Name, Student Name, Roll Number, Email, and Mobile Number columns</p>
+                            <p className="text-xs text-highlight mt-1">Supports CSV files with Campus Name, Course Name, Student Name, Roll Number, Email, and Mobile Number columns</p>
                         </div>
                     </div>
-                   
-                    {previewData && (
-                        <div className="mt-4 max-h-48 overflow-y-auto bg-white p-4 rounded-lg border border-gray-200">
-                            <h4 className="font-semibold mb-2">Validation Preview ({previewData.filter(r => r.errors.length === 0).length} valid)</h4>
-                            <ul className="divide-y">
-                                {previewData.map((row, i) => (
-                                    <li key={i} className={`p-2 text-sm ${row.errors.length > 0 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-                                        {row.student_name} - {row.email} {row.errors.length > 0 && `(Error: ${row.errors[0]})`}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
                 </div>
             )
         }
@@ -503,14 +520,14 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
 
     return (
         <motion.div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-            <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }} className="bg-yellow-50 rounded-2xl shadow-2xl w-full max-w-2xl border border-amber-300">
-                <div className="p-6 border-b border-amber-200">
+            <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-gray-200 text-black">
+                <div className="p-6 border-b border-gray-200">
                     <div className="flex justify-between items-center">
-                        <h2 className="text-2xl font-bold text-amber-900">{currentStep.title}</h2>
-                        <button onClick={closeModal}><X className="text-amber-700 hover:text-amber-900"/></button>
+                        <h2 className="text-2xl font-bold text-black">{currentStep.title}</h2>
+                        <button onClick={closeModal}><X className="text-black hover:text-highlight"/></button>
                     </div>
-                    <div className="w-full bg-amber-200 rounded-full h-1.5 mt-2">
-                        <div className="bg-amber-500 h-1.5 rounded-full" style={{ width: `${(step / steps.length) * 100}%` }}></div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
+                        <div className="bg-highlight h-1.5 rounded-full" style={{ width: `${(step / steps.length) * 100}%` }}></div>
                     </div>
                 </div>
 
@@ -518,12 +535,12 @@ const CreateBatchModal = ({ closeModal, onBatchCreated }) => {
                     {loading ? <LoadingSpinner /> : currentStep.content}
                 </div>
 
-                <div className="px-8 py-4 bg-amber-100 rounded-b-2xl flex justify-between items-center">
-                    <button onClick={() => setStep(s => s - 1)} disabled={step === 1} className="px-4 py-2 rounded-lg text-amber-800 bg-amber-200 hover:bg-amber-300 disabled:opacity-50">Back</button>
+                <div className="px-8 py-4 bg-gray-100 rounded-b-2xl flex justify-between items-center">
+                    <button onClick={() => setStep(s => s - 1)} disabled={step === 1} className="px-4 py-2 rounded-lg text-black bg-gray-200 hover:bg-gray-300 disabled:opacity-50">Back</button>
                     {step < steps.length ? (
-                        <button onClick={() => setStep(s => s + 1)} disabled={formData.name === '' || formData.course_ids.length === 0} className="px-4 py-2 rounded-lg text-white bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300">Next</button>
+                        <button onClick={() => setStep(s => s + 1)} disabled={formData.name === '' || formData.course_ids.length === 0} className="px-4 py-2 rounded-lg text-white bg-highlight hover:bg-highlight/80 disabled:bg-gray-300">Next</button>
                     ) : (
-                        <button onClick={handleSubmit} disabled={!previewData || isSubmitting} className="px-4 py-2 rounded-lg text-white bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300">
+                        <button onClick={handleSubmit} disabled={!previewData || isSubmitting} className="px-4 py-2 rounded-lg text-white bg-highlight hover:bg-highlight/80 disabled:bg-gray-300">
                             {isSubmitting ? 'Creating...' : 'Create Batch'}
                         </button>
                     )}

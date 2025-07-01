@@ -5,7 +5,7 @@ import Header from '../../components/common/Header';
 import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
-import { Book, PlusCircle, Search, Trash2, Edit, X, User, Mail, Key, Building, ChevronDown, ChevronUp, Briefcase } from 'lucide-react';
+import { Book, PlusCircle, Search, Trash2, Edit, X, User, Mail, Key, Building, ChevronDown, ChevronUp, Briefcase, Users } from 'lucide-react';
 
 const CourseManagement = () => {
     const [courses, setCourses] = useState([]);
@@ -132,68 +132,68 @@ const CourseManagement = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex">
+        <div className="min-h-screen bg-background flex">
             <SuperAdminSidebar />
-            <div className="flex-1 lg:pl-64">
+            <div className="flex-1 lg:pl-64 bg-white min-h-screen">
                 <Header />
                 <main className="px-6 lg:px-10 py-12">
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                         <div className="flex justify-between items-center mb-8">
                             <div>
-                                <h1 className="text-3xl font-bold text-gray-900">Course Management</h1>
-                                <p className="mt-2 text-gray-600">Manage all academic courses across campuses.</p>
+                                <h1 className="text-3xl font-bold text-black">Course Management</h1>
+                                <p className="mt-2 text-black">Manage all academic courses across campuses.</p>
                             </div>
-                            <button onClick={() => openModal()} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold px-4 py-2 rounded-lg shadow-md hover:bg-indigo-700 transition">
+                            <button onClick={() => openModal()} className="flex items-center gap-2 bg-highlight text-white font-semibold px-4 py-2 rounded-lg shadow-md hover:bg-highlight-hover transition">
                                 <PlusCircle size={20} />
                                 Add Course
                             </button>
                         </div>
 
-                        <div className="mt-8 bg-white rounded-2xl shadow-lg">
-                             <div className="p-6 border-b border-gray-200">
+                        <div className="mt-8 bg-white rounded-2xl shadow-lg border-l-8 border-highlight">
+                             <div className="p-6 border-b border-stroke">
                                 <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-tertiary" />
                                     <input
                                         type="text"
                                         placeholder="Search by course, campus, or admin..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                        className="w-full pl-10 pr-4 py-2 border border-stroke rounded-md shadow-sm focus:ring-highlight focus:border-highlight text-black"
                                     />
                                 </div>
                             </div>
                             
                             <div className="overflow-x-auto">
                                 {loading ? <LoadingSpinner /> : (
-                                    <table className="min-w-full divide-y divide-gray-200">
-                                        <thead className="bg-gray-50">
+                                    <table className="min-w-full divide-y divide-stroke">
+                                        <thead className="bg-white">
                                             <tr>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campus</th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Admin</th>
-                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Course</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Campus</th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Course Admin</th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">Actions</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="bg-white divide-y divide-gray-200">
+                                        <tbody className="bg-white divide-y divide-stroke">
                                             {filteredCourses.map(course => (
                                                 <React.Fragment key={course.id}>
-                                                    <tr className="cursor-pointer hover:bg-gray-50" onClick={() => toggleCourseExpansion(course.id)}>
+                                                    <tr className="cursor-pointer hover:bg-tertiary/30" onClick={() => toggleCourseExpansion(course.id)}>
                                                         <td className="px-6 py-4 whitespace-nowrap">
                                                             <div className="flex items-center">
-                                                                <span className="text-sm font-medium text-gray-900">{course.name}</span>
+                                                                <span className="text-sm font-medium text-black">{course.name}</span>
                                                                 <div className="ml-2">
                                                                     {expandedCourse === course.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{course.campus?.name || 'N/A'}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{course.campus?.name || 'N/A'}</td>
                                                         <td className="px-6 py-4 whitespace-nowrap">
-                                                            <div className="text-sm font-medium text-gray-900">{course.admin?.name || 'N/A'}</div>
-                                                            <div className="text-sm text-gray-500">{course.admin?.email || 'N/A'}</div>
+                                                            <div className="text-sm font-medium text-black">{course.admin?.name || 'N/A'}</div>
+                                                            <div className="text-sm text-black">{course.admin?.email || 'N/A'}</div>
                                                         </td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                            <button onClick={(e) => { e.stopPropagation(); openModal(course); }} className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={18} /></button>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(course.id); }} className="text-red-600 hover:text-red-900"><Trash2 size={18}/></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); openModal(course); }} className="text-highlight hover:text-highlight-hover mr-4"><Edit size={18} /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(course.id); }} className="text-highlight hover:text-highlight-hover"><Trash2 size={18}/></button>
                                                         </td>
                                                     </tr>
                                                     <AnimatePresence>
@@ -204,20 +204,20 @@ const CourseManagement = () => {
                                                                 exit={{ opacity: 0, height: 0 }}
                                                             >
                                                                 <td colSpan="4" className="p-0">
-                                                                    <div className="bg-gray-100 p-4">
+                                                                    <div className="bg-tertiary/10 p-4">
                                                                         {loadingBatches ? <LoadingSpinner size="sm" /> :
                                                                             batches.length > 0 ? (
                                                                                 <div>
-                                                                                    <h4 className="text-md font-semibold mb-2 text-gray-700">Batches</h4>
+                                                                                    <h4 className="text-md font-semibold mb-2 text-black">Batches</h4>
                                                                                     <ul className="space-y-2">
                                                                                         {batches.map(batch => (
-                                                                                            <li key={batch.id} className="bg-white p-3 rounded-md shadow-sm flex justify-between items-center">
+                                                                                            <li key={batch.id} className="bg-white p-3 rounded-md shadow-sm flex justify-between items-center border-l-4 border-highlight">
                                                                                                 <div className="flex items-center">
-                                                                                                    <Briefcase size={16} className="mr-2 text-purple-500"/>
-                                                                                                    <span className="text-sm font-medium text-gray-800">{batch.name}</span>
+                                                                                                    <Briefcase size={16} className="mr-2 text-highlight"/>
+                                                                                                    <span className="text-sm font-medium text-black">{batch.name}</span>
                                                                                                 </div>
-                                                                                                <div className="flex items-center text-sm text-gray-600">
-                                                                                                    <Users size={14} className="mr-1 text-gray-400"/>
+                                                                                                <div className="flex items-center text-sm text-black">
+                                                                                                    <Users size={14} className="mr-1 text-tertiary"/>
                                                                                                     <span>{batch.student_count} Students</span>
                                                                                                 </div>
                                                                                             </li>
@@ -225,7 +225,7 @@ const CourseManagement = () => {
                                                                                     </ul>
                                                                                 </div>
                                                                             ) : (
-                                                                                <div className="text-center py-4 text-gray-500">No batches found for this course.</div>
+                                                                                <div className="text-center py-4 text-black">No batches found for this course.</div>
                                                                             )
                                                                         }
                                                                     </div>
@@ -248,22 +248,22 @@ const CourseManagement = () => {
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                         <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }} className="bg-white rounded-lg shadow-xl w-full max-w-md p-8">
                            <div className="flex justify-between items-center mb-6">
-                             <h2 className="text-2xl font-bold text-gray-800">{isEditMode ? 'Edit Course' : 'Create Course'}</h2>
-                             <button onClick={closeModal}><X className="text-gray-500 hover:text-gray-800"/></button>
+                             <h2 className="text-2xl font-bold text-black">{isEditMode ? 'Edit Course' : 'Create Course'}</h2>
+                             <button onClick={closeModal}><X className="text-tertiary hover:text-paragraph"/></button>
                            </div>
                             <form onSubmit={handleSubmit}>
                                 <div className="space-y-4">
                                     {!isEditMode && (
-                                        <SelectField label="Campus" name="campus_id" value={formData.campus_id} onChange={handleInputChange} options={campuses} icon={<Building size={18} />} />
+                                        <SelectField label="Campus" name="campus_id" value={formData.campus_id} onChange={handleInputChange} options={campuses} icon={<Building size={18} />} textClass="text-black" />
                                     )}
-                                    <InputField label="Course Name" name="course_name" value={formData.course_name} onChange={handleInputChange} icon={<Book size={18}/>} />
-                                    <InputField label="Admin Name" name="admin_name" value={formData.admin_name} onChange={handleInputChange} icon={<User size={18}/>} />
-                                    <InputField label="Admin Email" name="admin_email" type="email" value={formData.admin_email} onChange={handleInputChange} icon={<Mail size={18}/>} disabled={isEditMode} />
-                                    <InputField label="Admin Password" name="admin_password" type="password" value={formData.admin_password} onChange={handleInputChange} icon={<Key size={18}/>} placeholder={isEditMode ? 'Leave blank to keep current password' : ''}/>
+                                    <InputField label="Course Name" name="course_name" value={formData.course_name} onChange={handleInputChange} icon={<Book size={18}/>} textClass="text-black" />
+                                    <InputField label="Admin Name" name="admin_name" value={formData.admin_name} onChange={handleInputChange} icon={<User size={18}/>} textClass="text-black" />
+                                    <InputField label="Admin Email" name="admin_email" type="email" value={formData.admin_email} onChange={handleInputChange} icon={<Mail size={18}/>} disabled={isEditMode} textClass="text-black" />
+                                    <InputField label="Admin Password" name="admin_password" type="password" value={formData.admin_password} onChange={handleInputChange} icon={<Key size={18}/>} placeholder={isEditMode ? 'Leave blank to keep current password' : ''} textClass="text-black" />
                                 </div>
                                 <div className="mt-8 flex justify-end">
-                                    <button type="button" onClick={closeModal} className="mr-3 bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300">Cancel</button>
-                                    <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700" disabled={!isEditMode && !formData.campus_id}>{isEditMode ? 'Update' : 'Create'}</button>
+                                    <button type="button" onClick={closeModal} className="mr-3 bg-tertiary text-black px-4 py-2 rounded-lg hover:bg-highlight">Cancel</button>
+                                    <button type="submit" className="bg-highlight text-black px-4 py-2 rounded-lg hover:bg-highlight-hover" disabled={!isEditMode && !formData.campus_id}>{isEditMode ? 'Update' : 'Create'}</button>
                                 </div>
                             </form>
                         </motion.div>
@@ -274,11 +274,11 @@ const CourseManagement = () => {
     );
 };
 
-const InputField = ({ label, name, type = 'text', value, onChange, icon, placeholder, disabled=false }) => (
+const InputField = ({ label, name, type = 'text', value, onChange, icon, placeholder, disabled=false, textClass = '' }) => (
     <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <label className={`block text-sm font-medium mb-1 ${textClass}`}>{label}</label>
         <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">{icon}</span>
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-black">{icon}</span>
             <input 
                 type={type} 
                 name={name} 
@@ -287,23 +287,23 @@ const InputField = ({ label, name, type = 'text', value, onChange, icon, placeho
                 placeholder={placeholder}
                 disabled={disabled}
                 required={!disabled && name !== 'admin_password'}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100" 
+                className={`w-full pl-10 pr-4 py-2 border border-stroke rounded-md shadow-sm focus:ring-highlight focus:border-highlight disabled:bg-background ${textClass}`} 
             />
         </div>
     </div>
 );
 
-const SelectField = ({ label, name, value, onChange, options, icon }) => (
+const SelectField = ({ label, name, value, onChange, options, icon, textClass = '' }) => (
     <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <label className={`block text-sm font-medium mb-1 ${textClass}`}>{label}</label>
         <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">{icon}</span>
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-black">{icon}</span>
             <select 
                 name={name} 
                 value={value} 
                 onChange={onChange}
                 required
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 appearance-none"
+                className={`w-full pl-10 pr-4 py-2 border border-stroke rounded-md shadow-sm focus:ring-highlight focus:border-highlight appearance-none ${textClass}`}
             >
                 <option value="">Select a {label}</option>
                 {options.map(option => (

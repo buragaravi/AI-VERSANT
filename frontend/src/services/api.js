@@ -212,4 +212,30 @@ export const deleteStudent = async (studentId) => {
   return api.delete(`/batch-management/student/${studentId}`);
 };
 
+export const uploadModuleQuestions = async (moduleId, levelId, questions) => {
+  return api.post('/test-management/module-question-bank/upload', {
+    module_id: moduleId,
+    level_id: levelId,
+    questions,
+  });
+};
+
+export const getRandomQuestionsFromBank = async (moduleId, levelId, count) => {
+  return api.post('/test-management/module-question-bank/random', {
+    module_id: moduleId,
+    level_id: levelId,
+    count,
+  });
+};
+
+export const createTestFromBank = async (testData) => {
+  return api.post('/test-management/create-test-from-bank', testData);
+};
+
+export const getAllTests = async () => api.get('/test-management/tests');
+
+// Returns { count, students: [ ... ] }
+export const getStudentCount = async ({ campus, batches, courses }) =>
+  api.post('/test-management/student-count', { campus, batches, courses });
+
 export default api

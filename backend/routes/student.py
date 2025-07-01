@@ -323,9 +323,6 @@ def get_online_exams():
             'course_ids': user.get('course_id')
         }
         
-        # This part can be extended with batch_ids if needed
-        # 'batch_ids': user.get('batch_id')
-
         projection = { "questions": 0, "audio_config": 0 }
         
         exams = list(mongo_db.db.tests.find(query, projection))
@@ -340,12 +337,18 @@ def get_online_exams():
             else:
                 level_name = LEVELS.get(exam.get('level_id'), 'N/A')
 
+            # Add start/end time fields
+            start_dt = exam.get('startDateTime')
+            end_dt = exam.get('endDateTime')
+
             exams_data.append({
                 '_id': str(exam['_id']),
                 'name': exam.get('name'),
                 'module_name': module_name,
                 'level_name': level_name,
-                'question_count': len(exam.get('questions', [])) if 'questions' in exam else 'N/A'
+                'question_count': len(exam.get('questions', [])) if 'questions' in exam else 'N/A',
+                'startDateTime': start_dt,
+                'endDateTime': end_dt
             })
         
         return jsonify({
@@ -422,6 +425,7 @@ def submit_student_test():
         correct_answers_count = 0
         
         answers = data.get('answers', {})
+        time_taken = data.get('time_taken', 0)  # Time taken in seconds
 
         for q in test['questions']:
             q_id = q.get('question_id')
@@ -456,7 +460,8 @@ def submit_student_test():
             'correct_answers': correct_answers_count,
             'total_questions': len(test['questions']),
             'submitted_at': datetime.utcnow(),
-            'test_type': test.get('test_type', 'practice')
+            'test_type': test.get('test_type', 'practice'),
+            'time_taken': time_taken  # Store time taken for the test
         }
         
         result_id = mongo_db.db.test_results.insert_one(result_doc).inserted_id
@@ -469,6 +474,7 @@ def submit_student_test():
                 'average_score': average_score,
                 'total_questions': len(test['questions']),
                 'correct_answers': correct_answers_count,
+                'time_taken': time_taken,
                 'results': results
             }
         }), 201
@@ -511,6 +517,7 @@ def get_test_history():
                     'average_score': 1,
                     'correct_answers': 1,
                     'total_questions': 1,
+                    'time_taken': 1,
                     'submitted_at': 1,
                     'test_type': 1
                 }
@@ -843,3 +850,55 @@ def get_progress_summary():
     except Exception as e:
         logging.error(f"Error fetching progress summary for student {get_jwt_identity()}: {e}", exc_info=True)
         return jsonify({'success': False, 'message': 'Failed to fetch progress summary.'}), 500 
+
+def get_students_for_test_ids(test_ids):
+    """
+    Given a list of test IDs, return a list of students (dicts with at least email and name)
+    assigned to those tests based on campus_ids, course_ids, and batch_ids.
+    Fetch from students collection, join with users for email.
+    """
+    student_set = {}
+    for test_id in test_ids:
+        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
+        if not test:
+            continue
+        campus_ids = test.get('campus_ids', [])
+        course_ids = test.get('course_ids', [])
+        batch_ids = test.get('batch_ids', [])
+        query = {
+            '$or': [
+                {'campus_id': {'$in': campus_ids}},
+                {'course_id': {'$in': course_ids}},
+                {'batch_id': {'$in': batch_ids}},
+            ]
+        }
+        students = mongo_db.students.find(query)
+        for s in students:
+            # Join with users collection to get email
+            user = mongo_db.users.find_one({'_id': s.get('user_id')})
+            email = user.get('email') if user else None
+            if email:
+                student_set[email] = {
+                    'email': email,
+                    'name': s.get('name', user.get('name', 'Student') if user else 'Student'),
+                    'roll_number': s.get('roll_number'),
+                    'student_id': str(s.get('_id'))
+                }
+    return list(student_set.values()) 
+
+@student_bp.route('/students/assign', methods=['POST'])
+@jwt_required()
+def assign_student_to_instance():
+    data = request.get_json()
+    student_id = data.get('student_id')
+    batch_course_instance_id = data.get('batch_course_instance_id')
+    if not student_id or not batch_course_instance_id:
+        return jsonify({'success': False, 'message': 'Missing student_id or batch_course_instance_id'}), 400
+    result = mongo_db.students.update_one(
+        {'_id': ObjectId(student_id)},
+        {'$set': {'batch_course_instance_id': ObjectId(batch_course_instance_id)}}
+    )
+    if result.modified_count == 1:
+        return jsonify({'success': True, 'message': 'Student assigned to batch-course instance'}), 200
+    else:
+        return jsonify({'success': False, 'message': 'Student not found or not updated'}), 404 
