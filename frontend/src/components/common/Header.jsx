@@ -15,7 +15,7 @@ const Header = () => {
   }
 
   return (
-    <header className="sticky top-0 z-40 bg-white shadow-md flex items-center h-20 relative px-4 sm:px-8 border-b-2 border-emerald-400">
+    <header className="sticky top-0 z-40 bg-white shadow-md flex items-center h-20 px-4 sm:px-8 border-b-2 border-emerald-400">
       {/* Left: Hamburger menu */}
       <div className="flex items-center flex-shrink-0">
         <button

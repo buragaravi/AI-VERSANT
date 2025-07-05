@@ -25,8 +25,8 @@ import QuestionBankUpload from './pages/superadmin/QuestionBankUpload'
 import CampusAdminDashboard from './pages/campus-admin/CampusAdminDashboard'
 import CampusStudentManagement from './pages/campus-admin/CampusStudentManagement'
 import CampusReports from './pages/campus-admin/CampusReports'
-import BatchManagement from './pages/campus-admin/BatchManagement'
-import CourseManagement from './pages/campus-admin/CourseManagement'
+import CampusBatchManagement from './pages/campus-admin/BatchManagement'
+import CampusCourseManagement from './pages/campus-admin/CourseManagement'
 
 // Course Admin Pages
 import CourseAdminDashboard from './pages/course-admin/CourseAdminDashboard'
@@ -94,8 +94,8 @@ function App() {
                       <Routes>
                         <Route path="/" element={<CampusAdminDashboard />} />
                         <Route path="/students" element={<CampusStudentManagement />} />
-                        <Route path="/batches" element={<BatchManagement />} />
-                        <Route path="/courses" element={<CourseManagement />} />
+                        <Route path="/batches" element={<CampusBatchManagement />} />
+                        <Route path="/courses" element={<CampusCourseManagement />} />
                         <Route path="/results" element={<CampusReports />} />
                         <Route path="/analytics" element={<CampusReports />} />
                         <Route path="/reports" element={<CampusReports />} />
