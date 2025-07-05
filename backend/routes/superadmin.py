@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from bson import ObjectId
 import bcrypt
@@ -28,12 +28,18 @@ def dashboard():
         total_users = mongo_db.users.count_documents({})
         total_students = mongo_db.students.count_documents({})
         total_tests = mongo_db.tests.count_documents({})
-        
+        # Optionally, count admins (super, campus, course)
+        total_admins = mongo_db.users.count_documents({'role': {'$in': [ROLES['SUPER_ADMIN'], ROLES.get('CAMPUS_ADMIN'), ROLES.get('COURSE_ADMIN')]}})
+        # Optionally, count active courses
+        total_courses = mongo_db.courses.count_documents({})
+
         dashboard_data = {
             'statistics': {
                 'total_users': total_users,
                 'total_students': total_students,
-                'total_tests': total_tests
+                'total_tests': total_tests,
+                'total_admins': total_admins,
+                'active_courses': total_courses
             }
         }
         
@@ -44,6 +50,7 @@ def dashboard():
         }), 200
         
     except Exception as e:
+        current_app.logger.error(f"Failed to get dashboard data: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'Failed to get dashboard data: {str(e)}'

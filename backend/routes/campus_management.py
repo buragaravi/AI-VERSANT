@@ -51,7 +51,7 @@ def create_campus():
             'name': admin_name,
             'email': admin_email,
             'username': admin_name,
-            'password': password_hash,
+            'password_hash': password_hash,
             'role': ROLES['CAMPUS_ADMIN'],
             'is_active': True,
             'created_at': datetime.now(pytz.utc)
@@ -108,7 +108,7 @@ def update_campus(campus_id):
             update_data = {'name': data['admin_name'], 'email': data['admin_email'], 'username': data['admin_name']}
             if 'admin_password' in data and data['admin_password']:
                 password_hash = bcrypt.generate_password_hash(data['admin_password']).decode('utf-8')
-                update_data['password'] = password_hash
+                update_data['password_hash'] = password_hash
             
             campus = mongo_db.campuses.find_one({'_id': ObjectId(campus_id)})
             if campus and 'admin_id' in campus:

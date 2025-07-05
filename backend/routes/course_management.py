@@ -104,7 +104,7 @@ def create_course(campus_id):
             'name': admin_name,
             'email': admin_email,
             'username': admin_name,
-            'password': password_hash,
+            'password_hash': password_hash,
             'role': ROLES['COURSE_ADMIN'],
             'is_active': True,
             'campus_id': ObjectId(campus_id),
@@ -165,7 +165,7 @@ def update_course(course_id):
             update_data = {'name': data['admin_name'], 'email': data['admin_email'], 'username': data['admin_name']}
             if 'admin_password' in data and data['admin_password']:
                 password_hash = bcrypt.generate_password_hash(data['admin_password']).decode('utf-8')
-                update_data['password'] = password_hash
+                update_data['password_hash'] = password_hash
             
             course = mongo_db.courses.find_one({'_id': ObjectId(course_id)})
             if course and 'admin_id' in course:
