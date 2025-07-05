@@ -63,8 +63,13 @@ const BatchDetails = () => {
         setOriginalFile(file);
         const formData = new FormData();
         formData.append('file', file);
-        if (batchInfo?.campus_id) { // This might need adjustment if batch has multiple campuses
-            formData.append('campus_id', batchInfo.campus_id);
+        // Always send a valid campus_id for validation
+        let campusId = batchInfo?.campus_id;
+        if (!campusId && Array.isArray(batchInfo?.campus_ids) && batchInfo.campus_ids.length > 0) {
+            campusId = batchInfo.campus_ids[0];
+        }
+        if (campusId) {
+            formData.append('campus_id', campusId);
         }
 
         try {
@@ -203,13 +208,6 @@ const BatchDetails = () => {
                                 </p>
                             </div>
                             <div className="flex gap-3">
-                                <button
-                                    onClick={() => setIsModulesModalOpen(true)}
-                                    className="inline-flex items-center justify-center px-4 py-2 border border-blue-300 text-sm font-medium rounded-md shadow-sm text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                >
-                                    <BarChart2 className="mr-2 h-5 w-5" />
-                                    Assigned Modules
-                                </button>
                                 <button
                                     onClick={handleDownloadTemplate}
                                     className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
