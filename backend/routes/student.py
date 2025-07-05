@@ -882,7 +882,8 @@ def get_students_for_test_ids(test_ids):
                     'email': email,
                     'name': s.get('name', user.get('name', 'Student') if user else 'Student'),
                     'roll_number': s.get('roll_number'),
-                    'student_id': str(s.get('_id'))
+                    'student_id': str(s.get('_id')),
+                    'mobile_number': s.get('mobile_number')
                 }
     return list(student_set.values()) 
 

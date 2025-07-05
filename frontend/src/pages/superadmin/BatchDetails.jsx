@@ -7,8 +7,9 @@ import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import UploadPreviewModal from '../../components/common/UploadPreviewModal';
 import CredentialsDisplayModal from '../../components/common/CredentialsDisplayModal';
-import api from '../../services/api';
+import api, { getBatchCourses } from '../../services/api';
 import { Users, ArrowLeft, Upload, Edit, Trash2, Download, X, Save, User, Mail, Key, Building, Book, ListChecks, BarChart2, CheckCircle, XCircle } from 'lucide-react';
+import { useDropzone } from 'react-dropzone';
 
 const BatchDetails = () => {
     const { batchId } = useParams();
@@ -39,6 +40,15 @@ const BatchDetails = () => {
     const [selectedModule, setSelectedModule] = useState(null);
     const [isModuleResultsModalOpen, setIsModuleResultsModalOpen] = useState(false);
 
+    const [isStudentUploadModalOpen, setIsStudentUploadModalOpen] = useState(false);
+    const [selectedCourseIds, setSelectedCourseIds] = useState([]);
+    const [uploadFile, setUploadFile] = useState(null);
+    const [uploading, setUploading] = useState(false);
+    const [batchCourses, setBatchCourses] = useState([]);
+
+    const [studentForm, setStudentForm] = useState({ name: '', rollNumber: '', email: '', mobile: '', courseId: '' });
+    const [addingStudent, setAddingStudent] = useState(false);
+
     const fetchBatchDetails = useCallback(async () => {
         try {
             setLoading(true);
@@ -55,6 +65,14 @@ const BatchDetails = () => {
     useEffect(() => {
         fetchBatchDetails();
     }, [fetchBatchDetails]);
+
+    useEffect(() => {
+        if (batchInfo?.campus_ids && batchInfo.campus_ids.length > 0) {
+            getBatchCourses(batchInfo.campus_ids).then(res => {
+                setBatchCourses(res.data.data || []);
+            }).catch(() => setBatchCourses([]));
+        }
+    }, [batchInfo]);
 
     const handleFileDrop = async (acceptedFiles) => {
         const file = acceptedFiles[0];
@@ -185,6 +203,112 @@ const BatchDetails = () => {
         }
     }, [isStudentModulesModalOpen, selectedStudent, batchId]);
 
+    const handleOpenStudentUploadModal = () => {
+        setIsStudentUploadModalOpen(true);
+        setSelectedCourseIds([]);
+        setUploadFile(null);
+    };
+
+    const handleCloseStudentUploadModal = () => {
+        setIsStudentUploadModalOpen(false);
+        setSelectedCourseIds([]);
+        setUploadFile(null);
+    };
+
+    const handleCourseToggle = (id) => {
+        setSelectedCourseIds(prev => prev.includes(id) ? prev.filter(cid => cid !== id) : [...prev, id]);
+    };
+
+    const handleStudentFileDrop = (acceptedFiles) => {
+        setUploadFile(acceptedFiles[0]);
+    };
+
+    const handleStudentUpload = async () => {
+        if (!uploadFile) {
+            error('Please select a file to upload.');
+            return;
+        }
+        if (!selectedCourseIds.length) {
+            error('Please select at least one course.');
+            return;
+        }
+        setUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', uploadFile);
+            formData.append('batch_id', batchId);
+            selectedCourseIds.forEach(cid => formData.append('course_ids', cid));
+            const res = await api.post('/batch-management/upload-students', formData);
+            if (res.data.success) {
+                success(res.data.message);
+                setCreatedStudents(res.data.created_students || []);
+                setIsCredentialsModalOpen(true);
+                handleCloseStudentUploadModal();
+                fetchBatchDetails();
+            } else {
+                error(res.data.message || 'Failed to upload students.');
+            }
+        } catch (err) {
+            error(err.response?.data?.message || 'An error occurred during upload.');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const handleDownloadStudentTemplate = () => {
+        const headers = ['Student Name', 'Roll Number', 'Email', 'Mobile Number'];
+        const exampleRow = ['John Doe', 'ROLL001', 'john.doe@email.com', '1234567890'];
+        let csvRows = [headers, exampleRow];
+        let csvString = csvRows.map(row => row.map(val => `"${val}"`).join(',')).join('\r\n');
+        const encodedUri = "data:text/csv;charset=utf-8," + encodeURIComponent(csvString);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `student_upload_template.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        success('Template downloaded successfully!');
+    };
+
+    const filteredBatchCourses = batchCourses.filter(course => (batchInfo?.course_ids || []).includes(course.id));
+
+    const handleStudentFormChange = (e) => {
+        const { name, value } = e.target;
+        setStudentForm(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleAddStudent = async () => {
+        if (!studentForm.name || !studentForm.rollNumber || !studentForm.email || !studentForm.courseId) {
+            error('Please fill all required fields.');
+            return;
+        }
+        setAddingStudent(true);
+        try {
+            const res = await api.post('/batch-management/add-student', {
+                batch_id: batchId,
+                course_id: studentForm.courseId,
+                name: studentForm.name,
+                roll_number: studentForm.rollNumber,
+                email: studentForm.email,
+                mobile_number: studentForm.mobile,
+            });
+            if (res.data.success) {
+                success(res.data.message || 'Student added successfully!');
+                setCreatedStudents(res.data.created_students ? res.data.created_students : []);
+                setIsCredentialsModalOpen(true);
+                setStudentForm({ name: '', rollNumber: '', email: '', mobile: '', courseId: '' });
+                setIsStudentUploadModalOpen(false);
+                fetchBatchDetails();
+            } else {
+                error(res.data.message || 'Failed to add student.');
+            }
+        } catch (err) {
+            error(err.response?.data?.message || 'An error occurred while adding student.');
+        } finally {
+            setAddingStudent(false);
+        }
+    };
+
     if (loading) {
         return <div className="flex justify-center items-center h-screen"><LoadingSpinner /></div>;
     }
@@ -216,19 +340,12 @@ const BatchDetails = () => {
                                     Download Template
                                 </button>
                                 <button
-                                    onClick={() => document.getElementById('student-upload-input').click()}
+                                    onClick={handleOpenStudentUploadModal}
                                     className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                 >
                                     <Upload className="mr-2 h-5 w-5" />
                                     Add Students
                                 </button>
-                                <input
-                                    type="file"
-                                    id="student-upload-input"
-                                    className="hidden"
-                                    onChange={(e) => handleFileDrop(e.target.files)}
-                                    accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
-                                />
                             </div>
                         </div>
 
@@ -326,6 +443,75 @@ const BatchDetails = () => {
                   )}
                 </div>
               </div>
+            )}
+            {isStudentUploadModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+                    <div className="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full relative">
+                        <button onClick={handleCloseStudentUploadModal} className="absolute top-3 right-3 text-gray-500 hover:text-red-600 text-xl">&times;</button>
+                        <h2 className="text-2xl font-bold mb-4">Add Student to Batch</h2>
+                        <div className="mb-4">
+                            <label className="block font-semibold mb-1">Select Course</label>
+                            <select
+                                name="courseId"
+                                value={studentForm.courseId}
+                                onChange={handleStudentFormChange}
+                                className="w-full px-3 py-2 border rounded mb-2"
+                            >
+                                <option value="">-- Select Course --</option>
+                                {filteredBatchCourses.map(course => (
+                                    <option key={course.id} value={course.id}>{course.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="mb-4">
+                            <label className="block font-semibold mb-1">Student Name</label>
+                            <input
+                                type="text"
+                                name="name"
+                                value={studentForm.name}
+                                onChange={handleStudentFormChange}
+                                className="w-full px-3 py-2 border rounded"
+                            />
+                        </div>
+                        <div className="mb-4">
+                            <label className="block font-semibold mb-1">Roll Number</label>
+                            <input
+                                type="text"
+                                name="rollNumber"
+                                value={studentForm.rollNumber}
+                                onChange={handleStudentFormChange}
+                                className="w-full px-3 py-2 border rounded"
+                            />
+                        </div>
+                        <div className="mb-4">
+                            <label className="block font-semibold mb-1">Email</label>
+                            <input
+                                type="email"
+                                name="email"
+                                value={studentForm.email}
+                                onChange={handleStudentFormChange}
+                                className="w-full px-3 py-2 border rounded"
+                            />
+                        </div>
+                        <div className="mb-4">
+                            <label className="block font-semibold mb-1">Mobile Number</label>
+                            <input
+                                type="text"
+                                name="mobile"
+                                value={studentForm.mobile}
+                                onChange={handleStudentFormChange}
+                                className="w-full px-3 py-2 border rounded"
+                            />
+                        </div>
+                        <button
+                            onClick={handleAddStudent}
+                            disabled={addingStudent}
+                            className="w-full bg-indigo-600 text-white font-semibold py-2 rounded-lg shadow hover:bg-indigo-700 transition disabled:opacity-50"
+                        >
+                            {addingStudent ? 'Adding...' : 'Add Student'}
+                        </button>
+                    </div>
+                </div>
             )}
         </div>
     );

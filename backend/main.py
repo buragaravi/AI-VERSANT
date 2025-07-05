@@ -83,6 +83,12 @@ def create_app():
     def health_check():
         return {'status': 'healthy', 'message': 'VERSANT API is running'}
     
+    # Email status endpoint
+    @app.route('/email-status')
+    def email_status():
+        from utils.email_service import get_email_status
+        return get_email_status()
+    
     # Root endpoint
     @app.route('/')
     def root():

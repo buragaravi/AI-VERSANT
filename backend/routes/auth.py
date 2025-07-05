@@ -31,6 +31,9 @@ def login():
         
         # Find user by username
         user = mongo_db.find_user_by_username(username)
+        # If not found, try by email
+        if not user:
+            user = mongo_db.users.find_one({'email': username})
         
         if not user:
             print(f"❌ User not found: {username}", file=sys.stderr)

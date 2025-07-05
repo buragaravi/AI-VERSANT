@@ -467,8 +467,10 @@ const TestPreviewView = ({ test, onBack }) => {
                   <tr>
                     <th className="px-3 py-2 text-left">Name</th>
                     <th className="px-3 py-2 text-left">Email</th>
+                    <th className="px-3 py-2 text-left">Mobile</th>
                     <th className="px-3 py-2 text-left">Test Status</th>
-                    <th className="px-3 py-2 text-left">Notification</th>
+                    <th className="px-3 py-2 text-left">Email Notification</th>
+                    <th className="px-3 py-2 text-left">SMS Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -476,6 +478,7 @@ const TestPreviewView = ({ test, onBack }) => {
                     <tr key={s.email} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                       <td className="px-3 py-2">{s.name}</td>
                       <td className="px-3 py-2">{s.email}</td>
+                      <td className="px-3 py-2">{s.mobile_number || '-'}</td>
                       <td className="px-3 py-2">
                         {s.test_status === 'completed' ? (
                           <span className="text-green-600 font-semibold">Completed</span>
@@ -488,6 +491,12 @@ const TestPreviewView = ({ test, onBack }) => {
                         {s.notify_status === 'skipped' && <span className="text-gray-500">Skipped</span>}
                         {s.notify_status === 'pending' && <span className="text-blue-500">Pending</span>}
                         {s.notify_status === 'failed' && <span className="text-red-600">Failed</span>}
+                      </td>
+                      <td className="px-3 py-2">
+                        {s.sms_status === 'sent' && <span className="text-green-700">Sent</span>}
+                        {s.sms_status === 'failed' && <span className="text-red-600">Failed</span>}
+                        {s.sms_status === 'no_mobile' && <span className="text-gray-500">No Mobile</span>}
+                        {!s.sms_status && <span className="text-gray-400">-</span>}
                       </td>
                     </tr>
                   ))}

@@ -43,6 +43,7 @@ from dateutil import tz
 from pymongo import DESCENDING
 from collections import defaultdict
 from utils.email_service import send_email, render_template
+import requests
 
 test_management_bp = Blueprint('test_management', __name__)
 
@@ -1513,6 +1514,12 @@ def notify_students(test_id):
         subject = f"New {test_type} Test Assigned: {test_name}"
 
         notify_results = []
+        API_KEY = '7c9c967a-4ce9-4748-9dc7-d2aaef847275'
+        API_URL = 'http://www.bulksmsapps.com/api/apismsv2.aspx'
+        SENDER_ID = 'PYDAHK'
+        TEMPLATE_ID = '1707171819046577560'
+        def sms_message(vars):
+            return f"Join MBA,MCA @ Pydah College of Engg (Autonomous).Best Opportunity for Employees,Aspiring Students. {vars[0]} youtu.be/bnLOLQrSC5g?si=7TNjgpGQ3lTIe-sf -PYDAH"
         for student in student_list:
             email = student['email']
             already_completed = email in completed_emails
@@ -1535,6 +1542,25 @@ def notify_students(test_id):
                 except Exception as e:
                     notify_status['notify_status'] = 'failed'
                     notify_status['error'] = str(e)
+                # --- SMS Integration ---
+                mobile_number = student.get('mobile_number')
+                if mobile_number:
+                    try:
+                        params = {
+                            'apikey': API_KEY,
+                            'sender': SENDER_ID,
+                            'number': mobile_number,
+                            'message': sms_message(['Admissions Open!']),
+                            'templateid': TEMPLATE_ID,
+                        }
+                        sms_response = requests.get(API_URL, params=params)
+                        notify_status['sms_status'] = 'sent' if sms_response.status_code == 200 else 'failed'
+                        notify_status['sms_response'] = sms_response.text
+                    except Exception as sms_e:
+                        notify_status['sms_status'] = 'failed'
+                        notify_status['sms_error'] = str(sms_e)
+                else:
+                    notify_status['sms_status'] = 'no_mobile'
             notify_results.append(notify_status)
         return jsonify({'success': True, 'results': notify_results}), 200
     except Exception as e:
