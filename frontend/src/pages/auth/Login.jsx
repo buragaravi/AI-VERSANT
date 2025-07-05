@@ -63,6 +63,35 @@ const Login = () => {
         transition={{ duration: 20, repeat: Infinity, repeatType: 'mirror' }}
       />
 
+      {/* Loading Spinner Overlay */}
+      {isLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-70">
+          <div className="relative flex flex-col items-center">
+            <div className="relative flex items-center justify-center">
+              <img
+                src="https://static.wixstatic.com/media/bfee2e_7d499a9b2c40442e85bb0fa99e7d5d37~mv2.png/v1/fill/w_203,h_111,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/logo1.png"
+                alt="Loading..."
+                className="w-24 h-24 z-10 drop-shadow-lg"
+              />
+              <svg className="absolute w-32 h-32 animate-spin-slow" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="40" stroke="#6366f1" strokeWidth="8" fill="none" strokeDasharray="62.8 62.8" strokeLinecap="round"/>
+                <circle cx="50" cy="50" r="32" stroke="#06b6d4" strokeWidth="4" fill="none" strokeDasharray="40 40" strokeDashoffset="20"/>
+              </svg>
+            </div>
+            <div className="mt-6 text-lg text-blue-700 font-semibold animate-pulse">Signing in...</div>
+          </div>
+          <style>{`
+            @keyframes spin-slow {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+            .animate-spin-slow {
+              animation: spin-slow 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+            }
+          `}</style>
+        </div>
+      )}
+
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -160,17 +189,6 @@ const Login = () => {
                 )}
               </motion.div>
 
-              <div className="flex items-center justify-end">
-                <div className="text-sm">
-                  <Link
-                    to="/forgot-password"
-                    className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors duration-200"
-                  >
-                    Forgot your password?
-                  </Link>
-                </div>
-              </div>
-
               <motion.div
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -181,7 +199,7 @@ const Login = () => {
                   disabled={isLoading}
                   className="w-full flex justify-center py-3 px-4 border border-transparent text-sm font-bold rounded-lg text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-indigo-500/50 transform hover:-translate-y-0.5"
                 >
-                  {isLoading ? <LoadingSpinner size="sm" /> : 'Sign in'}
+                  Sign in
                 </button>
               </motion.div>
               <div className="text-center mt-4">
