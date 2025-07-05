@@ -7,8 +7,6 @@ import { NotificationProvider } from './contexts/NotificationContext'
 // Auth Pages
 import Login from './pages/auth/Login'
 import GetStarted from './pages/auth/GetStarted'
-import ForgotPassword from './pages/auth/ForgotPassword'
-import ResetPassword from './pages/auth/ResetPassword'
 
 // Super Admin Pages
 import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard'
@@ -27,6 +25,8 @@ import QuestionBankUpload from './pages/superadmin/QuestionBankUpload'
 import CampusAdminDashboard from './pages/campus-admin/CampusAdminDashboard'
 import CampusStudentManagement from './pages/campus-admin/CampusStudentManagement'
 import CampusReports from './pages/campus-admin/CampusReports'
+import BatchManagement from './pages/campus-admin/BatchManagement'
+import CourseManagement from './pages/campus-admin/CourseManagement'
 
 // Course Admin Pages
 import CourseAdminDashboard from './pages/course-admin/CourseAdminDashboard'
@@ -61,8 +61,6 @@ function App() {
                 {/* Public Routes */}
                 <Route path="/" element={<GetStarted />} />
                 <Route path="/login" element={<Login />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
 
                 {/* Super Admin Routes */}
                 <Route
@@ -96,6 +94,10 @@ function App() {
                       <Routes>
                         <Route path="/" element={<CampusAdminDashboard />} />
                         <Route path="/students" element={<CampusStudentManagement />} />
+                        <Route path="/batches" element={<BatchManagement />} />
+                        <Route path="/courses" element={<CourseManagement />} />
+                        <Route path="/results" element={<CampusReports />} />
+                        <Route path="/analytics" element={<CampusReports />} />
                         <Route path="/reports" element={<CampusReports />} />
                       </Routes>
                     </ProtectedRoute>

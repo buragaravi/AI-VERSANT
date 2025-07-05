@@ -45,9 +45,11 @@ const Sidebar = () => {
       
       case 'campus_admin':
         return [
-          ...baseItems,
+          { name: 'Dashboard', href: '/campus-admin', icon: Home },
           { name: 'Students', href: '/campus-admin/students', icon: GraduationCap },
-          { name: 'Reports', href: '/campus-admin/reports', icon: BarChart3 },
+          { name: 'Batches', href: '/campus-admin/batches', icon: BarChart },
+          { name: 'Courses', href: '/campus-admin/courses', icon: BookOpen },
+          { name: 'Results', href: '/campus-admin/results', icon: Award },
           { name: 'Analytics', href: '/campus-admin/analytics', icon: Activity }
         ]
       
