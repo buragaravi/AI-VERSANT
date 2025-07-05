@@ -68,33 +68,9 @@ const Login = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-70">
           <div className="relative flex flex-col items-center">
             <div className="relative flex items-center justify-center" style={{ width: '10rem', height: '10rem' }}>
-              <svg className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-spin-green" width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <linearGradient id="green-spinner-gradient" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse">
-                    <stop stopColor="#10b981" />
-                    <stop offset="1" stopColor="#a3e635" />
-                  </linearGradient>
-                </defs>
-                <circle cx="80" cy="80" r="70" stroke="url(#green-spinner-gradient)" strokeWidth="10" fill="none" />
-              </svg>
-              <img
-                src="https://static.wixstatic.com/media/bfee2e_7d499a9b2c40442e85bb0fa99e7d5d37~mv2.png/v1/fill/w_203,h_111,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/logo1.png"
-                alt="Loading..."
-                className="w-24 h-24 z-10 drop-shadow-lg bg-white p-2 rounded-full"
-                style={{ position: 'relative' }}
-              />
+              <LoadingSpinner size="lg" message="Signing in..." />
             </div>
-            <div className="mt-6 text-lg text-green-700 font-semibold animate-pulse">Signing in...</div>
           </div>
-          <style>{`
-            @keyframes spin-green {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
-            }
-            .animate-spin-green {
-              animation: spin-green 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-            }
-          `}</style>
         </div>
       )}
 

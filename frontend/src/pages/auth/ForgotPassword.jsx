@@ -4,7 +4,6 @@ import { useForm } from 'react-hook-form'
 import { motion } from 'framer-motion'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNotification } from '../../contexts/NotificationContext'
-import LoadingSpinner from '../../components/common/LoadingSpinner'
 
 const ForgotPassword = () => {
   const [isLoading, setIsLoading] = useState(false)
