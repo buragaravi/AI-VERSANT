@@ -1851,20 +1851,22 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
               {studentList.length === 0 ? (
                 <div className="text-gray-500 text-sm p-4">No students found for the selected criteria.</div>
               ) : (
-                <table className="min-w-full text-sm">
+                <table className="min-w-full text-sm border-separate border-spacing-0">
                   <thead className="bg-gray-100">
                     <tr>
-                      <th className="px-4 py-2 text-left font-medium text-gray-600">Name</th>
-                      <th className="px-4 py-2 text-left font-medium text-gray-600">Email</th>
-                      <th className="px-4 py-2 text-left font-medium text-gray-600">Roll Number</th>
+                      <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Name</th>
+                      <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Email</th>
+                      <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Roll Number</th>
+                      <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">Mobile Number</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {studentList.map((s) => (
-                      <tr key={s.id} className="even:bg-gray-50">
-                        <td className="px-4 py-2 text-gray-800">{s.name}</td>
-                        <td className="px-4 py-2 text-gray-800">{s.email}</td>
-                        <td className="px-4 py-2 text-gray-800">{s.roll_number}</td>
+                    {studentList.map((s, idx) => (
+                      <tr key={s.id} className={idx % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-50'}>
+                        <td className="px-4 py-2 text-gray-900 border-b align-middle">{s.name}</td>
+                        <td className="px-4 py-2 text-gray-900 border-b align-middle">{s.email}</td>
+                        <td className="px-4 py-2 text-gray-900 border-b align-middle">{s.roll_number}</td>
+                        <td className="px-4 py-2 text-gray-900 border-b align-middle text-center">{s.mobile_number || '-'}</td>
                       </tr>
                     ))}
                   </tbody>

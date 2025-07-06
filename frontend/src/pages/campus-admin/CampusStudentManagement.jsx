@@ -36,6 +36,10 @@ const CampusStudentManagement = () => {
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-bold text-text">Student Management</h1>
           </div>
+          <div className="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+            <p className="text-yellow-800">To add, edit, or delete students, please request the Superadmin.</p>
+            <button className="mt-2 px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition">Request Superadmin</button>
+          </div>
           {loading ? (
             <LoadingSpinner size="md" />
           ) : (

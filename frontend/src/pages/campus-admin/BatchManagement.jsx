@@ -94,12 +94,10 @@ const BatchManagement = () => {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-bold text-text">Batch Management</h1>
-            <button
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition"
-              onClick={() => { setShowModal(true); setEditingBatch(null); setForm({ name: '', course_ids: [] }); }}
-            >
-              + New Batch
-            </button>
+          </div>
+          <div className="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+            <p className="text-yellow-800">To add, edit, or delete batches, please request the Superadmin.</p>
+            <button className="mt-2 px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition">Request Superadmin</button>
           </div>
           {loading ? (
             <LoadingSpinner size="md" />
@@ -116,7 +114,6 @@ const BatchManagement = () => {
                     <th className="px-4 py-2 text-left">Batch Name</th>
                     <th className="px-4 py-2 text-left">Courses</th>
                     <th className="px-4 py-2 text-left">Students</th>
-                    <th className="px-4 py-2 text-left">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -125,16 +122,6 @@ const BatchManagement = () => {
                       <td className="px-4 py-2">{batch.name}</td>
                       <td className="px-4 py-2">{batch.courses.map(c => c.name).join(', ')}</td>
                       <td className="px-4 py-2">{batch.student_count}</td>
-                      <td className="px-4 py-2 space-x-2">
-                        <button
-                          className="text-blue-600 hover:underline"
-                          onClick={() => handleEdit(batch)}
-                        >Edit</button>
-                        <button
-                          className="text-red-600 hover:underline"
-                          onClick={() => handleDelete(batch.id)}
-                        >Delete</button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>

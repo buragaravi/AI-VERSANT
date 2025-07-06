@@ -104,26 +104,26 @@ const CampusAdminDashboard = () => {
       <Sidebar />
       <div className="flex-1 lg:pl-64">
         <Header />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+        <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 mt-4 overflow-x-hidden">
           {/* Statistics Cards */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6"
           >
             {dashboardCards.map((card, index) => (
               <Link
                 key={index}
                 to={card.link}
-                className="rounded-xl bg-white border border-border shadow-md p-6 flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:border-highlight group animate-fade-in"
+                className="rounded-xl bg-white border border-border shadow-md p-4 sm:p-6 flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:border-highlight group animate-fade-in w-full max-w-xs mx-auto mb-2"
               >
-                <div className={`flex items-center justify-center w-12 h-12 rounded-full ${card.color} mb-4 shadow group-hover:shadow-lg transition-all duration-300`}>
+                <div className={`flex items-center justify-center w-12 h-12 rounded-full ${card.color} mb-3 shadow group-hover:shadow-lg transition-all duration-300`}>
                   <span className="text-white text-2xl">{card.icon}</span>
                 </div>
-                <p className="text-lg font-bold text-text mb-1 transition-colors duration-200 group-hover:text-highlight">{card.title}</p>
-                <p className="text-3xl font-extrabold text-text mb-2 transition-colors duration-200 group-hover:text-highlight">{card.value}</p>
-                <span className="text-sm text-text opacity-70 group-hover:opacity-100 transition-opacity duration-200">View All</span>
+                <p className="text-base sm:text-lg font-bold text-text mb-1 transition-colors duration-200 group-hover:text-highlight text-center">{card.title}</p>
+                <p className="text-2xl sm:text-3xl font-extrabold text-text mb-2 transition-colors duration-200 group-hover:text-highlight text-center">{card.value}</p>
+                <span className="text-xs sm:text-sm text-text opacity-70 group-hover:opacity-100 transition-opacity duration-200">View All</span>
               </Link>
             ))}
           </motion.div>
@@ -133,21 +133,21 @@ const CampusAdminDashboard = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="mb-8"
+            className="mb-6"
           >
-            <h2 className="text-xl font-semibold text-text mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-text mb-3">Quick Actions</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {quickActions.map((action, index) => (
                 <Link
                   key={index}
                   to={action.link}
-                  className={`rounded-xl bg-secondary border-l-4 border-highlight shadow-md p-6 flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:border-highlight group animate-fade-in ${action.color}`}
+                  className={`rounded-xl bg-secondary border-l-4 border-highlight shadow-md p-4 sm:p-6 flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:border-highlight group animate-fade-in w-full max-w-xs mx-auto mb-2 ${action.color}`}
                 >
-                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-highlight mb-4 shadow group-hover:shadow-lg transition-all duration-300">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-highlight mb-3 shadow group-hover:shadow-lg transition-all duration-300">
                     <span className="text-buttontext text-2xl">{action.icon}</span>
                   </div>
-                  <h3 className="text-lg font-semibold text-text mb-1 transition-colors duration-200 group-hover:text-highlight">{action.title}</h3>
-                  <p className="text-text text-sm opacity-80 group-hover:opacity-100 transition-opacity duration-200">{action.description}</p>
+                  <h3 className="text-base sm:text-lg font-semibold text-text mb-1 transition-colors duration-200 group-hover:text-highlight text-center">{action.title}</h3>
+                  <p className="text-text text-xs sm:text-sm opacity-80 group-hover:opacity-100 transition-opacity duration-200 text-center">{action.description}</p>
                 </Link>
               ))}
             </div>
