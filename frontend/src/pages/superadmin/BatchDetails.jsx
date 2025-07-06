@@ -272,6 +272,9 @@ const BatchDetails = () => {
 
     const filteredBatchCourses = batchCourses.filter(course => (batchInfo?.course_ids || []).includes(course.id));
 
+    // Fallback: if filteredBatchCourses is empty but batchCourses is not, use batchCourses
+    const courseOptions = filteredBatchCourses.length > 0 ? filteredBatchCourses : batchCourses;
+
     const handleStudentFormChange = (e) => {
         const { name, value } = e.target;
         setStudentForm(prev => ({ ...prev, [name]: value }));
@@ -451,7 +454,7 @@ const BatchDetails = () => {
                                 className="w-full px-3 py-2 border rounded mb-2"
                             >
                                 <option value="">-- Select Course --</option>
-                                {filteredBatchCourses.map(course => (
+                                {courseOptions.map(course => (
                                     <option key={course.id} value={course.id}>{course.name}</option>
                                 ))}
                             </select>

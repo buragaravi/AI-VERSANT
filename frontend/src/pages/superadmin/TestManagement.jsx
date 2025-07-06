@@ -2022,29 +2022,25 @@ const ModuleQuestionUpload = ({ onBack }) => {
     setNotifyModalOpen(true);
     setNotifyLoading(true);
     try {
-      // Simulate fetching students for this module/level (use backend logic as in test assignment)
-      // You may need to call a backend endpoint to get students for this module/level
-      // For now, call /test-management/student-count with selectedModule, levelId, etc.
-      const res = await api.post('/test-management/student-count', {
-        campus: null, // or selected campus if available
-        batches: [], // or selected batches if available
-        courses: [], // or selected courses if available
-        module_id: selectedModule?.id,
-        level_id: levelId,
-      });
-      const students = res.data.students || [];
-      // For each student, check their test status (pending/completed) if needed
-      // For now, mark all as pending
-      setNotifyResults(students.map(s => ({
-        name: s.name,
-        email: s.email,
-        roll_number: s.roll_number,
-        mobile_number: s.mobile_number, // Ensure mobile number is included
-        test_status: 'pending',
-        notify_status: 'pending',
-      })));
+      if (!selectedModule || !levelId) {
+        error('Please select a module and level.');
+        setNotifyLoading(false);
+        return;
+      }
+      // Find the test for this module/level (assume you have a way to get testId for the selected module/level)
+      // If you have a test list, find the matching testId. Otherwise, you may need to fetch it.
+      // For now, let's assume you have a function getTestIdForModuleLevel(selectedModule.id, levelId)
+      const testId = await getTestIdForModuleLevel(selectedModule.id, levelId);
+      if (!testId) {
+        error('No test found for this module and level.');
+        setNotifyLoading(false);
+        return;
+      }
+      const res = await api.post(`/test-management/notify-students/${testId}`);
+      const notifyResults = res.data.results || [];
+      setNotifyResults(notifyResults);
     } catch (e) {
-      error('Failed to fetch students for notification.');
+      error('Failed to notify students.');
       setNotifyResults([]);
     } finally {
       setNotifyLoading(false);
@@ -2214,5 +2210,18 @@ const ModuleQuestionUpload = ({ onBack }) => {
     </motion.div>
   );
 };
+
+// Helper function to get testId for a module and level (implement as needed)
+async function getTestIdForModuleLevel(moduleId, levelId) {
+  // You may need to fetch all tests and find the one matching moduleId and levelId
+  try {
+    const res = await api.get('/test-management/tests');
+    const tests = res.data.data || [];
+    const test = tests.find(t => t.module_id === moduleId && t.level_id === levelId);
+    return test ? test._id || test.id : null;
+  } catch {
+    return null;
+  }
+}
 
 export default TestManagement 
