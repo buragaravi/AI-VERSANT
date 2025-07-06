@@ -2039,6 +2039,7 @@ const ModuleQuestionUpload = ({ onBack }) => {
         name: s.name,
         email: s.email,
         roll_number: s.roll_number,
+        mobile_number: s.mobile_number, // Ensure mobile number is included
         test_status: 'pending',
         notify_status: 'pending',
       })));
