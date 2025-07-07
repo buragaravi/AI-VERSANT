@@ -1760,6 +1760,7 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
         batch_ids: testData.batches.map(b => b.value),
         questions: testData.questions,
         audio_config: isMcqModule ? {} : { accent: data.accent, speed: data.speed },
+        assigned_student_ids: studentList.map(s => s.id), // Only assign to confirmed students
       };
       if (testData.testType?.toLowerCase() === 'online') {
         // Always send ISO strings for startDateTime and endDateTime

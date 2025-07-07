@@ -851,10 +851,11 @@ def get_progress_summary():
         logging.error(f"Error fetching progress summary for student {get_jwt_identity()}: {e}", exc_info=True)
         return jsonify({'success': False, 'message': 'Failed to fetch progress summary.'}), 500 
 
-def get_students_for_test_ids(test_ids):
+def get_students_for_test_ids(test_ids, assigned_student_ids=None):
     """
     Given a list of test IDs, return a list of students (dicts with at least email and name)
     assigned to those tests based on campus_ids, course_ids, and batch_ids.
+    If assigned_student_ids is provided, only return those students.
     Fetch from students collection, join with users for email.
     """
     student_set = {}
@@ -865,13 +866,17 @@ def get_students_for_test_ids(test_ids):
         campus_ids = test.get('campus_ids', [])
         course_ids = test.get('course_ids', [])
         batch_ids = test.get('batch_ids', [])
-        query = {
-            '$or': [
-                {'campus_id': {'$in': campus_ids}},
-                {'course_id': {'$in': course_ids}},
-                {'batch_id': {'$in': batch_ids}},
-            ]
-        }
+        query = {}
+        if campus_ids:
+            query['campus_id'] = {'$in': campus_ids}
+        if course_ids:
+            query['course_id'] = {'$in': course_ids}
+        if batch_ids:
+            query['batch_id'] = {'$in': batch_ids}
+        if assigned_student_ids:
+            query['_id'] = {'$in': assigned_student_ids}
+        if not query:
+            continue
         students = mongo_db.students.find(query)
         for s in students:
             # Join with users collection to get email

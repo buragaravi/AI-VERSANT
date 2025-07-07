@@ -371,6 +371,9 @@ def create_test():
             'status': 'active' if is_mcq else 'processing', # MCQ tests are immediately active
             'is_active': True if is_mcq else False  # MCQ tests don't need audio generation
         }
+        # Store assigned_student_ids if provided
+        if 'assigned_student_ids' in data:
+            test_doc['assigned_student_ids'] = [ObjectId(sid) for sid in data['assigned_student_ids']]
 
         # Add start/end date and time for online tests
         if data['test_type'].lower() == 'online':
@@ -1479,7 +1482,10 @@ def notify_students(test_id):
 
         # Fetch all assigned students
         from routes.student import get_students_for_test_ids
-        student_list = get_students_for_test_ids([test_id])
+        if test.get('assigned_student_ids'):
+            student_list = get_students_for_test_ids([test_id], assigned_student_ids=test['assigned_student_ids'])
+        else:
+            student_list = get_students_for_test_ids([test_id])
         if not student_list:
             return jsonify({'success': False, 'message': 'No students found for this test.'}), 404
 
