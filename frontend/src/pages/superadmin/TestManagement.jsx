@@ -443,7 +443,10 @@ const TestPreviewView = ({ test, onBack }) => {
                 </div>
               </div>
             ) : q.audio_presigned_url ? (
-              <AudioPlayer src={q.audio_presigned_url} />
+              <audio controls>
+                <source src={q.audio_presigned_url} type="audio/mpeg" />
+                Your browser does not support the audio element.
+              </audio>
             ) : (
               <div className="flex items-center space-x-2 bg-yellow-100 text-yellow-800 text-sm font-medium px-4 py-3 rounded-md">
                 <AlertTriangle className="h-5 w-5" />

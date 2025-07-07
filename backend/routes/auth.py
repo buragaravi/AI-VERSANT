@@ -5,6 +5,7 @@ from mongo import mongo_db
 from config.constants import ROLES
 import traceback
 import sys
+from bson.errors import InvalidId
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -159,14 +160,26 @@ def get_current_user():
         print('Authorization:', request.headers.get('Authorization'), file=sys.stderr)
         current_user_id = get_jwt_identity()
         print('JWT Identity:', current_user_id, file=sys.stderr)
-        user = mongo_db.find_user_by_id(current_user_id)
-        
+        try:
+            user = mongo_db.find_user_by_id(current_user_id)
+        except InvalidId as e:
+            print(f"❌ Invalid ObjectId for user: {current_user_id}", file=sys.stderr)
+            return jsonify({
+                'success': False,
+                'message': f'Invalid user ID: {current_user_id}'
+            }), 400
+        except Exception as e:
+            print(f"❌ Error looking up user by ID: {str(e)}", file=sys.stderr)
+            return jsonify({
+                'success': False,
+                'message': f'Error looking up user: {str(e)}'
+            }), 500
         if not user:
+            print(f"❌ User not found for ID: {current_user_id}", file=sys.stderr)
             return jsonify({
                 'success': False,
                 'message': 'User not found'
             }), 404
-        
         user_info = {
             'id': str(user['_id']),
             'username': user['username'],
@@ -178,14 +191,15 @@ def get_current_user():
             'batch_id': str(user['batch_id']) if user.get('batch_id') else None,
             'is_active': user.get('is_active', True)
         }
-        
         return jsonify({
             'success': True,
             'message': 'User information retrieved successfully',
             'data': user_info
         }), 200
-        
     except Exception as e:
+        import sys
+        print(f"❌ /auth/me error: {str(e)}", file=sys.stderr)
+        print(f"❌ Traceback: {traceback.format_exc()}", file=sys.stderr)
         return jsonify({
             'success': False,
             'message': f'Failed to get user information: {str(e)}'

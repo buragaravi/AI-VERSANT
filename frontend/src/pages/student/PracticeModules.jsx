@@ -305,6 +305,11 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
     const [cheatWarning, setCheatWarning] = useState(false);
     const [cheatCount, setCheatCount] = useState(0);
     const examRef = useRef(null);
+    const [recordings, setRecordings] = useState({}); // For speaking answers
+    const mediaRecorderRef = useRef(null);
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingQuestionId, setRecordingQuestionId] = useState(null);
+    const [audioURLs, setAudioURLs] = useState({});
 
     useEffect(() => {
         const fetchModuleDetails = async () => {
@@ -364,13 +369,51 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
         setAnswers(prev => ({ ...prev, [questionId]: answer }));
     };
 
+    // Audio recording logic for Speaking module
+    const startRecording = async (questionId) => {
+        setRecordingQuestionId(questionId);
+        setIsRecording(true);
+        if (navigator.mediaDevices && window.MediaRecorder) {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new window.MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+            let chunks = [];
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) chunks.push(e.data);
+            };
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'audio/wav' });
+                setRecordings(prev => ({ ...prev, [questionId]: blob }));
+                setAudioURLs(prev => ({ ...prev, [questionId]: URL.createObjectURL(blob) }));
+                setIsRecording(false);
+                setRecordingQuestionId(null);
+            };
+            mediaRecorder.start();
+        } else {
+            showError('Audio recording is not supported in this browser.');
+        }
+    };
+    const stopRecording = () => {
+        if (mediaRecorderRef.current) {
+            mediaRecorderRef.current.stop();
+        }
+    };
+
     const handleSubmit = async () => {
         try {
-            const payload = {
-                test_id: module._id,
-                answers: answers
-            };
-            const res = await api.post('/student/submit-test', payload);
+            const formData = new FormData();
+            formData.append('test_id', module._id);
+            // Attach MCQ answers
+            Object.entries(answers).forEach(([qid, ans]) => {
+                formData.append(`answer_${qid}`, ans);
+            });
+            // Attach audio answers
+            Object.entries(recordings).forEach(([qid, blob]) => {
+                formData.append(`question_${qid}`, blob, `answer_${qid}.wav`);
+            });
+            const res = await api.post('/student/submit-practice-test', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
             if (res.data.success) {
                 success("Module submitted successfully!");
                 onSubmit(res.data.data); // Pass result data to parent
@@ -403,6 +446,13 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
             </div>
 
             <div className="text-center">
+                {/* Listening Module: Play audio if available */}
+                {currentQuestion.question_type === 'audio' && currentQuestion.audio_url && (
+                    <audio controls className="mx-auto mb-4">
+                        <source src={currentQuestion.audio_url} type="audio/mpeg" />
+                        Your browser does not support the audio element.
+                    </audio>
+                )}
                 <p className="text-lg sm:text-xl text-gray-800 mb-8 break-words">{currentQuestion.question}</p>
             </div>
 
@@ -431,6 +481,20 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                             <span className="ml-3 text-gray-800">{value}</span>
                         </label>
                     ))}
+                </div>
+            )}
+
+            {/* Speaking Module: Record answer if no audio_url */}
+            {currentQuestion.question_type === 'audio' && !currentQuestion.audio_url && (
+                <div className="flex flex-col items-center mb-4">
+                    {audioURLs[currentQuestion.question_id] ? (
+                        <audio controls src={audioURLs[currentQuestion.question_id]} className="mb-2" />
+                    ) : null}
+                    {isRecording && recordingQuestionId === currentQuestion.question_id ? (
+                        <button onClick={stopRecording} className="px-4 py-2 bg-red-600 text-white rounded">Stop Recording</button>
+                    ) : (
+                        <button onClick={() => startRecording(currentQuestion.question_id)} className="px-4 py-2 bg-blue-600 text-white rounded">Record Answer</button>
+                    )}
                 </div>
             )}
 
@@ -480,54 +544,98 @@ const ResultView = ({ result, onBack }) => {
     
     const { correct_answers, total_questions, average_score, results } = result;
     const scorePercentage = average_score || 0;
-    const correctOnly = results ? results.filter(item => item.is_correct) : [];
+    
+    // Helper for word diff display
+    const renderWordDiff = (expected, got) => {
+        const expectedWords = expected.split(' ');
+        const gotWords = got.split(' ');
+        return (
+            <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap gap-2 items-center">
+                    <span className="font-semibold">Expected:</span>
+                    {expectedWords.map((word, idx) => (
+                        <span key={idx} className={gotWords[idx] === word ? 'bg-green-100 text-green-700 px-2 py-1 rounded flex items-center' : 'bg-gray-200 text-gray-700 px-2 py-1 rounded flex items-center'}>
+                            {gotWords[idx] === word ? <>&#10003;&nbsp;</> : null}{word}
+                        </span>
+                    ))}
+                </div>
+                <div className="flex flex-wrap gap-2 items-center">
+                    <span className="font-semibold">Got:</span>
+                    {gotWords.map((word, idx) => (
+                        <span key={idx} className={expectedWords[idx] === word ? 'bg-green-100 text-green-700 px-2 py-1 rounded flex items-center' : 'bg-yellow-100 text-yellow-700 px-2 py-1 rounded flex items-center'}>
+                            {expectedWords[idx] === word ? <>&#10003;&nbsp;</> : null}{word}
+                        </span>
+                    ))}
+                </div>
+            </div>
+        );
+    };
 
     return (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto">
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-2xl mx-auto">
             <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
                 <h1 className="text-3xl font-bold text-gray-800">Module Complete!</h1>
                 <p className="text-gray-600 mt-2">Here's how you did:</p>
-                
                 <div className="my-8">
                     <p className="text-6xl font-bold text-indigo-600">{correct_answers}<span className="text-4xl text-gray-500">/{total_questions}</span></p>
                     <p className="text-xl font-semibold text-gray-700">Questions Correct</p>
                 </div>
-
-                <div className="bg-gray-100 p-6 rounded-lg">
+                <div className="bg-gray-100 p-6 rounded-lg mb-8">
                     <h3 className="text-lg font-semibold">Your Score</h3>
                     <p className="text-4xl font-bold text-green-600 mt-2">{scorePercentage.toFixed(0)}%</p>
-                    {scorePercentage >= 60 ? (
-                        <p className="text-green-700 mt-2 flex items-center justify-center"><CheckCircle className="mr-2"/> Great job! You may have unlocked the next section.</p>
-                    ): (
-                        <p className="text-yellow-800 mt-2 flex items-center justify-center"><XCircle className="mr-2"/> Keep practicing! You need 60% to unlock the next section.</p>
-                    )}
                 </div>
-            </div>
-
-            <div className="mt-10">
-                {correctOnly.length > 0 ? (
-                    <>
-                        <h2 className="text-2xl font-bold text-gray-800 mb-6">Correctly Answered Questions</h2>
-                        <div className="space-y-4">
-                            {correctOnly.map((item, index) => (
-                                <div key={index} className="bg-white p-6 rounded-xl shadow-lg border-l-4 border-green-500">
-                                    <p className="font-semibold text-gray-800 mb-2">{item.question}</p>
-                                    <div className="text-sm mt-2">
-                                        <span className="font-semibold">Your Answer: </span>
-                                        <span className="px-3 py-1 rounded-full bg-green-500 text-white">{item.student_answer}</span>
+                <div className="mt-8 text-left">
+                    {results && results.map((q, idx) => (
+                        <div key={idx} className="mb-8 p-6 rounded-xl shadow border bg-white">
+                            <div className="mb-2 font-semibold text-indigo-700">Question {idx + 1}</div>
+                            {q.question_type === 'audio' ? (
+                                <>
+                                    {/* Listening: Play question audio if available */}
+                                    {q.audio_url && (
+                                        <audio controls className="mb-2">
+                                            <source src={q.audio_url} type="audio/mpeg" />
+                                            Your browser does not support the audio element.
+                                        </audio>
+                                    )}
+                                    <div className="mb-2"><span className="font-semibold">Prompt:</span> {q.original_text || q.question}</div>
+                                    <div className="mb-2 text-green-700 font-semibold">Result: Similarity Score: {q.similarity_score}</div>
+                                    <div className="mb-2">
+                                        <span className="font-semibold">Detailed Diff:</span>
+                                        <div className="border rounded p-2 mt-1 bg-gray-50">
+                                            {renderWordDiff(q.original_text || q.question, q.student_text || '')}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                    {/* Missing/Extra words */}
+                                    {(q.missing_words && q.missing_words.length > 0) && (
+                                        <div className="text-sm text-yellow-700 mt-1">Missing: {q.missing_words.join(', ')}</div>
+                                    )}
+                                    {(q.extra_words && q.extra_words.length > 0) && (
+                                        <div className="text-sm text-blue-700 mt-1">Extra: {q.extra_words.join(', ')}</div>
+                                    )}
+                                    {/* Student's submitted audio */}
+                                    {q.student_audio_url && (
+                                        <div className="mt-2">
+                                            <span className="font-semibold">Your Submitted Audio:</span>
+                                            <audio controls className="mt-1">
+                                                <source src={q.student_audio_url} type="audio/wav" />
+                                                Your browser does not support the audio element.
+                                            </audio>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                // MCQ
+                                <>
+                                    <div className="mb-2 font-semibold">{q.question}</div>
+                                    <div className="mb-2">Your Answer: <span className={q.is_correct ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>{q.student_answer}</span></div>
+                                    <div className="mb-2">Correct Answer: <span className="font-semibold">{q.correct_answer}</span></div>
+                                </>
+                            )}
                         </div>
-                    </>
-                ) : (
-                    <div className="text-center text-gray-500 text-lg">No correct answers this time. Keep practicing!</div>
-                )}
-            </div>
-
-            <div className="text-center mt-10">
-                <button onClick={onBack} className="px-8 py-3 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition">
-                    Back to Modules
+                    ))}
+                </div>
+                <button onClick={onBack} className="mt-8 px-8 py-3 rounded-lg bg-orange-500 text-white font-semibold hover:bg-orange-600 transition">
+                    Retry Practice Test
                 </button>
             </div>
         </motion.div>
