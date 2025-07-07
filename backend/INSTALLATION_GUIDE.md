@@ -159,4 +159,16 @@ For issues related to:
 - PyAudio installation: Check the troubleshooting section above
 - MongoDB: Refer to MongoDB documentation
 - AWS S3: Check AWS credentials and bucket permissions
-- General backend issues: Check the logs in the console output 
+- General backend issues: Check the logs in the console output
+
+## Audio Generation Dependencies
+
+- The backend requires `ffmpeg` to be installed on the server for audio generation (Listening/Speaking modules) to work.
+- On Ubuntu/Debian, install with:
+
+  ```sh
+  apt-get update && apt-get install -y ffmpeg
+  ```
+- On Render, add this line to your `build.sh` script.
+- **Vercel does NOT support custom system binaries like ffmpeg for Python backends.**
+  - Use a different host (Render, Railway, etc.) or a cloud TTS API instead. 
