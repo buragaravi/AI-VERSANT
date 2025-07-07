@@ -1857,8 +1857,10 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
                     <tr>
                       <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Name</th>
                       <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Email</th>
-                      <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Roll Number</th>
-                      <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">Mobile Number</th>
+                      <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">Mobile</th>
+                      <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">Test Status</th>
+                      <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">Email Notification</th>
+                      <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">SMS Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1866,8 +1868,10 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
                       <tr key={s.id} className={idx % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-50'}>
                         <td className="px-4 py-2 text-gray-900 border-b align-middle">{s.name}</td>
                         <td className="px-4 py-2 text-gray-900 border-b align-middle">{s.email}</td>
-                        <td className="px-4 py-2 text-gray-900 border-b align-middle">{s.roll_number}</td>
                         <td className="px-4 py-2 text-gray-900 border-b align-middle text-center">{s.mobile_number || '-'}</td>
+                        <td className="px-4 py-2 text-gray-900 border-b align-middle text-center">{s.test_status === 'completed' ? <span className="text-green-600 font-semibold">Completed</span> : <span className="text-yellow-600 font-semibold">Pending</span>}</td>
+                        <td className="px-4 py-2 text-gray-900 border-b align-middle text-center">{s.notify_status === 'sent' ? <span className="text-green-700">Sent</span> : s.notify_status === 'skipped' ? <span className="text-gray-500">Skipped</span> : s.notify_status === 'pending' ? <span className="text-blue-500">Pending</span> : s.notify_status === 'failed' ? <span className="text-red-600">Failed</span> : <span className="text-gray-400">-</span>}</td>
+                        <td className="px-4 py-2 text-gray-900 border-b align-middle text-center">{s.sms_status === 'sent' ? <span className="text-green-700">Sent</span> : s.sms_status === 'failed' ? <span className="text-red-600">Failed</span> : s.sms_status === 'no_mobile' ? <span className="text-gray-500">No Mobile</span> : <span className="text-gray-400">-</span>}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -21,29 +21,29 @@
   <div class="container">
     <div class="header">A New Test Has Been Assigned to You!</div>
     <div class="section">
-      <span class="label">Test Name:</span> <span class="value">{{ test_name }}</span>
+      <span class="label">Test Name:</span> <span class="value">{{ test_name or 'N/A' }}</span>
     </div>
     <table class="details-table">
       <tr>
         <td class="label">Type:</td>
-        <td class="value">{{ test_type }}</td>
+        <td class="value">{{ test_type or 'N/A' }}</td>
       </tr>
       <tr>
         <td class="label">Module:</td>
-        <td class="value">{{ module }}</td>
+        <td class="value">{{ module or 'N/A' }}</td>
       </tr>
       <tr>
         <td class="label">Total Questions:</td>
-        <td class="value">{{ question_count }}</td>
+        <td class="value">{{ question_count or 'N/A' }}</td>
       </tr>
       {% if is_online %}
       <tr>
         <td class="label">Start Date & Time:</td>
-        <td class="value">{{ start_dt }}</td>
+        <td class="value">{{ start_dt or 'N/A' }}</td>
       </tr>
       <tr>
         <td class="label">End Date & Time:</td>
-        <td class="value">{{ end_dt }}</td>
+        <td class="value">{{ end_dt or 'N/A' }}</td>
       </tr>
       {% endif %}
     </table>
