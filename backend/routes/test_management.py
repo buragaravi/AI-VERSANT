@@ -1038,6 +1038,16 @@ def get_all_tests():
         current_app.logger.error(f"Error fetching all tests: {e}", exc_info=True)
         return jsonify({'success': False, 'message': str(e)}), 500
 
+def convert_objectids(obj):
+    if isinstance(obj, dict):
+        return {k: convert_objectids(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_objectids(i) for i in obj]
+    elif isinstance(obj, ObjectId):
+        return str(obj)
+    else:
+        return obj
+
 @test_management_bp.route('/tests/<test_id>', methods=['GET'])
 @jwt_required()
 @require_superadmin
@@ -1067,22 +1077,15 @@ def get_single_test(test_id):
                     question['audio_presigned_url'] = None
             else:
                 current_app.logger.warning(f"Question_id {question.get('question_id')} is missing 'audio_url' or it is empty.")
-        
         test['_id'] = str(test['_id'])
-        # Convert other ObjectIds if necessary
-        for key in ['campus_ids', 'course_ids', 'batch_ids', 'created_by']:
-            if key in test and test[key] is not None:
-                if isinstance(test[key], list):
-                    test[key] = [str(item) for item in test[key]]
-                else:
-                    # Handle single ObjectId value
-                    test[key] = str(test[key])
-
+        # Convert all ObjectIds in the test document to strings
+        test = convert_objectids(test)
         current_app.logger.info(f"Successfully processed test {test_id}. Sending to frontend.")
         return jsonify({'success': True, 'data': test}), 200
     except Exception as e:
-        current_app.logger.error(f"Error fetching test {test_id}: {e}", exc_info=True)
-        return jsonify({'success': False, 'message': 'An error occurred while fetching the test.'}), 500
+        import traceback
+        current_app.logger.error(f"Error fetching test {test_id}: {e}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'message': f'An error occurred while fetching the test: {e}'}), 500
 
 @test_management_bp.route('/tests/<test_id>', methods=['DELETE'])
 @jwt_required()
@@ -1500,41 +1503,46 @@ def notify_students(test_id):
 
         # Prepare email content
         test_type = test.get('test_type', '').capitalize()
-        module_id = test.get('module_id', 'N/A')
-        level_id = test.get('level_id', 'N/A')
-        module_name = MODULES.get(module_id, str(module_id)) if 'MODULES' in globals() else str(module_id)
-        level_name = LEVELS.get(level_id, str(level_id)) if 'LEVELS' in globals() else str(level_id)
+        module = test.get('module_id', 'N/A')
+        module_display_name = MODULES.get(module, module)
+        level = test.get('level_id', 'N/A')
+        subcategory = test.get('subcategory')
+        if module == 'GRAMMAR' and subcategory:
+            level_display_name = GRAMMAR_CATEGORIES.get(subcategory, subcategory)
+        else:
+            level_display_name = LEVELS.get(level, level)
         test_name = test.get('name', 'N/A')
         start_dt = test.get('startDateTime')
         end_dt = test.get('endDateTime')
         is_online = test.get('test_type', '').lower() == 'online'
         question_count = len(test.get('questions', []))
-        login_url = "https://pydah-ai-versant.vercel.app/login"
 
         # Log context for debugging
         print('EMAIL TEMPLATE CONTEXT:', {
             'test_name': test_name,
             'test_type': test_type,
-            'module': module_name,
-            'level': level_name,
+            'module': module,
+            'module_display_name': module_display_name,
+            'level': level,
+            'level_display_name': level_display_name,
             'start_dt': start_dt,
             'end_dt': end_dt,
             'is_online': is_online,
-            'question_count': question_count,
-            'login_url': login_url
+            'question_count': question_count
         })
 
         # Render email template
-        html_content = render_template('emails/test_notification.html',
+        html_content = render_template('test_notification.html',
             test_name=test_name,
             test_type=test_type,
-            module=module_name,
-            level=level_name,
+            module=module,
+            module_display_name=module_display_name,
+            level=level,
+            level_display_name=level_display_name,
             start_dt=start_dt,
             end_dt=end_dt,
             is_online=is_online,
-            question_count=question_count,
-            login_url=login_url
+            question_count=question_count
         )
         subject = f"New {test_type} Test Assigned: {test_name}"
 
