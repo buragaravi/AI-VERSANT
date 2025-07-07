@@ -1,6 +1,7 @@
 import os
 import logging
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+import traceback
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -50,7 +51,8 @@ def render_template(template_name, **context):
         return template.render(**context)
     except Exception as e:
         logger.error(f"❌ Error rendering template {template_name}: {e}")
-        return f"<p>Error rendering template: {e}</p>"
+        logger.error(traceback.format_exc())
+        return f"<p>Error rendering template: {template_name}<br>{e}</p>"
 
 def send_email(to_email, to_name, subject, html_content):
     """Send email using Brevo service"""
