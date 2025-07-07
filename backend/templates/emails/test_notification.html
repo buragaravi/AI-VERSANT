@@ -15,10 +15,17 @@
     .details-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
     .details-table td { padding: 6px 0; }
     .details-table .label { width: 40%; }
+    .logo {
+      display: block;
+      margin: 0 auto 24px auto;
+      max-width: 200px;
+      height: auto;
+    }
   </style>
 </head>
 <body>
   <div class="container">
+    <img src="https://static.wixstatic.com/media/bfee2e_7d499a9b2c40442e85bb0fa99e7d5d37~mv2.png/v1/fill/w_203,h_111,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/logo1.png" alt="VERSANT Logo" class="logo" />
     <div class="header">A New Test Has Been Assigned to You!</div>
     <div class="section">
       <span class="label">Test Name:</span> <span class="value">{{ test_name or 'N/A' }}</span>

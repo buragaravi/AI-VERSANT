@@ -458,59 +458,61 @@ const TestPreviewView = ({ test, onBack }) => {
       {notifyModalOpen && (
         <Modal onClose={() => setNotifyModalOpen(false)} title="Notify Students">
           <div className="mb-4">
-            <h3 className="font-semibold text-lg mb-2">Notification Status</h3>
+            <h3 className="font-semibold text-xl mb-4 text-center text-blue-700">Notification Status</h3>
             {notifyLoading ? (
-              <div className="text-blue-600">Sending notifications...</div>
+              <div className="text-blue-600 text-center py-8">Sending notifications...</div>
             ) : (
-              <table className="min-w-full text-sm border rounded">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Name</th>
-                    <th className="px-3 py-2 text-left">Email</th>
-                    <th className="px-3 py-2 text-left">Mobile</th>
-                    <th className="px-3 py-2 text-left">Test Status</th>
-                    <th className="px-3 py-2 text-left">Email Notification</th>
-                    <th className="px-3 py-2 text-left">SMS Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {notifyResults.map((s, idx) => (
-                    <tr key={s.email} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="px-3 py-2">{s.name}</td>
-                      <td className="px-3 py-2">{s.email}</td>
-                      <td className="px-3 py-2">{s.mobile_number || '-'}</td>
-                      <td className="px-3 py-2">
-                        {s.test_status === 'completed' ? (
-                          <span className="text-green-600 font-semibold">Completed</span>
-                        ) : (
-                          <span className="text-yellow-600 font-semibold">Pending</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        {s.notify_status === 'sent' && <span className="text-green-700">Sent</span>}
-                        {s.notify_status === 'skipped' && <span className="text-gray-500">Skipped</span>}
-                        {s.notify_status === 'pending' && <span className="text-blue-500">Pending</span>}
-                        {s.notify_status === 'failed' && <span className="text-red-600">Failed</span>}
-                      </td>
-                      <td className="px-3 py-2">
-                        {s.sms_status === 'sent' && <span className="text-green-700">Sent</span>}
-                        {s.sms_status === 'failed' && <span className="text-red-600">Failed</span>}
-                        {s.sms_status === 'no_mobile' && <span className="text-gray-500">No Mobile</span>}
-                        {!s.sms_status && <span className="text-gray-400">-</span>}
-                      </td>
+              <div className="overflow-x-auto rounded-lg shadow">
+                <table className="min-w-full text-sm border rounded-lg bg-white">
+                  <thead className="bg-blue-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Name</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Email</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Mobile</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Test Status</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Email Notification</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">SMS Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {notifyResults.map((s, idx) => (
+                      <tr key={s.email} className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}>
+                        <td className="px-4 py-2 border-b">{s.name}</td>
+                        <td className="px-4 py-2 border-b">{s.email}</td>
+                        <td className="px-4 py-2 border-b">{s.mobile_number || '-'}</td>
+                        <td className="px-4 py-2 border-b">
+                          {s.test_status === 'completed' ? (
+                            <span className="text-green-600 font-semibold">Completed</span>
+                          ) : (
+                            <span className="text-yellow-600 font-semibold">Pending</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 border-b">
+                          {s.notify_status === 'sent' && <span className="text-green-700 font-semibold">Sent</span>}
+                          {s.notify_status === 'skipped' && <span className="text-gray-500 font-semibold">Skipped</span>}
+                          {s.notify_status === 'pending' && <span className="text-blue-500 font-semibold">Pending</span>}
+                          {s.notify_status === 'failed' && <span className="text-red-600 font-semibold">Failed</span>}
+                        </td>
+                        <td className="px-4 py-2 border-b">
+                          {s.sms_status === 'sent' && <span className="text-green-700 font-semibold">Sent</span>}
+                          {s.sms_status === 'failed' && <span className="text-red-600 font-semibold">Failed</span>}
+                          {s.sms_status === 'no_mobile' && <span className="text-gray-500 font-semibold">No Mobile</span>}
+                          {!s.sms_status && <span className="text-gray-400 font-semibold">-</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
             {!notifyLoading && notifyResults.length > 0 && (
-              <div className="mt-4 text-sm">
+              <div className="mt-6 text-sm text-center bg-blue-50 rounded-lg py-3">
                 <span className="font-semibold">Summary:</span> {notifyResults.filter(r => r.notify_status === 'sent').length} notified, {notifyResults.filter(r => r.notify_status === 'skipped').length} skipped (already completed), {notifyResults.filter(r => r.notify_status === 'failed').length} failed.
               </div>
             )}
           </div>
-          <div className="flex justify-end">
-            <button onClick={() => setNotifyModalOpen(false)} className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Close</button>
+          <div className="flex justify-center mt-4">
+            <button onClick={() => setNotifyModalOpen(false)} className="px-6 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 shadow">Close</button>
           </div>
         </Modal>
       )}

@@ -270,10 +270,8 @@ const BatchDetails = () => {
         success('Template downloaded successfully!');
     };
 
-    const filteredBatchCourses = batchCourses.filter(course => (batchInfo?.course_ids || []).includes(course.id));
-
-    // Fallback: if filteredBatchCourses is empty but batchCourses is not, use batchCourses
-    const courseOptions = filteredBatchCourses.length > 0 ? filteredBatchCourses : batchCourses;
+    // Always filter batchCourses by batchInfo.course_ids for course options
+    const courseOptions = batchCourses.filter(course => (batchInfo?.course_ids || []).includes(course.id));
 
     const handleStudentFormChange = (e) => {
         const { name, value } = e.target;
