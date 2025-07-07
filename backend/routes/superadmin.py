@@ -832,14 +832,10 @@ def get_student_assigned_modules():
         if not user or not student:
             return jsonify({'success': False, 'message': 'Student not found'}), 404
 
-        # Get all tests assigned to this batch, campus, or course
+        # Only include tests where the student is explicitly assigned (assigned_student_ids)
         assigned_tests = list(mongo_db.tests.find({
             'test_type': 'practice',
-            '$or': [
-                {'batch_ids': ObjectId(batch_id)},
-                {'campus_ids': student['campus_id']},
-                {'course_ids': student['course_id']}
-            ]
+            'assigned_student_ids': {'$in': [student['_id']]}
         }))
 
         # Get all attempts/results for this student

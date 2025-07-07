@@ -47,7 +47,7 @@ def render_template(template_name, **context):
             autoescape=select_autoescape(['html'])
         )
         template = env.get_template(template_name)
-        return template.render(params=context)
+        return template.render(**context)
     except Exception as e:
         logger.error(f"❌ Error rendering template {template_name}: {e}")
         return f"<p>Error rendering template: {e}</p>"

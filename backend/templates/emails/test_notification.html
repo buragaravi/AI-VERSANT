@@ -30,14 +30,16 @@
     <div class="section">
       <span class="label">Test Name:</span> <span class="value">{{ test_name or 'N/A' }}</span>
     </div>
+    <div class="section">
+      <span class="label">Module:</span> <span class="value">{{ module or 'N/A' }}</span>
+    </div>
+    <div class="section">
+      <span class="label">Level:</span> <span class="value">{{ level or 'N/A' }}</span>
+    </div>
     <table class="details-table">
       <tr>
         <td class="label">Type:</td>
         <td class="value">{{ test_type or 'N/A' }}</td>
-      </tr>
-      <tr>
-        <td class="label">Module:</td>
-        <td class="value">{{ module or 'N/A' }}</td>
       </tr>
       <tr>
         <td class="label">Total Questions:</td>
@@ -56,6 +58,8 @@
     </table>
     <div class="section" style="margin-top: 18px;">
       <span class="highlight">Please log in to the VERSANT System to view and attempt your test.</span>
+      <br><br>
+      <a href="{{ login_url }}" style="display:inline-block;padding:10px 24px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;margin-top:10px;">Login to VERSANT</a>
     </div>
     <div class="footer">
       If you have any questions, please contact your campus administrator.<br>

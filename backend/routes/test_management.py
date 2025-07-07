@@ -1500,22 +1500,41 @@ def notify_students(test_id):
 
         # Prepare email content
         test_type = test.get('test_type', '').capitalize()
-        module = test.get('module_id', 'N/A')
+        module_id = test.get('module_id', 'N/A')
+        level_id = test.get('level_id', 'N/A')
+        module_name = MODULES.get(module_id, str(module_id)) if 'MODULES' in globals() else str(module_id)
+        level_name = LEVELS.get(level_id, str(level_id)) if 'LEVELS' in globals() else str(level_id)
         test_name = test.get('name', 'N/A')
         start_dt = test.get('startDateTime')
         end_dt = test.get('endDateTime')
         is_online = test.get('test_type', '').lower() == 'online'
         question_count = len(test.get('questions', []))
+        login_url = "https://pydah-ai-versant.vercel.app/login"
+
+        # Log context for debugging
+        print('EMAIL TEMPLATE CONTEXT:', {
+            'test_name': test_name,
+            'test_type': test_type,
+            'module': module_name,
+            'level': level_name,
+            'start_dt': start_dt,
+            'end_dt': end_dt,
+            'is_online': is_online,
+            'question_count': question_count,
+            'login_url': login_url
+        })
 
         # Render email template
         html_content = render_template('emails/test_notification.html',
             test_name=test_name,
             test_type=test_type,
-            module=module,
+            module=module_name,
+            level=level_name,
             start_dt=start_dt,
             end_dt=end_dt,
             is_online=is_online,
-            question_count=question_count
+            question_count=question_count,
+            login_url=login_url
         )
         subject = f"New {test_type} Test Assigned: {test_name}"
 
