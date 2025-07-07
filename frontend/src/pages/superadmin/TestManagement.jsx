@@ -707,7 +707,7 @@ const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }
               </select>
               {errors.subcategory && <p className="text-red-500 text-xs mt-1">{errors.subcategory.message}</p>}
             </div>
-          ) : selectedModule !== 'VOCABULARY' ? (
+          ) : (
             <div>
               <label htmlFor="level" className="block text-sm font-medium text-gray-800 mb-1">Level</label>
               <select
@@ -722,7 +722,7 @@ const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }
               </select>
               {errors.level && <p className="text-red-500 text-xs mt-1">{errors.level.message}</p>}
             </div>
-          ) : null}
+          )}
         </div>
         <div className="flex justify-end pt-4">
           <button type="submit" className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105">
