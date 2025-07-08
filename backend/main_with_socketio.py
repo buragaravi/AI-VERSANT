@@ -7,6 +7,7 @@ from config.database_simple import DatabaseConfig, init_db
 from config.aws_config import init_aws
 from config.constants import JWT_ACCESS_TOKEN_EXPIRES, JWT_REFRESH_TOKEN_EXPIRES
 from config.shared import bcrypt
+from socketio_instance import socketio
 
 load_dotenv()
 
@@ -25,6 +26,7 @@ def create_app():
     # Initialize extensions
     jwt = JWTManager(app)
     bcrypt.init_app(app)
+    socketio.init_app(app)
     
     # CORS configuration with Vercel domain included
     # IMPORTANT: Set CORS_ORIGINS in your environment variables to include your frontend URL, e.g.:
@@ -135,4 +137,4 @@ if __name__ == '__main__':
     print(f"🚀 Starting VERSANT API on port {port}")
     print(f"🔧 Debug mode: {debug}")
     
-    app.run(host='0.0.0.0', port=port, debug=debug) 
+    socketio.run(app, host='0.0.0.0', port=port, debug=debug, allow_unsafe_werkzeug=True) 
