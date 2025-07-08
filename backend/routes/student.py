@@ -908,3 +908,60 @@ def assign_student_to_instance():
         return jsonify({'success': True, 'message': 'Student assigned to batch-course instance'}), 200
     else:
         return jsonify({'success': False, 'message': 'Student not found or not updated'}), 404 
+
+@student_bp.route('/unlocked-modules', methods=['GET'])
+@jwt_required()
+def get_unlocked_modules():
+    """Return all modules and levels the student is allowed to access."""
+    try:
+        from config.constants import MODULES, LEVELS
+        current_user_id = get_jwt_identity()
+        student = mongo_db.students.find_one({'user_id': ObjectId(current_user_id)})
+        # Default logic if student not found or no authorized_levels
+        modules_status = []
+        if not student or not student.get('authorized_levels'):
+            for module_id, module_name in MODULES.items():
+                levels = [
+                    {
+                        'level_id': level_id,
+                        'level_name': level['name'] if isinstance(level, dict) else level,
+                        'unlocked': (
+                            (module_id == 'GRAMMAR' and level_id == 'GRAMMAR_NOUN') or
+                            (module_id == 'VOCABULARY')
+                        )
+                    }
+                    for level_id, level in LEVELS.items()
+                    if (level.get('module_id') if isinstance(level, dict) else None) == module_id
+                ]
+                modules_status.append({
+                    'module_id': module_id,
+                    'module_name': module_name,
+                    'unlocked': (
+                        module_id == 'GRAMMAR' or module_id == 'VOCABULARY'
+                    ),
+                    'levels': levels
+                })
+            return jsonify({'success': True, 'data': modules_status}), 200
+        # If student has authorized_levels, use them
+        authorized_levels = set(student.get('authorized_levels', []))
+        for module_id, module_name in MODULES.items():
+            levels = [
+                {
+                    'level_id': level_id,
+                    'level_name': level['name'] if isinstance(level, dict) else level,
+                    'unlocked': level_id in authorized_levels
+                }
+                for level_id, level in LEVELS.items()
+                if (level.get('module_id') if isinstance(level, dict) else None) == module_id
+            ]
+            modules_status.append({
+                'module_id': module_id,
+                'module_name': module_name,
+                'unlocked': any(l['unlocked'] for l in levels) if levels else False,
+                'levels': levels
+            })
+        return jsonify({'success': True, 'data': modules_status}), 200
+    except Exception as e:
+        import logging
+        logging.error(f"Error fetching unlocked modules for student: {e}")
+        return jsonify({'success': False, 'message': 'An error occurred fetching unlocked modules.'}), 500 

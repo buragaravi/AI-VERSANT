@@ -34,10 +34,32 @@ GRAMMAR_CATEGORIES = {
 
 # Difficulty Levels
 LEVELS = {
-    'BEGINNER': 'Beginner',
-    'INTERMEDIATE': 'Intermediate',
-    'ADVANCED': 'Advanced'
+    # Listening
+    'LISTENING_BEGINNER': {'name': 'Beginner', 'module_id': 'LISTENING'},
+    'LISTENING_INTERMEDIATE': {'name': 'Intermediate', 'module_id': 'LISTENING'},
+    'LISTENING_ADVANCED': {'name': 'Advanced', 'module_id': 'LISTENING'},
+    # Speaking
+    'SPEAKING_BEGINNER': {'name': 'Beginner', 'module_id': 'SPEAKING'},
+    'SPEAKING_INTERMEDIATE': {'name': 'Intermediate', 'module_id': 'SPEAKING'},
+    'SPEAKING_ADVANCED': {'name': 'Advanced', 'module_id': 'SPEAKING'},
+    # Reading
+    'READING_BEGINNER': {'name': 'Beginner', 'module_id': 'READING'},
+    'READING_INTERMEDIATE': {'name': 'Intermediate', 'module_id': 'READING'},
+    'READING_ADVANCED': {'name': 'Advanced', 'module_id': 'READING'},
+    # Writing
+    'WRITING_BEGINNER': {'name': 'Beginner', 'module_id': 'WRITING'},
+    'WRITING_INTERMEDIATE': {'name': 'Intermediate', 'module_id': 'WRITING'},
+    'WRITING_ADVANCED': {'name': 'Advanced', 'module_id': 'WRITING'},
+    # Vocabulary
+    'VOCABULARY_BEGINNER': {'name': 'Beginner', 'module_id': 'VOCABULARY'},
+    'VOCABULARY_INTERMEDIATE': {'name': 'Intermediate', 'module_id': 'VOCABULARY'},
+    'VOCABULARY_ADVANCED': {'name': 'Advanced', 'module_id': 'VOCABULARY'},
+    # Grammar (categories as levels)
 }
+LEVELS.update({
+    f'GRAMMAR_{cat_id}': {'name': cat_name, 'module_id': 'GRAMMAR'}
+    for cat_id, cat_name in GRAMMAR_CATEGORIES.items()
+})
 
 # Test Types
 TEST_TYPES = {

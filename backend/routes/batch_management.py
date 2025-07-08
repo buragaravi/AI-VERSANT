@@ -692,12 +692,18 @@ def authorize_student_level(student_id):
         level = data.get('level')
         if not level:
             return jsonify({'success': False, 'message': 'Level is required'}), 400
-
-        # This is a placeholder for more complex logic
-        # For now, we'll just update a field on the student/user
-        mongo_db.students.update_one({'_id': ObjectId(student_id)}, {'$addToSet': {'authorized_levels': level}})
-        
-        return jsonify({'success': True, 'message': f"Level '{level}' authorized for student."}), 200
+        # Ensure authorized_levels exists
+        student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+        if not student:
+            return jsonify({'success': False, 'message': 'Student not found.'}), 404
+        if 'authorized_levels' not in student:
+            mongo_db.students.update_one({'_id': ObjectId(student_id)}, {'$set': {'authorized_levels': []}})
+        # Add the level to authorized_levels
+        result = mongo_db.students.update_one({'_id': ObjectId(student_id)}, {'$addToSet': {'authorized_levels': level}})
+        student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+        if result.modified_count == 0:
+            return jsonify({'success': False, 'message': f"Level '{level}' was already authorized for student.", 'authorized_levels': student.get('authorized_levels', [])}), 200
+        return jsonify({'success': True, 'message': f"Level '{level}' authorized for student.", 'authorized_levels': student.get('authorized_levels', [])}), 200
     except Exception as e:
         current_app.logger.error(f"Error authorizing level: {e}")
         return jsonify({'success': False, 'message': 'An error occurred authorizing the level.'}), 500
@@ -713,9 +719,16 @@ def authorize_student_module(student_id):
 
         # Find all levels for this module
         from config.constants import LEVELS
-        module_levels = [level_id for level_id, level in LEVELS.items() if level.get('module_id') == module or level.get('module') == module]
+        module_levels = [level_id for level_id, level in LEVELS.items() if (level.get('module_id') if isinstance(level, dict) else None) == module]
         if not module_levels:
             return jsonify({'success': False, 'message': 'No levels found for this module.'}), 404
+
+        # Ensure authorized_levels exists
+        student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+        if not student:
+            return jsonify({'success': False, 'message': 'Student not found.'}), 404
+        if 'authorized_levels' not in student:
+            mongo_db.students.update_one({'_id': ObjectId(student_id)}, {'$set': {'authorized_levels': []}})
 
         # Add all levels to authorized_levels
         mongo_db.students.update_one({'_id': ObjectId(student_id)}, {'$addToSet': {'authorized_levels': {'$each': module_levels}}})
@@ -1180,20 +1193,43 @@ def get_student_access_status(student_id):
     try:
         from config.constants import MODULES, LEVELS
         student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
-        if not student:
-            return jsonify({'success': False, 'message': 'Student not found.'}), 404
-        authorized_levels = set(student.get('authorized_levels', []))
-        # Build module/level status
+        # Default logic if student not found or no authorized_levels
+        default_grammar_unlocked = ['GRAMMAR_NOUN']
         modules_status = []
+        if not student or not student.get('authorized_levels'):
+            for module_id, module_name in MODULES.items():
+                levels = [
+                    {
+                        'level_id': level_id,
+                        'level_name': level['name'] if isinstance(level, dict) else level,
+                        'unlocked': (
+                            (module_id == 'GRAMMAR' and level_id == 'GRAMMAR_NOUN') or
+                            (module_id == 'VOCABULARY')
+                        )
+                    }
+                    for level_id, level in LEVELS.items()
+                    if (level.get('module_id') if isinstance(level, dict) else None) == module_id
+                ]
+                modules_status.append({
+                    'module_id': module_id,
+                    'module_name': module_name,
+                    'unlocked': (
+                        module_id == 'GRAMMAR' or module_id == 'VOCABULARY'
+                    ),
+                    'levels': levels
+                })
+            return jsonify({'success': True, 'data': modules_status}), 200
+        # If student has authorized_levels, use them
+        authorized_levels = set(student.get('authorized_levels', []))
         for module_id, module_name in MODULES.items():
             levels = [
                 {
                     'level_id': level_id,
-                    'level_name': level.get('name', level_id),
+                    'level_name': level['name'] if isinstance(level, dict) else level,
                     'unlocked': level_id in authorized_levels
                 }
                 for level_id, level in LEVELS.items()
-                if level.get('module_id') == module_id or level.get('module') == module_id
+                if (level.get('module_id') if isinstance(level, dict) else None) == module_id
             ]
             modules_status.append({
                 'module_id': module_id,

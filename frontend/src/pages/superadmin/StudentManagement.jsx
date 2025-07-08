@@ -41,6 +41,9 @@ const StudentManagement = () => {
     const [selectedBatch, setSelectedBatch] = useState(null);
     const [selectedCourse, setSelectedCourse] = useState(null);
     const [accessStatus, setAccessStatus] = useState([]);
+    const [showLevelsModal, setShowLevelsModal] = useState(false);
+    const [levelsModalData, setLevelsModalData] = useState({ module: null, levels: [] });
+    const [levelPercentages, setLevelPercentages] = useState({}); // { levelId: { practice: %, online: % } }
 
     const fetchStudents = useCallback(async () => {
         try {
@@ -156,7 +159,7 @@ const StudentManagement = () => {
         } catch (e) {
             setUnlockMsg('Failed to update module access.');
         } finally {
-            setTimeout(() => setUnlockMsg(''), 2000);
+        setTimeout(() => setUnlockMsg(''), 2000);
         }
     };
 
@@ -175,8 +178,33 @@ const StudentManagement = () => {
         } catch (e) {
             setUnlockMsg('Failed to update level access.');
         } finally {
-            setTimeout(() => setUnlockMsg(''), 2000);
+        setTimeout(() => setUnlockMsg(''), 2000);
         }
+    };
+
+    // Helper to fetch percentages for all levels in a module
+    const fetchLevelPercentages = async (student, module) => {
+        const percentages = {};
+        for (const lvl of module.levels) {
+            let practice = 0;
+            let online = 0;
+            try {
+                // Fetch practice results
+                const practiceRes = await api.get(`/superadmin/student-practice-results?student=${encodeURIComponent(student.email)}&module=${module.module_id}&level=${lvl.level_id}`);
+                if (practiceRes.data.data && practiceRes.data.data.length > 0) {
+                    const scores = practiceRes.data.data.map(r => r.average_score || 0);
+                    practice = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+                }
+                // Fetch online results
+                const onlineRes = await api.get(`/superadmin/student-online-results?student=${encodeURIComponent(student.email)}&module=${module.module_id}&level=${lvl.level_id}`);
+                if (onlineRes.data.data && onlineRes.data.data.length > 0) {
+                    const scores = onlineRes.data.data.map(r => r.average_score || 0);
+                    online = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+                }
+            } catch {}
+            percentages[lvl.level_id] = { practice, online };
+        }
+        setLevelPercentages(percentages);
     };
 
     useEffect(() => {
@@ -216,6 +244,15 @@ const StudentManagement = () => {
         });
         // refresh students or show success
     };
+
+    // Sort modules: Grammar, Vocabulary first, then others
+    const sortedAccessStatus = useMemo(() => {
+        if (!accessStatus) return [];
+        const priority = ['GRAMMAR', 'VOCABULARY'];
+        const priorityModules = accessStatus.filter(m => priority.includes(m.module_id));
+        const otherModules = accessStatus.filter(m => !priority.includes(m.module_id));
+        return [...priorityModules, ...otherModules];
+    }, [accessStatus]);
 
     return (
         <div className="min-h-screen bg-background flex">
@@ -258,7 +295,7 @@ const StudentManagement = () => {
                                         </thead>
                                         <tbody className="bg-white divide-y divide-stroke">
                                             {filteredStudents.map(student => (
-                                                <tr key={student._id} className="hover:bg-blue-50 cursor-pointer" onClick={() => setSelectedStudent(student)}>
+                                                <tr key={student._id} className="hover:bg-blue-50 cursor-pointer" onClick={() => handleStudentClick(student)}>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <div className="text-sm font-medium text-gray-900">{student.name}</div>
                                                         <div className="text-sm text-gray-500">{student.email}</div>
@@ -289,9 +326,8 @@ const StudentManagement = () => {
             </div>
             {/* Student Info & Access Control Modal */}
             {selectedStudent && (
-                <Modal isOpen={isProgressModalOpen} onClose={() => setIsProgressModalOpen(false)}>
+                <Modal isOpen={isProgressModalOpen} onClose={() => { setIsProgressModalOpen(false); setSelectedStudent(null); setSelectedModule(null); setShowLevelsModal(false); setLevelsModalData({ module: null, levels: [] }); }} title={`Student Details: ${selectedStudent.name}`}>
                     <div className="p-6">
-                        <h2 className="text-2xl font-bold mb-4">Student Details: {selectedStudent.name}</h2>
                         <h3 className="text-lg font-semibold mb-2">Module Access Control</h3>
                         {progressLoading ? (
                             <LoadingSpinner />
@@ -299,31 +335,27 @@ const StudentManagement = () => {
                             <div className="text-red-500">{progressError}</div>
                         ) : (
                             <div>
-                                {accessStatus.map((mod) => (
-                                    <div key={mod.module_id} className="mb-4 p-4 border rounded-lg bg-gray-50">
-                                        <div className="flex items-center justify-between mb-2">
+                                {accessStatus.length === 0 && !progressError && (
+                                    <div className="text-gray-500">No modules found for this student.</div>
+                                )}
+                                {sortedAccessStatus.map((mod) => (
+                                    <div key={mod.module_id} className="mb-4 p-4 border rounded-lg bg-gray-50 flex items-center justify-between cursor-pointer hover:bg-blue-100 transition"
+                                        onClick={async () => {
+                                            setLevelsModalData({ module: mod, levels: mod.levels });
+                                            setShowLevelsModal(true);
+                                            setLevelPercentages({});
+                                            await fetchLevelPercentages(selectedStudent, mod);
+                                        }}>
+                                        <div className="flex items-center gap-2">
                                             <span className="font-semibold text-lg">{mod.module_name}</span>
-                                            <button
-                                                className={`ml-2 px-3 py-1 rounded ${mod.unlocked ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'}`}
-                                                onClick={() => handleModuleLockToggle(selectedStudent._id, mod.module_id, mod.unlocked)}
-                                            >
-                                                {mod.unlocked ? 'Lock Module' : 'Unlock Module'}
-                                            </button>
+                                            {mod.unlocked ? <Unlock className="text-green-600" /> : <Lock className="text-gray-400" />}
                                         </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {mod.levels.map((lvl) => (
-                                                <div key={lvl.level_id} className="flex items-center justify-between p-2 bg-white rounded shadow-sm">
-                                                    <span>{lvl.level_name}</span>
-                                                    <button
-                                                        className={`ml-2 px-2 py-1 rounded ${lvl.unlocked ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}
-                                                        onClick={() => handleLevelLockToggle(selectedStudent._id, lvl.level_id, lvl.unlocked)}
-                                                        disabled={lvl.unlocked}
-                                                    >
-                                                        {lvl.unlocked ? 'Unlocked' : 'Unlock'}
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
+                                        <button
+                                            className={`ml-2 px-3 py-1 rounded ${mod.unlocked ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'}`}
+                                            onClick={e => { e.stopPropagation(); handleModuleLockToggle(selectedStudent._id, mod.module_id, mod.unlocked); }}
+                                        >
+                                            {mod.unlocked ? 'Lock Module' : 'Unlock Module'}
+                                        </button>
                                     </div>
                                 ))}
                                 {unlockMsg && <div className="mt-2 text-center text-sm text-green-600">{unlockMsg}</div>}
@@ -373,6 +405,39 @@ const StudentManagement = () => {
                             </div>
                         </div>
                     )}
+                </Modal>
+            )}
+            {/* Levels Modal */}
+            {showLevelsModal && levelsModalData.module && (
+                <Modal isOpen={showLevelsModal} onClose={() => { setShowLevelsModal(false); setLevelsModalData({ module: null, levels: [] }); }} title={`${levelsModalData.module.module_name} Levels`}>
+                    <div className="p-4">
+                        <div className="mb-4 text-lg font-semibold">Levels for {levelsModalData.module.module_name}</div>
+                        {levelsModalData.levels.length === 0 ? (
+                            <div className="text-gray-500">No levels found for this module.</div>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-3">
+                                {levelsModalData.levels.map(lvl => (
+                                    <div key={lvl.level_id} className="flex flex-col md:flex-row md:items-center justify-between p-3 bg-white rounded shadow border">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-semibold">{lvl.level_name}</span>
+                                            {lvl.unlocked ? <Unlock className="text-green-600" /> : <Lock className="text-gray-400" />}
+                                        </div>
+                                        <div className="flex flex-col md:flex-row gap-2 mt-2 md:mt-0">
+                                            <span className="text-xs text-blue-700">Practice: <b>{levelPercentages[lvl.level_id]?.practice?.toFixed(1) ?? '--'}%</b></span>
+                                            <span className="text-xs text-green-700">Online: <b>{levelPercentages[lvl.level_id]?.online?.toFixed(1) ?? '--'}%</b></span>
+                                        </div>
+                                        <button
+                                            className={`ml-2 px-2 py-1 rounded ${lvl.unlocked ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}
+                                            onClick={() => handleLevelLockToggle(selectedStudent._id, lvl.level_id, lvl.unlocked)}
+                                            disabled={lvl.unlocked}
+                                        >
+                                            {lvl.unlocked ? 'Unlocked' : 'Unlock'}
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </Modal>
             )}
             {/* Unlock message toast */}
