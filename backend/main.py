@@ -11,7 +11,7 @@ from flask_socketio import SocketIO
 
 load_dotenv()
 
-socketio = SocketIO(cors_allowed_origins=os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:5173,https://pydah-ai-versant.vercel.app').split(','), async_mode='threading')
+socketio = SocketIO(cors_allowed_origins=os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:5173,https://pydah-ai-versant.vercel.app').split(','), async_mode='eventlet')
 
 def create_app():
     """Create and configure Flask application"""
