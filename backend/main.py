@@ -7,8 +7,11 @@ from config.database_simple import DatabaseConfig, init_db
 from config.aws_config import init_aws
 from config.constants import JWT_ACCESS_TOKEN_EXPIRES, JWT_REFRESH_TOKEN_EXPIRES
 from config.shared import bcrypt
+from flask_socketio import SocketIO
 
 load_dotenv()
+
+socketio = SocketIO(cors_allowed_origins=os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:5173,https://pydah-ai-versant.vercel.app').split(','), async_mode='threading')
 
 def create_app():
     """Create and configure Flask application"""
@@ -25,6 +28,7 @@ def create_app():
     # Initialize extensions
     jwt = JWTManager(app)
     bcrypt.init_app(app)
+    socketio.init_app(app)
     
     # CORS configuration with Vercel domain included
     # IMPORTANT: Set CORS_ORIGINS in your environment variables to include your frontend URL, e.g.:
@@ -135,4 +139,4 @@ if __name__ == '__main__':
     print(f"🚀 Starting VERSANT API on port {port}")
     print(f"🔧 Debug mode: {debug}")
     
-    app.run(host='0.0.0.0', port=port, debug=debug) 
+    socketio.run(app, host='0.0.0.0', port=port, debug=debug) 
