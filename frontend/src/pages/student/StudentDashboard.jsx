@@ -8,7 +8,7 @@ import Sidebar from '../../components/common/Sidebar'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import api from '../../services/api'
 import { BrainCircuit, BookOpen } from 'lucide-react'
-import io from 'socket.io-client';
+
 
 const StudentDashboard = () => {
   const { user } = useAuth()
@@ -21,7 +21,6 @@ const StudentDashboard = () => {
   const [unlockedModules, setUnlockedModules] = useState([]);
   const [unlockedLoading, setUnlockedLoading] = useState(true);
   const [unlockedError, setUnlockedError] = useState(null);
-  const socketRef = React.useRef(null);
 
   const coreModules = [
     { id: 'GRAMMAR', name: 'Grammar', icon: '🧠', color: 'bg-indigo-500' },
@@ -48,29 +47,7 @@ const StudentDashboard = () => {
     fetchUnlocked();
   }, []);
 
-  useEffect(() => {
-    socketRef.current = io(process.env.REACT_APP_BACKEND_URL || 'https://pydah-ai-versant-backend-url');
-    socketRef.current.on('module_access_changed', (data) => {
-      // Optionally check student_id if available in context
-      // Always re-fetch unlocked modules on event
-      const fetchUnlocked = async () => {
-        try {
-          setUnlockedLoading(true);
-          setUnlockedError(null);
-          const res = await api.get('/student/unlocked-modules');
-          setUnlockedModules(res.data.data || []);
-        } catch (e) {
-          setUnlockedError('Failed to load unlocked modules.');
-        } finally {
-          setUnlockedLoading(false);
-        }
-      };
-      fetchUnlocked();
-    });
-    return () => {
-      if (socketRef.current) socketRef.current.disconnect();
-    };
-  }, []);
+
 
   const fetchDashboardData = async () => {
     try {

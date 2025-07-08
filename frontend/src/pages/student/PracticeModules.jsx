@@ -8,7 +8,7 @@ import Sidebar from '../../components/common/Sidebar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { BookOpen, BrainCircuit, ChevronLeft, Lock, Unlock, CheckCircle, XCircle, Ear } from 'lucide-react';
-import io from 'socket.io-client';
+
 
 const moduleIcons = {
   GRAMMAR: BrainCircuit,
@@ -28,7 +28,6 @@ const PracticeModules = () => {
   const [loading, setLoading] = useState(true);
   const [isPopupVisible, setIsPopupVisible] = useState(false);
   const { error: showError, success } = useNotification();
-  const socketRef = useRef(null);
 
   const resetToMain = () => {
     setView('main');
@@ -87,33 +86,7 @@ const PracticeModules = () => {
     }
   }, [showError]);
 
-  useEffect(() => {
-    // Setup socket connection
-    socketRef.current = io(process.env.REACT_APP_BACKEND_URL || 'https://pydah-ai-versant-backend-url');
-    socketRef.current.on('module_access_changed', (data) => {
-      // Optionally check student_id if available in context
-      // For now, always re-fetch modules on event
-      if (view === 'main') {
-        const fetchModules = async () => {
-          try {
-            setLoading(true);
-            const res = await api.get('/student/modules');
-            const modulesWithIcons = res.data.data.map(m => ({ ...m, icon: moduleIcons[m.id] || moduleIcons.DEFAULT }));
-            setModules(modulesWithIcons);
-          } catch (err) {
-            showError('Failed to load practice modules.');
-            setModules([]);
-          } finally {
-            setLoading(false);
-          }
-        };
-        fetchModules();
-      }
-    });
-    return () => {
-      if (socketRef.current) socketRef.current.disconnect();
-    };
-  }, [view, showError]);
+
 
   useEffect(() => {
     if (view === 'main') {
