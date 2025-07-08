@@ -11,9 +11,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def start_development():
-    """Start the app in development mode with Flask-SocketIO"""
+    """Start the app in development mode"""
     from main import create_app
-    from socketio_instance import socketio
     
     app = create_app()
     port = int(os.getenv('PORT', 5000))
@@ -22,7 +21,7 @@ def start_development():
     print(f"🚀 Starting VERSANT API in DEVELOPMENT mode on port {port}")
     print(f"🔧 Debug mode: {debug}")
     
-    socketio.run(app, host='0.0.0.0', port=port, debug=debug, allow_unsafe_werkzeug=True)
+    app.run(host='0.0.0.0', port=port, debug=debug)
 
 def start_production():
     """Start the app in production mode with Gunicorn"""

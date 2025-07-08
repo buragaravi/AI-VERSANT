@@ -6,7 +6,6 @@ WSGI entry point for production deployment
 import os
 from dotenv import load_dotenv
 from main import create_app
-from socketio_instance import socketio
 
 load_dotenv()
 
