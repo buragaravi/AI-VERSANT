@@ -34,12 +34,13 @@ class AWSConfig:
             region_name=AWSConfig.AWS_REGION
         )
 
-# Global instances for easy import
-s3_client = AWSConfig.get_s3_client()
+# Global instances for easy import (will be None if AWS not configured)
+s3_client = None
 S3_BUCKET_NAME = AWSConfig.AWS_S3_BUCKET
 
 def init_aws():
     """Initialize AWS S3 connection"""
+    global s3_client
     try:
         s3_client = AWSConfig.get_s3_client()
         
@@ -55,4 +56,5 @@ def init_aws():
             
     except Exception as e:
         print(f"❌ AWS S3 initialization error: {e}")
-        print("⚠️  Audio file uploads may not work properly") 
+        print("⚠️  Audio file uploads may not work properly")
+        s3_client = None 

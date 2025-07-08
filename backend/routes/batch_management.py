@@ -12,7 +12,7 @@ import pytz
 import io
 from utils.email_service import send_email, render_template
 from config.shared import bcrypt
-from main import socketio
+from socketio_instance import socketio
 
 batch_management_bp = Blueprint('batch_management', __name__)
 

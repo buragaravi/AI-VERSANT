@@ -7,11 +7,9 @@ from config.database_simple import DatabaseConfig, init_db
 from config.aws_config import init_aws
 from config.constants import JWT_ACCESS_TOKEN_EXPIRES, JWT_REFRESH_TOKEN_EXPIRES
 from config.shared import bcrypt
-from flask_socketio import SocketIO
+from socketio_instance import socketio
 
 load_dotenv()
-
-socketio = SocketIO(cors_allowed_origins=os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:5173,https://pydah-ai-versant.vercel.app').split(','), async_mode='eventlet')
 
 def create_app():
     """Create and configure Flask application"""
