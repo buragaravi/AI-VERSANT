@@ -34,13 +34,11 @@ def start_production():
     print(f"🚀 Starting VERSANT API in PRODUCTION mode on port {port}")
     print(f"👥 Workers: {workers}")
     
-    # Start Gunicorn with eventlet worker
+    # Start Gunicorn with sync worker (more reliable)
     cmd = [
         'gunicorn',
         '--bind', f'0.0.0.0:{port}',
-        '--worker-class', 'eventlet',
         '--workers', workers,
-        '--worker-connections', '1000',
         '--timeout', '30',
         '--keep-alive', '2',
         '--access-logfile', '-',

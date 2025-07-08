@@ -13,9 +13,6 @@ load_dotenv()
 # Create the Flask app
 app = create_app()
 
-# Initialize socketio with the app
-socketio.init_app(app, cors_allowed_origins=os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:5173,https://pydah-ai-versant.vercel.app').split(','))
-
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     debug = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'

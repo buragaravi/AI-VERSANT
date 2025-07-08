@@ -12,8 +12,7 @@ backlog = 2048
 
 # Worker processes
 workers = multiprocessing.cpu_count() * 2 + 1
-worker_class = "eventlet"
-worker_connections = 1000
+worker_class = "sync"
 max_requests = 1000
 max_requests_jitter = 50
 
