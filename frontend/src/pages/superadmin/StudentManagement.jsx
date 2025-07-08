@@ -7,6 +7,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { Users, Filter, Search, Trash2, ListChecks, CheckCircle, BookOpen, Lock, Unlock } from 'lucide-react';
 import Modal from '../../components/common/Modal';
+import { getStudentAccessStatus, authorizeStudentModule, lockStudentModule, authorizeStudentLevel } from '../../services/api';
 
 const StudentManagement = () => {
     const [students, setStudents] = useState([]);
@@ -39,6 +40,7 @@ const StudentManagement = () => {
     const [courses, setCourses] = useState([]);
     const [selectedBatch, setSelectedBatch] = useState(null);
     const [selectedCourse, setSelectedCourse] = useState(null);
+    const [accessStatus, setAccessStatus] = useState([]);
 
     const fetchStudents = useCallback(async () => {
         try {
@@ -84,21 +86,13 @@ const StudentManagement = () => {
         setIsProgressModalOpen(true);
         setProgressLoading(true);
         setProgressError(null);
-        setModuleProgress([]);
-        setAvailableModules([]);
-        setAuthorizeMsg('');
+        setAccessStatus([]);
         try {
-            // 1. Fetch available modules (superadmin endpoint)
-            const modulesRes = await api.get(`/superadmin/student-modules?student_email=${encodeURIComponent(student.email)}`);
-            setAvailableModules(modulesRes.data.data || []);
-            // 2. Fetch practice (module-level) results
-            const practiceRes = await api.get(`/superadmin/student-practice-results?student=${encodeURIComponent(student.email)}`);
-            setPracticeResults(practiceRes.data.data || []);
-            // 3. Fetch online exam results
-            const onlineRes = await api.get(`/superadmin/student-online-results?student=${encodeURIComponent(student.email)}`);
-            setOnlineExamResults(onlineRes.data.data || []);
+            // Fetch access status for modules and levels
+            const res = await getStudentAccessStatus(student._id);
+            setAccessStatus(res.data.data || []);
         } catch (e) {
-            setProgressError('Failed to load module/online exam results.');
+            setProgressError('Failed to load access status.');
         } finally {
             setProgressLoading(false);
         }
@@ -147,20 +141,42 @@ const StudentManagement = () => {
         }
     };
 
-    const handleModuleLockToggle = async (studentId, moduleId, locked) => {
-        // Call backend to lock/unlock module (implement endpoint as needed)
-        // For now, just show a toast
-        setUnlockMsg(locked ? 'Module locked!' : 'Module unlocked!');
-        setTimeout(() => setUnlockMsg(''), 2000);
-        // Optionally, refresh students
-        fetchStudents();
+    const handleModuleLockToggle = async (studentId, moduleId, unlocked) => {
+        try {
+            if (unlocked) {
+                await lockStudentModule(studentId, moduleId);
+                setUnlockMsg('Module locked!');
+            } else {
+                await authorizeStudentModule(studentId, moduleId);
+                setUnlockMsg('Module unlocked!');
+            }
+            // Refresh access status
+            const res = await getStudentAccessStatus(studentId);
+            setAccessStatus(res.data.data || []);
+        } catch (e) {
+            setUnlockMsg('Failed to update module access.');
+        } finally {
+            setTimeout(() => setUnlockMsg(''), 2000);
+        }
     };
 
-    const handleLevelLockToggle = async (studentId, levelId, locked) => {
-        // Call backend to lock/unlock level (implement endpoint as needed)
-        setUnlockMsg(locked ? 'Level locked!' : 'Level unlocked!');
-        setTimeout(() => setUnlockMsg(''), 2000);
-        fetchStudents();
+    const handleLevelLockToggle = async (studentId, levelId, unlocked) => {
+        try {
+            if (unlocked) {
+                // Lock: remove from authorized_levels (not implemented, but could be added)
+                setUnlockMsg('Level lock not implemented!');
+            } else {
+                await authorizeStudentLevel(studentId, levelId);
+                setUnlockMsg('Level unlocked!');
+            }
+            // Refresh access status
+            const res = await getStudentAccessStatus(studentId);
+            setAccessStatus(res.data.data || []);
+        } catch (e) {
+            setUnlockMsg('Failed to update level access.');
+        } finally {
+            setTimeout(() => setUnlockMsg(''), 2000);
+        }
     };
 
     useEffect(() => {
@@ -273,170 +289,48 @@ const StudentManagement = () => {
             </div>
             {/* Student Info & Access Control Modal */}
             {selectedStudent && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-                    <div className="bg-white rounded-3xl shadow-2xl p-10 max-w-3xl w-full relative">
-                        <button onClick={() => { setSelectedStudent(null); setModalSelectedModule(null); }} className="absolute top-4 right-4 text-gray-400 hover:text-red-600 text-3xl font-bold">&times;</button>
-                        <h2 className="text-3xl font-extrabold mb-8 text-center text-blue-900">Student Details: <span className="text-blue-700">{selectedStudent.name}</span></h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                            {/* Section 1: Modules as cards */}
+                <Modal isOpen={isProgressModalOpen} onClose={() => setIsProgressModalOpen(false)}>
+                    <div className="p-6">
+                        <h2 className="text-2xl font-bold mb-4">Student Details: {selectedStudent.name}</h2>
+                        <h3 className="text-lg font-semibold mb-2">Module Access Control</h3>
+                        {progressLoading ? (
+                            <LoadingSpinner />
+                        ) : progressError ? (
+                            <div className="text-red-500">{progressError}</div>
+                        ) : (
                             <div>
-                                <h3 className="text-xl font-bold mb-6 text-blue-800">Modules</h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    {selectedStudent.modules && selectedStudent.modules.length > 0 ? (
-                                        selectedStudent.modules.map((mod) => (
-                                            <div
-                                                key={mod.module_id}
-                                                className={`cursor-pointer bg-blue-50 border-2 ${modalSelectedModule && modalSelectedModule.module_id === mod.module_id ? 'border-blue-500 shadow-lg' : 'border-blue-100'} rounded-2xl px-8 py-8 transition text-center flex flex-col items-center hover:border-blue-400 hover:shadow-md`}
-                                                onClick={() => setModalSelectedModule(mod)}
+                                {accessStatus.map((mod) => (
+                                    <div key={mod.module_id} className="mb-4 p-4 border rounded-lg bg-gray-50">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="font-semibold text-lg">{mod.module_name}</span>
+                                            <button
+                                                className={`ml-2 px-3 py-1 rounded ${mod.unlocked ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'}`}
+                                                onClick={() => handleModuleLockToggle(selectedStudent._id, mod.module_id, mod.unlocked)}
                                             >
-                                                <div className="font-extrabold text-blue-900 text-lg mb-2 tracking-wide">{mod.module_name}</div>
-                                                <div className="text-xs text-blue-400 font-semibold">{mod.levels.length} Level{mod.levels.length !== 1 ? 's' : ''}</div>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="text-gray-400 col-span-2">No modules found for this student.</div>
-                                    )}
-                                </div>
-                            </div>
-                            {/* Section 2: Access Control */}
-                            <div className="flex flex-col h-full">
-                                <div className="border-b-2 border-blue-100 mb-6"></div>
-                                <h3 className="text-xl font-bold mb-6 text-blue-800">Access Control</h3>
-                                {modalSelectedModule && (
-                                    <>
-                                        <div className="mt-10 mb-0">
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-h-[55vh] overflow-y-auto pr-2 custom-scrollbar">
-                                                {modalSelectedModule.levels && modalSelectedModule.levels.length > 0 ? (
-                                                    modalSelectedModule.levels.map((lvl, idx) => (
-                                                        <div
-                                                            key={lvl.level_id}
-                                                            className={`rounded-3xl p-6 shadow-lg flex flex-col justify-between min-h-[140px] border transition ${lvl.locked ? 'bg-gray-50 border-gray-200 opacity-70' : 'bg-white border-blue-200'} ${!lvl.locked ? 'hover:shadow-2xl' : ''}`}
-                                                            onClick={async () => {
-                                                                setSelectedLevel(lvl);
-                                                                setShowLevelResultsPanel(true);
-                                                                setLevelResultsLoading(true);
-                                                                try {
-                                                                    // Fetch online exam results for this level from the new endpoint
-                                                                    const onlineRes = await api.get(`/superadmin/student-online-results?student=${encodeURIComponent(selectedStudent.email)}&module=${modalSelectedModule.module_id}&level=${lvl.level_id}`);
-                                                                    setSelectedLevelResults(onlineRes.data.data || []);
-                                                                    // Fetch practice results for this level from the new endpoint
-                                                                    const practiceRes = await api.get(`/superadmin/student-practice-results?student=${encodeURIComponent(selectedStudent.email)}&module=${modalSelectedModule.module_id}&level=${lvl.level_id}`);
-                                                                    setSelectedLevelPracticeResults(practiceRes.data.data || []);
-                                                                } catch (e) {
-                                                                    setSelectedLevelResults([]);
-                                                                    setSelectedLevelPracticeResults([]);
-                                                                } finally {
-                                                                    setLevelResultsLoading(false);
-                                                                }
-                                                            }}
-                                                            style={{ cursor: lvl.locked ? 'not-allowed' : 'pointer' }}
-                                                        >
-                                                            <div className="flex items-center gap-2 mb-3">
-                                                                <span className={`font-bold text-lg ${lvl.locked ? 'text-gray-400' : 'text-blue-900'}`}>{lvl.level_name}</span>
-                                                                {lvl.locked ? <Lock size={20} className="text-gray-400" /> : <Unlock size={20} className="text-green-500" />}
-                                                            </div>
-                                                            <div className="flex-1 flex flex-col justify-center">
-                                                                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
-                                                                    <div
-                                                                        className={`h-2 rounded-full ${lvl.locked ? 'bg-gray-300' : 'bg-green-400'}`}
-                                                                        style={{ width: `${lvl.percentage}%` }}
-                                                                    ></div>
-                                                                </div>
-                                                                <div className={`text-xs font-semibold ${lvl.locked ? 'text-gray-400' : 'text-green-700'}`}>Highest Score: {lvl.percentage}%</div>
-                                                                {lvl.locked && (
-                                                                    <div className="mt-2 text-xs text-yellow-600 bg-yellow-50 rounded px-2 py-1">
-                                                                        Complete the previous part with 60% or more to unlock.
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            <div className="mt-4 flex justify-end">
-                                                                <button
-                                                                    className={`px-5 py-2 rounded-full text-xs font-bold shadow ${lvl.locked ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}
-                                                                    onClick={async (e) => {
-                                                                        e.stopPropagation();
-                                                                        handleLevelLockToggle(selectedStudent._id, lvl.level_id, lvl.locked);
-                                                                    }}
-                                                                >
-                                                                    {lvl.locked ? 'Unlock' : 'Lock'}
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <div className="text-gray-400 col-span-2">No levels for this module.</div>
-                                                )}
-                                            </div>
+                                                {mod.unlocked ? 'Lock Module' : 'Unlock Module'}
+                                            </button>
                                         </div>
-                                        {/* Centered modal popup for level results */}
-                                        {showLevelResultsPanel && (
-                                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-                                                <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-lg w-full relative animate-fade-in">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {mod.levels.map((lvl) => (
+                                                <div key={lvl.level_id} className="flex items-center justify-between p-2 bg-white rounded shadow-sm">
+                                                    <span>{lvl.level_name}</span>
                                                     <button
-                                                        className="absolute top-4 right-4 text-gray-400 hover:text-red-600 text-3xl font-bold"
-                                                        onClick={() => setShowLevelResultsPanel(false)}
+                                                        className={`ml-2 px-2 py-1 rounded ${lvl.unlocked ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}
+                                                        onClick={() => handleLevelLockToggle(selectedStudent._id, lvl.level_id, lvl.unlocked)}
+                                                        disabled={lvl.unlocked}
                                                     >
-                                                        &times;
+                                                        {lvl.unlocked ? 'Unlocked' : 'Unlock'}
                                                     </button>
-                                                    <h4 className="text-2xl font-bold mb-4 text-blue-800 text-center">Results for {selectedLevel?.level_name}</h4>
-                                                    {levelResultsLoading ? (
-                                                        <div className="flex justify-center items-center h-32"><LoadingSpinner /></div>
-                                                    ) : (
-                                                        <>
-                                                            {/* Practice Module Results */}
-                                                            <div className="mb-6">
-                                                                <h5 className="text-lg font-bold mb-2 text-green-800">Practice Module Results</h5>
-                                                                {selectedLevelPracticeResults.length === 0 ? (
-                                                                    <div className="bg-green-50 rounded-2xl p-4 shadow-inner text-center text-gray-500">
-                                                                        No practice module results for this level.
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="space-y-3">
-                                                                        {selectedLevelPracticeResults.map((res, idx) => (
-                                                                            <div key={res._id || idx} className="rounded-xl border-2 border-green-400 bg-green-50 p-3 shadow flex flex-col gap-1">
-                                                                                <div className="flex items-center gap-2">
-                                                                                    <span className="font-bold text-green-900">{res.test_name}</span>
-                                                                                    <span className="ml-auto px-2 py-0.5 rounded bg-green-200 text-xs font-semibold">Practice</span>
-                                                                                </div>
-                                                                                <div className="text-xs text-gray-700">Score: <span className="font-bold text-green-700">{res.average_score}%</span></div>
-                                                                                <div className="text-xs text-gray-500">Submitted: {res.submitted_at ? new Date(res.submitted_at).toLocaleString() : 'N/A'}</div>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            {/* Online Exam Results */}
-                                                            <div>
-                                                                <h5 className="text-lg font-bold mb-2 text-blue-800">Online Exam Results</h5>
-                                                                {selectedLevelResults.length === 0 ? (
-                                                                    <div className="bg-blue-50 rounded-2xl p-4 shadow-inner text-center text-gray-500">
-                                                                        No online exam results for this level.
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="space-y-3">
-                                                                        {selectedLevelResults.map((res, idx) => (
-                                                                            <div key={res._id || idx} className="rounded-xl border-2 border-blue-400 bg-blue-50 p-3 shadow flex flex-col gap-1">
-                                                                                <div className="flex items-center gap-2">
-                                                                                    <span className="font-bold text-blue-900">{res.test_name}</span>
-                                                                                    <span className="ml-auto px-2 py-0.5 rounded bg-blue-200 text-xs font-semibold">Online Exam</span>
-                                                                                </div>
-                                                                                <div className="text-xs text-gray-700">Score: <span className="font-bold text-blue-700">{res.average_score}%</span></div>
-                                                                                <div className="text-xs text-gray-500">Submitted: {res.submitted_at ? new Date(res.submitted_at).toLocaleString() : 'N/A'}</div>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </>
-                                                    )}
                                                 </div>
-                                            </div>
-                                        )}
-                                    </>
-                                )}
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                                {unlockMsg && <div className="mt-2 text-center text-sm text-green-600">{unlockMsg}</div>}
                             </div>
-                        </div>
+                        )}
                     </div>
-                </div>
+                </Modal>
             )}
             {/* Level Tests Modal */}
             {levelTestModal.open && (

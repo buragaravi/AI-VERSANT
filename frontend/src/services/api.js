@@ -238,4 +238,16 @@ export const getAllTests = async () => api.get('/test-management/tests');
 export const getStudentCount = async ({ campus, batches, courses }) =>
   api.post('/test-management/student-count', { campus, batches, courses });
 
+export const getStudentAccessStatus = async (studentId) => {
+  return api.get(`/batch-management/student/${studentId}/access-status`);
+};
+
+export const authorizeStudentModule = async (studentId, moduleId) => {
+  return api.post(`/batch-management/student/${studentId}/authorize-module`, { module: moduleId });
+};
+
+export const lockStudentModule = async (studentId, moduleId) => {
+  return api.post(`/batch-management/student/${studentId}/lock-module`, { module: moduleId });
+};
+
 export default api

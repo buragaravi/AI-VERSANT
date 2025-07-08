@@ -702,6 +702,51 @@ def authorize_student_level(student_id):
         current_app.logger.error(f"Error authorizing level: {e}")
         return jsonify({'success': False, 'message': 'An error occurred authorizing the level.'}), 500
 
+@batch_management_bp.route('/student/<student_id>/authorize-module', methods=['POST'])
+@jwt_required()
+def authorize_student_module(student_id):
+    try:
+        data = request.json
+        module = data.get('module')
+        if not module:
+            return jsonify({'success': False, 'message': 'Module is required'}), 400
+
+        # Find all levels for this module
+        from config.constants import LEVELS
+        module_levels = [level_id for level_id, level in LEVELS.items() if level.get('module_id') == module or level.get('module') == module]
+        if not module_levels:
+            return jsonify({'success': False, 'message': 'No levels found for this module.'}), 404
+
+        # Add all levels to authorized_levels
+        mongo_db.students.update_one({'_id': ObjectId(student_id)}, {'$addToSet': {'authorized_levels': {'$each': module_levels}}})
+        student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+        return jsonify({'success': True, 'message': f"Module '{module}' authorized for student.", 'authorized_levels': student.get('authorized_levels', [])}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error authorizing module: {e}")
+        return jsonify({'success': False, 'message': 'An error occurred authorizing the module.'}), 500
+
+@batch_management_bp.route('/student/<student_id>/lock-module', methods=['POST'])
+@jwt_required()
+def lock_student_module(student_id):
+    try:
+        data = request.json
+        module = data.get('module')
+        if not module:
+            return jsonify({'success': False, 'message': 'Module is required'}), 400
+
+        from config.constants import LEVELS
+        module_levels = [level_id for level_id, level in LEVELS.items() if level.get('module_id') == module or level.get('module') == module]
+        if not module_levels:
+            return jsonify({'success': False, 'message': 'No levels found for this module.'}), 404
+
+        # Remove all levels from authorized_levels
+        mongo_db.students.update_one({'_id': ObjectId(student_id)}, {'$pull': {'authorized_levels': {'$in': module_levels}}})
+        student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+        return jsonify({'success': True, 'message': f"Module '{module}' locked for student.", 'authorized_levels': student.get('authorized_levels', [])}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error locking module: {e}")
+        return jsonify({'success': False, 'message': 'An error occurred locking the module.'}), 500
+
 @batch_management_bp.route('/create-with-students', methods=['POST'])
 @jwt_required()
 def create_batch_with_students():
@@ -1128,3 +1173,35 @@ def add_single_student():
     except Exception as e:
         current_app.logger.error(f"Error adding single student: {str(e)}")
         return jsonify({'success': False, 'message': f'An unexpected server error occurred: {str(e)}'}), 500
+
+@batch_management_bp.route('/student/<student_id>/access-status', methods=['GET'])
+@jwt_required()
+def get_student_access_status(student_id):
+    try:
+        from config.constants import MODULES, LEVELS
+        student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+        if not student:
+            return jsonify({'success': False, 'message': 'Student not found.'}), 404
+        authorized_levels = set(student.get('authorized_levels', []))
+        # Build module/level status
+        modules_status = []
+        for module_id, module_name in MODULES.items():
+            levels = [
+                {
+                    'level_id': level_id,
+                    'level_name': level.get('name', level_id),
+                    'unlocked': level_id in authorized_levels
+                }
+                for level_id, level in LEVELS.items()
+                if level.get('module_id') == module_id or level.get('module') == module_id
+            ]
+            modules_status.append({
+                'module_id': module_id,
+                'module_name': module_name,
+                'unlocked': all(l['unlocked'] for l in levels) if levels else False,
+                'levels': levels
+            })
+        return jsonify({'success': True, 'data': modules_status}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching access status: {e}")
+        return jsonify({'success': False, 'message': 'An error occurred fetching access status.'}), 500
