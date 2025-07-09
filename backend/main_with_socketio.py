@@ -8,6 +8,7 @@ from config.aws_config import init_aws
 from config.constants import JWT_ACCESS_TOKEN_EXPIRES, JWT_REFRESH_TOKEN_EXPIRES
 from config.shared import bcrypt
 from socketio_instance import socketio
+from flask_socketio import join_room
 
 load_dotenv()
 
@@ -126,6 +127,14 @@ def create_app():
         import sys
         print('JWT revoked_token_loader', file=sys.stderr)
         return {'success': False, 'message': 'Token has been revoked'}, 401
+    
+    # Socket.IO event handler for 'join'
+    @socketio.on('join')
+    def handle_join(data):
+        student_id = data.get('student_id')
+        if student_id:
+            join_room(student_id)
+            print(f"Student {student_id} joined their room.")
     
     return app
 

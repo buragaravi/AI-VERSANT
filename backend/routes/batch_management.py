@@ -12,6 +12,7 @@ import pytz
 import io
 from utils.email_service import send_email, render_template
 from config.shared import bcrypt
+from socketio_instance import socketio
 
 batch_management_bp = Blueprint('batch_management', __name__)
 
@@ -733,6 +734,10 @@ def authorize_student_module(student_id):
         # Add all levels to authorized_levels
         mongo_db.students.update_one({'_id': ObjectId(student_id)}, {'$addToSet': {'authorized_levels': {'$each': module_levels}}})
         student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+
+        # Emit real-time event to the student
+        socketio.emit('module_access_changed', {'student_id': str(student_id), 'module': module, 'action': 'unlocked'}, room=str(student_id))
+
         return jsonify({'success': True, 'message': f"Module '{module}' authorized for student.", 'authorized_levels': student.get('authorized_levels', [])}), 200
     except Exception as e:
         current_app.logger.error(f"Error authorizing module: {e}")
@@ -755,6 +760,10 @@ def lock_student_module(student_id):
         # Remove all levels from authorized_levels
         mongo_db.students.update_one({'_id': ObjectId(student_id)}, {'$pull': {'authorized_levels': {'$in': module_levels}}})
         student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+
+        # Emit real-time event to the student
+        socketio.emit('module_access_changed', {'student_id': str(student_id), 'module': module, 'action': 'locked'}, room=str(student_id))
+
         return jsonify({'success': True, 'message': f"Module '{module}' locked for student.", 'authorized_levels': student.get('authorized_levels', [])}), 200
     except Exception as e:
         current_app.logger.error(f"Error locking module: {e}")

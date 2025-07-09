@@ -7,6 +7,12 @@ from config.database_simple import DatabaseConfig, init_db
 from config.aws_config import init_aws
 from config.constants import JWT_ACCESS_TOKEN_EXPIRES, JWT_REFRESH_TOKEN_EXPIRES
 from config.shared import bcrypt
+from fastapi import FastAPI
+from socketio_instance import socketio
+import uvicorn
+
+# Import event handlers to ensure they are registered
+from flask_socketio import join_room
 
 load_dotenv()
 
@@ -127,12 +133,20 @@ def create_app():
     
     return app
 
-if __name__ == '__main__':
-    app = create_app()
-    port = int(os.getenv('PORT', 5000))
-    debug = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
-    
-    print(f"🚀 Starting VERSANT API on port {port}")
-    print(f"🔧 Debug mode: {debug}")
-    
-    app.run(host='0.0.0.0', port=port, debug=debug) 
+@socketio.on('join')
+def handle_join(data):
+    student_id = data.get('student_id')
+    if student_id:
+        join_room(student_id)
+        print(f"Student {student_id} joined their room.")
+
+app = FastAPI()
+
+# Register all your routes here (API routers, etc.)
+# ... existing code ...
+
+# Wrap FastAPI app with Socket.IO app
+app = socketio.ASGIApp(socketio, app)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000) 

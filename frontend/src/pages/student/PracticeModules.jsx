@@ -8,6 +8,9 @@ import Sidebar from '../../components/common/Sidebar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { BookOpen, BrainCircuit, ChevronLeft, Lock, Unlock, CheckCircle, XCircle, Ear } from 'lucide-react';
+import { io } from 'socket.io-client';
+import { useContext } from 'react';
+import AuthContext from '../../contexts/AuthContext';
 
 
 const moduleIcons = {
@@ -28,6 +31,7 @@ const PracticeModules = () => {
   const [loading, setLoading] = useState(true);
   const [isPopupVisible, setIsPopupVisible] = useState(false);
   const { error: showError, success } = useNotification();
+  const { user } = useContext(AuthContext); // Assumes user object contains student_id or _id
 
   const resetToMain = () => {
     setView('main');
@@ -86,23 +90,23 @@ const PracticeModules = () => {
     }
   }, [showError]);
 
+  const fetchModules = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/student/modules');
+      const modulesWithIcons = res.data.data.map(m => ({ ...m, icon: moduleIcons[m.id] || moduleIcons.DEFAULT }));
+      setModules(modulesWithIcons);
+    } catch (err) {
+      showError('Failed to load practice modules.');
+      setModules([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [showError]);
 
 
   useEffect(() => {
     if (view === 'main') {
-      const fetchModules = async () => {
-        try {
-          setLoading(true);
-          const res = await api.get('/student/modules');
-          const modulesWithIcons = res.data.data.map(m => ({ ...m, icon: moduleIcons[m.id] || moduleIcons.DEFAULT }));
-          setModules(modulesWithIcons);
-        } catch (err) {
-          showError('Failed to load practice modules.');
-          setModules([]);
-        } finally {
-          setLoading(false);
-        }
-      };
       fetchModules();
     } else if (view === 'grammar_categories') {
       fetchGrammarProgress();
@@ -126,7 +130,27 @@ const PracticeModules = () => {
       };
       fetchModules();
     }
-  }, [view, currentCategory, fetchGrammarProgress, showError]);
+  }, [view, currentCategory, fetchGrammarProgress, showError, fetchModules]);
+
+  useEffect(() => {
+    if (!user || !user._id) return;
+    const socket = io(process.env.VITE_SOCKET_IO_URL || 'https://pydah-ai-versant-backend-url', {
+      transports: ['websocket'],
+      auth: { token: localStorage.getItem('token') },
+    });
+    // Join a room for this student
+    socket.emit('join', { student_id: user._id });
+    // Listen for module access changes
+    socket.on('module_access_changed', (data) => {
+      if (data.student_id === user._id) {
+        // Re-fetch modules when access changes
+        fetchModules();
+      }
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [user, fetchModules]);
 
   const renderContent = () => {
     if (loading) return <LoadingSpinner />;
