@@ -184,7 +184,7 @@ def get_current_user():
             'id': str(user['_id']),
             'username': user['username'],
             'email': user['email'],
-            'name': user['name'],
+            'name': user.get('name', f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() or user.get('username', '')),
             'role': user['role'],
             'campus_id': str(user['campus_id']) if user.get('campus_id') else None,
             'course_id': str(user['course_id']) if user.get('course_id') else None,
