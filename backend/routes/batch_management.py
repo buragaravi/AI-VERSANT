@@ -713,6 +713,11 @@ def authorize_student_level(student_id):
 @batch_management_bp.route('/student/<student_id>/authorize-module/', methods=['POST'])
 @jwt_required()
 def authorize_student_module(student_id):
+    print(f"DEBUG: authorize_student_module route hit - student_id: {student_id}")
+    print(f"DEBUG: Request method: {request.method}")
+    print(f"DEBUG: Request URL: {request.url}")
+    print(f"DEBUG: Request headers: {dict(request.headers)}")
+    print(f"DEBUG: Request JSON: {request.json}")
     try:
         data = request.json
         module = data.get('module')
