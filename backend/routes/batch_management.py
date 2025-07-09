@@ -710,6 +710,7 @@ def authorize_student_level(student_id):
         return jsonify({'success': False, 'message': 'An error occurred authorizing the level.'}), 500
 
 @batch_management_bp.route('/student/<student_id>/authorize-module', methods=['POST'])
+@batch_management_bp.route('/student/<student_id>/authorize-module/', methods=['POST'])
 @jwt_required()
 def authorize_student_module(student_id):
     try:
