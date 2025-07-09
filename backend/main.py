@@ -58,6 +58,11 @@ app.register_blueprint(course_management_bp, url_prefix='/course-management')
 app.register_blueprint(batch_management_bp, url_prefix='/batch-management')
 app.register_blueprint(access_control_bp, url_prefix='/access-control')
 
+print("=== Registered Routes ===")
+for rule in app.url_map.iter_rules():
+    print(rule)
+print("=========================")
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     socketio.run(app, host="0.0.0.0", port=port) 
