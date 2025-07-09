@@ -1,10 +1,10 @@
+import os
 from flask import Flask
 from socketio_instance import socketio
 from config.shared import bcrypt
 from config.constants import JWT_ACCESS_TOKEN_EXPIRES, JWT_REFRESH_TOKEN_EXPIRES
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
-import os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -59,4 +59,5 @@ app.register_blueprint(batch_management_bp, url_prefix='/batch-management')
 app.register_blueprint(access_control_bp, url_prefix='/access-control')
 
 if __name__ == "__main__":
-    socketio.run(app, host="0.0.0.0", port=8000, debug=True) 
+    port = int(os.environ.get("PORT", 8000))
+    socketio.run(app, host="0.0.0.0", port=port) 

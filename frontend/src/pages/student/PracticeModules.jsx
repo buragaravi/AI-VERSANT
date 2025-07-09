@@ -10,7 +10,7 @@ import api from '../../services/api';
 import { BookOpen, BrainCircuit, ChevronLeft, Lock, Unlock, CheckCircle, XCircle, Ear } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { useContext } from 'react';
-import AuthContext from '../../contexts/AuthContext';
+import { AuthContext } from '../../contexts/AuthContext';
 
 
 const moduleIcons = {
