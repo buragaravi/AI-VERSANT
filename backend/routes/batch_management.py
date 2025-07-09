@@ -731,8 +731,22 @@ def authorize_student_module(student_id):
             return jsonify({'success': False, 'message': 'No levels found for this module.'}), 404
 
         # Ensure authorized_levels exists
-        student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+        print(f"DEBUG: Looking for student with ID: {student_id}")
+        print(f"DEBUG: Student ID type: {type(student_id)}")
+        try:
+            obj_id = ObjectId(student_id)
+            print(f"DEBUG: Converted to ObjectId: {obj_id}")
+        except Exception as e:
+            print(f"DEBUG: Failed to convert to ObjectId: {e}")
+            return jsonify({'success': False, 'message': f'Invalid student_id: {student_id}'}), 400
+        student = mongo_db.students.find_one({'_id': obj_id})
+        print(f"DEBUG: Student found: {student is not None}")
         if not student:
+            print(f"DEBUG: No student found with ID: {student_id}")
+            # Let's also check if there are any students in the database
+            all_students = list(mongo_db.students.find({}, {'_id': 1, 'name': 1, 'email': 1}))
+            print(f"DEBUG: Total students in database: {len(all_students)}")
+            print(f"DEBUG: Sample student IDs: {[str(s['_id']) for s in all_students[:5]]}")
             return jsonify({'success': False, 'message': 'Student not found.'}), 404
         if 'authorized_levels' not in student:
             mongo_db.students.update_one({'_id': ObjectId(student_id)}, {'$set': {'authorized_levels': []}})
