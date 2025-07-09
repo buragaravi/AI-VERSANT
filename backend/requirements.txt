@@ -27,3 +27,4 @@ fastapi
 uvicorn
 python-socketio
 flask-socketio 
+eventlet 
