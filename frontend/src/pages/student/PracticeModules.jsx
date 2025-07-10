@@ -495,7 +495,14 @@ const ModuleLevelsView = ({ moduleId, levels, scores, onSelectLevel, onBack }) =
                 "cursor-pointer": unlocked,
                 "opacity-60 bg-gray-100": !unlocked,
               })}
-              onClick={() => unlocked ? onSelectLevel(level, idx) : setUnlockPopupMessage('Complete the previous level with 60% or more to unlock this!') || setShowUnlockPopup(true)}
+              onClick={() => {
+                if (unlocked) {
+                  onSelectLevel(level, idx);
+                } else {
+                  setUnlockPopupMessage('Complete the previous level with 60% or more to unlock this! You are just one step away from progressing! Give it your best shot!');
+                  setShowUnlockPopup(true);
+                }
+              }}
             >
               <div className="flex justify-between items-center">
                 <h3 className="text-xl font-bold text-gray-800 mt-1">{level.level_name}</h3>
