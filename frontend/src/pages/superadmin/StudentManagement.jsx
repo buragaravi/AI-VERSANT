@@ -153,13 +153,13 @@ const StudentManagement = () => {
                 await authorizeStudentModule(studentId, moduleId);
                 setUnlockMsg('Module unlocked!');
             }
-            // Refresh access status
+            // Refresh access status for the modal UI
             const res = await getStudentAccessStatus(studentId);
             setAccessStatus(res.data.data || []);
         } catch (e) {
             setUnlockMsg('Failed to update module access.');
         } finally {
-        setTimeout(() => setUnlockMsg(''), 2000);
+            setTimeout(() => setUnlockMsg(''), 2000);
         }
     };
 

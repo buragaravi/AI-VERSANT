@@ -193,39 +193,116 @@ const PracticeModules = () => {
   );
 };
 
-const MainView = ({ modules, onSelectModule }) => (
-  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-    <h1 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-8">Practice Modules</h1>
-    <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
-      {modules.map(module => (
-        <motion.div
-          key={module.id}
-          whileHover={!module.locked ? { scale: 1.05 } : {}}
-          className={clsx(
-            "bg-white p-6 sm:p-8 rounded-2xl shadow-lg flex flex-col items-center text-center relative",
-            {
-              "cursor-pointer": !module.locked,
-              "opacity-60 bg-gray-100 cursor-not-allowed": module.locked,
-            }
-          )}
-          onClick={() => onSelectModule(module)}
-        >
-          {module.locked && (
-            <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-gray-300 p-2 rounded-full">
-              <Lock className="h-5 w-5 text-gray-600" />
-            </div>
-          )}
-          <module.icon className={clsx("h-16 w-16 sm:h-20 sm:w-20 mb-4", {
-            "text-indigo-500": !module.locked,
-            "text-gray-400": module.locked
-          })} />
-          <h2 className="text-xl sm:text-2xl font-semibold text-gray-800">{module.name}</h2>
-          <p className="text-gray-500 mt-2 text-sm sm:text-base">Improve your {module.name.toLowerCase()} skills.</p>
-        </motion.div>
-      ))}
-    </div>
-  </motion.div>
-);
+const MainView = ({ modules, onSelectModule }) => {
+  const [expandedModule, setExpandedModule] = React.useState(null);
+  const [levels, setLevels] = React.useState([]);
+  const [levelLoading, setLevelLoading] = React.useState(false);
+  const [levelStatus, setLevelStatus] = React.useState({});
+
+  const handleExpand = async (module) => {
+    if (expandedModule === module.id) {
+      setExpandedModule(null);
+      setLevels([]);
+      return;
+    }
+    setExpandedModule(module.id);
+    setLevelLoading(true);
+    try {
+      // Fetch latest module status (including levels)
+      const res = await api.get('/student/unlocked-modules');
+      const found = res.data.data.find(m => m.module_id === module.id);
+      setLevels(found ? found.levels : []);
+      setLevelStatus(Object.fromEntries((found ? found.levels : []).map(l => [l.level_id, l.unlocked])));
+    } catch {
+      setLevels([]);
+      setLevelStatus({});
+    } finally {
+      setLevelLoading(false);
+    }
+  };
+
+  const handleLevelToggle = async (moduleId, levelId, unlocked) => {
+    setLevelLoading(true);
+    try {
+      if (unlocked) {
+        await api.post(`/batch-management/student/level/lock`, { module: moduleId, level: levelId });
+      } else {
+        await api.post(`/batch-management/student/level/unlock`, { module: moduleId, level: levelId });
+      }
+      // Refresh levels
+      const res = await api.get('/student/unlocked-modules');
+      const found = res.data.data.find(m => m.module_id === moduleId);
+      setLevels(found ? found.levels : []);
+      setLevelStatus(Object.fromEntries((found ? found.levels : []).map(l => [l.level_id, l.unlocked])));
+    } catch {}
+    setLevelLoading(false);
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <h1 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-8">Practice Modules</h1>
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
+        {modules.map(module => (
+          <motion.div
+            key={module.id}
+            whileHover={!module.locked ? { scale: 1.05 } : {}}
+            className={clsx(
+              "bg-white p-6 sm:p-8 rounded-2xl shadow-lg flex flex-col items-center text-center relative",
+              {
+                "cursor-pointer": !module.locked,
+                "opacity-60 bg-gray-100 cursor-not-allowed": module.locked,
+              }
+            )}
+            onClick={() => onSelectModule(module)}
+          >
+            {module.locked && (
+              <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-gray-300 p-2 rounded-full">
+                <Lock className="h-5 w-5 text-gray-600" />
+              </div>
+            )}
+            <module.icon className={clsx("h-16 w-16 sm:h-20 sm:w-20 mb-4", {
+              "text-indigo-500": !module.locked,
+              "text-gray-400": module.locked
+            })} />
+            <h2 className="text-xl sm:text-2xl font-semibold text-gray-800">{module.name}</h2>
+            <p className="text-gray-500 mt-2 text-sm sm:text-base">Improve your {module.name.toLowerCase()} skills.</p>
+            {/* Expand for levels if unlocked */}
+            {!module.locked && (
+              <button className="mt-4 text-blue-600 underline" onClick={e => { e.stopPropagation(); handleExpand(module); }}>
+                {expandedModule === module.id ? 'Hide Levels' : 'Show Levels'}
+              </button>
+            )}
+            {expandedModule === module.id && !levelLoading && (
+              <div className="mt-4 w-full">
+                {levels.length === 0 ? (
+                  <div className="text-gray-500">No levels found.</div>
+                ) : (
+                  <ul className="space-y-2">
+                    {levels.map(level => (
+                      <li key={level.level_id} className="flex items-center justify-between bg-gray-50 rounded p-2">
+                        <span>{level.level_name}</span>
+                        <button
+                          className={clsx("ml-2 px-2 py-1 rounded text-xs font-semibold", levelStatus[level.level_id] ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800')}
+                          onClick={e => { e.stopPropagation(); handleLevelToggle(module.id, level.level_id, levelStatus[level.level_id]); }}
+                        >
+                          {levelStatus[level.level_id] ? 'Lock Level' : 'Unlock Level'}
+                        </button>
+                        {levelStatus[level.level_id] ? <Unlock className="ml-2 text-green-600" /> : <Lock className="ml-2 text-gray-400" />}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            {expandedModule === module.id && levelLoading && (
+              <div className="mt-4 text-gray-500">Loading levels...</div>
+            )}
+          </motion.div>
+        ))}
+      </div>
+    </motion.div>
+  );
+};
 
 const PopupModal = ({ isVisible, onClose }) => {
   if (!isVisible) return null;
