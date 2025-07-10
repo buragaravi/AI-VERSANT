@@ -44,19 +44,34 @@ const PracticeModules = () => {
     setModuleResult(null);
   };
   
-  const handleSelectModule = (module) => {
+  const handleSelectModule = async (module) => {
     if (module.locked) {
       setIsPopupVisible(true);
       return;
     }
-    // For Grammar, show grammar categories (levels)
     if (module.id === 'GRAMMAR') {
       setView('grammar_categories');
     } else {
-      setCurrentCategory({ id: module.id, name: module.name });
-      setView('module_list');
+      // Fetch levels and scores for this module
+      setLoading(true);
+      try {
+        const res = await api.get('/student/unlocked-modules');
+        const found = res.data.data.find(m => m.module_id === module.id);
+        const levels = found ? found.levels : [];
+        // Fetch scores for each level (simulate or use actual API)
+        // For now, assume scores are in found.levels as {level_id, unlocked, score}
+        const scores = {};
+        levels.forEach(lvl => { scores[lvl.level_id] = { score: lvl.score || 0, unlocked: lvl.unlocked }; });
+        setCurrentCategory({ id: module.id, name: module.name, levels, scores });
+        setView('module_levels');
+      } catch {
+        setCurrentCategory({ id: module.id, name: module.name, levels: [], scores: {} });
+        setView('module_levels');
+      } finally {
+        setLoading(false);
+      }
     }
-    setScrollToLevelId(null); // Reset scroll target
+    setScrollToLevelId(null);
   };
 
   const handleSelectCategory = (category) => {
@@ -185,6 +200,8 @@ const PracticeModules = () => {
         return <ModuleTakingView module={currentModule} onSubmit={handleModuleSubmit} onBack={() => setView('module_list')}/>;
       case 'result':
         return <ResultView result={moduleResult} onBack={() => { setView('module_list'); setModuleResult(null); }} />;
+      case 'module_levels':
+        return <ModuleLevelsView moduleId={currentCategory.id} levels={currentCategory.levels} scores={currentCategory.scores} onSelectLevel={handleSelectPracticeModule} />;
       default: // 'main'
         return <MainView modules={modules} onSelectModule={handleSelectModule} />;
     }
@@ -413,6 +430,49 @@ const ModuleListView = ({ category, modules, onSelectModule, onBack }) => (
         )}
   </motion.div>
 );
+
+const ModuleLevelsView = ({ moduleId, levels, scores, onSelectLevel }) => {
+  // Only for non-grammar modules
+  // levels: [{level_id, level_name}], scores: {level_id: {score, unlocked}}
+  let canUnlock = true;
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {levels.map((level, idx) => {
+        let unlocked = false;
+        if (idx === 0) {
+          unlocked = true;
+        } else {
+          // Previous level must be completed with >= 60%
+          const prev = levels[idx - 1];
+          unlocked = scores[prev.level_id]?.score >= 60;
+        }
+        return (
+          <motion.div
+            key={level.level_id}
+            whileHover={unlocked ? { scale: 1.05 } : {}}
+            className={clsx("bg-white p-6 rounded-xl shadow-lg relative", {
+              "cursor-pointer": unlocked,
+              "opacity-60 bg-gray-100": !unlocked,
+            })}
+            onClick={() => unlocked ? onSelectLevel(level) : setUnlockPopupMessage('Complete the previous level with 60% or more to unlock this!') || setShowUnlockPopup(true)}
+          >
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-bold text-gray-800 mt-1">{level.level_name}</h3>
+              {unlocked ? <Unlock className="h-6 w-6 text-green-500" /> : <Lock className="h-6 w-6 text-gray-400" />}
+            </div>
+            <div className="mt-4">
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${scores[level.level_id]?.score || 0}%` }}></div>
+              </div>
+              <p className="text-right text-sm text-gray-600 mt-1">Highest Score: {scores[level.level_id]?.score?.toFixed(0) ?? 0}%</p>
+            </div>
+            {!unlocked && <p className="text-xs text-center text-yellow-800 bg-yellow-100 p-2 rounded-md mt-4">Complete the previous level with 60% or more to unlock.</p>}
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+};
 
 const ModuleTakingView = ({ module, onSubmit, onBack }) => {
     const [questions, setQuestions] = useState([]);
