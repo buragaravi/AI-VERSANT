@@ -434,11 +434,33 @@ const StudentManagement = () => {
                                             <span className="text-xs text-green-700">Online: <b>{levelPercentages[lvl.level_id]?.online?.toFixed(1) ?? '--'}%</b></span>
                                         </div>
                                         <button
-                                            className={`ml-2 px-2 py-1 rounded ${lvl.unlocked ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}
-                                            onClick={() => handleLevelLockToggle(selectedStudent._id, lvl.level_id, lvl.unlocked)}
-                                            disabled={lvl.unlocked}
+                                            className={`ml-2 px-2 py-1 rounded ${lvl.unlocked ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}
+                                            onClick={async () => {
+                                                setLevelActionLoading(prev => ({ ...prev, [lvl.level_id]: true }));
+                                                try {
+                                                    if (lvl.unlocked) {
+                                                        await api.post(`/batch-management/student/${selectedStudent._id}/lock-level`, { module_id: levelsModalData.module.module_id, level_id: lvl.level_id });
+                                                        setUnlockMsg('Level locked!');
+                                                    } else {
+                                                        await api.post(`/batch-management/student/${selectedStudent._id}/authorize-level`, { module_id: levelsModalData.module.module_id, level_id: lvl.level_id });
+                                                        setUnlockMsg('Level unlocked!');
+                                                    }
+                                                    // Refresh levels for modal UI
+                                                    const res = await getStudentAccessStatus(selectedStudent._id);
+                                                    const updatedModule = (res.data.data || []).find(m => m.module_id === levelsModalData.module.module_id);
+                                                    setLevelsModalData({ module: updatedModule, levels: updatedModule.levels });
+                                                } catch (e) {
+                                                    setUnlockMsg('Failed to update level access.');
+                                                } finally {
+                                                    setLevelActionLoading(prev => ({ ...prev, [lvl.level_id]: false }));
+                                                    setTimeout(() => setUnlockMsg(''), 2000);
+                                                }
+                                            }}
+                                            disabled={!!levelActionLoading[lvl.level_id]}
                                         >
-                                            {lvl.unlocked ? 'Unlocked' : 'Unlock'}
+                                            {levelActionLoading[lvl.level_id]
+                                                ? (lvl.unlocked ? 'Locking...' : 'Unlocking...')
+                                                : (lvl.unlocked ? 'Lock Level' : 'Unlock Level')}
                                         </button>
                                     </div>
                                 ))}
