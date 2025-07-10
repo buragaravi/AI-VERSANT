@@ -34,6 +34,7 @@ const PracticeModules = () => {
   const { user } = useContext(AuthContext); // Assumes user object contains student_id or _id
   const [showUnlockPopup, setShowUnlockPopup] = useState(false);
   const [unlockPopupMessage, setUnlockPopupMessage] = useState('');
+  const [scrollToLevelId, setScrollToLevelId] = useState(null);
 
   const resetToMain = () => {
     setView('main');
@@ -48,13 +49,14 @@ const PracticeModules = () => {
       setIsPopupVisible(true);
       return;
     }
-
+    // For Grammar, show grammar categories (levels)
     if (module.id === 'GRAMMAR') {
       setView('grammar_categories');
     } else {
       setCurrentCategory({ id: module.id, name: module.name });
       setView('module_list');
     }
+    setScrollToLevelId(null); // Reset scroll target
   };
 
   const handleSelectCategory = (category) => {
@@ -161,6 +163,15 @@ const PracticeModules = () => {
       socket.disconnect();
     };
   }, [user, fetchModules]);
+
+  useEffect(() => {
+    if (scrollToLevelId) {
+      const el = document.getElementById(`level-${scrollToLevelId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [scrollToLevelId]);
 
   const renderContent = () => {
     if (loading) return <LoadingSpinner />;
@@ -292,37 +303,7 @@ const MainView = ({ modules, onSelectModule }) => {
             })} />
             <h2 className="text-xl sm:text-2xl font-semibold text-gray-800">{module.name}</h2>
             <p className="text-gray-500 mt-2 text-sm sm:text-base">Improve your {module.name.toLowerCase()} skills.</p>
-            {/* Expand for levels if unlocked */}
-            {!module.locked && (
-              <button className="mt-4 text-blue-600 underline" onClick={e => { e.stopPropagation(); handleExpand(module); }}>
-                {expandedModule === module.id ? 'Hide Levels' : 'Show Levels'}
-              </button>
-            )}
-            {expandedModule === module.id && !levelLoading && (
-              <div className="mt-4 w-full">
-                {levels.length === 0 ? (
-                  <div className="text-gray-500">No levels found.</div>
-                ) : (
-                  <ul className="space-y-2">
-                    {levels.map(level => (
-                      <li key={level.level_id} className="flex items-center justify-between bg-gray-50 rounded p-2">
-                        <span>{level.level_name}</span>
-                        <button
-                          className={clsx("ml-2 px-2 py-1 rounded text-xs font-semibold", levelStatus[level.level_id] ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800')}
-                          onClick={e => { e.stopPropagation(); handleLevelToggle(module.id, level.level_id, levelStatus[level.level_id]); }}
-                        >
-                          {levelStatus[level.level_id] ? 'Lock Level' : 'Unlock Level'}
-                        </button>
-                        {levelStatus[level.level_id] ? <Unlock className="ml-2 text-green-600" /> : <Lock className="ml-2 text-gray-400" />}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            {expandedModule === module.id && levelLoading && (
-              <div className="mt-4 text-gray-500">Loading levels...</div>
-            )}
+            {/* Removed: Show Levels link */}
           </motion.div>
         ))}
       </div>
