@@ -917,17 +917,25 @@ def get_unlocked_modules():
         from config.constants import MODULES, LEVELS
         current_user_id = get_jwt_identity()
         student = mongo_db.students.find_one({'user_id': ObjectId(current_user_id)})
-        # Default logic if student not found or no authorized_levels
+        # Define the desired order
+        module_order = ['GRAMMAR', 'VOCABULARY', 'LISTENING', 'SPEAKING', 'READING', 'WRITING']
+        # Build a list of (module_id, module_name) in the desired order, then append any others
+        ordered_modules = []
+        for mid in module_order:
+            if mid in MODULES:
+                ordered_modules.append((mid, MODULES[mid]))
+        for mid, mname in MODULES.items():
+            if mid not in module_order:
+                ordered_modules.append((mid, mname))
         modules_status = []
         if not student or not student.get('authorized_levels'):
-            for module_id, module_name in MODULES.items():
+            for module_id, module_name in ordered_modules:
                 levels = [
                     {
                         'level_id': level_id,
                         'level_name': level['name'] if isinstance(level, dict) else level,
                         'unlocked': (
-                            (module_id == 'GRAMMAR' and level_id == 'GRAMMAR_NOUN') or
-                            (module_id == 'VOCABULARY')
+                            module_id == 'GRAMMAR' or module_id == 'VOCABULARY'
                         )
                     }
                     for level_id, level in LEVELS.items()
@@ -944,20 +952,33 @@ def get_unlocked_modules():
             return jsonify({'success': True, 'data': modules_status}), 200
         # If student has authorized_levels, use them
         authorized_levels = set(student.get('authorized_levels', []))
-        for module_id, module_name in MODULES.items():
-            levels = [
-                {
-                    'level_id': level_id,
-                    'level_name': level['name'] if isinstance(level, dict) else level,
-                    'unlocked': level_id in authorized_levels
-                }
-                for level_id, level in LEVELS.items()
-                if (level.get('module_id') if isinstance(level, dict) else None) == module_id
-            ]
+        for module_id, module_name in ordered_modules:
+            if module_id in ['GRAMMAR', 'VOCABULARY']:
+                unlocked = True
+                levels = [
+                    {
+                        'level_id': level_id,
+                        'level_name': level['name'] if isinstance(level, dict) else level,
+                        'unlocked': True
+                    }
+                    for level_id, level in LEVELS.items()
+                    if (level.get('module_id') if isinstance(level, dict) else None) == module_id
+                ]
+            else:
+                levels = [
+                    {
+                        'level_id': level_id,
+                        'level_name': level['name'] if isinstance(level, dict) else level,
+                        'unlocked': level_id in authorized_levels
+                    }
+                    for level_id, level in LEVELS.items()
+                    if (level.get('module_id') if isinstance(level, dict) else None) == module_id
+                ]
+                unlocked = any(l['unlocked'] for l in levels) if levels else False
             modules_status.append({
                 'module_id': module_id,
                 'module_name': module_name,
-                'unlocked': any(l['unlocked'] for l in levels) if levels else False,
+                'unlocked': unlocked,
                 'levels': levels
             })
         return jsonify({'success': True, 'data': modules_status}), 200
