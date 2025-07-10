@@ -35,6 +35,8 @@ const PracticeModules = () => {
   const [showUnlockPopup, setShowUnlockPopup] = useState(false);
   const [unlockPopupMessage, setUnlockPopupMessage] = useState('');
   const [scrollToLevelId, setScrollToLevelId] = useState(null);
+  const [showNextLevelPopup, setShowNextLevelPopup] = useState(false);
+  const [nextLevelInfo, setNextLevelInfo] = useState(null);
 
   const resetToMain = () => {
     setView('main');
@@ -84,9 +86,13 @@ const PracticeModules = () => {
     }
   };
 
-  const handleSelectPracticeModule = (module) => {
+  const handleSelectPracticeModule = (module, idx = null) => {
     setCurrentModule(module);
     setView('taking_module');
+    if (idx !== null) {
+      setNextLevelInfo({ levelName: module.level_name, idx: idx });
+      setShowNextLevelPopup(true);
+    }
   };
 
   const handleModuleSubmit = (result) => {
@@ -96,6 +102,11 @@ const PracticeModules = () => {
        fetchGrammarProgress();
     }
     setView('result');
+    // If next level is unlocked, show popup
+    if (result.nextLevelUnlocked) {
+      setNextLevelInfo(result.nextLevelInfo); // {levelName, idx, ...}
+      setShowNextLevelPopup(true);
+    }
   };
 
   const fetchGrammarProgress = useCallback(async () => {
@@ -201,7 +212,7 @@ const PracticeModules = () => {
       case 'result':
         return <ResultView result={moduleResult} onBack={() => { setView('module_list'); setModuleResult(null); }} />;
       case 'module_levels':
-        return <ModuleLevelsView moduleId={currentCategory.id} levels={currentCategory.levels} scores={currentCategory.scores} onSelectLevel={handleSelectPracticeModule} />;
+        return <ModuleLevelsView moduleId={currentCategory.id} levels={currentCategory.levels} scores={currentCategory.scores} onSelectLevel={handleSelectPracticeModule} onBack={resetToMain} />;
       default: // 'main'
         return <MainView modules={modules} onSelectModule={handleSelectModule} />;
     }
@@ -239,6 +250,34 @@ const PracticeModules = () => {
               className="mt-4 w-full bg-yellow-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-yellow-600 transition-colors text-lg shadow"
             >
               Got it! I'll try again
+            </button>
+          </motion.div>
+        </div>
+      )}
+      {showNextLevelPopup && nextLevelInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-white rounded-2xl shadow-2xl p-10 max-w-md w-full text-center border-4 border-green-400"
+          >
+            <div className="mx-auto bg-green-100 h-24 w-24 flex items-center justify-center rounded-full mb-4">
+              <Unlock className="h-16 w-16 text-green-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mt-2 mb-2">Congratulations!</h2>
+            <p className="text-lg text-gray-700 mb-4">You've unlocked the next level: <span className="font-semibold">{nextLevelInfo.levelName}</span>! Keep up the great work and continue your progress.</p>
+            <button 
+              onClick={() => { setShowNextLevelPopup(false); handleSelectPracticeModule(nextLevelInfo.level, nextLevelInfo.idx); }}
+              className="mt-4 w-full bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition-colors text-lg shadow"
+            >
+              Go to Next Level
+            </button>
+            <button 
+              onClick={() => setShowNextLevelPopup(false)}
+              className="mt-2 w-full bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors text-base"
+            >
+              Maybe Later
             </button>
           </motion.div>
         </div>
@@ -431,45 +470,48 @@ const ModuleListView = ({ category, modules, onSelectModule, onBack }) => (
   </motion.div>
 );
 
-const ModuleLevelsView = ({ moduleId, levels, scores, onSelectLevel }) => {
+const ModuleLevelsView = ({ moduleId, levels, scores, onSelectLevel, onBack }) => {
   // Only for non-grammar modules
   // levels: [{level_id, level_name}], scores: {level_id: {score, unlocked}}
   let canUnlock = true;
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {levels.map((level, idx) => {
-        let unlocked = false;
-        if (idx === 0) {
-          unlocked = true;
-        } else {
-          // Previous level must be completed with >= 60%
-          const prev = levels[idx - 1];
-          unlocked = scores[prev.level_id]?.score >= 60;
-        }
-        return (
-          <motion.div
-            key={level.level_id}
-            whileHover={unlocked ? { scale: 1.05 } : {}}
-            className={clsx("bg-white p-6 rounded-xl shadow-lg relative", {
-              "cursor-pointer": unlocked,
-              "opacity-60 bg-gray-100": !unlocked,
-            })}
-            onClick={() => unlocked ? onSelectLevel(level) : setUnlockPopupMessage('Complete the previous level with 60% or more to unlock this!') || setShowUnlockPopup(true)}
-          >
-            <div className="flex justify-between items-center">
-              <h3 className="text-xl font-bold text-gray-800 mt-1">{level.level_name}</h3>
-              {unlocked ? <Unlock className="h-6 w-6 text-green-500" /> : <Lock className="h-6 w-6 text-gray-400" />}
-            </div>
-            <div className="mt-4">
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${scores[level.level_id]?.score || 0}%` }}></div>
+    <div>
+      <button onClick={onBack} className="mb-6 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 font-semibold">← Back to Modules</button>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {levels.map((level, idx) => {
+          let unlocked = false;
+          if (idx === 0) {
+            unlocked = true;
+          } else {
+            // Previous level must be completed with >= 60%
+            const prev = levels[idx - 1];
+            unlocked = scores[prev.level_id]?.score >= 60;
+          }
+          return (
+            <motion.div
+              key={level.level_id}
+              whileHover={unlocked ? { scale: 1.05 } : {}}
+              className={clsx("bg-white p-6 rounded-xl shadow-lg relative", {
+                "cursor-pointer": unlocked,
+                "opacity-60 bg-gray-100": !unlocked,
+              })}
+              onClick={() => unlocked ? onSelectLevel(level, idx) : setUnlockPopupMessage('Complete the previous level with 60% or more to unlock this!') || setShowUnlockPopup(true)}
+            >
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold text-gray-800 mt-1">{level.level_name}</h3>
+                {unlocked ? <Unlock className="h-6 w-6 text-green-500" /> : <Lock className="h-6 w-6 text-gray-400" />}
               </div>
-              <p className="text-right text-sm text-gray-600 mt-1">Highest Score: {scores[level.level_id]?.score?.toFixed(0) ?? 0}%</p>
-            </div>
-            {!unlocked && <p className="text-xs text-center text-yellow-800 bg-yellow-100 p-2 rounded-md mt-4">Complete the previous level with 60% or more to unlock.</p>}
-          </motion.div>
-        );
-      })}
+              <div className="mt-4">
+                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                  <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${scores[level.level_id]?.score || 0}%` }}></div>
+                </div>
+                <p className="text-right text-sm text-gray-600 mt-1">Highest Score: {scores[level.level_id]?.score?.toFixed(0) ?? 0}%</p>
+              </div>
+              {!unlocked && <p className="text-xs text-center text-yellow-800 bg-yellow-100 p-2 rounded-md mt-4">Complete the previous level with 60% or more to unlock.</p>}
+            </motion.div>
+          );
+        })}
+      </div>
     </div>
   );
 };
