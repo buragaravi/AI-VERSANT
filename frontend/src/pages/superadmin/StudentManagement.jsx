@@ -355,7 +355,7 @@ const StudentManagement = () => {
                                             {mod.unlocked ? <Unlock className="text-green-600" /> : <Lock className="text-gray-400" />}
                                         </div>
                                         <button
-                                            className={`ml-2 px-3 py-1 rounded ${mod.unlocked ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'}`}
+                                            className={`ml-2 px-3 py-1 rounded font-semibold transition-colors duration-150 ${mod.unlocked ? 'bg-red-200 text-red-800 hover:bg-red-300' : 'bg-green-200 text-green-800 hover:bg-green-300'}`}
                                             onClick={e => { e.stopPropagation(); handleModuleLockToggle(selectedStudent._id, mod.module_id, mod.unlocked); }}
                                             disabled={!!moduleActionLoading[mod.module_id]}
                                         >
