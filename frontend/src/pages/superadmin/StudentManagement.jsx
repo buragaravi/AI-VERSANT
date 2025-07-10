@@ -408,7 +408,7 @@ const StudentManagement = () => {
                 </Modal>
             )}
             {/* Levels Modal */}
-            {showLevelsModal && levelsModalData.module && (
+            {showLevelsModal && levelsModalData.module && levelsModalData.module.unlocked && (
                 <Modal isOpen={showLevelsModal} onClose={() => { setShowLevelsModal(false); setLevelsModalData({ module: null, levels: [] }); }} title={`${levelsModalData.module.module_name} Levels`}>
                     <div className="p-4">
                         <div className="mb-4 text-lg font-semibold">Levels for {levelsModalData.module.module_name}</div>
