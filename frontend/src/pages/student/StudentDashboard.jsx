@@ -137,47 +137,7 @@ const StudentDashboard = () => {
             </motion.div>
 
             {/* Unlocked Modules/Levels Section */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }} className="bg-white rounded-lg shadow-md p-6 mb-8">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Your Accessible Modules & Levels</h2>
-              {unlockedLoading ? <LoadingSpinner size="md" /> : unlockedError ? <div className="text-red-500">{unlockedError}</div> : (
-                <div className="space-y-4">
-                  {unlockedModules.map(mod => (
-                    <div key={mod.module_id} className="border rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="font-bold text-lg">{mod.module_name}</span>
-                        {mod.unlocked ? <span className="text-green-600">(Unlocked)</span> : <span className="text-gray-400">(Locked)</span>}
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {mod.levels.map(lvl => (
-                          <div key={lvl.level_id} className="flex items-center gap-2">
-                            <span>{lvl.level_name}</span>
-                            {lvl.unlocked ? <span className="text-green-600">Unlocked</span> : <span className="text-gray-400">Locked</span>}
-                            {/* Show progress if available, else placeholder */}
-                            {lvl.unlocked && (
-                              <span className="text-xs text-blue-700 ml-2">
-                                {(() => {
-                                  // Try to find progress for this level
-                                  let found = false;
-                                  if (mod.module_id === 'GRAMMAR') {
-                                    found = grammarResults.find(g => g.subcategory_display_name === lvl.level_name);
-                                    return found ? `Best: ${found.highest_score.toFixed(1)}%` : 'No attempts yet';
-                                  } else if (mod.module_id === 'VOCABULARY') {
-                                    found = vocabularyResults.find(v => v.level_display_name === lvl.level_name);
-                                    return found ? `Best: ${found.highest_score.toFixed(1)}%` : 'No attempts yet';
-                                  }
-                                  // For other modules, could add logic if needed
-                                  return '';
-                                })()}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
+            {/* Removed: Accessible Modules & Levels section as per requirements */}
 
             {/* Main Content Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
