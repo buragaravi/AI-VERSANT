@@ -93,8 +93,15 @@ const PracticeModules = () => {
   const fetchModules = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get('/student/modules');
-      const modulesWithIcons = res.data.data.map(m => ({ ...m, icon: moduleIcons[m.id] || moduleIcons.DEFAULT }));
+      // Use the new endpoint for per-student module access
+      const res = await api.get('/student/unlocked-modules');
+      // Map backend unlocked -> frontend locked
+      const modulesWithIcons = res.data.data.map(m => ({
+        id: m.module_id,
+        name: m.module_name,
+        locked: !m.unlocked, // invert for UI
+        icon: moduleIcons[m.module_id] || moduleIcons.DEFAULT
+      }));
       setModules(modulesWithIcons);
     } catch (err) {
       showError('Failed to load practice modules.');
@@ -630,7 +637,7 @@ const ResultView = ({ result, onBack }) => {
                                         <span className="font-semibold">Detailed Diff:</span>
                                         <div className="border rounded p-2 mt-1 bg-gray-50">
                                             {renderWordDiff(q.original_text || q.question, q.student_text || '')}
-            </div>
+                                        </div>
                                     </div>
                                     {/* Missing/Extra words */}
                                     {(q.missing_words && q.missing_words.length > 0) && (
@@ -647,18 +654,18 @@ const ResultView = ({ result, onBack }) => {
                                                 <source src={q.student_audio_url} type="audio/wav" />
                                                 Your browser does not support the audio element.
                                             </audio>
-                                </div>
+                                        </div>
                                     )}
-                    </>
-                ) : (
+                                </>
+                            ) : (
                                 // MCQ
                                 <>
                                     <div className="mb-2 font-semibold">{q.question}</div>
                                     <div className="mb-2">Your Answer: <span className={q.is_correct ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>{q.student_answer}</span></div>
                                     <div className="mb-2">Correct Answer: <span className="font-semibold">{q.correct_answer}</span></div>
                                 </>
-                )}
-            </div>
+                            )}
+                        </div>
                     ))}
                 </div>
                 <button onClick={onBack} className="mt-8 px-8 py-3 rounded-lg bg-orange-500 text-white font-semibold hover:bg-orange-600 transition">
