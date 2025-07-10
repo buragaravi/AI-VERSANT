@@ -44,6 +44,7 @@ const StudentManagement = () => {
     const [showLevelsModal, setShowLevelsModal] = useState(false);
     const [levelsModalData, setLevelsModalData] = useState({ module: null, levels: [] });
     const [levelPercentages, setLevelPercentages] = useState({}); // { levelId: { practice: %, online: % } }
+    const [moduleActionLoading, setModuleActionLoading] = useState({});
 
     const fetchStudents = useCallback(async () => {
         try {
@@ -145,6 +146,7 @@ const StudentManagement = () => {
     };
 
     const handleModuleLockToggle = async (studentId, moduleId, unlocked) => {
+        setModuleActionLoading(prev => ({ ...prev, [moduleId]: true }));
         try {
             if (unlocked) {
                 await lockStudentModule(studentId, moduleId);
@@ -153,12 +155,13 @@ const StudentManagement = () => {
                 await authorizeStudentModule(studentId, moduleId);
                 setUnlockMsg('Module unlocked!');
             }
-            // Refresh access status for the modal UI
+            // Refresh access status for the modal UI and force re-render
             const res = await getStudentAccessStatus(studentId);
-            setAccessStatus(res.data.data || []);
+            setAccessStatus([...res.data.data]); // new array reference
         } catch (e) {
             setUnlockMsg('Failed to update module access.');
         } finally {
+            setModuleActionLoading(prev => ({ ...prev, [moduleId]: false }));
             setTimeout(() => setUnlockMsg(''), 2000);
         }
     };
@@ -353,8 +356,11 @@ const StudentManagement = () => {
                                         <button
                                             className={`ml-2 px-3 py-1 rounded ${mod.unlocked ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'}`}
                                             onClick={e => { e.stopPropagation(); handleModuleLockToggle(selectedStudent._id, mod.module_id, mod.unlocked); }}
+                                            disabled={!!moduleActionLoading[mod.module_id]}
                                         >
-                                            {mod.unlocked ? 'Lock Module' : 'Unlock Module'}
+                                            {moduleActionLoading[mod.module_id]
+                                                ? (mod.unlocked ? 'Locking...' : 'Unlocking...')
+                                                : (mod.unlocked ? 'Lock Module' : 'Unlock Module')}
                                         </button>
                                     </div>
                                 ))}
