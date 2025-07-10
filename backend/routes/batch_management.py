@@ -743,20 +743,25 @@ def authorize_student_module(student_id):
         print(f"DEBUG: Student found: {student is not None}")
         if not student:
             print(f"DEBUG: No student found with ID: {student_id}")
-            # Let's also check if there are any students in the database
-            all_students = list(mongo_db.students.find({}, {'_id': 1, 'name': 1, 'email': 1}))
-            print(f"DEBUG: Total students in database: {len(all_students)}")
-            print(f"DEBUG: Sample student IDs: {[str(s['_id']) for s in all_students[:5]]}")
-            return jsonify({'success': False, 'message': 'Student not found.'}), 404
+            # Fallback: try user_id
+            student = mongo_db.students.find_one({'user_id': obj_id})
+            if student:
+                print(f"DEBUG: Found student by user_id fallback: {student}")
+            else:
+                # Let's also check if there are any students in the database
+                all_students = list(mongo_db.students.find({}, {'_id': 1, 'name': 1, 'email': 1}))
+                print(f"DEBUG: Total students in database: {len(all_students)}")
+                print(f"DEBUG: Sample student IDs: {[str(s['_id']) for s in all_students[:5]]}")
+                return jsonify({'success': False, 'message': 'Student not found.'}), 404
         if 'authorized_levels' not in student:
-            mongo_db.students.update_one({'_id': ObjectId(student_id)}, {'$set': {'authorized_levels': []}})
+            mongo_db.students.update_one({'_id': student['_id']}, {'$set': {'authorized_levels': []}})
 
         # Add all levels to authorized_levels
-        mongo_db.students.update_one({'_id': ObjectId(student_id)}, {'$addToSet': {'authorized_levels': {'$each': module_levels}}})
-        student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+        mongo_db.students.update_one({'_id': student['_id']}, {'$addToSet': {'authorized_levels': {'$each': module_levels}}})
+        student = mongo_db.students.find_one({'_id': student['_id']})
 
         # Emit real-time event to the student
-        socketio.emit('module_access_changed', {'student_id': str(student_id), 'module': module, 'action': 'unlocked'}, room=str(student_id))
+        socketio.emit('module_access_changed', {'student_id': str(student['_id']), 'module': module, 'action': 'unlocked'}, room=str(student['_id']))
 
         return jsonify({'success': True, 'message': f"Module '{module}' authorized for student.", 'authorized_levels': student.get('authorized_levels', [])}), 200
     except Exception as e:
@@ -778,11 +783,16 @@ def lock_student_module(student_id):
             return jsonify({'success': False, 'message': 'No levels found for this module.'}), 404
 
         # Remove all levels from authorized_levels
-        mongo_db.students.update_one({'_id': ObjectId(student_id)}, {'$pull': {'authorized_levels': {'$in': module_levels}}})
         student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+        if not student:
+            student = mongo_db.students.find_one({'user_id': ObjectId(student_id)})
+        if not student:
+            return jsonify({'success': False, 'message': 'Student not found.'}), 404
+        mongo_db.students.update_one({'_id': student['_id']}, {'$pull': {'authorized_levels': {'$in': module_levels}}})
+        student = mongo_db.students.find_one({'_id': student['_id']})
 
         # Emit real-time event to the student
-        socketio.emit('module_access_changed', {'student_id': str(student_id), 'module': module, 'action': 'locked'}, room=str(student_id))
+        socketio.emit('module_access_changed', {'student_id': str(student['_id']), 'module': module, 'action': 'locked'}, room=str(student['_id']))
 
         return jsonify({'success': True, 'message': f"Module '{module}' locked for student.", 'authorized_levels': student.get('authorized_levels', [])}), 200
     except Exception as e:
