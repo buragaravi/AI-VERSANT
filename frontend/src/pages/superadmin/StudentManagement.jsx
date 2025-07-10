@@ -45,6 +45,7 @@ const StudentManagement = () => {
     const [levelsModalData, setLevelsModalData] = useState({ module: null, levels: [] });
     const [levelPercentages, setLevelPercentages] = useState({}); // { levelId: { practice: %, online: % } }
     const [moduleActionLoading, setModuleActionLoading] = useState({});
+    const [levelActionLoading, setLevelActionLoading] = useState({});
 
     const fetchStudents = useCallback(async () => {
         try {
