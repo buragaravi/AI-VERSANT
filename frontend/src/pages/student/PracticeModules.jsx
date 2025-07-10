@@ -32,6 +32,8 @@ const PracticeModules = () => {
   const [isPopupVisible, setIsPopupVisible] = useState(false);
   const { error: showError, success } = useNotification();
   const { user } = useContext(AuthContext); // Assumes user object contains student_id or _id
+  const [showUnlockPopup, setShowUnlockPopup] = useState(false);
+  const [unlockPopupMessage, setUnlockPopupMessage] = useState('');
 
   const resetToMain = () => {
     setView('main');
@@ -60,7 +62,8 @@ const PracticeModules = () => {
       setCurrentCategory({ ...category, id: 'GRAMMAR', subId: category.id, name: category.name });
       setView('module_list');
     } else {
-      showError("Complete the previous part with a score of 60% or more to unlock this.");
+      setUnlockPopupMessage('Complete the previous part with a score of 60% or more to unlock this. You are just one step away from progressing! Give it your best shot!');
+      setShowUnlockPopup(true);
     }
   };
 
@@ -189,6 +192,29 @@ const PracticeModules = () => {
         isVisible={isPopupVisible} 
         onClose={() => setIsPopupVisible(false)} 
       />
+      {/* Motivational Unlock Popup */}
+      {showUnlockPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-white rounded-2xl shadow-2xl p-10 max-w-md w-full text-center border-4 border-yellow-400"
+          >
+            <div className="mx-auto bg-yellow-100 h-24 w-24 flex items-center justify-center rounded-full mb-4">
+              <CheckCircle className="h-16 w-16 text-yellow-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mt-2 mb-2">Keep Going!</h2>
+            <p className="text-lg text-gray-700 mb-4">{unlockPopupMessage}</p>
+            <button 
+              onClick={() => setShowUnlockPopup(false)}
+              className="mt-4 w-full bg-yellow-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-yellow-600 transition-colors text-lg shadow"
+            >
+              Got it! I'll try again
+            </button>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };
