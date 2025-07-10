@@ -343,26 +343,36 @@ const StudentManagement = () => {
                                     <div className="text-gray-500">No modules found for this student.</div>
                                 )}
                                 {sortedAccessStatus.map((mod) => (
-                                    <div key={mod.module_id} className="mb-4 p-4 border rounded-lg bg-gray-50 flex items-center justify-between cursor-pointer hover:bg-blue-100 transition"
-                                        onClick={async () => {
+                                    <div key={mod.module_id} className={`mb-4 p-4 border rounded-lg bg-gray-50 flex items-center justify-between transition ${mod.unlocked ? 'cursor-pointer hover:bg-blue-100' : ''}`}
+                                        onClick={mod.unlocked ? async () => {
                                             setLevelsModalData({ module: mod, levels: mod.levels });
                                             setShowLevelsModal(true);
                                             setLevelPercentages({});
                                             await fetchLevelPercentages(selectedStudent, mod);
-                                        }}>
+                                        } : undefined}
+                                    >
                                         <div className="flex items-center gap-2">
                                             <span className="font-semibold text-lg">{mod.module_name}</span>
                                             {mod.unlocked ? <Unlock className="text-green-600" /> : <Lock className="text-gray-400" />}
                                         </div>
-                                        <button
-                                            className={`ml-2 px-3 py-1 rounded font-semibold transition-colors duration-150 ${mod.unlocked ? 'bg-red-200 text-red-800 hover:bg-red-300' : 'bg-green-200 text-green-800 hover:bg-green-300'}`}
-                                            onClick={e => { e.stopPropagation(); handleModuleLockToggle(selectedStudent._id, mod.module_id, mod.unlocked); }}
-                                            disabled={!!moduleActionLoading[mod.module_id]}
-                                        >
-                                            {moduleActionLoading[mod.module_id]
-                                                ? (mod.unlocked ? 'Locking...' : 'Unlocking...')
-                                                : (mod.unlocked ? 'Lock Module' : 'Unlock Module')}
-                                        </button>
+                                        {!mod.unlocked && (
+                                            <button
+                                                className={`ml-2 px-3 py-1 rounded font-semibold transition-colors duration-150 bg-green-200 text-green-800 hover:bg-green-300`}
+                                                onClick={e => { e.stopPropagation(); handleModuleLockToggle(selectedStudent._id, mod.module_id, mod.unlocked); }}
+                                                disabled={!!moduleActionLoading[mod.module_id]}
+                                            >
+                                                {moduleActionLoading[mod.module_id] ? 'Unlocking...' : 'Unlock Module'}
+                                            </button>
+                                        )}
+                                        {mod.unlocked && (
+                                            <button
+                                                className={`ml-2 px-3 py-1 rounded font-semibold transition-colors duration-150 bg-red-200 text-red-800 hover:bg-red-300`}
+                                                onClick={e => { e.stopPropagation(); handleModuleLockToggle(selectedStudent._id, mod.module_id, mod.unlocked); }}
+                                                disabled={!!moduleActionLoading[mod.module_id]}
+                                            >
+                                                {moduleActionLoading[mod.module_id] ? 'Locking...' : 'Lock Module'}
+                                            </button>
+                                        )}
                                     </div>
                                 ))}
                                 {unlockMsg && <div className="mt-2 text-center text-sm text-green-600">{unlockMsg}</div>}
