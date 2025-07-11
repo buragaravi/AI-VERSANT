@@ -1483,6 +1483,20 @@ Answer: C`
     return hasAnswer && hasOptions
   }
 
+  const handleNextStep = () => {
+    const normalizedModule = typeof testData.module === 'object' ? testData.module.id : testData.module;
+    const normalizedLevel = typeof testData.level === 'object' ? testData.level.id : testData.level;
+    const normalizedSubcategory = typeof testData.subcategory === 'object' ? testData.subcategory.id : testData.subcategory;
+    updateTestData({
+      ...testData,
+      module: normalizedModule,
+      level: normalizedLevel,
+      subcategory: normalizedSubcategory,
+      questions,
+    });
+    nextStep();
+  };
+
   const onSubmit = () => {
     if (questions.some(q => !q.question.trim())) {
       error("All questions must have text. Please remove empty questions before proceeding.")
@@ -1503,8 +1517,7 @@ Answer: C`
       }
     }
     
-    updateTestData({ questions })
-    nextStep()
+    handleNextStep()
   }
 
   return (
