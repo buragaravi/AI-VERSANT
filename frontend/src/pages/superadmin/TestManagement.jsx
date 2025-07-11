@@ -554,7 +554,33 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
   const prevStep = () => setStep(prev => prev > 1 ? prev - 1 : prev)
 
   const updateTestData = (data) => {
-    setTestData(prev => ({ ...prev, ...data }))
+    // Normalize data to ensure we always store string IDs, not objects
+    const normalizedData = {};
+    
+    Object.keys(data).forEach(key => {
+      const value = data[key];
+      if (typeof value === 'object' && value !== null) {
+        // Handle different object types
+        if (value.id !== undefined) {
+          normalizedData[key] = value.id;
+        } else if (value.name !== undefined) {
+          normalizedData[key] = value.name;
+        } else if (value.value !== undefined) {
+          normalizedData[key] = value.value;
+        } else if (Array.isArray(value)) {
+          // Handle arrays of objects
+          normalizedData[key] = value.map(item => 
+            typeof item === 'object' ? (item.id || item.value || item.name) : item
+          );
+        } else {
+          normalizedData[key] = value;
+        }
+      } else {
+        normalizedData[key] = value;
+      }
+    });
+    
+    setTestData(prev => ({ ...prev, ...normalizedData }))
   }
 
   const renderStep = () => {
@@ -614,11 +640,16 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
 }
 
 const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }) => {
+  // Normalize testData to ensure we always have string IDs, not objects
+  const normalizedModule = typeof testData.module === 'object' ? testData.module?.id : testData.module;
+  const normalizedLevel = typeof testData.level === 'object' ? testData.level?.id : testData.level;
+  const normalizedSubcategory = typeof testData.subcategory === 'object' ? testData.subcategory?.id : testData.subcategory;
+
   const { register, handleSubmit, watch, formState: { errors } } = useForm({
     defaultValues: {
-      module: testData.module,
-      level: testData.level,
-      subcategory: testData.subcategory,
+      module: normalizedModule || '',
+      level: normalizedLevel || '',
+      subcategory: normalizedSubcategory || '',
     }
   })
   const { error } = useNotification()
@@ -790,9 +821,12 @@ const Step2TestType = ({ nextStep, prevStep, updateTestData, testData }) => {
 }
 
 const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
+  // Normalize testData to ensure we always have string values, not objects
+  const normalizedTestName = typeof testData.testName === 'object' ? testData.testName?.name : testData.testName;
+
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm({
     defaultValues: {
-      testName: testData.testName,
+      testName: normalizedTestName || '',
       startDateTime: testData.startDateTime || '',
       endDateTime: testData.endDateTime || '',
     }
@@ -1195,9 +1229,11 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
   // Determine module type
   const moduleType = (() => {
     if (!testData.module) return null;
-    if (["GRAMMAR", "VOCABULARY"].includes(testData.module)) return "MCQ";
-    if (["LISTENING", "AUDIO"].includes(testData.module)) return "AUDIO";
-    if (["SPEAKING", "SENTENCE"].includes(testData.module)) return "SENTENCE";
+    // Handle both string and object cases
+    const moduleId = typeof testData.module === 'object' ? testData.module?.id : testData.module;
+    if (["GRAMMAR", "VOCABULARY"].includes(moduleId)) return "MCQ";
+    if (["LISTENING", "AUDIO"].includes(moduleId)) return "AUDIO";
+    if (["SPEAKING", "SENTENCE"].includes(moduleId)) return "SENTENCE";
     return "MCQ"; // fallback
   })();
 
@@ -1222,7 +1258,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
     prevStep();
   };
 
-  // Render the appropriate upload component
+    // Render the appropriate upload component
   if (moduleType === "MCQ") {
     return (
       <MCQUpload
@@ -1230,29 +1266,29 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
         setQuestions={setQuestions}
         onNext={handleNext}
         onBack={handleBack}
-        moduleName={testData.module}
+        moduleName={typeof testData.module === 'object' ? testData.module?.name : testData.module}
       />
     );
   }
   if (moduleType === "AUDIO") {
-  return (
+    return (
       <AudioUpload
         audioFiles={audioFiles}
         setAudioFiles={setAudioFiles}
         onNext={handleNext}
         onBack={handleBack}
-        moduleName={testData.module}
+        moduleName={typeof testData.module === 'object' ? testData.module?.name : testData.module}
       />
     );
   }
   if (moduleType === "SENTENCE") {
-  return (
+    return (
       <SentenceUpload
         sentences={sentences}
         setSentences={setSentences}
         onNext={handleNext}
         onBack={handleBack}
-        moduleName={testData.module}
+        moduleName={typeof testData.module === 'object' ? testData.module?.name : testData.module}
       />
     );
   }
