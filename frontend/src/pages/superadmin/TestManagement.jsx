@@ -854,18 +854,33 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
 
   const onSubmit = async (data) => {
     try {
+      // Safely extract values from testData, handling both string and object formats
+      const moduleValue = typeof testData.module === 'object' ? testData.module?.id || testData.module?.value : testData.module;
+      const levelValue = typeof testData.level === 'object' ? testData.level?.id || testData.level?.value : testData.level;
+      const campusValue = typeof testData.campus === 'object' ? testData.campus?.value || testData.campus?.id : testData.campus;
+      
+      // Safely handle arrays
+      const batchesValue = Array.isArray(testData.batches) 
+        ? testData.batches.map(b => typeof b === 'object' ? (b.value || b.id) : b).filter(Boolean)
+        : [];
+      const coursesValue = Array.isArray(testData.courses)
+        ? testData.courses.map(c => typeof c === 'object' ? (c.value || c.id) : c).filter(Boolean)
+        : [];
+
       const res = await api.post('/test-management/check-test-name', {
         name: data.testName,
-        module: testData.module,
-        level: testData.level,
-        campus: testData.campus?.value,
-        batches: testData.batches?.map(b => b.value),
-        courses: testData.courses?.map(c => c.value),
+        module: moduleValue,
+        level: levelValue,
+        campus: campusValue,
+        batches: batchesValue,
+        courses: coursesValue,
       });
+      
       if (res.data.exists) {
         error(`A test with the name '${data.testName}' already exists for the selected module, level, campus, batch, and course.`);
         return;
       }
+      
       if (testType === 'online') {
         if (!testData.startDateTime || !testData.endDateTime) {
           error('Start and End date/time are required for Online Exam.');
@@ -964,7 +979,7 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
             type="number"
             min="1"
             value={testData.duration || ''}
-            onChange={e => updateTestData({ ...testData, duration: e.target.value })}
+            onChange={e => updateTestData({ duration: e.target.value })}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             required={testData.testType === 'Online'}
             placeholder="Enter duration in minutes"

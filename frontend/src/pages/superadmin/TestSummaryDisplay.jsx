@@ -2,14 +2,21 @@ import React from 'react';
 
 export default function TestSummaryDisplay({ testData, modules = [], levels = [], grammarCategories = [] }) {
   const getDisplay = (val, arr) => {
-    if (typeof val === 'object' && val !== null) return val.label || val.name || val.id || JSON.stringify(val);
+    if (typeof val === 'object' && val !== null) {
+      // Safely handle object values without causing serialization issues
+      return val.label || val.name || val.id || val.value || 'N/A';
+    }
     if (arr && arr.length && typeof val === 'string') {
       const found = arr.find(x => x.id === val);
       if (found) return found.label || found.name || found.id;
     }
     return val || 'N/A';
   };
-  const getArrayDisplay = arr => Array.isArray(arr) ? arr.map(x => getDisplay(x)).join(', ') : 'N/A';
+  
+  const getArrayDisplay = arr => {
+    if (!Array.isArray(arr)) return 'N/A';
+    return arr.map(x => getDisplay(x)).filter(Boolean).join(', ') || 'N/A';
+  };
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm">
       <div><strong className="text-gray-500 block">Campus:</strong><span className="text-gray-800">{getDisplay(testData.campus)}</span></div>
