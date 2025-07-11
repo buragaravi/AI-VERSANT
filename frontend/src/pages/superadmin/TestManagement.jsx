@@ -18,6 +18,9 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import Modal from '../../components/common/Modal';
 import TestSummaryDisplay from './TestSummaryDisplay';
+import MCQUpload from './MCQUpload';
+import AudioUpload from './AudioUpload';
+import SentenceUpload from './SentenceUpload';
 
 const TestManagement = () => {
   const location = useLocation()
@@ -613,15 +616,12 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
 const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }) => {
   const { register, handleSubmit, watch, formState: { errors } } = useForm({
     defaultValues: {
-      testName: testData.testName,
-      testType: testData.testType,
       module: testData.module,
       level: testData.level,
       subcategory: testData.subcategory,
     }
   })
   const { error } = useNotification()
-  const testType = watch('testType')
   const selectedModule = watch('module')
   const [modules, setModules] = useState([])
   const [levels, setLevels] = useState([])
@@ -662,31 +662,6 @@ const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }
             <Briefcase className="h-6 w-6"/>
           </div>
           <h2 className="text-2xl font-bold mb-4">Select Module and Level</h2>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-800">Test Type</label>
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <label className={clsx('relative flex p-4 border rounded-lg cursor-pointer hover:bg-blue-50 transition', {
-              'bg-blue-50 border-blue-500 ring-2 ring-blue-500': testType === 'Practice'
-            })}>
-              <input type="radio" {...register('testType')} value="Practice" className="sr-only" />
-              <div className="flex-1">
-                <span className="font-medium text-gray-800">Practice Module</span>
-                <p className="text-sm text-gray-500">Low-stakes module for student practice.</p>
-              </div>
-              {testType === 'Practice' && <CheckCircle className="h-5 w-5 text-blue-500 absolute top-2 right-2" />}
-            </label>
-            <label className={clsx('relative flex p-4 border rounded-lg cursor-pointer hover:bg-blue-50 transition', {
-              'bg-blue-50 border-blue-500 ring-2 ring-blue-500': testType === 'Online'
-            })}>
-              <input type="radio" {...register('testType')} value="Online" className="sr-only" />
-              <div className="flex-1">
-                <span className="font-medium text-gray-800">Online Exam</span>
-                <p className="text-sm text-gray-500">Formal, graded assessment.</p>
-              </div>
-              {testType === 'Online' && <CheckCircle className="h-5 w-5 text-blue-500 absolute top-2 right-2" />}
-            </label>
-          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
@@ -735,9 +710,12 @@ const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }
             </div>
           )}
         </div>
-        <div className="flex justify-end pt-4">
+        <div className="flex justify-between items-center pt-4">
+          <button type="button" onClick={prevStep} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors">
+            <ChevronLeft className="h-5 w-5 mr-1" /> Back
+          </button>
           <button type="submit" className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105">
-            Next: Select Test Type <ChevronRight className="h-5 w-5 ml-2" />
+            Next: Enter Test Name <ChevronRight className="h-5 w-5 ml-2" />
           </button>
         </div>
       </form>
@@ -803,7 +781,7 @@ const Step2TestType = ({ nextStep, prevStep, updateTestData, testData }) => {
             <ChevronLeft className="h-5 w-5 mr-1" /> Back
           </button>
           <button type="submit" className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105">
-            Next: Select Test Name <ChevronRight className="h-5 w-5 ml-2" />
+            Next: Select Module and Level <ChevronRight className="h-5 w-5 ml-2" />
           </button>
         </div>
       </form>
@@ -820,10 +798,6 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
     }
   })
   const { error } = useNotification()
-  const [baseName, setBaseName] = useState('')
-  const [sequence, setSequence] = useState(1)
-  const [existingTestNames, setExistingTestNames] = useState([]);
-  const [loadingNames, setLoadingNames] = useState(true);
   const [modules, setModules] = useState([]);
   const [levels, setLevels] = useState([]);
   const [grammarCategories, setGrammarCategories] = useState([]);
@@ -874,20 +848,6 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
   }
 
   useEffect(() => {
-    const fetchTestNames = async () => {
-      try {
-        const res = await getAllTests();
-        setExistingTestNames(res.data.data.map(t => t.name));
-      } catch (e) {
-        setExistingTestNames([]);
-      } finally {
-        setLoadingNames(false);
-      }
-    };
-    fetchTestNames();
-  }, []);
-
-  useEffect(() => {
     const fetchMeta = async () => {
       try {
         const res = await api.get('/test-management/get-test-data');
@@ -916,8 +876,8 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
         <div className="mb-6 bg-gray-50 border border-gray-200 p-4 rounded-lg">
           <h3 className="font-semibold text-gray-700 mb-2">Selections So Far:</h3>
           <TestSummaryDisplay testData={testData} modules={modules} levels={levels} grammarCategories={grammarCategories} />
-        </div>
-        {/* Test Name Input and Already Uploaded Names */}
+            </div>
+        {/* Test Name Input */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>
             <label htmlFor="testName" className="block text-sm font-medium text-gray-800">Test Name</label>
@@ -929,24 +889,6 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
               placeholder="e.g. Mid-term English Proficiency"
             />
             {errors.testName && <p className="text-red-500 text-xs mt-1">{errors.testName.message}</p>}
-            <div className="mt-4">
-              <div className="font-semibold text-gray-700 mb-1">Already Uploaded Test Names:</div>
-              {loadingNames ? (
-                <div className="text-gray-500 text-sm">Loading...</div>
-              ) : (
-                <div className="max-h-32 overflow-y-auto border border-gray-300 rounded bg-gray-50 p-2 text-sm text-gray-800">
-                  {existingTestNames.length === 0 ? (
-                    <div className="text-gray-400">No tests found.</div>
-                  ) : (
-                    <ul>
-                      {existingTestNames.map((name, idx) => (
-                        <li key={idx} className="truncate">{name}</li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </div>
           </div>
           {/* Start/End DateTime for Online Test */}
           {testType === 'online' && (
@@ -999,7 +941,7 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
             <ChevronLeft className="h-5 w-5 mr-1" /> Back
           </button>
           <button type="submit" className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105">
-            Next: Select Audience <ChevronRight className="h-5 w-5 ml-2" />
+            Next: Upload Questions <ChevronRight className="h-5 w-5 ml-2" />
           </button>
         </div>
       </form>
@@ -1250,450 +1192,72 @@ const CheckboxCard = ({ id, label, checked, onChange }) => {
 }
 
 const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) => {
-  const [questions, setQuestions] = useState(testData.questions || [])
-  const [previewQuestions, setPreviewQuestions] = useState([])
-  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
-  const { success, error } = useNotification()
+  // Determine module type
+  const moduleType = (() => {
+    if (!testData.module) return null;
+    if (["GRAMMAR", "VOCABULARY"].includes(testData.module)) return "MCQ";
+    if (["LISTENING", "AUDIO"].includes(testData.module)) return "AUDIO";
+    if (["SPEAKING", "SENTENCE"].includes(testData.module)) return "SENTENCE";
+    return "MCQ"; // fallback
+  })();
 
-  // Check if this is an MCQ module (Grammar or Vocabulary)
-  const isMcqModule = testData.module && ['GRAMMAR', 'VOCABULARY'].includes(testData.module)
+  // State for each upload type
+  const [questions, setQuestions] = useState(testData.questions || []);
+  const [audioFiles, setAudioFiles] = useState(testData.audioFiles || []);
+  const [sentences, setSentences] = useState(testData.sentences || []);
 
-  const processQuestionsForPreview = (parsedQuestions) => {
-    const existingQuestionTexts = new Set(questions.map(q => q.question.trim().toLowerCase()));
-    const questionsForPreview = [];
-
-    parsedQuestions.forEach(q => {
-      const questionText = q.question?.trim();
-      if (!questionText) {
-        return; // Ignore empty rows
-      }
-      const questionTextLower = questionText.toLowerCase();
-
-      // Check against questions already in the list AND questions in the current upload batch
-      if (existingQuestionTexts.has(questionTextLower)) {
-        questionsForPreview.push({ ...q, status: 'Duplicate' });
-      } else {
-        questionsForPreview.push({ ...q, status: 'New' });
-        existingQuestionTexts.add(questionTextLower); // Add to set to prevent duplicates from same file being marked as 'New'
-      }
-    });
-
-    if (questionsForPreview.length === 0) {
-        error("Could not find any questions in the uploaded file.");
-        return;
+  // Handlers for next/back
+  const handleNext = () => {
+    // Normalize and update testData based on moduleType
+    if (moduleType === "MCQ") {
+      updateTestData({ questions });
+    } else if (moduleType === "AUDIO") {
+      updateTestData({ audioFiles });
+    } else if (moduleType === "SENTENCE") {
+      updateTestData({ sentences });
     }
-
-    setPreviewQuestions(questionsForPreview);
-    setIsPreviewModalOpen(true);
-  };
-  
-  const handleConfirmPreview = () => {
-    const newQuestions = previewQuestions.filter(q => q.status === 'New');
-    setQuestions(current => [...current, ...newQuestions]);
-    setIsPreviewModalOpen(false);
-    setPreviewQuestions([]);
-    if (newQuestions.length > 0) {
-        success(`${newQuestions.length} new question(s) have been added.`);
-    } else {
-        error("No new questions were added as all were duplicates.");
-    }
-  };
-
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0]
-    if (!file) return
-
-    // Validate file type
-    const allowedTypes = [
-      'text/csv',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-      'application/vnd.ms-excel', // .xls
-      'application/octet-stream' // fallback for some Excel files
-    ]
-    
-    const fileExtension = file.name.toLowerCase().split('.').pop()
-    const isValidExtension = ['csv', 'xlsx', 'xls'].includes(fileExtension)
-    const isValidType = allowedTypes.includes(file.type) || file.type === ''
-    
-    if (!isValidExtension && !isValidType) {
-      error(`Invalid file type. Please upload a .csv, .xlsx, or .xls file. Received: ${file.type || fileExtension}`)
-      event.target.value = null
-      return
-    }
-
-    const reader = new FileReader();
-
-    reader.onload = (e) => {
-      try {
-        let parsedQuestions = [];
-        
-        if (fileExtension === 'csv' || file.type === 'text/csv') {
-          // CSV parsing for template format
-          const result = Papa.parse(e.target.result, { header: true, skipEmptyLines: true, trimHeaders: true, trimValues: true });
-          if (result.errors.length > 0) console.warn("CSV parsing warnings:", result.errors);
-          if (result.data.length === 0) throw new Error("No data found in CSV file.");
-          
-          parsedQuestions = result.data.map(row => ({
-            question: row.question || row.Question || '',
-            instructions: row.instructions || row.Instructions || '',
-          }));
-
-        } else {
-          // Excel parsing (.xlsx, .xls)
-          const workbook = XLSX.read(e.target.result, { type: 'array' });
-          if (!workbook.SheetNames.length) throw new Error("No sheets found in Excel file.");
-          
-          const sheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[sheetName];
-          if (!worksheet) throw new Error(`Sheet "${sheetName}" not found.`);
-
-          // For MCQ modules, detect if it's the "block" format (no headers) or "template" format (with headers).
-          let isBlockFormat = false;
-          if (isMcqModule) {
-            const firstRowJson = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 0 });
-            if (firstRowJson.length > 0) {
-              const header = String(firstRowJson[0][0] || '').trim().toLowerCase();
-              if (header !== 'question') {
-                isBlockFormat = true;
-              }
-            } else {
-              // Empty sheet, let the downstream logic handle it.
-              isBlockFormat = true;
-            }
-          }
-
-          if (isBlockFormat && isMcqModule) {
-            // New "block" parsing logic for user-friendly MCQ format
-            const data = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-            const questionsFromSheet = [];
-            let currentQuestionLines = [];
-
-            for (const row of data) {
-              const cellValue = row[0] ? String(row[0]).trim() : '';
-              if (cellValue) {
-                currentQuestionLines.push(cellValue);
-              }
-
-              // A question block is considered complete when we find the answer line.
-              if (cellValue.toLowerCase().startsWith('answer:')) {
-                if (currentQuestionLines.length > 1) { // Ensure it's not just an answer line by itself
-                  questionsFromSheet.push({
-                    question: currentQuestionLines.join('\n'),
-                    instructions: '', // This format doesn't have an instructions column
-                  });
-                }
-                currentQuestionLines = []; // Reset for the next question
-              }
-            }
-            parsedQuestions = questionsFromSheet;
-          } else {
-            // Original "template" parsing logic (header-based)
-            const jsonData = XLSX.utils.sheet_to_json(worksheet);
-            parsedQuestions = jsonData.map(row => ({
-              question: row.question || row.Question || '',
-              instructions: row.instructions || row.Instructions || '',
-            }));
-          }
-        }
-
-        const finalQuestions = parsedQuestions.filter(q => q && q.question && q.question.trim() !== '');
-
-        if (finalQuestions.length === 0) {
-          throw new Error("No valid questions found in the file. Please check the file's format and content.");
-        }
-
-        processQuestionsForPreview(finalQuestions);
-        
-      } catch (err) {
-        error(`File processing error: ${err.message}`);
-        console.error("File Processing Error:", err);
-      }
-    };
-    
-    reader.onerror = () => {
-      error("An unexpected error occurred while reading the file. Please try again.");
-    };
-
-    // Read file based on type
-    if (fileExtension === 'csv' || file.type === 'text/csv') {
-      reader.readAsText(file, 'UTF-8');
-    } else {
-      reader.readAsArrayBuffer(file);
-    }
-    
-    // Reset file input
-    event.target.value = null
-  }
-
-  const handleAddQuestion = () => {
-    if (isMcqModule) {
-      // Add MCQ question template
-      const mcqTemplate = `Which of the following is a proper noun?
-A) city
-B) school
-C) London
-D) teacher
-Answer: C`
-      setQuestions([...questions, { question: mcqTemplate, instructions: '' }])
-    } else {
-      setQuestions([...questions, { question: '', instructions: '' }])
-    }
-  }
-
-  const handleRemoveQuestion = (index) => {
-    setQuestions(questions.filter((_, i) => i !== index))
-  }
-
-  const handleQuestionChange = (index, field, value) => {
-    const newQuestions = [...questions]
-    newQuestions[index][field] = value
-    setQuestions(newQuestions)
-  }
-
-  const downloadTemplate = () => {
-    let headers, example
-    if (isMcqModule) {
-      headers = "question,instructions\n"
-      example = `"Which of the following is a proper noun?\nA) city\nB) school\nC) London\nD) teacher\nAnswer: C","Please select the correct answer."\n`
-    } else {
-      headers = "question,instructions\n"
-      example = `"What is the capital of France?","Please answer in a complete sentence."\n`
-    }
-    
-    const blob = new Blob([headers, example], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement("a")
-    if (link.download !== undefined) { 
-      const url = URL.createObjectURL(blob)
-      link.setAttribute("href", url)
-      link.setAttribute("download", isMcqModule ? "mcq_question_template.csv" : "question_template.csv")
-      link.style.visibility = 'hidden'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    }
-  }
-
-  const validateMcqQuestion = (questionText) => {
-    const lines = questionText.trim().split('\n')
-    if (lines.length < 6) return false
-    
-    const hasAnswer = lines.some(line => line.trim().startsWith('Answer:'))
-    const hasOptions = lines.filter(line => line.trim().match(/^[A-D]\)/)).length === 4
-    
-    return hasAnswer && hasOptions
-  }
-
-  const handleNextStep = () => {
-    const normalizedModule = typeof testData.module === 'object' ? testData.module.id : testData.module;
-    const normalizedLevel = typeof testData.level === 'object' ? testData.level.id : testData.level;
-    const normalizedSubcategory = typeof testData.subcategory === 'object' ? testData.subcategory.id : testData.subcategory;
-    updateTestData({
-      ...testData,
-      module: normalizedModule,
-      level: normalizedLevel,
-      subcategory: normalizedSubcategory,
-      questions,
-    });
     nextStep();
   };
+  const handleBack = () => {
+    prevStep();
+  };
 
-  const onSubmit = () => {
-    if (questions.some(q => !q.question.trim())) {
-      error("All questions must have text. Please remove empty questions before proceeding.")
-      return
-    }
-    if (questions.length === 0) {
-      error("Please add at least one question.")
-      return
-    }
-    
-    // Validate MCQ questions if it's an MCQ module
-    if (isMcqModule) {
-      for (let i = 0; i < questions.length; i++) {
-        if (!validateMcqQuestion(questions[i].question)) {
-          error(`Question ${i + 1} is not in the correct MCQ format. Please use the template format.`)
-          return
-        }
-      }
-    }
-    
-    handleNextStep()
+  // Render the appropriate upload component
+  if (moduleType === "MCQ") {
+    return (
+      <MCQUpload
+        questions={questions}
+        setQuestions={setQuestions}
+        onNext={handleNext}
+        onBack={handleBack}
+        moduleName={testData.module}
+      />
+    );
   }
-
+  if (moduleType === "AUDIO") {
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
-      {isPreviewModalOpen && (
-        <QuestionPreviewModal
-            questionsToPreview={previewQuestions}
-            onClose={() => setIsPreviewModalOpen(false)}
-            onConfirm={handleConfirmPreview}
-        />
-      )}
-      <div className="space-y-6">
-        <div className="flex items-center space-x-3">
-          <div className="bg-blue-500 p-2 rounded-full text-white">
-            <FileQuestion className="h-6 w-6"/>
-          </div>
-          <div>
-            <h2 className="text-2xl font-semibold text-gray-800">Upload Questions</h2>
-            {isMcqModule && (
-              <p className="text-sm text-gray-500 mt-1">
-                This module uses MCQ format. Questions should include options A, B, C, D and the correct answer.
-              </p>
-            )}
-          </div>
-        </div>
-        
-        {isMcqModule && (
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-            <h3 className="text-sm font-medium text-blue-800 mb-2">MCQ Question Format:</h3>
-            <div className="text-sm text-blue-700 font-mono bg-white p-3 rounded border">
-              <div>Which of the following is a proper noun?</div>
-              <div>A) city</div>
-              <div>B) school</div>
-              <div>C) London</div>
-              <div>D) teacher</div>
-              <div>Answer: C</div>
-            </div>
-          </div>
-        )}
-        
-        <div className="flex items-center space-x-4">
-          <label className="inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors">
-            <Upload className="h-5 w-5 mr-2 text-gray-500" />
-            Upload from File
-            <input 
-              type='file' 
-              className="hidden" 
-              onChange={handleFileUpload} 
-              accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" 
-            />
-          </label>
-          <button onClick={downloadTemplate} type="button" className="inline-flex items-center text-sm text-blue-500 hover:text-blue-700 hover:underline">
-            <FileText className="h-4 w-4 mr-1" /> Download Template
-          </button>
-        </div>
-        
-        <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
-          <p className="text-sm text-gray-500">
-            <strong>Supported formats:</strong> CSV (.csv), Excel (.xlsx, .xls)
-          </p>
-          <p className="text-sm text-gray-500 mt-1">
-            <strong>Required columns:</strong> "question" (or "Question") - Instructions column is optional
-          </p>
-          {isMcqModule && (
-            <p className="text-sm text-blue-500 mt-1">
-              <strong>Note:</strong> For MCQ modules, put the entire question with options and answer in the question column
-            </p>
-          )}
-        </div>
-        
-        <div className="mt-4 space-y-4 max-h-[400px] overflow-y-auto p-1">
-          {questions.map((q, index) => (
-            <motion.div key={index} layout className="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg border border-gray-200 shadow-sm">
-              <span className="text-blue-500 font-semibold">{index + 1}.</span>
-              <div className="flex-grow space-y-2">
-                {isMcqModule ? (
-                  <textarea
-                    placeholder="Enter MCQ question with options and answer..."
-                    value={q.question}
-                    onChange={(e) => handleQuestionChange(index, 'question', e.target.value)}
-                    className="w-full h-32 border-gray-200 rounded-md shadow-sm sm:text-sm focus:ring-blue-500 focus:border-blue-500 font-mono"
-                  />
-                ) : (
-                  <input
-                    type="text"
-                    placeholder="Enter question text..."
-                    value={q.question}
-                    onChange={(e) => handleQuestionChange(index, 'question', e.target.value)}
-                    className="w-full border-gray-200 rounded-md shadow-sm sm:text-sm focus:ring-blue-500 focus:border-blue-500"
-                  />
-                )}
-                <input
-                  type="text"
-                  placeholder="Instructions for student (optional)..."
-                  value={q.instructions}
-                  onChange={(e) => handleQuestionChange(index, 'instructions', e.target.value)}
-                  className="w-full border-gray-200 rounded-md shadow-sm sm:text-sm focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <button type="button" onClick={() => handleRemoveQuestion(index)} className="p-2 text-gray-400 hover:text-red-600 rounded-full transition-colors">
-                <Trash2 className="h-5 w-5" />
-              </button>
-            </motion.div>
-          ))}
-        </div>
-        
-        <button type="button" onClick={handleAddQuestion} className="mt-4 inline-flex items-center text-sm font-medium text-blue-500 hover:text-blue-700">
-          <Plus className="h-5 w-5 mr-1" /> Add Question Manually
-        </button>
-        
-        <div className="flex justify-between items-center pt-4">
-          <button type="button" onClick={prevStep} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors">
-            <ChevronLeft className="h-5 w-5 mr-1" /> Back
-          </button>
-          <button type="button" onClick={onSubmit} className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105">
-            Next: {isMcqModule ? 'Review & Create' : 'Configure Audio'} <ChevronRight className="h-5 w-5 ml-2" />
-          </button>
-        </div>
-      </div>
-    </motion.div>
-  )
-}
-
-const QuestionPreviewModal = ({ questionsToPreview, onClose, onConfirm }) => {
-  const newQuestionsCount = questionsToPreview.filter(q => q.status === 'New').length;
-
+      <AudioUpload
+        audioFiles={audioFiles}
+        setAudioFiles={setAudioFiles}
+        onNext={handleNext}
+        onBack={handleBack}
+        moduleName={testData.module}
+      />
+    );
+  }
+  if (moduleType === "SENTENCE") {
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
-      <div className="relative mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-md bg-white">
-        <div className="mt-3 text-center">
-          <h3 className="text-lg leading-6 font-medium text-gray-900">Upload Preview</h3>
-          <div className="mt-2 px-7 py-3">
-            <p className="text-sm text-gray-500">
-              Found {questionsToPreview.length} questions in the file. {newQuestionsCount} are new and will be added.
-            </p>
-            <div className="mt-4 max-h-80 overflow-y-auto border-t border-b">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Question</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {questionsToPreview.map((q, index) => (
-                    <tr key={index}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{index + 1}</td>
-                      <td className="px-6 py-4 text-left text-sm text-gray-900">{q.question.substring(0, 100)}{q.question.length > 100 ? '...' : ''}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${q.status === 'New' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                          {q.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div className="items-center px-4 py-3">
-            <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md mr-2 hover:bg-gray-300">
-              Cancel
-            </button>
-            <button
-              onClick={onConfirm}
-              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
-              disabled={newQuestionsCount === 0}
-            >
-              Add {newQuestionsCount} New Questions
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+      <SentenceUpload
+        sentences={sentences}
+        setSentences={setSentences}
+        onNext={handleNext}
+        onBack={handleBack}
+        moduleName={testData.module}
+      />
+    );
+  }
+  // fallback
+  return <div className="p-8 text-red-500">Unknown module type. Please go back and select a valid module.</div>;
 };
 
 const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
