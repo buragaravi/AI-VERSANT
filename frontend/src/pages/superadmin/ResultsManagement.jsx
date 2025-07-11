@@ -5,7 +5,7 @@ import Header from '../../components/common/Header';
 import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
-import { BookOpen, User, Calendar, Percent, Filter, Building, Briefcase, GraduationCap } from 'lucide-react';
+import { BookOpen, User, Calendar, Percent, Filter, Building, Briefcase, GraduationCap, ChevronDown, ChevronUp, Volume2, CheckCircle, XCircle } from 'lucide-react';
 
 const ResultsManagement = () => {
     const [results, setResults] = useState([]);
@@ -19,6 +19,7 @@ const ResultsManagement = () => {
         batch: ''
     });
     const { error } = useNotification();
+    const [expandedAttempt, setExpandedAttempt] = useState(null);
 
     useEffect(() => {
         const fetchResults = async () => {
@@ -58,6 +59,11 @@ const ResultsManagement = () => {
 
     const handleFilterChange = (e) => {
         setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const handleExpand = (resultIdx, attemptIdx) => {
+        const key = `${resultIdx}-${attemptIdx}`;
+        setExpandedAttempt(expandedAttempt === key ? null : key);
     };
 
     return (
@@ -108,39 +114,100 @@ const ResultsManagement = () => {
                                             <tr>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campus</th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Batch</th>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Test Name</th>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time Taken</th>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted At</th>
+                                                <th className="px-6 py-3"></th>
                                             </tr>
                                         </thead>
                                         <tbody className="bg-white divide-y divide-gray-200">
-                                            {filteredResults.map(result => (
-                                                <tr key={result._id}>
+                                            {filteredResults.map((result, resultIdx) => (
+                                                result.attempts.map((attempt, attemptIdx) => {
+                                                    const key = `${resultIdx}-${attemptIdx}`;
+                                                    return (
+                                                        <React.Fragment key={key}>
+                                                            <tr>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <div className="text-sm font-medium text-gray-900">{result.student_name}</div>
-                                                        <div className="text-sm text-gray-500">{result.roll_number || result.student_email}</div>
+                                                                    <div className="text-sm text-gray-500">{result.student_email}</div>
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{result.campus_name || 'N/A'}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{result.course_name || 'N/A'}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{result.batch_name || 'N/A'}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{result.test_name}</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{attempt.test_name}</td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800 capitalize">{result.test_type}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">{result.score?.toFixed(2) || 0.00}%</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
-                                                        {result.time_taken ? (
-                                                            <span>
-                                                                {Math.floor(result.time_taken / 60)}m {result.time_taken % 60}s
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-gray-400">N/A</span>
-                                                        )}
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">{attempt.score?.toFixed(2) || 0.00}%</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{attempt.submitted_at}</td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-right">
+                                                                    <button onClick={() => handleExpand(resultIdx, attemptIdx)} className="text-indigo-600 hover:text-indigo-900">
+                                                                        {expandedAttempt === key ? <ChevronUp /> : <ChevronDown />}
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                            {expandedAttempt === key && (
+                                                                <tr>
+                                                                    <td colSpan={7} className="bg-gray-50 px-6 py-4">
+                                                                        <div className="space-y-4">
+                                                                            {attempt.detailed_results && attempt.detailed_results.length > 0 ? (
+                                                                                attempt.detailed_results.map((q, qIdx) => (
+                                                                                    <div key={qIdx} className="border rounded-lg p-4 bg-white shadow-sm">
+                                                                                        <div className="font-semibold mb-2">Q{qIdx + 1}: {q.question || q.original_text}</div>
+                                                                                        {q.question_type === 'mcq' ? (
+                                                                                            <div>
+                                                                                                <div className="mb-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                                                                    {q.options && Object.entries(q.options).map(([key, value]) => {
+                                                                                                        const isCorrect = key === q.correct_answer;
+                                                                                                        const isStudent = key === q.student_answer;
+                                                                                                        return (
+                                                                                                            <div
+                                                                                                                key={key}
+                                                                                                                className={`flex items-center p-3 rounded-lg border-2 text-base font-medium transition-all
+                                                                                                                    ${isCorrect ? 'border-green-500 bg-green-50 text-green-800' :
+                                                                                                                        isStudent ? 'border-red-500 bg-red-50 text-red-800' :
+                                                                                                                        'border-gray-200 bg-white text-gray-700'}`}
+                                                                                                            >
+                                                                                                                <span className="font-bold mr-2">{key}.</span>
+                                                                                                                <span>{value}</span>
+                                                                                                                {isCorrect && <span className="ml-2 text-green-600 font-bold">(Correct)</span>}
+                                                                                                                {isStudent && !isCorrect && <span className="ml-2 text-red-600 font-bold">(Your Answer)</span>}
+                                                                                                            </div>
+                                                                                                        );
+                                                                                                    })}
+                                                                                                </div>
+                                                                                                <div className="mt-2 text-sm">
+                                                                                                    <span className="font-semibold">Your Answer:</span> <span className={q.is_correct ? 'text-green-700' : 'text-red-700'}>{q.student_answer || 'N/A'}</span>
+                                                                                                    <span className="ml-4 font-semibold">Correct Answer:</span> <span className="text-green-700">{q.correct_answer}</span>
+                                                                                                    {q.is_correct ? (
+                                                                                                        <span className="ml-4 flex items-center text-green-600"><CheckCircle className="h-5 w-5 mr-1" /> Correct</span>
+                                                                                                    ) : (
+                                                                                                        <span className="ml-4 flex items-center text-red-600"><XCircle className="h-5 w-5 mr-1" /> Incorrect</span>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        ) : (
+                                                                                            <div>
+                                                                                                <div className="mb-1">Transcript: <span className="font-mono bg-gray-100 px-2 py-1 rounded">{q.student_text}</span></div>
+                                                                                                <div className="mb-1">Similarity Score: <span className="font-semibold">{q.similarity_score?.toFixed(2) || 0}%</span></div>
+                                                                                                <div className="mb-1">Missing Words: <span className="text-yellow-700">{q.missing_words && q.missing_words.join(', ')}</span></div>
+                                                                                                <div className="mb-1">Extra Words: <span className="text-blue-700">{q.extra_words && q.extra_words.join(', ')}</span></div>
+                                                                                                {q.student_audio_url && (
+                                                                                                    <audio controls src={`https://<YOUR_S3_BUCKET_URL>/${q.student_audio_url}`} className="mt-2">
+                                                                                                        Your browser does not support the audio element.
+                                                                                                    </audio>
+                                                                                                )}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                ))
+                                                                            ) : (
+                                                                                <div className="text-gray-500">No detailed results available.</div>
+                                                                            )}
+                                                                        </div>
                                                     </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{result.submitted_at}</td>
                                                 </tr>
+                                                            )}
+                                                        </React.Fragment>
+                                                    );
+                                                })
                                             ))}
                                         </tbody>
                                     </table>

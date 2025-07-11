@@ -431,22 +431,28 @@ def get_student_practice_results():
             ]}})
         
         results = list(mongo_db.db.test_results.aggregate(pipeline))
-        
-        # Process results
+
+        # Fetch detailed answers for each attempt
         for result in results:
             result['module_display_name'] = MODULES.get(result['module_name'], 'Unknown')
             result['accuracy'] = (result['total_correct'] / result['total_questions'] * 100) if result['total_questions'] > 0 else 0
             result['last_attempt'] = result['last_attempt'].isoformat() if result['last_attempt'] else None
             result['status'] = 'completed' if result['highest_score'] >= 60 else 'needs_improvement'
-            
+
             # Sort attempts by date
             result['attempts'].sort(key=lambda x: x['submitted_at'], reverse=True)
-            
-            # Convert ObjectIds to strings
+
+            # Convert ObjectIds to strings and fetch detailed results
             for attempt in result['attempts']:
                 attempt['result_id'] = str(attempt['result_id'])
                 attempt['submitted_at'] = attempt['submitted_at'].isoformat()
-        
+                # Fetch the full test result document for detailed answers
+                test_result_doc = mongo_db.db.test_results.find_one({'_id': ObjectId(attempt['result_id'])})
+                if test_result_doc and 'results' in test_result_doc:
+                    attempt['detailed_results'] = test_result_doc['results']
+                else:
+                    attempt['detailed_results'] = []
+
         return jsonify({
             'success': True,
             'data': results

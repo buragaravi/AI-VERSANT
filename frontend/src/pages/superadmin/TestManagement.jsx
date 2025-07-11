@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { useForm, Controller } from 'react-hook-form'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNotification } from '../../contexts/NotificationContext'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import Header from '../../components/common/Header'
 import SuperAdminSidebar from '../../components/common/SuperAdminSidebar'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
@@ -332,6 +332,7 @@ const TestPreviewView = ({ test, onBack }) => {
   const [notifyModalOpen, setNotifyModalOpen] = useState(false);
   const [notifyResults, setNotifyResults] = useState([]);
   const [notifyLoading, setNotifyLoading] = useState(false);
+  const navigate = useNavigate();
 
   if (!test) {
     return (
@@ -416,6 +417,12 @@ const TestPreviewView = ({ test, onBack }) => {
             className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
           >
             {notifying ? 'Notifying...' : 'Notify Students'}
+          </button>
+          <button
+            onClick={() => navigate(`/superadmin/results?test_id=${test._id}`)}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors"
+          >
+            Results
           </button>
         </div>
       </div>
@@ -915,11 +922,11 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
               <div><strong className="text-gray-500 block">Batches:</strong><span className="text-gray-800">{testData.batches?.map(b => b.label).join(', ') || 'N/A'}</span></div>
               <div><strong className="text-gray-500 block">Courses:</strong><span className="text-gray-800">{testData.courses?.map(c => c.label).join(', ') || 'N/A'}</span></div>
               <div><strong className="text-gray-500 block">Test Type:</strong><span className="text-gray-800">{testData.testType || 'N/A'}</span></div>
-              <div><strong className="text-gray-500 block">Module:</strong><span className="text-gray-800">{modules.find(m => m.id === testData.module)?.name || testData.module || 'N/A'}</span></div>
+              <div><strong className="text-gray-500 block">Module:</strong><span className="text-gray-800">{typeof testData.module === 'object' ? testData.module.name || testData.module.id : (modules.find(m => m.id === testData.module)?.name || testData.module || 'N/A')}</span></div>
               {testData.module === 'GRAMMAR' && testData.subcategory ? (
-                <div><strong className="text-gray-500 block">Grammar Category:</strong><span className="text-gray-800">{grammarCategories.find(cat => cat.id === testData.subcategory)?.name || testData.subcategory}</span></div>
+                <div><strong className="text-gray-500 block">Grammar Category:</strong><span className="text-gray-800">{typeof testData.subcategory === 'object' ? testData.subcategory.name || testData.subcategory.id : (grammarCategories.find(cat => cat.id === testData.subcategory)?.name || testData.subcategory)}</span></div>
               ) : testData.module !== 'VOCABULARY' && testData.level ? (
-                <div><strong className="text-gray-500 block">Level:</strong><span className="text-gray-800">{levels.find(l => l.id === testData.level)?.name || testData.level}</span></div>
+                <div><strong className="text-gray-500 block">Level:</strong><span className="text-gray-800">{typeof testData.level === 'object' ? testData.level.name || testData.level.id : (levels.find(l => l.id === testData.level)?.name || testData.level)}</span></div>
               ) : null}
             </div>
           )}
