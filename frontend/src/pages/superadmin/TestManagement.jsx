@@ -17,24 +17,7 @@ import { uploadModuleQuestions, getRandomQuestionsFromBank, createTestFromBank, 
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import Modal from '../../components/common/Modal';
-
-// Add this new component at the top or after imports:
-function TestSummaryDisplay({ testData, modules, levels, grammarCategories }) {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-      <div><strong className="text-gray-500 block">Campus:</strong><span className="text-gray-800">{testData.campus?.label || (typeof testData.campus === 'object' ? testData.campus.name || testData.campus.id : String(testData.campus || 'N/A'))}</span></div>
-      <div><strong className="text-gray-500 block">Batches:</strong><span className="text-gray-800">{Array.isArray(testData.batches) ? testData.batches.map(b => b.label || (typeof b === 'object' ? b.name || b.id : String(b))).join(', ') : 'N/A'}</span></div>
-      <div><strong className="text-gray-500 block">Courses:</strong><span className="text-gray-800">{Array.isArray(testData.courses) ? testData.courses.map(c => c.label || (typeof c === 'object' ? c.name || c.id : String(c))).join(', ') : 'N/A'}</span></div>
-      <div><strong className="text-gray-500 block">Test Type:</strong><span className="text-gray-800">{testData.testType || 'N/A'}</span></div>
-      <div><strong className="text-gray-500 block">Module:</strong><span className="text-gray-800">{typeof testData.module === 'object' ? testData.module.name || testData.module.id : (modules.find(m => m.id === testData.module)?.name || testData.module || 'N/A')}</span></div>
-      {testData.module === 'GRAMMAR' && testData.subcategory ? (
-        <div><strong className="text-gray-500 block">Grammar Category:</strong><span className="text-gray-800">{typeof testData.subcategory === 'object' ? testData.subcategory.name || testData.subcategory.id : (grammarCategories.find(cat => cat.id === testData.subcategory)?.name || testData.subcategory)}</span></div>
-      ) : testData.module !== 'VOCABULARY' && testData.level ? (
-        <div><strong className="text-gray-500 block">Level:</strong><span className="text-gray-800">{typeof testData.level === 'object' ? testData.level.name || testData.level.id : (levels.find(l => l.id === testData.level)?.name || testData.level)}</span></div>
-      ) : null}
-    </div>
-  );
-}
+import TestSummaryDisplay from './TestSummaryDisplay';
 
 const TestManagement = () => {
   const location = useLocation()
@@ -932,11 +915,7 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
         {/* Selections Summary */}
         <div className="mb-6 bg-gray-50 border border-gray-200 p-4 rounded-lg">
           <h3 className="font-semibold text-gray-700 mb-2">Selections So Far:</h3>
-          {loadingMeta ? (
-            <div className="text-gray-500 text-sm">Loading selections...</div>
-          ) : (
-            <TestSummaryDisplay testData={testData} modules={modules} levels={levels} grammarCategories={grammarCategories} />
-          )}
+          <TestSummaryDisplay testData={testData} modules={modules} levels={levels} grammarCategories={grammarCategories} />
         </div>
         {/* Test Name Input and Already Uploaded Names */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
