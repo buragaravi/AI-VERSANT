@@ -268,7 +268,7 @@ const GetStarted = () => {
             transition={{ duration: 0.8, delay: 2.6 }}
             className="text-gray-500 text-sm"
           >
-            <p>© 2024 Study Edge. All rights reserved. | Empowering minds through comprehensive learning.</p>
+            <p>© 2025 Study Edge. All rights reserved. | Empowering minds through comprehensive learning.</p>
           </motion.div>
         </motion.div>
       </div>

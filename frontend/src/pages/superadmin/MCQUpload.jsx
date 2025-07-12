@@ -61,8 +61,13 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
     setIsPreviewModalOpen(true);
   };
 
+  const toBackendFormat = (q) =>
+    `${q.question}\nA) ${q.optionA}\nB) ${q.optionB}\nC) ${q.optionC}\nD) ${q.optionD}\nAnswer: ${q.answer}`;
+
   const handleConfirmPreview = () => {
-    const newQuestions = previewQuestions.filter(q => q.status === 'New');
+    const newQuestions = previewQuestions
+      .filter(q => q.status === 'New')
+      .map(q => ({ question: toBackendFormat(q) }));
     setQuestions(current => [...current, ...newQuestions]);
     setIsPreviewModalOpen(false);
     setPreviewQuestions([]);
