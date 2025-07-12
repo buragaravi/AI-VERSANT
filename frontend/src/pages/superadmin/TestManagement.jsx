@@ -21,6 +21,7 @@ import TestSummaryDisplay from './TestSummaryDisplay';
 import MCQUpload from './MCQUpload';
 import AudioUpload from './AudioUpload';
 import SentenceUpload from './SentenceUpload';
+import ReadingUpload from './ReadingUpload';
 
 // Config for modules and levels
 const MODULE_CONFIG = {
@@ -28,34 +29,34 @@ const MODULE_CONFIG = {
     label: 'Grammar',
     type: 'MCQ',
     levels: ['Noun', 'Pronoun', 'Verb', 'Adjective', 'Adverb', 'Preposition', 'Conjunction', 'Interjection'],
-    uploadComponent: require('./MCQUpload').default,
+    uploadComponent: MCQUpload,
   },
   VOCABULARY: {
     label: 'Vocabulary',
     type: 'MCQ',
     levels: ['Beginner', 'Intermediate', 'Advanced'],
-    uploadComponent: require('./MCQUpload').default,
+    uploadComponent: MCQUpload,
   },
   READING: {
     label: 'Reading',
     type: 'MCQ',
     levels: ['Beginner', 'Intermediate', 'Advanced'],
-    uploadComponent: require('./ReadingUpload').default,
+    uploadComponent: ReadingUpload,
   },
   LISTENING: {
     label: 'Listening',
     type: 'AUDIO',
-    uploadComponent: require('./SentenceUpload').default,
+    uploadComponent: SentenceUpload,
   },
   SPEAKING: {
     label: 'Speaking',
     type: 'SENTENCE',
-    uploadComponent: require('./SentenceUpload').default,
+    uploadComponent: SentenceUpload,
   },
   WRITING: {
     label: 'Writing',
     type: 'TEXT',
-    uploadComponent: require('./SentenceUpload').default, // You can create a dedicated WritingUpload if needed
+    uploadComponent: SentenceUpload, // Replace with WritingUpload if available
   },
 };
 
@@ -875,12 +876,12 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
   const handleNext = () => {
     if (!module) {
       setError('Please select a module.');
-      return;
-    }
+        return;
+      }
     if (MODULE_CONFIG[module]?.levels && !level) {
       setError('Please select a level.');
-      return;
-    }
+          return;
+        }
     if (!testName.trim()) {
       setError('Please enter a test name.');
       return;
@@ -901,7 +902,7 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
             <option key={key} value={key}>{mod.label}</option>
           ))}
         </select>
-      </div>
+          </div>
       {module && MODULE_CONFIG[module]?.levels && (
         <div className="mb-4">
           <label className="block font-semibold mb-2">Level</label>
@@ -911,17 +912,17 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
               <option key={lvl} value={lvl}>{lvl}</option>
             ))}
           </select>
-        </div>
-      )}
-      <div className="mb-4">
+            </div>
+          )}
+        <div className="mb-4">
         <label className="block font-semibold mb-2">Test Name</label>
         <input value={testName} onChange={e => setTestName(e.target.value)} className="w-full p-2 border rounded" placeholder="Enter test name" />
-      </div>
+        </div>
       {error && <div className="text-red-600 mb-4">{error}</div>}
       <div className="flex gap-2">
         <button onClick={prevStep} className="px-4 py-2 bg-gray-200 rounded">Back</button>
         <button onClick={handleNext} className="px-4 py-2 bg-blue-600 text-white rounded">Next</button>
-      </div>
+        </div>
     </div>
   );
 };
@@ -1180,11 +1181,11 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
       return;
     }
     setError('');
-    updateTestData({ questions });
+      updateTestData({ questions });
     nextStep();
   };
 
-  return (
+    return (
     <div>
       <UploadComponent
         questions={questions}
