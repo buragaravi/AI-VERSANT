@@ -2,6 +2,38 @@ import React, { useState } from 'react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
+function parseHumanReadableMCQ(text) {
+  // Split by question blocks
+  const blocks = text.split(/\n\s*\d+\./).filter(Boolean);
+  const questions = [];
+  blocks.forEach(block => {
+    // Extract question
+    const lines = block.trim().split(/\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length < 6) return;
+    const questionLine = lines[0];
+    const options = {};
+    let answer = '';
+    lines.forEach(line => {
+      if (/^A\)/.test(line)) options.A = line.replace(/^A\)\s*/, '');
+      if (/^B\)/.test(line)) options.B = line.replace(/^B\)\s*/, '');
+      if (/^C\)/.test(line)) options.C = line.replace(/^C\)\s*/, '');
+      if (/^D\)/.test(line)) options.D = line.replace(/^D\)\s*/, '');
+      if (/^Answer:/i.test(line)) answer = line.replace(/^Answer:\s*/i, '').trim();
+    });
+    if (questionLine && options.A && options.B && options.C && options.D && answer) {
+      questions.push({
+        question: questionLine,
+        optionA: options.A,
+        optionB: options.B,
+        optionC: options.C,
+        optionD: options.D,
+        answer,
+      });
+    }
+  });
+  return questions;
+}
+
 export default function MCQUpload({ questions, setQuestions, onNext, onBack, moduleName }) {
   const [previewQuestions, setPreviewQuestions] = useState([]);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
@@ -44,13 +76,14 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
       'text/csv',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'application/vnd.ms-excel',
-      'application/octet-stream'
+      'application/octet-stream',
+      'text/plain'
     ];
     const fileExtension = file.name.toLowerCase().split('.').pop();
-    const isValidExtension = ['csv', 'xlsx', 'xls'].includes(fileExtension);
+    const isValidExtension = ['csv', 'xlsx', 'xls', 'txt'].includes(fileExtension);
     const isValidType = allowedTypes.includes(file.type) || file.type === '';
     if (!isValidExtension && !isValidType) {
-      setError(`Invalid file type. Please upload a .csv, .xlsx, or .xls file. Received: ${file.type || fileExtension}`);
+      setError(`Invalid file type. Please upload a .csv, .xlsx, .xls, or .txt file. Received: ${file.type || fileExtension}`);
       event.target.value = null;
       return;
     }
@@ -63,9 +96,13 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
           if (result.data.length === 0) throw new Error('No data found in CSV file.');
           parsedQuestions = result.data.map(row => ({
             question: row.question || row.Question || '',
-            instructions: row.instructions || row.Instructions || '',
+            optionA: row.optionA || row.OptionA || row.A || '',
+            optionB: row.optionB || row.OptionB || row.B || '',
+            optionC: row.optionC || row.OptionC || row.C || '',
+            optionD: row.optionD || row.OptionD || row.D || '',
+            answer: row.answer || row.Answer || '',
           }));
-        } else {
+        } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
           const workbook = XLSX.read(e.target.result, { type: 'array' });
           if (!workbook.SheetNames.length) throw new Error('No sheets found in Excel file.');
           const sheetName = workbook.SheetNames[0];
@@ -74,10 +111,19 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
           const jsonData = XLSX.utils.sheet_to_json(worksheet);
           parsedQuestions = jsonData.map(row => ({
             question: row.question || row.Question || '',
-            instructions: row.instructions || row.Instructions || '',
+            optionA: row.optionA || row.OptionA || row.A || '',
+            optionB: row.optionB || row.OptionB || row.B || '',
+            optionC: row.optionC || row.OptionC || row.C || '',
+            optionD: row.optionD || row.OptionD || row.D || '',
+            answer: row.answer || row.Answer || '',
           }));
+        } else if (fileExtension === 'txt' || file.type === 'text/plain') {
+          parsedQuestions = parseHumanReadableMCQ(e.target.result);
+        } else {
+          // Try to parse as plain text as fallback
+          parsedQuestions = parseHumanReadableMCQ(e.target.result);
         }
-        const finalQuestions = parsedQuestions.filter(q => q && q.question && q.question.trim() !== '');
+        const finalQuestions = parsedQuestions.filter(q => q && q.question && q.optionA && q.optionB && q.optionC && q.optionD && q.answer);
         if (finalQuestions.length === 0) throw new Error('No valid questions found in the file.');
         processQuestionsForPreview(finalQuestions);
       } catch (err) {
@@ -85,7 +131,7 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
       }
     };
     reader.onerror = () => setError('An unexpected error occurred while reading the file.');
-    if (fileExtension === 'csv' || file.type === 'text/csv') {
+    if (fileExtension === 'csv' || file.type === 'text/csv' || fileExtension === 'txt' || file.type === 'text/plain') {
       reader.readAsText(file, 'UTF-8');
     } else {
       reader.readAsArrayBuffer(file);
@@ -96,7 +142,7 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
   return (
     <div>
       <h3 className="font-semibold text-lg mb-2">Upload MCQ Questions for {moduleName}</h3>
-      <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} />
+      <input type="file" accept=".csv,.xlsx,.xls,.txt" onChange={handleFileUpload} />
       {error && <div className="text-red-600 mt-2">{error}</div>}
       {/* Preview Modal */}
       {isPreviewModalOpen && (
