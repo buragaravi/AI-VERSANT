@@ -22,6 +22,43 @@ import MCQUpload from './MCQUpload';
 import AudioUpload from './AudioUpload';
 import SentenceUpload from './SentenceUpload';
 
+// Config for modules and levels
+const MODULE_CONFIG = {
+  GRAMMAR: {
+    label: 'Grammar',
+    type: 'MCQ',
+    levels: ['Noun', 'Pronoun', 'Verb', 'Adjective', 'Adverb', 'Preposition', 'Conjunction', 'Interjection'],
+    uploadComponent: require('./MCQUpload').default,
+  },
+  VOCABULARY: {
+    label: 'Vocabulary',
+    type: 'MCQ',
+    levels: ['Beginner', 'Intermediate', 'Advanced'],
+    uploadComponent: require('./MCQUpload').default,
+  },
+  READING: {
+    label: 'Reading',
+    type: 'MCQ',
+    levels: ['Beginner', 'Intermediate', 'Advanced'],
+    uploadComponent: require('./ReadingUpload').default,
+  },
+  LISTENING: {
+    label: 'Listening',
+    type: 'AUDIO',
+    uploadComponent: require('./SentenceUpload').default,
+  },
+  SPEAKING: {
+    label: 'Speaking',
+    type: 'SENTENCE',
+    uploadComponent: require('./SentenceUpload').default,
+  },
+  WRITING: {
+    label: 'Writing',
+    type: 'TEXT',
+    uploadComponent: require('./SentenceUpload').default, // You can create a dedicated WritingUpload if needed
+  },
+};
+
 const TestManagement = () => {
   const location = useLocation()
   const [view, setView] = useState('list')
@@ -590,7 +627,7 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
       case 2:
         return <Step2TestType nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
       case 3:
-        return <Step1TestDetails nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
+        return <Step3TestName nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
       case 4:
         return <Step3TestName nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
       case 5:
@@ -821,182 +858,73 @@ const Step2TestType = ({ nextStep, prevStep, updateTestData, testData }) => {
 }
 
 const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
-  // Normalize testData to ensure we always have string values, not objects
-  const normalizedTestName = typeof testData.testName === 'object' ? testData.testName?.name : testData.testName;
+  const [module, setModule] = useState(testData.module || '');
+  const [level, setLevel] = useState(testData.level || '');
+  const [testName, setTestName] = useState(testData.testName || '');
+  const [error, setError] = useState('');
 
-  const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm({
-    defaultValues: {
-      testName: normalizedTestName || '',
-      startDateTime: testData.startDateTime || '',
-      endDateTime: testData.endDateTime || '',
-    }
-  })
-  const { error } = useNotification()
-  const [modules, setModules] = useState([]);
-  const [levels, setLevels] = useState([]);
-  const [grammarCategories, setGrammarCategories] = useState([]);
-  const [loadingMeta, setLoadingMeta] = useState(true);
-
-  const testName = watch('testName')
-  const testType = testData.testType?.toLowerCase();
-
-  // Use testData.startDateTime and testData.endDateTime as the source of truth
-  const startDateTime = testData.startDateTime ? new Date(testData.startDateTime) : null;
-  const endDateTime = testData.endDateTime ? new Date(testData.endDateTime) : null;
-
-  // Update testData immediately when date changes
-  const handleStartDateChange = (date) => {
-    updateTestData({ startDateTime: date ? date.toISOString() : '' });
-  };
-  const handleEndDateChange = (date) => {
-    updateTestData({ endDateTime: date ? date.toISOString() : '' });
+  const handleModuleChange = (e) => {
+    setModule(e.target.value);
+    setLevel('');
   };
 
-  const onSubmit = async (data) => {
-    try {
-      // Safely extract values from testData, handling both string and object formats
-      const moduleValue = typeof testData.module === 'object' ? testData.module?.id || testData.module?.value : testData.module;
-      const levelValue = typeof testData.level === 'object' ? testData.level?.id || testData.level?.value : testData.level;
-      const campusValue = typeof testData.campus === 'object' ? testData.campus?.value || testData.campus?.id : testData.campus;
-      
-      // Safely handle arrays
-      const batchesValue = Array.isArray(testData.batches) 
-        ? testData.batches.map(b => typeof b === 'object' ? (b.value || b.id) : b).filter(Boolean)
-        : [];
-      const coursesValue = Array.isArray(testData.courses)
-        ? testData.courses.map(c => typeof c === 'object' ? (c.value || c.id) : c).filter(Boolean)
-        : [];
+  const handleLevelChange = (e) => {
+    setLevel(e.target.value);
+  };
 
-      const res = await api.post('/test-management/check-test-name', {
-        name: data.testName,
-        module: moduleValue,
-        level: levelValue,
-        campus: campusValue,
-        batches: batchesValue,
-        courses: coursesValue,
-      });
-      
-      if (res.data.exists) {
-        error(`A test with the name '${data.testName}' already exists for the selected module, level, campus, batch, and course.`);
-        return;
-      }
-      
-      if (testType === 'online') {
-        if (!testData.startDateTime || !testData.endDateTime) {
-          error('Start and End date/time are required for Online Exam.');
-          return;
-        }
-        updateTestData({ testName: data.testName });
-      } else {
-        updateTestData({ testName: data.testName })
-      }
-      nextStep()
-    } catch (err) {
-      error("Failed to verify test name. Please try again.");
+  const handleNext = () => {
+    if (!module) {
+      setError('Please select a module.');
+      return;
     }
-  }
-
-  useEffect(() => {
-    const fetchMeta = async () => {
-      try {
-        const res = await api.get('/test-management/get-test-data');
-        setModules(res.data.data.modules || []);
-        setLevels(res.data.data.levels || []);
-        setGrammarCategories(res.data.data.grammar_categories || []);
-      } catch (err) {
-        setModules([]); setLevels([]); setGrammarCategories([]);
-      } finally {
-        setLoadingMeta(false);
-      }
-    };
-    fetchMeta();
-  }, []);
+    if (MODULE_CONFIG[module]?.levels && !level) {
+      setError('Please select a level.');
+      return;
+    }
+    if (!testName.trim()) {
+      setError('Please enter a test name.');
+      return;
+    }
+    setError('');
+    updateTestData({ module, level, testName });
+    nextStep();
+  };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-        <div className="flex items-center space-x-3 border-b pb-4 border-gray-200">
-          <div className="bg-blue-500 p-2 rounded-full text-white">
-            <Briefcase className="h-6 w-6"/>
-          </div>
-          <h2 className="text-2xl font-bold mb-4">Enter Test Name</h2>
-        </div>
-        {/* Selections Summary */}
-        <div className="mb-6 bg-gray-50 border border-gray-200 p-4 rounded-lg">
-          <h3 className="font-semibold text-gray-700 mb-2">Selections So Far:</h3>
-          <TestSummaryDisplay testData={testData} modules={modules} levels={levels} grammarCategories={grammarCategories} />
-            </div>
-        {/* Test Name Input */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div>
-            <label htmlFor="testName" className="block text-sm font-medium text-gray-800">Test Name</label>
-            <input
-              type="text"
-              id="testName"
-              {...register('testName', { required: 'Test name is required' })}
-              className="mt-1 block w-full rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition bg-gray-700 text-white border-gray-600 placeholder-gray-400"
-              placeholder="e.g. Mid-term English Proficiency"
-            />
-            {errors.testName && <p className="text-red-500 text-xs mt-1">{errors.testName.message}</p>}
-          </div>
-          {/* Start/End DateTime for Online Test */}
-          {testType === 'online' && (
-            <div className="space-y-4">
-              <label className="block text-sm font-medium text-gray-800">Start Date & Time</label>
-              <DatePicker
-                selected={startDateTime}
-                onChange={handleStartDateChange}
-                showTimeSelect
-                timeFormat="HH:mm"
-                timeIntervals={15}
-                dateFormat="dd-MM-yyyy HH:mm"
-                placeholderText="Select start date & time"
-                minDate={new Date()}
-                className="mt-1 block w-full rounded-lg shadow focus:border-blue-600 focus:ring-2 focus:ring-blue-500 sm:text-base bg-white text-gray-900 border border-blue-300 placeholder-gray-400 transition"
-                calendarClassName="rounded-lg border-blue-300 shadow-lg"
-                popperClassName="z-50"
-              />
-              <label className="block text-sm font-medium text-gray-800">End Date & Time</label>
-              <DatePicker
-                selected={endDateTime}
-                onChange={handleEndDateChange}
-                showTimeSelect
-                timeFormat="HH:mm"
-                timeIntervals={15}
-                dateFormat="dd-MM-yyyy HH:mm"
-                placeholderText="Select end date & time"
-                minDate={startDateTime || new Date()}
-                className="mt-1 block w-full rounded-lg shadow focus:border-blue-600 focus:ring-2 focus:ring-blue-500 sm:text-base bg-white text-gray-900 border border-blue-300 placeholder-gray-400 transition"
-                calendarClassName="rounded-lg border-blue-300 shadow-lg"
-                popperClassName="z-50"
-              />
-            </div>
-          )}
-        </div>
+    <div className="max-w-xl mx-auto bg-white p-8 rounded-xl shadow">
+      <h2 className="text-2xl font-bold mb-6">Select Module, Level, and Enter Test Name</h2>
+      <div className="mb-4">
+        <label className="block font-semibold mb-2">Module</label>
+        <select value={module} onChange={handleModuleChange} className="w-full p-2 border rounded">
+          <option value="">Select Module</option>
+          {Object.entries(MODULE_CONFIG).map(([key, mod]) => (
+            <option key={key} value={key}>{mod.label}</option>
+          ))}
+        </select>
+      </div>
+      {module && MODULE_CONFIG[module]?.levels && (
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700">Test Duration (minutes)</label>
-          <input
-            type="number"
-            min="1"
-            value={testData.duration || ''}
-            onChange={e => updateTestData({ duration: e.target.value })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            required={testData.testType === 'Online'}
-            placeholder="Enter duration in minutes"
-          />
+          <label className="block font-semibold mb-2">Level</label>
+          <select value={level} onChange={handleLevelChange} className="w-full p-2 border rounded">
+            <option value="">Select Level</option>
+            {MODULE_CONFIG[module].levels.map(lvl => (
+              <option key={lvl} value={lvl}>{lvl}</option>
+            ))}
+          </select>
         </div>
-        <div className="flex justify-between items-center pt-8 border-t mt-8 border-gray-200">
-          <button type="button" onClick={prevStep} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors">
-            <ChevronLeft className="h-5 w-5 mr-1" /> Back
-          </button>
-          <button type="submit" className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105">
-            Next: Upload Questions <ChevronRight className="h-5 w-5 ml-2" />
-          </button>
-        </div>
-      </form>
-    </motion.div>
-  )
-}
+      )}
+      <div className="mb-4">
+        <label className="block font-semibold mb-2">Test Name</label>
+        <input value={testName} onChange={e => setTestName(e.target.value)} className="w-full p-2 border rounded" placeholder="Enter test name" />
+      </div>
+      {error && <div className="text-red-600 mb-4">{error}</div>}
+      <div className="flex gap-2">
+        <button onClick={prevStep} className="px-4 py-2 bg-gray-200 rounded">Back</button>
+        <button onClick={handleNext} className="px-4 py-2 bg-blue-600 text-white rounded">Next</button>
+      </div>
+    </div>
+  );
+};
 
 const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }) => {
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm({
@@ -1240,84 +1168,34 @@ const CheckboxCard = ({ id, label, checked, onChange }) => {
   );
 }
 
-const MCQ_MODULES = ["GRAMMAR", "VOCABULARY", "READING"];
-
 const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) => {
-  // Determine module type
-  const moduleType = (() => {
-    if (!testData.module) return null;
-    // Handle both string and object cases
-    const moduleId = typeof testData.module === 'object' ? testData.module?.id : testData.module;
-    if (MCQ_MODULES.includes(moduleId)) return "MCQ";
-    if (["LISTENING", "AUDIO"].includes(moduleId)) return "AUDIO";
-    if (["SPEAKING", "SENTENCE"].includes(moduleId)) return "SENTENCE";
-    return "MCQ"; // fallback
-  })();
-
-  // State for each upload type
+  const module = testData.module;
+  const UploadComponent = MODULE_CONFIG[module]?.uploadComponent || (() => <div>Unknown module</div>);
   const [questions, setQuestions] = useState(testData.questions || []);
-  const [audioFiles, setAudioFiles] = useState(testData.audioFiles || []);
-  const [sentences, setSentences] = useState(testData.sentences || []);
+  const [error, setError] = useState('');
 
-  // Handlers for next/back
   const handleNext = () => {
-    // Normalize and update testData based on moduleType
-    if (moduleType === "MCQ") {
-      updateTestData({ questions });
-    } else if (moduleType === "AUDIO") {
-      updateTestData({ audioFiles });
-    } else if (moduleType === "SENTENCE") {
-      updateTestData({ sentences });
+    if (MODULE_CONFIG[module]?.type === 'MCQ' && questions.length === 0) {
+      setError('Please upload at least one question.');
+      return;
     }
+    setError('');
+    updateTestData({ questions });
     nextStep();
   };
-  const handleBack = () => {
-    prevStep();
-  };
 
-  // Render the appropriate upload component
-  if (moduleType === "MCQ") {
-    // Dynamically choose the upload component
-    let UploadComponent = MCQUpload;
-    if (typeof testData.module === 'string' && testData.module === 'READING') {
-      try {
-        UploadComponent = require('./ReadingUpload').default;
-      } catch {}
-    }
-    return (
+  return (
+    <div>
       <UploadComponent
         questions={questions}
         setQuestions={setQuestions}
         onNext={handleNext}
-        onBack={handleBack}
-        moduleName={typeof testData.module === 'object' ? testData.module?.name : testData.module}
+        onBack={prevStep}
+        moduleName={MODULE_CONFIG[module]?.label}
       />
-    );
-  }
-  if (moduleType === "AUDIO") {
-    return (
-      <AudioUpload
-        audioFiles={audioFiles}
-        setAudioFiles={setAudioFiles}
-        onNext={handleNext}
-        onBack={handleBack}
-        moduleName={typeof testData.module === 'object' ? testData.module?.name : testData.module}
-      />
-    );
-  }
-  if (moduleType === "SENTENCE") {
-    return (
-      <SentenceUpload
-        sentences={sentences}
-        setSentences={setSentences}
-        onNext={handleNext}
-        onBack={handleBack}
-        moduleName={typeof testData.module === 'object' ? testData.module?.name : testData.module}
-      />
-    );
-  }
-  // fallback
-  return <div className="p-8 text-red-500">Unknown module type. Please go back and select a valid module.</div>;
+      {error && <div className="text-red-600 mt-2">{error}</div>}
+    </div>
+  );
 };
 
 const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
