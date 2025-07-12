@@ -1240,13 +1240,15 @@ const CheckboxCard = ({ id, label, checked, onChange }) => {
   );
 }
 
+const MCQ_MODULES = ["GRAMMAR", "VOCABULARY", "READING"];
+
 const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) => {
   // Determine module type
   const moduleType = (() => {
     if (!testData.module) return null;
     // Handle both string and object cases
     const moduleId = typeof testData.module === 'object' ? testData.module?.id : testData.module;
-    if (["GRAMMAR", "VOCABULARY"].includes(moduleId)) return "MCQ";
+    if (MCQ_MODULES.includes(moduleId)) return "MCQ";
     if (["LISTENING", "AUDIO"].includes(moduleId)) return "AUDIO";
     if (["SPEAKING", "SENTENCE"].includes(moduleId)) return "SENTENCE";
     return "MCQ"; // fallback
@@ -1273,10 +1275,17 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
     prevStep();
   };
 
-    // Render the appropriate upload component
+  // Render the appropriate upload component
   if (moduleType === "MCQ") {
+    // Dynamically choose the upload component
+    let UploadComponent = MCQUpload;
+    if (typeof testData.module === 'string' && testData.module === 'READING') {
+      try {
+        UploadComponent = require('./ReadingUpload').default;
+      } catch {}
+    }
     return (
-      <MCQUpload
+      <UploadComponent
         questions={questions}
         setQuestions={setQuestions}
         onNext={handleNext}
