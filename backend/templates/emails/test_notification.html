@@ -36,7 +36,7 @@
 </head>
 <body>
   <div class="container">
-    <img src="https://static.wixstatic.com/media/bfee2e_7d499a9b2c40442e85bb0fa99e7d5d37~mv2.png/v1/fill/w_203,h_111,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/logo1.png" alt="VERSANT Logo" class="logo" />
+    <img src="https://static.wixstatic.com/media/bfee2e_7d499a9b2c40442e85bb0fa99e7d5d37~mv2.png/v1/fill/w_203,h_111,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/logo1.png" alt="Study Edge Logo" class="logo" />
     <div class="header">A New Module/Test Has Been Assigned to You!</div>
     <div class="section">
       <span class="label">Test Name:</span> <span class="value">{{ test_name or 'N/A' }}</span>
@@ -70,16 +70,20 @@
       {% endif %}
     </table>
     <div class="section" style="margin-top: 18px;">
-      <span class="highlight">You have been assigned a new module/test. Please log in to the VERSANT System to view and attempt your test.</span>
+      <span class="highlight">You have been assigned a new module/test. Click the button below to go directly to your test.</span>
     </div>
     <div style="text-align:center;">
-      <a href="https://pydah-ai-versant.vercel.app/login" class="login-btn">Login to VERSANT System</a>
+      {% if is_online %}
+        <a href="https://pydah-ai-versant.vercel.app/login?redirect=/student/online-exams/{{ test_id }}" class="login-btn">Go to Online Test</a>
+      {% else %}
+        <a href="https://pydah-ai-versant.vercel.app/login?redirect=/student/practice-modules/{{ test_id }}" class="login-btn">Go to Practice Test</a>
+      {% endif %}
     </div>
     <div class="footer">
       If you have any questions, please contact your campus administrator.<br>
       <br>
       Good luck!<br>
-      <b>VERSANT System Team</b>
+      <b>Study Edge Team</b>
     </div>
   </div>
 </body>

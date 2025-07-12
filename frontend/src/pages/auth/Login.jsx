@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { motion } from 'framer-motion'
 import { useAuth } from '../../contexts/AuthContext'
@@ -13,6 +13,7 @@ const Login = () => {
   const { success, error: showError } = useNotification()
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const [showPassword, setShowPassword] = useState(false)
 
   const {
@@ -28,6 +29,12 @@ const Login = () => {
       console.log('Login returned user:', user)
       if (user) {
         success('Login successful!')
+        // Check for redirect query param
+        const redirectParam = searchParams.get('redirect')
+        if (redirectParam) {
+          navigate(redirectParam, { replace: true })
+          return
+        }
         // Redirect based on user role
         const roleRoutes = {
           superadmin: '/superadmin',

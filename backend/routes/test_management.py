@@ -1542,7 +1542,8 @@ def notify_students(test_id):
             start_dt=start_dt,
             end_dt=end_dt,
             is_online=is_online,
-            question_count=question_count
+            question_count=question_count,
+            test_id=str(test['_id'])  # Pass test_id for direct link
         )
         subject = f"New {test_type} Test Assigned: {test_name}"
 
