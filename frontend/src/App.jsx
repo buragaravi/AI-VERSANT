@@ -42,6 +42,7 @@ import ProgressTracker from './pages/student/ProgressTracker'
 import StudentProfile from './pages/student/Profile'
 import OnlineExamTaking from './pages/student/OnlineExamTaking'
 import TestResult from './pages/student/TestResult'
+import PracticeModuleTaking from './pages/student/PracticeModuleTaking'
 
 // Components
 import ProtectedRoute from './components/common/ProtectedRoute'
@@ -132,6 +133,7 @@ function App() {
                         <Route path="/profile" element={<StudentProfile />} />
                         <Route path="/exam/:examId" element={<OnlineExamTaking />} />
                         <Route path="/test-result/:resultId" element={<TestResult />} />
+                        <Route path="/practice-modules/:testId" element={<PracticeModuleTaking />} />
                       </Routes>
                     </ProtectedRoute>
                   }

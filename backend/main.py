@@ -6,6 +6,7 @@ from config.constants import JWT_ACCESS_TOKEN_EXPIRES, JWT_REFRESH_TOKEN_EXPIRES
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from dotenv import load_dotenv
+from scheduler import schedule_daily_notifications
 
 load_dotenv()
 
@@ -62,6 +63,9 @@ print("=== Registered Routes ===")
 for rule in app.url_map.iter_rules():
     print(rule)
 print("=========================")
+
+# Initialize the scheduler for daily notifications
+schedule_daily_notifications(app)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
