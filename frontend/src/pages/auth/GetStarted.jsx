@@ -64,15 +64,16 @@ const GetStarted = () => {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 relative overflow-hidden">
-      {/* Background decorative elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
-        <div className="absolute top-40 left-40 w-80 h-80 bg-pink-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"></div>
+    <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 relative overflow-x-hidden overflow-y-auto">
+      {/* Enhanced Background Animations */}
+      <div className="fixed inset-0 -z-10 pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40vw] h-[40vw] bg-blue-200 rounded-full mix-blend-multiply filter blur-2xl opacity-60 animate-blob"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] bg-purple-200 rounded-full mix-blend-multiply filter blur-2xl opacity-60 animate-blob animation-delay-2000"></div>
+        <div className="absolute top-[30%] right-[10%] w-[30vw] h-[30vw] bg-pink-200 rounded-full mix-blend-multiply filter blur-2xl opacity-50 animate-blob animation-delay-4000"></div>
+        <div className="absolute bottom-[20%] left-[20%] w-[25vw] h-[25vw] bg-yellow-100 rounded-full mix-blend-multiply filter blur-2xl opacity-40 animate-blob animation-delay-1000"></div>
       </div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="relative z-10 max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 py-12 w-full">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -88,7 +89,7 @@ const GetStarted = () => {
           >
             <img
               src="https://static.wixstatic.com/media/bfee2e_7d499a9b2c40442e85bb0fa99e7d5d37~mv2.png/v1/fill/w_203,h_111,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/logo1.png"
-              alt="VERSANT Logo"
+              alt="Study Edge Logo"
               className="mx-auto h-28 w-auto drop-shadow-lg"
             />
           </motion.div>
@@ -102,7 +103,7 @@ const GetStarted = () => {
           >
             Welcome to{' '}
             <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
-              VERSANT
+              Study Edge
             </span>
           </motion.h1>
 
@@ -123,7 +124,7 @@ const GetStarted = () => {
             transition={{ duration: 0.8, delay: 0.8 }}
             className="text-lg text-gray-600 mb-12 max-w-3xl mx-auto"
           >
-            From foundational grammar to advanced programming logic, VERSANT offers an immersive learning experience that adapts to your pace and goals.
+            From foundational grammar to advanced programming logic, Study Edge offers an immersive learning experience that adapts to your pace and goals.
           </motion.p>
 
           {/* Urgency Message */}
@@ -145,7 +146,7 @@ const GetStarted = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 1.2 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16 w-full"
           >
             {features.map((feature, index) => (
               <motion.div
@@ -154,13 +155,14 @@ const GetStarted = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 1.4 + index * 0.1 }}
                 whileHover={{ 
-                  scale: 1.05,
-                  rotateY: 5,
+                  scale: 1.07,
+                  boxShadow: '0 8px 32px 0 rgba(0, 120, 255, 0.15), 0 0 40px 10px #a5b4fc',
+                  background: 'linear-gradient(120deg, #f0f7ff 60%, #e0e7ff 100%)',
                   transition: { duration: 0.3 }
                 }}
                 className="group relative"
               >
-                <div className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 hover:border-blue-200">
+                <div className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 hover:border-blue-200 overflow-hidden">
                   <div className={`text-5xl mb-4 group-hover:scale-110 transition-transform duration-300`}>
                     {feature.icon}
                   </div>
@@ -170,7 +172,11 @@ const GetStarted = () => {
                   <p className="text-gray-600 text-sm leading-relaxed">
                     {feature.description}
                   </p>
-                  <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-5 rounded-2xl transition-opacity duration-300`}></div>
+                  {/* Card lighting effect */}
+                  <div className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <div className="absolute -top-10 -left-10 w-40 h-40 bg-blue-200 rounded-full blur-2xl opacity-40 animate-card-light"></div>
+                    <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-purple-200 rounded-full blur-2xl opacity-30 animate-card-light animation-delay-2000"></div>
+                  </div>
                 </div>
               </motion.div>
             ))}
@@ -184,7 +190,7 @@ const GetStarted = () => {
             className="bg-white rounded-3xl p-8 shadow-xl mb-12 max-w-5xl mx-auto"
           >
             <h3 className="text-3xl font-bold text-gray-900 mb-6 text-center">
-              Why Choose VERSANT?
+              Why Choose Study Edge?
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {benefits.map((benefit, index) => (
@@ -262,7 +268,7 @@ const GetStarted = () => {
             transition={{ duration: 0.8, delay: 2.6 }}
             className="text-gray-500 text-sm"
           >
-            <p>© 2024 VERSANT. All rights reserved. | Empowering minds through comprehensive learning.</p>
+            <p>© 2024 Study Edge. All rights reserved. | Empowering minds through comprehensive learning.</p>
           </motion.div>
         </motion.div>
       </div>
@@ -285,11 +291,21 @@ const GetStarted = () => {
         .animate-blob {
           animation: blob 7s infinite;
         }
+        .animation-delay-1000 {
+          animation-delay: 1s;
+        }
         .animation-delay-2000 {
           animation-delay: 2s;
         }
         .animation-delay-4000 {
           animation-delay: 4s;
+        }
+        @keyframes card-light {
+          0%, 100% { opacity: 0.4; }
+          50% { opacity: 0.7; }
+        }
+        .animate-card-light {
+          animation: card-light 3s infinite alternate;
         }
       `}</style>
     </div>
