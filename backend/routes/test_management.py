@@ -1091,17 +1091,19 @@ def get_single_test(test_id):
 @jwt_required()
 @require_superadmin
 def delete_test(test_id):
-    """Delete a test and its associated S3 audio files."""
+    """Delete a test and its associated S3 audio files (if any)."""
     try:
         test_to_delete = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
         if not test_to_delete:
             return jsonify({'success': False, 'message': 'Test not found'}), 404
 
-        # Delete audio files from S3
-        questions = test_to_delete.get('questions', [])
-        if questions:
+        # Only delete S3 audio files for non-MCQ modules
+        module_id = test_to_delete.get('module_id')
+        mcq_modules = ['GRAMMAR', 'VOCABULARY', 'READING']
+        if module_id not in mcq_modules:
+            questions = test_to_delete.get('questions', [])
             objects_to_delete = [{'Key': q['audio_url']} for q in questions if 'audio_url' in q and q['audio_url']]
-            if objects_to_delete:
+            if objects_to_delete and s3_client:
                 s3_client.delete_objects(
                     Bucket=S3_BUCKET_NAME,
                     Delete={'Objects': objects_to_delete}
