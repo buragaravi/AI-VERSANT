@@ -93,6 +93,7 @@ const QuestionBankUpload = () => {
   const [errorMsg, setErrorMsg] = useState('');
   const [duplicateMap, setDuplicateMap] = useState({});
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     const fetchOptions = async () => {
@@ -126,6 +127,7 @@ const QuestionBankUpload = () => {
     setQuestions([]);
     setSuccessMsg('');
     setErrorMsg('');
+    setShowPreview(false);
   };
   const handleBackToModules = () => {
     setSelectedModule(null);
@@ -134,6 +136,7 @@ const QuestionBankUpload = () => {
     setQuestions([]);
     setSuccessMsg('');
     setErrorMsg('');
+    setShowPreview(false);
   };
   const parsePlainTextMCQ = (text) => {
     // Split by lines starting with a serial number (e.g., 1. ... 2. ...)
@@ -196,27 +199,20 @@ const QuestionBankUpload = () => {
           try {
             const result = Papa.parse(e.target.result, { header: true, skipEmptyLines: true });
             parsedQuestions = result.data.map(row => {
-              if (row.Question && row.A && row.B && row.C && row.D && row.Answer && row.Level) {
+              if (row.Question && row.A && row.B && row.C && row.D && row.Answer) {
                 return {
-                  type: 'MCQ',
-                  question_text: row.Question,
-                  options: { A: row.A, B: row.B, C: row.C, D: row.D },
-                  correct_option: row.Answer,
-                  module: selectedModule?.name,
-                  level: row.Level,
-                  used_count: 0,
-                  last_used: null
+                  question: row.Question,
+                  optionA: row.A,
+                  optionB: row.B,
+                  optionC: row.C,
+                  optionD: row.D,
+                  answer: row.Answer,
+                  set: row.Set || row.set || 'Set-1',
+                  level: row.Level || row.level || '',
                 };
               }
-              return {
-                question: row.question || row.Question || '',
-                instructions: row.instructions || row.Instructions || '',
-                module: selectedModule?.name,
-                level: row.Level || levelId,
-                used_count: 0,
-                last_used: null
-              };
-            });
+              return null;
+            }).filter(Boolean);
           } catch {
             parseError = true;
           }
@@ -227,27 +223,20 @@ const QuestionBankUpload = () => {
             const worksheet = workbook.Sheets[sheetName];
             const jsonData = XLSX.utils.sheet_to_json(worksheet);
             parsedQuestions = jsonData.map(row => {
-              if (row.Question && row.A && row.B && row.C && row.D && row.Answer && row.Level) {
+              if (row.Question && row.A && row.B && row.C && row.D && row.Answer) {
                 return {
-                  type: 'MCQ',
-                  question_text: row.Question,
-                  options: { A: row.A, B: row.B, C: row.C, D: row.D },
-                  correct_option: row.Answer,
-                  module: selectedModule?.name,
-                  level: row.Level,
-                  used_count: 0,
-                  last_used: null
+                  question: row.Question,
+                  optionA: row.A,
+                  optionB: row.B,
+                  optionC: row.C,
+                  optionD: row.D,
+                  answer: row.Answer,
+                  set: row.Set || row.set || 'Set-1',
+                  level: row.Level || row.level || '',
                 };
               }
-              return {
-                question: row.question || row.Question || '',
-                instructions: row.instructions || row.Instructions || '',
-                module: selectedModule?.name,
-                level: row.Level || levelId,
-                used_count: 0,
-                last_used: null
-              };
-            });
+              return null;
+            }).filter(Boolean);
           } catch {
             parseError = true;
           }
@@ -261,19 +250,21 @@ const QuestionBankUpload = () => {
           setQuestions([]);
           setSuccessMsg('');
           setErrorMsg('Failed to parse file.');
+          setShowPreview(false);
           return;
         }
-        setQuestions(parsedQuestions.filter(q => (q.type === 'MCQ' ? q.question_text : q.question) && ((q.type === 'MCQ' && q.options) || q.question)));
+        setQuestions(parsedQuestions);
         setSuccessMsg(`Loaded ${parsedQuestions.length} questions.`);
         setErrorMsg('');
+        setShowPreview(true);
         await checkDuplicates(parsedQuestions);
-        setShowPreviewModal(true);
       } catch (err) {
         setErrorMsg('Failed to parse file.');
         setSuccessMsg('');
+        setShowPreview(false);
       }
     };
-    if (fileExtension === 'csv' || fileExtension === 'txt') {
+    if (fileExtension === 'csv') {
       reader.readAsText(file, 'UTF-8');
     } else {
       reader.readAsArrayBuffer(file);
@@ -281,8 +272,8 @@ const QuestionBankUpload = () => {
     event.target.value = null;
   };
   const handleUpload = async () => {
-    if (!selectedModule || !levelId || questions.length === 0) {
-      setErrorMsg('Please select module, level, and upload questions.');
+    if (!selectedModule || questions.length === 0) {
+      setErrorMsg('Please select module and upload questions.');
       setSuccessMsg('');
       return;
     }
@@ -295,15 +286,23 @@ const QuestionBankUpload = () => {
     }
     setLoading(true);
     try {
-      await api.post('/test-management/module-question-bank/upload', {
+      const payload = {
         module_id: selectedModule.id,
-        level_id: levelId,
-        questions: uniqueQuestions,
-      });
+        level_id: levelId || '',
+        questions: uniqueQuestions.map(q => ({
+          question: q.question,
+          options: { A: q.optionA, B: q.optionB, C: q.optionC, D: q.optionD },
+          correct_answer: q.answer,
+          set: q.set,
+          level: q.level,
+        })),
+      };
+      await api.post('/test-management/module-question-bank/upload', payload);
       setSuccessMsg('Questions uploaded to module bank!');
       setQuestions([]);
       setDuplicateMap({});
       setErrorMsg('');
+      setShowPreview(false);
     } catch (err) {
       setErrorMsg('Failed to upload questions.');
       setSuccessMsg('');
@@ -315,12 +314,16 @@ const QuestionBankUpload = () => {
   const checkDuplicates = async (questionsToCheck) => {
     // Call backend to check for duplicates
     if (!selectedModule || !levelId) return;
-    const res = await api.post('/test-management/question-bank/check-duplicates', {
-      module_id: selectedModule.id,
-      level_id: levelId,
-      questions: questionsToCheck.map(q => q.type === 'MCQ' ? q.question_text : q.question)
-    });
-    setDuplicateMap(res.data.duplicates || {});
+    try {
+      const res = await api.post('/test-management/question-bank/check-duplicates', {
+        module_id: selectedModule.id,
+        level_id: levelId,
+        questions: questionsToCheck.map(q => q.question)
+      });
+      setDuplicateMap(res.data.duplicates || {});
+    } catch (err) {
+      console.error('Failed to check duplicates:', err);
+    }
   };
 
   // UI
