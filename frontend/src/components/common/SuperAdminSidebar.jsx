@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Home, Users, FilePlus, Building2, BarChart, LayoutDashboard, BookCopy, Briefcase, PlusSquare, BarChart3, GraduationCap, LineChart } from 'lucide-react'
+import { Home, Users, FilePlus, Building2, BarChart, LayoutDashboard, BookCopy, Briefcase, PlusSquare, BarChart3, GraduationCap, LineChart, DocumentPlusIcon, AcademicCapIcon, ChartBarIcon } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { motion } from 'framer-motion'
 
@@ -16,14 +16,15 @@ const SuperAdminSidebar = ({ onModuleUpload }) => {
 
   const navLinks = [
     { name: 'Dashboard', path: '/superadmin/dashboard', icon: LayoutDashboard },
-    { name: 'User Management', path: '/superadmin/users', icon: Users },
     { name: 'Campus Management', path: '/superadmin/campuses', icon: Building2 },
     { name: 'Course Management', path: '/superadmin/courses', icon: BookCopy },
-    { name: 'Batch Management', path: '/superadmin/batches', icon: Briefcase },
-    { name: 'Module Creation', path: '/superadmin/tests/create', icon: PlusSquare },
-    { name: 'Results', path: '/superadmin/results', icon: BarChart3 },
-    { name: 'Practice Analytics', path: '/superadmin/practice-analytics', icon: BarChart3 },
+    { name: 'Batch-Course Instances', path: '/superadmin/batch-course-instances', icon: AcademicCapIcon },
+    { name: 'User Management', path: '/superadmin/users', icon: Users },
+    { name: 'Test Management', path: '/superadmin/tests', icon: FilePlus },
+    { name: 'Question Bank Upload', path: '/superadmin/question-bank-upload', icon: DocumentPlusIcon },
     { name: 'Student Management', path: '/superadmin/students', icon: GraduationCap },
+    { name: 'Results Management', path: '/superadmin/results', icon: BarChart },
+    { name: 'Practice Analytics', path: '/superadmin/practice-analytics', icon: ChartBarIcon },
     // { name: 'System Analytics', path: '/superadmin/analytics', icon: LineChart }
   ]
 

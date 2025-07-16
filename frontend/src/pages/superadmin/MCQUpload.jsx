@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import { toast } from 'react-hot-toast';
+import api from '../../services/api';
 
 function parseHumanReadableMCQ(text) {
   // Split by question blocks
@@ -34,49 +36,80 @@ function parseHumanReadableMCQ(text) {
   return questions;
 }
 
-export default function MCQUpload({ questions, setQuestions, onNext, onBack, moduleName }) {
+export default function MCQUpload({ questions, setQuestions, onNext, onBack, moduleName, levelId, onUploadSuccess }) {
   const [previewQuestions, setPreviewQuestions] = useState([]);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [existingQuestions, setExistingQuestions] = useState([]);
+
+  // Fetch existing questions for duplicate checking
+  React.useEffect(() => {
+    if (moduleName && levelId) {
+      fetchExistingQuestions();
+    }
+  }, [moduleName, levelId]);
+
+  const fetchExistingQuestions = async () => {
+    try {
+      const response = await api.get(`/test-management/existing-questions?module_id=${moduleName}&level_id=${levelId}`);
+      if (response.data.success) {
+        setExistingQuestions(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching existing questions:', error);
+      // Don't show error as this might be a new endpoint
+    }
+  };
 
   const processQuestionsForPreview = (parsedQuestions) => {
-    const existingQuestionTexts = new Set(questions.map(q => q.question.trim().toLowerCase()));
+    const existingQuestionTexts = new Set(existingQuestions.map(q => q.question.trim().toLowerCase()));
     const questionsForPreview = [];
+    let duplicateCount = 0;
+    let newCount = 0;
+
     parsedQuestions.forEach(q => {
       const questionText = q.question?.trim();
       if (!questionText) return;
+      
       const questionTextLower = questionText.toLowerCase();
       if (existingQuestionTexts.has(questionTextLower)) {
         questionsForPreview.push({ ...q, status: 'Duplicate' });
+        duplicateCount++;
       } else {
         questionsForPreview.push({ ...q, status: 'New' });
         existingQuestionTexts.add(questionTextLower);
+        newCount++;
       }
     });
+
     if (questionsForPreview.length === 0) {
       setError('Could not find any questions in the uploaded file.');
       return;
     }
+
     setPreviewQuestions(questionsForPreview);
     setIsPreviewModalOpen(true);
-  };
-
-  const toBackendFormat = (q) =>
-    `${q.question}\nA) ${q.optionA}\nB) ${q.optionB}\nC) ${q.optionC}\nD) ${q.optionD}\nAnswer: ${q.answer}`;
-
-  const handleConfirmPreview = () => {
-    const newQuestions = previewQuestions
-      .filter(q => q.status === 'New')
-      .map(q => ({ question: toBackendFormat(q) }));
-    setQuestions(current => [...current, ...newQuestions]);
-    setIsPreviewModalOpen(false);
-    setPreviewQuestions([]);
-    setError('');
+    
+    // Show summary
+    if (duplicateCount > 0) {
+      toast.warning(`${duplicateCount} duplicate questions found and will be skipped.`);
+    }
+    if (newCount > 0) {
+      toast.success(`${newCount} new questions will be uploaded.`);
+    }
   };
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
     if (!file) return;
+
+    if (!levelId) {
+      toast.error('Please select a level first');
+      event.target.value = null;
+      return;
+    }
+
     const allowedTypes = [
       'text/csv',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -84,21 +117,34 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
       'application/octet-stream',
       'text/plain'
     ];
+    
     const fileExtension = file.name.toLowerCase().split('.').pop();
     const isValidExtension = ['csv', 'xlsx', 'xls', 'txt'].includes(fileExtension);
     const isValidType = allowedTypes.includes(file.type) || file.type === '';
+    
     if (!isValidExtension && !isValidType) {
       setError(`Invalid file type. Please upload a .csv, .xlsx, .xls, or .txt file. Received: ${file.type || fileExtension}`);
       event.target.value = null;
       return;
     }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         let parsedQuestions = [];
+        
         if (fileExtension === 'csv' || file.type === 'text/csv') {
-          const result = Papa.parse(e.target.result, { header: true, skipEmptyLines: true, trimHeaders: true, trimValues: true });
-          if (result.data.length === 0) throw new Error('No data found in CSV file.');
+          const result = Papa.parse(e.target.result, { 
+            header: true, 
+            skipEmptyLines: true, 
+            trimHeaders: true, 
+            trimValues: true 
+          });
+          
+          if (result.data.length === 0) {
+            throw new Error('No data found in CSV file.');
+          }
+          
           parsedQuestions = result.data.map(row => ({
             question: row.question || row.Question || '',
             optionA: row.optionA || row.OptionA || row.A || '',
@@ -106,15 +152,20 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
             optionC: row.optionC || row.OptionC || row.C || '',
             optionD: row.optionD || row.OptionD || row.D || '',
             answer: row.answer || row.Answer || '',
-            set: row.set || row.Set || 'Set-1',
-            level: row.level || row.Level || '',
+            instructions: row.instructions || row.Instructions || ''
           }));
         } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
           const workbook = XLSX.read(e.target.result, { type: 'array' });
-          if (!workbook.SheetNames.length) throw new Error('No sheets found in Excel file.');
+          if (!workbook.SheetNames.length) {
+            throw new Error('No sheets found in Excel file.');
+          }
+          
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
-          if (!worksheet) throw new Error(`Sheet "${sheetName}" not found.`);
+          if (!worksheet) {
+            throw new Error(`Sheet "${sheetName}" not found.`);
+          }
+          
           const jsonData = XLSX.utils.sheet_to_json(worksheet);
           parsedQuestions = jsonData.map(row => ({
             question: row.question || row.Question || '',
@@ -123,8 +174,7 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
             optionC: row.optionC || row.OptionC || row.C || '',
             optionD: row.optionD || row.OptionD || row.D || '',
             answer: row.answer || row.Answer || '',
-            set: row.set || row.Set || 'Set-1',
-            level: row.level || row.Level || '',
+            instructions: row.instructions || row.Instructions || ''
           }));
         } else if (fileExtension === 'txt' || file.type === 'text/plain') {
           parsedQuestions = parseHumanReadableMCQ(e.target.result);
@@ -132,49 +182,211 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
           // Try to parse as plain text as fallback
           parsedQuestions = parseHumanReadableMCQ(e.target.result);
         }
-        const finalQuestions = parsedQuestions.filter(q => q && q.question && q.optionA && q.optionB && q.optionC && q.optionD && q.answer);
-        if (finalQuestions.length === 0) throw new Error('No valid questions found in the file.');
+
+        const finalQuestions = parsedQuestions.filter(q => 
+          q && q.question && q.optionA && q.optionB && q.optionC && q.optionD && q.answer
+        );
+
+        if (finalQuestions.length === 0) {
+          throw new Error('No valid questions found in the file.');
+        }
+
         processQuestionsForPreview(finalQuestions);
+        
       } catch (err) {
         setError(`File processing error: ${err.message}`);
+        toast.error(`File processing error: ${err.message}`);
       }
     };
-    reader.onerror = () => setError('An unexpected error occurred while reading the file.');
+    
+    reader.onerror = () => {
+      setError('An unexpected error occurred while reading the file.');
+      toast.error('An unexpected error occurred while reading the file.');
+    };
+    
     if (fileExtension === 'csv' || file.type === 'text/csv' || fileExtension === 'txt' || file.type === 'text/plain') {
       reader.readAsText(file, 'UTF-8');
     } else {
       reader.readAsArrayBuffer(file);
     }
+    
     event.target.value = null;
   };
 
+  const handleConfirmPreview = async () => {
+    const newQuestions = previewQuestions.filter(q => q.status === 'New');
+    
+    if (newQuestions.length === 0) {
+      toast.error('No new questions to upload');
+      setIsPreviewModalOpen(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        module_id: moduleName,
+        level_id: levelId,
+        questions: newQuestions.map(q => ({
+          question: q.question,
+          options: [q.optionA, q.optionB, q.optionC, q.optionD],
+          answer: q.answer,
+          instructions: q.instructions || ''
+        }))
+      };
+
+      const response = await api.post('/test-management/module-question-bank/upload', payload);
+      
+      if (response.data.success) {
+        toast.success(`Successfully uploaded ${newQuestions.length} questions`);
+        setIsPreviewModalOpen(false);
+        setPreviewQuestions([]);
+        setError('');
+        
+        // Call the success callback
+        if (onUploadSuccess) {
+          onUploadSuccess();
+        }
+      } else {
+        toast.error(response.data.message || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error('Upload failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div>
-      <h3 className="font-semibold text-lg mb-2">Upload MCQ Questions for {moduleName}</h3>
-      <input type="file" accept=".csv,.xlsx,.xls,.txt" onChange={handleFileUpload} />
-      {error && <div className="text-red-600 mt-2">{error}</div>}
+    <div className="space-y-6">
+      <div>
+        <h3 className="font-semibold text-lg mb-4">Upload MCQ Questions for {moduleName}</h3>
+        
+        {/* File Upload Area */}
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
+          <input
+            type="file"
+            accept=".csv,.xlsx,.xls,.txt"
+            onChange={handleFileUpload}
+            className="hidden"
+            id="file-upload"
+          />
+          <label htmlFor="file-upload" className="cursor-pointer">
+            <div className="text-4xl mb-4">📁</div>
+            <p className="text-lg font-medium text-gray-700 mb-2">
+              Choose a file or drag it here
+            </p>
+            <p className="text-sm text-gray-500 mb-4">
+              Supports CSV, XLSX, XLS, and TXT files with columns: Question, A, B, C, D, Answer
+            </p>
+            <button className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              Select File
+            </button>
+          </label>
+        </div>
+        
+        {error && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-600">{error}</p>
+          </div>
+        )}
+      </div>
+
       {/* Preview Modal */}
       {isPreviewModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-lg w-full">
-            <h4 className="font-bold mb-2">Preview Questions</h4>
-            <ul className="max-h-60 overflow-y-auto mb-4">
-              {previewQuestions.map((q, i) => (
-                <li key={i} className={q.status === 'Duplicate' ? 'text-yellow-600' : 'text-green-700'}>
-                  {q.question} <span className="text-xs">({q.status})</span>
-                </li>
-              ))}
-            </ul>
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setIsPreviewModalOpen(false)} className="px-4 py-2 bg-gray-200 rounded">Cancel</button>
-              <button onClick={handleConfirmPreview} className="px-4 py-2 bg-blue-600 text-white rounded">Add New</button>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xl font-bold text-gray-800">Preview Questions</h4>
+                <button
+                  onClick={() => setIsPreviewModalOpen(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="text-sm text-gray-600 mt-2">
+                <p><strong>Module:</strong> {moduleName} | <strong>Level:</strong> {levelId}</p>
+                <p><strong>New Questions:</strong> {previewQuestions.filter(q => q.status === 'New').length} | 
+                   <strong>Duplicates:</strong> {previewQuestions.filter(q => q.status === 'Duplicate').length}</p>
+              </div>
+            </div>
+            
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+              <div className="space-y-4">
+                {previewQuestions.map((q, i) => (
+                  <div key={i} className={`p-4 border rounded-lg ${
+                    q.status === 'Duplicate' ? 'border-yellow-200 bg-yellow-50' : 'border-green-200 bg-green-50'
+                  }`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <h5 className="font-medium text-gray-800">Q{i + 1}: {q.question}</h5>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        q.status === 'Duplicate' ? 'bg-yellow-200 text-yellow-800' : 'bg-green-200 text-green-800'
+                      }`}>
+                        {q.status}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600">
+                      <div>A: {q.optionA}</div>
+                      <div>B: {q.optionB}</div>
+                      <div>C: {q.optionC}</div>
+                      <div>D: {q.optionD}</div>
+                    </div>
+                    <div className="mt-2 text-sm">
+                      <span className="font-medium text-green-600">Answer: {q.answer}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="p-6 border-t border-gray-200 flex gap-3 justify-end">
+              <button
+                onClick={() => setIsPreviewModalOpen(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmPreview}
+                disabled={loading || previewQuestions.filter(q => q.status === 'New').length === 0}
+                className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                  loading || previewQuestions.filter(q => q.status === 'New').length === 0
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
+              >
+                {loading ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Uploading...
+                  </div>
+                ) : (
+                  `Upload ${previewQuestions.filter(q => q.status === 'New').length} Questions`
+                )}
+              </button>
             </div>
           </div>
         </div>
       )}
-      <div className="flex gap-2 mt-4">
-        <button onClick={onBack} className="px-4 py-2 bg-gray-200 rounded">Back</button>
-        <button onClick={onNext} className="px-4 py-2 bg-blue-600 text-white rounded">Next</button>
+
+      {/* Navigation Buttons */}
+      <div className="flex gap-3 justify-between pt-6 border-t border-gray-200">
+        <button
+          onClick={onBack}
+          className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+        >
+          Back
+        </button>
+        <div className="text-sm text-gray-600">
+          {existingQuestions.length > 0 && (
+            <span>Existing questions in this level: {existingQuestions.length}</span>
+          )}
+        </div>
       </div>
     </div>
   );

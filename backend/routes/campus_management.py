@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from mongo import mongo_db
 from bson import ObjectId
 from config.shared import bcrypt
@@ -31,8 +31,18 @@ def get_campuses():
 @campus_management_bp.route('/', methods=['POST'])
 @jwt_required()
 def create_campus():
-    """Create a new campus and assign an admin"""
+    """Create a new campus and assign an admin - SUPER ADMIN ONLY"""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can create campuses
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Only super admin can create campuses.'
+            }), 403
+        
         data = request.get_json()
         campus_name = data.get('campus_name')
         admin_name = data.get('admin_name')
@@ -88,9 +98,20 @@ def create_campus():
         except Exception as e:
             print(f"Failed to send welcome email to {admin_email}: {e}")
 
-        return jsonify({'success': True, 'data': {'campus_id': str(campus_id), 'user_id': str(user_id)}}), 201
+        return jsonify({
+            'success': True,
+            'message': 'Campus created successfully',
+            'data': {
+                'campus_id': str(campus_id),
+                'admin_id': str(user_id)
+            }
+        }), 201
+        
     except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({
+            'success': False,
+            'message': f'Failed to create campus: {str(e)}'
+        }), 500
 
 @campus_management_bp.route('/<campus_id>', methods=['PUT'])
 @jwt_required()

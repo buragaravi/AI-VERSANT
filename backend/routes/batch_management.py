@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from mongo import mongo_db
 from bson import ObjectId
 import csv
@@ -38,8 +38,18 @@ def list_batches():
 @batch_management_bp.route('/', methods=['POST'])
 @jwt_required()
 def create_batch_from_selection():
-    """Create a new batch from selected campuses and courses."""
+    """Create a new batch from selected campuses and courses - SUPER ADMIN ONLY"""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can create batches
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Only super admin can create batches.'
+            }), 403
+        
         data = request.get_json()
         name = data.get('name')
         campus_ids = [ObjectId(cid) for cid in data.get('campus_ids', [])]
@@ -51,6 +61,7 @@ def create_batch_from_selection():
         if mongo_db.batches.find_one({'name': name}):
             return jsonify({'success': False, 'message': 'Batch name already exists'}), 409
 
+        # Create the batch
         batch_id = mongo_db.batches.insert_one({
             'name': name,
             'campus_ids': campus_ids,
@@ -58,7 +69,24 @@ def create_batch_from_selection():
             'created_at': datetime.now(pytz.utc)
         }).inserted_id
 
-        return jsonify({'success': True, 'data': {'id': str(batch_id)}}), 201
+        # Create batch-course instances for each course
+        created_instances = []
+        for course_id in course_ids:
+            instance_id = mongo_db.find_or_create_batch_course_instance(batch_id, course_id)
+            created_instances.append({
+                'batch_id': str(batch_id),
+                'course_id': str(course_id),
+                'instance_id': str(instance_id)
+            })
+
+        return jsonify({
+            'success': True, 
+            'message': 'Batch created successfully',
+            'data': {
+                'id': str(batch_id),
+                'instances': created_instances
+            }
+        }), 201
     except Exception as e:
         current_app.logger.error(f"Error creating batch: {e}")
         return jsonify({'success': False, 'message': 'An error occurred while creating the batch.'}), 500
@@ -110,8 +138,18 @@ def get_batches_for_campus(campus_id):
 @batch_management_bp.route('/create', methods=['POST'])
 @jwt_required()
 def create_batch():
-    """Create a new batch and upload student data from an Excel file."""
+    """Create a new batch and upload student data from an Excel file - SUPER ADMIN ONLY"""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can create batches
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Only super admin can create batches.'
+            }), 403
+        
         if 'student_file' not in request.files:
             return jsonify({'success': False, 'message': 'No student file part'}), 400
 
@@ -131,9 +169,14 @@ def create_batch():
             'name': batch_name,
             'campus_id': ObjectId(campus_id),
             'course_id': ObjectId(course_id),
+            'campus_ids': [ObjectId(campus_id)],
+            'course_ids': [ObjectId(course_id)],
             'created_at': datetime.now(pytz.utc)
         }
         new_batch_id = mongo_db.batches.insert_one(batch_doc).inserted_id
+
+        # Create batch-course instance
+        instance_id = mongo_db.find_or_create_batch_course_instance(new_batch_id, ObjectId(course_id))
 
         # Process student file
         workbook = openpyxl.load_workbook(file, data_only=True)
@@ -172,11 +215,27 @@ def create_batch():
                 'campus_id': ObjectId(campus_id),
                 'course_id': ObjectId(course_id),
                 'batch_id': new_batch_id,
+                'batch_course_instance_id': instance_id,  # Link to instance
                 'is_active': True,
                 'created_at': datetime.now(pytz.utc),
                 'mfa_enabled': False
             }
             mongo_db.users.insert_one(student_doc)
+            
+            # Create student profile with instance link
+            student_profile = {
+                'user_id': student_doc['_id'],
+                'name': student['student_name'],
+                'roll_number': str(student['roll_number']),
+                'email': student['email_id'],
+                'campus_id': ObjectId(campus_id),
+                'course_id': ObjectId(course_id),
+                'batch_id': new_batch_id,
+                'batch_course_instance_id': instance_id,  # Link to instance
+                'created_at': datetime.now(pytz.utc)
+            }
+            mongo_db.students.insert_one(student_profile)
+            
             created_students.append({
                 "student_name": student['student_name'],
                 "email_id": student['email_id'],
@@ -209,6 +268,7 @@ def create_batch():
             'message': 'Batch and students created successfully',
             'data': {
                 'batch_id': str(new_batch_id),
+                'instance_id': str(instance_id),
                 'created_students': created_students
             }
         }), 201
@@ -1280,3 +1340,262 @@ def get_student_access_status(student_id):
     except Exception as e:
         current_app.logger.error(f"Error fetching access status: {e}")
         return jsonify({'success': False, 'message': 'An error occurred fetching access status.'}), 500
+
+# --- BATCH-COURSE INSTANCE MANAGEMENT ---
+
+@batch_management_bp.route('/instances', methods=['GET'])
+@jwt_required()
+def get_batch_course_instances():
+    """Get all batch-course instances with details"""
+    try:
+        pipeline = [
+            {
+                '$lookup': {
+                    'from': 'batches',
+                    'localField': 'batch_id',
+                    'foreignField': '_id',
+                    'as': 'batch'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'courses',
+                    'localField': 'course_id',
+                    'foreignField': '_id',
+                    'as': 'course'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'campuses',
+                    'localField': 'batch.campus_ids',
+                    'foreignField': '_id',
+                    'as': 'campuses'
+                }
+            },
+            {
+                '$unwind': '$batch'
+            },
+            {
+                '$unwind': '$course'
+            },
+            {
+                '$project': {
+                    '_id': 1,
+                    'batch_name': '$batch.name',
+                    'course_name': '$course.name',
+                    'campus_names': '$campuses.name',
+                    'student_count': {'$size': {'$ifNull': ['$students', []]}},
+                    'created_at': 1
+                }
+            },
+            {'$sort': {'created_at': -1}}
+        ]
+        
+        instances = list(mongo_db.db.batch_course_instances.aggregate(pipeline))
+        
+        # Convert ObjectIds to strings
+        for instance in instances:
+            instance['_id'] = str(instance['_id'])
+            if 'created_at' in instance:
+                instance['created_at'] = instance['created_at'].isoformat()
+        
+        return jsonify({'success': True, 'data': instances}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching batch-course instances: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@batch_management_bp.route('/instances/<instance_id>', methods=['GET'])
+@jwt_required()
+def get_batch_course_instance_details(instance_id):
+    """Get detailed information about a specific batch-course instance"""
+    try:
+        instance = mongo_db.db.batch_course_instances.find_one({'_id': ObjectId(instance_id)})
+        if not instance:
+            return jsonify({'success': False, 'message': 'Instance not found'}), 404
+        
+        # Get batch details
+        batch = mongo_db.batches.find_one({'_id': instance['batch_id']})
+        course = mongo_db.courses.find_one({'_id': instance['course_id']})
+        
+        # Get students in this instance
+        students = list(mongo_db.students.find({'batch_course_instance_id': ObjectId(instance_id)}))
+        
+        # Get test results for this instance
+        test_results = list(mongo_db.student_test_attempts.find({'batch_course_instance_id': ObjectId(instance_id)}))
+        
+        instance_data = {
+            'id': str(instance['_id']),
+            'batch': {
+                'id': str(batch['_id']),
+                'name': batch['name']
+            } if batch else None,
+            'course': {
+                'id': str(course['_id']),
+                'name': course['name']
+            } if course else None,
+            'student_count': len(students),
+            'test_results_count': len(test_results),
+            'created_at': instance.get('created_at', '').isoformat() if instance.get('created_at') else None
+        }
+        
+        return jsonify({'success': True, 'data': instance_data}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching instance details: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@batch_management_bp.route('/instances/<instance_id>/students', methods=['GET'])
+@jwt_required()
+def get_instance_students(instance_id):
+    """Get all students in a specific batch-course instance"""
+    try:
+        students = list(mongo_db.students.find({'batch_course_instance_id': ObjectId(instance_id)}))
+        
+        student_list = []
+        for student in students:
+            # Get user details
+            user = mongo_db.users.find_one({'_id': student['user_id']})
+            student_list.append({
+                'id': str(student['_id']),
+                'name': student['name'],
+                'roll_number': student['roll_number'],
+                'email': student['email'],
+                'username': user['username'] if user else '',
+                'is_active': user['is_active'] if user else True,
+                'created_at': student['created_at'].isoformat() if student.get('created_at') else None
+            })
+        
+        return jsonify({'success': True, 'data': student_list}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching instance students: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@batch_management_bp.route('/instances/<instance_id>/upload-students', methods=['POST'])
+@jwt_required()
+def upload_students_to_instance(instance_id):
+    """Upload students to a specific batch-course instance"""
+    try:
+        # Verify instance exists
+        instance = mongo_db.db.batch_course_instances.find_one({'_id': ObjectId(instance_id)})
+        if not instance:
+            return jsonify({'success': False, 'message': 'Instance not found'}), 404
+        
+        # Get batch and course details
+        batch = mongo_db.batches.find_one({'_id': instance['batch_id']})
+        course = mongo_db.courses.find_one({'_id': instance['course_id']})
+        
+        if not batch or not course:
+            return jsonify({'success': False, 'message': 'Batch or course not found'}), 404
+        
+        # Handle file upload
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': 'No file uploaded'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'message': 'No file selected'}), 400
+        
+        # Parse student file
+        rows = _parse_student_file(file)
+        if not rows:
+            return jsonify({'success': False, 'message': 'File is empty or invalid'}), 400
+        
+        # Validate columns
+        columns = list(rows[0].keys()) if rows else []
+        required_fields = ['Student Name', 'Roll Number', 'Email', 'Mobile Number']
+        missing_fields = [field for field in required_fields if field not in columns]
+        if missing_fields:
+            return jsonify({'success': False, 'message': f"Invalid file structure. Missing columns: {', '.join(missing_fields)}"}), 400
+        
+        # Fetch existing data for validation
+        existing_roll_numbers = set(s['roll_number'] for s in mongo_db.students.find({}, {'roll_number': 1}))
+        existing_emails = set(u['email'] for u in mongo_db.users.find({}, {'email': 1}))
+        
+        created_students = []
+        errors = []
+        
+        for row in rows:
+            student_name = str(row.get('Student Name', '')).strip()
+            roll_number = str(row.get('Roll Number', '')).strip()
+            email = str(row.get('Email', '')).strip().lower()
+            mobile_number = str(row.get('Mobile Number', '')).strip()
+            
+            # Validation
+            if not all([student_name, roll_number, email]):
+                errors.append(f"{student_name or roll_number or email}: Missing required fields")
+                continue
+            
+            if roll_number in existing_roll_numbers:
+                errors.append(f"{student_name}: Roll number already exists")
+                continue
+            
+            if email in existing_emails:
+                errors.append(f"{student_name}: Email already exists")
+                continue
+            
+            try:
+                # Create user account
+                username = roll_number
+                password = f"{student_name.split()[0][:4].lower()}{roll_number[-4:]}"
+                password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+                
+                user_doc = {
+                    'username': username,
+                    'email': email,
+                    'password_hash': password_hash,
+                    'role': 'student',
+                    'name': student_name,
+                    'mobile_number': mobile_number,
+                    'campus_id': batch['campus_ids'][0] if batch.get('campus_ids') else None,
+                    'course_id': course['_id'],
+                    'batch_id': batch['_id'],
+                    'batch_course_instance_id': ObjectId(instance_id),
+                    'is_active': True,
+                    'created_at': datetime.now(pytz.utc),
+                    'mfa_enabled': False
+                }
+                
+                user_id = mongo_db.users.insert_one(user_doc).inserted_id
+                
+                # Create student profile
+                student_doc = {
+                    'user_id': user_id,
+                    'name': student_name,
+                    'roll_number': roll_number,
+                    'email': email,
+                    'mobile_number': mobile_number,
+                    'campus_id': batch['campus_ids'][0] if batch.get('campus_ids') else None,
+                    'course_id': course['_id'],
+                    'batch_id': batch['_id'],
+                    'batch_course_instance_id': ObjectId(instance_id),
+                    'created_at': datetime.now(pytz.utc)
+                }
+                
+                mongo_db.students.insert_one(student_doc)
+                
+                created_students.append({
+                    'name': student_name,
+                    'email': email,
+                    'username': username,
+                    'password': password
+                })
+                
+                # Update existing sets
+                existing_roll_numbers.add(roll_number)
+                existing_emails.add(email)
+                
+            except Exception as e:
+                errors.append(f"{student_name}: {str(e)}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully created {len(created_students)} students',
+            'data': {
+                'created_students': created_students,
+                'errors': errors
+            }
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error uploading students to instance: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500

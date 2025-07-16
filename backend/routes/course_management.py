@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from mongo import mongo_db
 from bson import ObjectId
 from config.shared import bcrypt
@@ -84,7 +84,18 @@ def get_courses_by_campus(campus_id):
 @course_management_bp.route('/<campus_id>', methods=['POST'])
 @jwt_required()
 def create_course(campus_id):
+    """Create a new course - SUPER ADMIN ONLY"""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can create courses
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Only super admin can create courses.'
+            }), 403
+        
         data = request.get_json()
         course_name = data.get('course_name')
         admin_name = data.get('admin_name')
@@ -143,12 +154,23 @@ def create_course(campus_id):
         except Exception as e:
             print(f"Failed to send welcome email to {admin_email}: {e}")
 
-        return jsonify({'success': True, 'data': {'id': str(course_id), 'admin_id': str(user_id)}}), 201
+        return jsonify({
+            'success': True,
+            'message': 'Course created successfully',
+            'data': {
+                'course_id': str(course_id),
+                'admin_id': str(user_id)
+            }
+        }), 201
+        
     except DuplicateKeyError:
         return jsonify({'success': False, 'message': 'A user with this email or username already exists.'}), 409
     except Exception as e:
         print(f"Error creating course: {e}") 
-        return jsonify({'success': False, 'message': f'An unexpected error occurred: {str(e)}'}), 500
+        return jsonify({
+            'success': False,
+            'message': f'Failed to create course: {str(e)}'
+        }), 500
 
 @course_management_bp.route('/<course_id>', methods=['PUT'])
 @jwt_required()

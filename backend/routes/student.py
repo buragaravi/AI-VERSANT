@@ -1,10 +1,11 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from mongo import mongo_db
 from bson import ObjectId
 from config.constants import GRAMMAR_CATEGORIES, MODULES, LEVELS
 import logging
 from datetime import datetime
+import pytz
 
 student_bp = Blueprint('student', __name__)
 
@@ -149,97 +150,197 @@ def dashboard():
 
 @student_bp.route('/tests', methods=['GET'])
 @jwt_required()
-def get_available_tests():
-    """Get available tests for a student, with optional filtering."""
+def get_student_tests():
+    """Get tests available for the logged-in student based on their batch-course instance"""
     try:
         current_user_id = get_jwt_identity()
-        user = mongo_db.db.users.find_one({'_id': ObjectId(current_user_id)})
+        user = mongo_db.users.find_one({'_id': ObjectId(current_user_id)})
         
         if not user or user.get('role') != 'student':
             return jsonify({'success': False, 'message': 'Access denied'}), 403
 
-        # Base query for active practice tests assigned to the student's audience
-        query = {
-            'test_type': 'practice', 
-            'status': 'active',
-            '$or': [
-                { 'campus_ids': {'$in': [user.get('campus_id')]} },
-                { 'course_ids': {'$in': [user.get('course_id')]} },
-                { 'batch_ids': {'$in': [user.get('batch_id')]} }
-            ]
-        }
-
-        # Filter by module and subcategory if provided from the frontend
-        module_id = request.args.get('module')
-        if module_id:
-            query['module_id'] = module_id
+        # Get student's batch-course instance
+        student = mongo_db.students.find_one({'user_id': ObjectId(current_user_id)})
+        if not student or not student.get('batch_course_instance_id'):
+            return jsonify({'success': False, 'message': 'Student not assigned to any batch-course instance'}), 404
         
-        subcategory_id = request.args.get('subcategory')
-        if subcategory_id:
-            query['subcategory'] = subcategory_id
+        instance_id = student['batch_course_instance_id']
         
-        # Projection to avoid sending large question data
-        projection = { "name": 1 }
+        # Get tests assigned to this instance
+        tests = list(mongo_db.tests.find({
+            'batch_course_instance_ids': instance_id,
+            'is_active': True
+        }))
         
-        pipeline = [
-            { '$match': query },
-            {
-                '$lookup': {
-                    'from': 'test_results',
-                    'let': { 'test_id': '$_id' },
-                    'pipeline': [
-                        {
-                            '$match': {
-                                '$expr': {
-                                    '$and': [
-                                        { '$eq': ['$test_id', '$$test_id'] },
-                                        { '$eq': ['$student_id', ObjectId(current_user_id)] }
-                                    ]
-                                }
-                            }
-                        },
-                        { '$sort': { 'average_score': -1 } },
-                        { '$limit': 1 }
-                    ],
-                    'as': 'student_results'
-                }
-            },
-            {
-                '$addFields': {
-                    'highest_score': { '$ifNull': [{ '$arrayElemAt': ['$student_results.average_score', 0] }, 0] }
-                }
-            },
-            {
-                '$project': {
-                    'name': 1,
-                    'highest_score': 1
-                }
-            }
-        ]
-
-        tests = list(mongo_db.db.tests.aggregate(pipeline))
-
-        # Manually process tests to serialize and clean up data for the list view
-        tests_data = []
+        test_list = []
         for test in tests:
-            tests_data.append({
-                '_id': str(test['_id']),
-                'name': test.get('name', 'Untitled Test'),
-                'highest_score': test.get('highest_score', 0)
+            # Check if student has already attempted this test
+            existing_attempt = mongo_db.student_test_attempts.find_one({
+                'test_id': test['_id'],
+                'student_id': ObjectId(current_user_id),
+                'batch_course_instance_id': instance_id
             })
+            
+            test_list.append({
+                'id': str(test['_id']),
+                'name': test['name'],
+                'type': test['type'],
+                'duration': test['duration'],
+                'total_marks': test['total_marks'],
+                'instructions': test.get('instructions', ''),
+                'start_date': test.get('start_date', '').isoformat() if test.get('start_date') else None,
+                'end_date': test.get('end_date', '').isoformat() if test.get('end_date') else None,
+                'has_attempted': existing_attempt is not None,
+                'attempt_id': str(existing_attempt['_id']) if existing_attempt else None
+            })
+        
+        return jsonify({'success': True, 'data': test_list}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching student tests: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@student_bp.route('/tests/<test_id>/start', methods=['POST'])
+@jwt_required()
+def start_test(test_id):
+    """Start a test for the student"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.users.find_one({'_id': ObjectId(current_user_id)})
+        
+        if not user or user.get('role') != 'student':
+            return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        # Get student's batch-course instance
+        student = mongo_db.students.find_one({'user_id': ObjectId(current_user_id)})
+        if not student or not student.get('batch_course_instance_id'):
+            return jsonify({'success': False, 'message': 'Student not assigned to any batch-course instance'}), 404
+        
+        instance_id = student['batch_course_instance_id']
+        
+        # Get test and verify it's assigned to this instance
+        test = mongo_db.tests.find_one({
+            '_id': ObjectId(test_id),
+            'batch_course_instance_ids': instance_id,
+            'is_active': True
+        })
+        
+        if not test:
+            return jsonify({'success': False, 'message': 'Test not found or not available'}), 404
+        
+        # Check if student has already attempted this test
+        existing_attempt = mongo_db.student_test_attempts.find_one({
+            'test_id': ObjectId(test_id),
+            'student_id': ObjectId(current_user_id),
+            'batch_course_instance_id': instance_id
+        })
+        
+        if existing_attempt:
+            return jsonify({'success': False, 'message': 'Test already attempted'}), 409
+        
+        # Create test attempt
+        attempt_doc = {
+            'test_id': ObjectId(test_id),
+            'student_id': ObjectId(current_user_id),
+            'batch_course_instance_id': instance_id,
+            'start_time': datetime.now(pytz.utc),
+            'status': 'in_progress',
+            'answers': [],
+            'score': 0,
+            'total_marks': test['total_marks']
+        }
+        
+        attempt_id = mongo_db.student_test_attempts.insert_one(attempt_doc).inserted_id
         
         return jsonify({
             'success': True,
-            'message': 'Tests retrieved successfully',
-            'data': tests_data
+            'data': {
+                'attempt_id': str(attempt_id),
+                'test': {
+                    'id': str(test['_id']),
+                    'name': test['name'],
+                    'duration': test['duration'],
+                    'total_marks': test['total_marks'],
+                    'instructions': test.get('instructions', '')
+                }
+            }
         }), 200
-        
     except Exception as e:
-        logging.error(f"Error in /student/tests for user {current_user_id}: {e}", exc_info=True)
+        current_app.logger.error(f"Error starting test: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@student_bp.route('/tests/<test_id>/submit', methods=['POST'])
+@jwt_required()
+def submit_test(test_id):
+    """Submit test answers and calculate score"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.users.find_one({'_id': ObjectId(current_user_id)})
+        
+        if not user or user.get('role') != 'student':
+            return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        data = request.get_json()
+        attempt_id = data.get('attempt_id')
+        answers = data.get('answers', [])
+        
+        if not attempt_id:
+            return jsonify({'success': False, 'message': 'Attempt ID is required'}), 400
+        
+        # Get student's batch-course instance
+        student = mongo_db.students.find_one({'user_id': ObjectId(current_user_id)})
+        if not student or not student.get('batch_course_instance_id'):
+            return jsonify({'success': False, 'message': 'Student not assigned to any batch-course instance'}), 404
+        
+        instance_id = student['batch_course_instance_id']
+        
+        # Get test attempt
+        attempt = mongo_db.student_test_attempts.find_one({
+            '_id': ObjectId(attempt_id),
+            'test_id': ObjectId(test_id),
+            'student_id': ObjectId(current_user_id),
+            'batch_course_instance_id': instance_id
+        })
+        
+        if not attempt:
+            return jsonify({'success': False, 'message': 'Test attempt not found'}), 404
+        
+        if attempt['status'] == 'completed':
+            return jsonify({'success': False, 'message': 'Test already submitted'}), 409
+        
+        # Get test details
+        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
+        if not test:
+            return jsonify({'success': False, 'message': 'Test not found'}), 404
+        
+        # Calculate score (simplified - you can implement more complex scoring logic)
+        score = 0
+        total_questions = len(answers)
+        
+        # Update attempt with answers and score
+        mongo_db.student_test_attempts.update_one(
+            {'_id': ObjectId(attempt_id)},
+            {
+                '$set': {
+                    'answers': answers,
+                    'score': score,
+                    'end_time': datetime.now(pytz.utc),
+                    'status': 'completed'
+                }
+            }
+        )
+        
         return jsonify({
-            'success': False,
-            'message': f'An error occurred while fetching tests: {str(e)}'
-        }), 500
+            'success': True,
+            'message': 'Test submitted successfully',
+            'data': {
+                'score': score,
+                'total_marks': test['total_marks'],
+                'total_questions': total_questions
+            }
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Error submitting test: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @student_bp.route('/grammar-progress', methods=['GET'])
 @jwt_required()
@@ -421,88 +522,6 @@ def get_single_test(test_id):
     except Exception as e:
         logging.error(f"Error fetching single test {test_id} for student {current_user_id}: {e}", exc_info=True)
         return jsonify({'success': False, 'message': 'Could not load test details.'}), 500
-
-@student_bp.route('/submit-test', methods=['POST'])
-@jwt_required()
-def submit_student_test():
-    """Submit a test (practice or online) with student's answers."""
-    try:
-        current_user_id = get_jwt_identity()
-        data = request.get_json()
-
-        if not data or 'test_id' not in data or 'answers' not in data:
-            return jsonify({'success': False, 'message': 'Test ID and answers are required.'}), 400
-
-        test_id = ObjectId(data['test_id'])
-        test = mongo_db.db.tests.find_one({'_id': test_id})
-
-        if not test:
-            return jsonify({'success': False, 'message': 'Test not found'}), 404
-        
-        # NOTE: Add access validation here if needed
-
-        results = []
-        total_score = 0
-        correct_answers_count = 0
-        
-        answers = data.get('answers', {})
-        time_taken = data.get('time_taken', 0)  # Time taken in seconds
-
-        for q in test['questions']:
-            q_id = q.get('question_id')
-            student_answer = answers.get(q_id)
-            is_correct = student_answer == q.get('correct_answer')
-            score = 100 if is_correct else 0
-            
-            if is_correct:
-                correct_answers_count += 1
-            total_score += score
-            
-            results.append({
-                'question_id': q_id,
-                'question': q.get('question'),
-                'student_answer': student_answer,
-                'correct_answer': q.get('correct_answer'),
-                'is_correct': is_correct,
-                'score': score
-            })
-
-        average_score = total_score / len(test['questions']) if test['questions'] else 0
-
-        result_doc = {
-            'student_id': ObjectId(current_user_id),
-            'test_id': test_id,
-            'module_id': test.get('module_id'),
-            'subcategory': test.get('subcategory'),
-            'level_id': test.get('level_id'),
-            'results': results,
-            'total_score': total_score,
-            'average_score': average_score,
-            'correct_answers': correct_answers_count,
-            'total_questions': len(test['questions']),
-            'submitted_at': datetime.utcnow(),
-            'test_type': test.get('test_type', 'practice'),
-            'time_taken': time_taken  # Store time taken for the test
-        }
-        
-        result_id = mongo_db.db.test_results.insert_one(result_doc).inserted_id
-
-        return jsonify({
-            'success': True,
-            'message': 'Test submitted successfully!',
-            'data': {
-                'result_id': str(result_id),
-                'average_score': average_score,
-                'total_questions': len(test['questions']),
-                'correct_answers': correct_answers_count,
-                'time_taken': time_taken,
-                'results': results
-            }
-        }), 201
-
-    except Exception as e:
-        logging.error(f"Error submitting test for student {get_jwt_identity()}: {e}", exc_info=True)
-        return jsonify({'success': False, 'message': 'An internal server error occurred.'}), 500 
 
 @student_bp.route('/test-history', methods=['GET'])
 @jwt_required()

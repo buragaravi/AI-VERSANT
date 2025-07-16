@@ -1,0 +1,381 @@
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { toast } from 'react-hot-toast';
+import Papa from 'papaparse';
+import api from '../../services/api';
+import Header from '../../components/common/Header';
+import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
+
+const BatchCourseInstances = () => {
+  const [instances, setInstances] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedInstance, setSelectedInstance] = useState(null);
+  const [showInstanceDetails, setShowInstanceDetails] = useState(false);
+  const [instanceStudents, setInstanceStudents] = useState([]);
+  const [showStudentUpload, setShowStudentUpload] = useState(false);
+
+  useEffect(() => {
+    fetchInstances();
+  }, []);
+
+  const fetchInstances = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/batch-management/instances');
+      if (response.data.success) {
+        setInstances(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching instances:', error);
+      toast.error('Failed to fetch batch-course instances');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchInstanceDetails = async (instanceId) => {
+    try {
+      const response = await api.get(`/batch-management/instances/${instanceId}`);
+      if (response.data.success) {
+        setSelectedInstance(response.data.data);
+        setShowInstanceDetails(true);
+      }
+    } catch (error) {
+      console.error('Error fetching instance details:', error);
+      toast.error('Failed to fetch instance details');
+    }
+  };
+
+  const fetchInstanceStudents = async (instanceId) => {
+    try {
+      const response = await api.get(`/batch-management/instances/${instanceId}/students`);
+      if (response.data.success) {
+        setInstanceStudents(response.data.data);
+        setShowStudentUpload(true);
+      }
+    } catch (error) {
+      console.error('Error fetching instance students:', error);
+      toast.error('Failed to fetch instance students');
+    }
+  };
+
+  const handleFileUpload = async (event, instanceId) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await api.post(`/batch-management/instances/${instanceId}/upload-students`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (response.data.success) {
+        toast.success(response.data.message);
+        fetchInstanceDetails(instanceId);
+        fetchInstanceStudents(instanceId);
+      } else {
+        toast.error(response.data.message || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Error uploading students:', error);
+      toast.error('Failed to upload students');
+    }
+  };
+
+  const downloadTemplate = () => {
+    const templateData = [
+      {
+        'Student Name': 'John Doe',
+        'Roll Number': '2024001',
+        'Email': 'john.doe@example.com',
+        'Mobile Number': '9876543210'
+      },
+      {
+        'Student Name': 'Jane Smith',
+        'Roll Number': '2024002',
+        'Email': 'jane.smith@example.com',
+        'Mobile Number': '9876543211'
+      }
+    ];
+
+    const csv = Papa.unparse(templateData);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'student_upload_template.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-screen bg-gray-100">
+        <SuperAdminSidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header />
+          <main className="flex-1 overflow-x-hidden overflow-y-auto flex items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-gray-100">
+      <SuperAdminSidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header />
+        <main className="flex-1 overflow-x-hidden overflow-y-auto">
+          <div className="p-6">
+            {/* Header */}
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                Batch-Course Instances
+              </h1>
+              <p className="text-gray-600">
+                Manage batch-course instances and their students
+              </p>
+            </div>
+
+            {/* Instances Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {instances.map((instance, index) => (
+                <motion.div
+                  key={instance._id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow"
+                >
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-800">
+                        {instance.batch_name}
+                      </h3>
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                        {instance.student_count || 0} students
+                      </span>
+                    </div>
+                    
+                    <div className="space-y-2 mb-4">
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">Course:</span> {instance.course_name}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">Campus:</span> {instance.campus_names?.join(', ') || 'N/A'}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">Created:</span> {new Date(instance.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => fetchInstanceDetails(instance._id)}
+                        className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                      >
+                        View Details
+                      </button>
+                      <button
+                        onClick={() => fetchInstanceStudents(instance._id)}
+                        className="flex-1 px-3 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
+                      >
+                        Manage Students
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Empty State */}
+            {instances.length === 0 && (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-4">📚</div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                  No Batch-Course Instances Found
+                </h3>
+                <p className="text-gray-600">
+                  Create batches with courses to generate instances automatically.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Instance Details Modal */}
+          {showInstanceDetails && selectedInstance && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+                <div className="p-6 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold text-gray-800">
+                      Instance Details
+                    </h2>
+                    <button
+                      onClick={() => setShowInstanceDetails(false)}
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="font-semibold text-gray-800">Batch</h4>
+                        <p className="text-gray-600">{selectedInstance.batch?.name}</p>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-800">Course</h4>
+                        <p className="text-gray-600">{selectedInstance.course?.name}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="font-semibold text-gray-800">Students</h4>
+                        <p className="text-gray-600">{selectedInstance.student_count}</p>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-800">Test Results</h4>
+                        <p className="text-gray-600">{selectedInstance.test_results_count}</p>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-semibold text-gray-800">Created</h4>
+                      <p className="text-gray-600">
+                        {selectedInstance.created_at ? new Date(selectedInstance.created_at).toLocaleString() : 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Student Management Modal */}
+          {showStudentUpload && selectedInstance && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+                <div className="p-6 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold text-gray-800">
+                      Student Management - {selectedInstance.batch?.name} ({selectedInstance.course?.name})
+                    </h2>
+                    <button
+                      onClick={() => setShowStudentUpload(false)}
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+                  {/* Upload Section */}
+                  <div className="mb-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <h3 className="font-semibold text-blue-800 mb-2">Upload Students</h3>
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="file"
+                        accept=".csv,.xlsx,.xls"
+                        onChange={(e) => handleFileUpload(e, selectedInstance.id)}
+                        className="flex-1"
+                      />
+                      <button
+                        onClick={downloadTemplate}
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                      >
+                        Download Template
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Students List */}
+                  <div>
+                    <h3 className="font-semibold text-gray-800 mb-4">
+                      Current Students ({instanceStudents.length})
+                    </h3>
+                    
+                    {instanceStudents.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Name
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Roll Number
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Email
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Username
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Status
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {instanceStudents.map((student) => (
+                              <tr key={student.id} className="hover:bg-gray-50">
+                                <td className="px-4 py-3 text-sm text-gray-900">
+                                  {student.name}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-600">
+                                  {student.roll_number}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-600">
+                                  {student.email}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-600">
+                                  {student.username}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`px-2 py-1 text-xs rounded-full ${
+                                    student.is_active 
+                                      ? 'bg-green-100 text-green-800' 
+                                      : 'bg-red-100 text-red-800'
+                                  }`}>
+                                    {student.is_active ? 'Active' : 'Inactive'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <div className="text-4xl mb-4">👥</div>
+                        <p className="text-gray-600">No students enrolled in this instance yet.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default BatchCourseInstances; 

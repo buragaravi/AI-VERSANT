@@ -1,161 +1,153 @@
-import React, { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { useAuth } from '../../contexts/AuthContext'
-import { useNotification } from '../../contexts/NotificationContext'
-import Header from '../../components/common/Header'
-import Sidebar from '../../components/common/Sidebar'
-import LoadingSpinner from '../../components/common/LoadingSpinner'
-import api from '../../services/api'
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { toast } from 'react-hot-toast';
+import api from '../../services/api';
+import Header from '../../components/common/Header';
+import AdminSidebar from '../../components/common/AdminSidebar';
+import { FilePlus, Users, BarChart, Building2 } from 'lucide-react';
 
 const CampusAdminDashboard = () => {
-  const { user } = useAuth()
-  const { error } = useNotification()
-  const [stats, setStats] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [batchCount, setBatchCount] = useState(0)
+  const [stats, setStats] = useState({
+    totalStudents: 0,
+    totalTests: 0,
+    totalResults: 0
+  });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchDashboardStats()
-    fetchBatchCount()
-  }, [])
+    fetchDashboardStats();
+  }, []);
 
   const fetchDashboardStats = async () => {
     try {
-      const response = await api.get('/campus-admin/dashboard')
-      setStats(response.data.data)
-    } catch (err) {
-      error('Failed to load dashboard data')
+      setLoading(true);
+      const response = await api.get('/campus-admin/dashboard');
+      if (response.data.success) {
+        setStats(response.data.data.statistics);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+      toast.error('Failed to fetch dashboard statistics');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
-
-  const fetchBatchCount = async () => {
-    try {
-      const response = await api.get('/campus-admin/batches')
-      setBatchCount(response.data.data?.length || 0)
-    } catch (err) {
-      setBatchCount(0)
-    }
-  }
+  };
 
   const dashboardCards = [
     {
       title: 'Total Students',
-      value: stats?.statistics?.total_students || 0,
-      icon: '🎓',
+      value: stats.totalStudents,
+      icon: Users,
       color: 'bg-blue-500',
-      link: '/campus-admin/students'
+      path: '/campus-admin/student-upload'
     },
     {
-      title: 'Total Courses',
-      value: stats?.statistics?.total_courses || 0,
-      icon: '📚',
+      title: 'Total Tests',
+      value: stats.totalTests,
+      icon: FilePlus,
       color: 'bg-green-500',
-      link: '/campus-admin/courses'
+      path: '/campus-admin/tests'
     },
     {
-      title: 'Total Batches',
-      value: batchCount,
-      icon: '🗂️',
+      title: 'Test Results',
+      value: stats.totalResults,
+      icon: BarChart,
       color: 'bg-purple-500',
-      link: '/campus-admin/batches'
+      path: '/campus-admin/results'
     }
-  ]
-
-  const quickActions = [
-    {
-      title: 'Batch Management',
-      description: 'Create and manage batches',
-      icon: '🗂️',
-      link: '/campus-admin/batches',
-      color: 'bg-orange-600'
-    },
-    {
-      title: 'Course Management',
-      description: 'Add or modify courses',
-      icon: '📚',
-      link: '/campus-admin/courses',
-      color: 'bg-green-600'
-    },
-    {
-      title: 'Student Management',
-      description: 'View and manage students',
-      icon: '🎓',
-      link: '/campus-admin/students',
-      color: 'bg-blue-600'
-    },
-    {
-      title: 'Results & Analytics',
-      description: 'View results and analytics',
-      icon: '📊',
-      link: '/campus-admin/analytics',
-      color: 'bg-purple-600'
-    }
-  ]
+  ];
 
   if (loading) {
-    return <LoadingSpinner size="lg" />
+    return (
+      <div className="flex h-screen bg-gray-100">
+        <AdminSidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header />
+          <main className="flex-1 overflow-x-hidden overflow-y-auto flex items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          </main>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col lg:flex-row">
-      <Sidebar />
-      <div className="flex-1 lg:pl-64">
+    <div className="flex h-screen bg-gray-100">
+      <AdminSidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
-        <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 mt-4 overflow-x-hidden">
-          {/* Statistics Cards */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6"
-          >
-            {dashboardCards.map((card, index) => (
-              <Link
-                key={index}
-                to={card.link}
-                className="rounded-xl bg-white border border-border shadow-md p-4 sm:p-6 flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:border-highlight group animate-fade-in w-full max-w-xs mx-auto mb-2"
-              >
-                <div className={`flex items-center justify-center w-12 h-12 rounded-full ${card.color} mb-3 shadow group-hover:shadow-lg transition-all duration-300`}>
-                  <span className="text-white text-2xl">{card.icon}</span>
-                </div>
-                <p className="text-base sm:text-lg font-bold text-text mb-1 transition-colors duration-200 group-hover:text-highlight text-center">{card.title}</p>
-                <p className="text-2xl sm:text-3xl font-extrabold text-text mb-2 transition-colors duration-200 group-hover:text-highlight text-center">{card.value}</p>
-                <span className="text-xs sm:text-sm text-text opacity-70 group-hover:opacity-100 transition-opacity duration-200">View All</span>
-              </Link>
-            ))}
-          </motion.div>
+        <main className="flex-1 overflow-x-hidden overflow-y-auto">
+          <div className="p-6">
+            {/* Header */}
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                Campus Admin Dashboard
+              </h1>
+              <p className="text-gray-600">
+                Manage tests and student uploads for your campus
+              </p>
+            </div>
 
-          {/* Quick Actions */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="mb-6"
-          >
-            <h2 className="text-lg sm:text-xl font-semibold text-text mb-3">Quick Actions</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {quickActions.map((action, index) => (
-                <Link
-                  key={index}
-                  to={action.link}
-                  className={`rounded-xl bg-secondary border-l-4 border-highlight shadow-md p-4 sm:p-6 flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:border-highlight group animate-fade-in w-full max-w-xs mx-auto mb-2 ${action.color}`}
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              {dashboardCards.map((card, index) => (
+                <motion.div
+                  key={card.title}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer"
+                  onClick={() => window.location.href = card.path}
                 >
-                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-highlight mb-3 shadow group-hover:shadow-lg transition-all duration-300">
-                    <span className="text-buttontext text-2xl">{action.icon}</span>
+                  <div className="flex items-center">
+                    <div className={`p-3 rounded-full ${card.color} text-white`}>
+                      <card.icon className="w-6 h-6" />
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-600">{card.title}</p>
+                      <p className="text-2xl font-bold text-gray-900">{card.value}</p>
+                    </div>
                   </div>
-                  <h3 className="text-base sm:text-lg font-semibold text-text mb-1 transition-colors duration-200 group-hover:text-highlight text-center">{action.title}</h3>
-                  <p className="text-text text-xs sm:text-sm opacity-80 group-hover:opacity-100 transition-opacity duration-200 text-center">{action.description}</p>
-                </Link>
+                </motion.div>
               ))}
             </div>
-          </motion.div>
-        </div>
+
+            {/* Quick Actions */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">Quick Actions</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => window.location.href = '/campus-admin/tests'}
+                  className="flex items-center p-4 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  <FilePlus className="w-8 h-8 text-blue-600 mr-4" />
+                  <div className="text-left">
+                    <h3 className="font-semibold text-blue-800">Create Test</h3>
+                    <p className="text-sm text-blue-600">Create and manage tests for your campus</p>
+                  </div>
+                </motion.button>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => window.location.href = '/campus-admin/student-upload'}
+                  className="flex items-center p-4 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
+                >
+                  <Users className="w-8 h-8 text-green-600 mr-4" />
+                  <div className="text-left">
+                    <h3 className="font-semibold text-green-800">Upload Students</h3>
+                    <p className="text-sm text-green-600">Upload student data via CSV/Excel</p>
+                  </div>
+                </motion.button>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default CampusAdminDashboard 
+export default CampusAdminDashboard; 

@@ -15,12 +15,12 @@ import CampusManagement from './pages/superadmin/CampusManagement'
 import CourseManagement from './pages/superadmin/CourseManagement'
 import UserManagement from './pages/superadmin/UserManagement'
 import TestManagement from './pages/superadmin/TestManagement'
-import BatchManagement from './pages/superadmin/BatchManagement'
 import StudentManagement from './pages/superadmin/StudentManagement'
 import ResultsManagement from './pages/superadmin/ResultsManagement'
 import BatchDetails from './pages/superadmin/BatchDetails'
 import PracticeAnalytics from './pages/superadmin/PracticeAnalytics'
 import QuestionBankUpload from './pages/superadmin/QuestionBankUpload'
+import BatchCourseInstances from './pages/superadmin/BatchCourseInstances'
 
 // Campus Admin Pages
 import CampusAdminDashboard from './pages/campus-admin/CampusAdminDashboard'
@@ -50,6 +50,10 @@ import ProtectedRoute from './components/common/ProtectedRoute'
 import LoadingSpinner from './components/common/LoadingSpinner'
 import ErrorBoundary from './components/common/ErrorBoundary'
 import NotificationToast from './components/common/NotificationToast'
+
+// Admin Components
+import AdminSidebar from './components/common/AdminSidebar'
+import SuperAdminSidebar from './components/common/SuperAdminSidebar'
 
 function App() {
   return (
@@ -88,61 +92,40 @@ function App() {
                 <Route path="/" element={<GetStarted />} />
                 <Route path="/login" element={<Login />} />
 
-                {/* Super Admin Routes */}
-                <Route
-                  path="/superadmin/*"
-                  element={
-                    <ProtectedRoute allowedRoles={['superadmin', 'super_admin']}>
-                      <Routes>
-                        <Route path="/" element={<Navigate to="dashboard" replace />} />
-                        <Route path="dashboard" element={<SuperAdminDashboard />} />
-                        <Route path="users" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><UserManagement /></ProtectedRoute>} />
-                        <Route path="campuses" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><CampusManagement /></ProtectedRoute>} />
-                        <Route path="courses" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><CourseManagement /></ProtectedRoute>} />
-                        <Route path="batches" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><BatchManagement /></ProtectedRoute>} />
-                        <Route path="batches/:batchId" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><BatchDetails /></ProtectedRoute>} />
-                        <Route path="students" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><StudentManagement /></ProtectedRoute>} />
-                        <Route path="results" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><ResultsManagement /></ProtectedRoute>} />
-                        <Route path="practice-analytics" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><PracticeAnalytics /></ProtectedRoute>} />
-                        <Route path="tests" element={<TestManagement />} />
-                        <Route path="tests/create" element={<TestManagement />} />
-                        <Route path="question-bank-upload" element={<QuestionBankUpload />} />
-                      </Routes>
-                    </ProtectedRoute>
-                  }
-                />
+                {/* Admin Routes */}
+                <Routes>
+                  {/* Super Admin Routes */}
+                  <Route path="superadmin" element={<SuperAdminSidebar />}>
+                    <Route path="dashboard" element={<SuperAdminDashboard />} />
+                    <Route path="campuses" element={<CampusManagement />} />
+                    <Route path="courses" element={<CourseManagement />} />
+                    <Route path="users" element={<UserManagement />} />
+                    <Route path="students" element={<StudentManagement />} />
+                    <Route path="results" element={<ResultsManagement />} />
+                    <Route path="batches/:batchId" element={<BatchDetails />} />
+                    <Route path="practice-analytics" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><PracticeAnalytics /></ProtectedRoute>} />
+                    <Route path="tests" element={<TestManagement />} />
+                    <Route path="tests/create" element={<TestManagement />} />
+                    <Route path="question-bank-upload" element={<QuestionBankUpload />} />
+                    <Route path="batch-course-instances" element={<BatchCourseInstances />} />
+                  </Route>
 
-                {/* Campus Admin Routes */}
-                <Route
-                  path="/campus-admin/*"
-                  element={
-                    <ProtectedRoute allowedRoles={['campus_admin']}>
-                      <Routes>
-                        <Route path="/" element={<CampusAdminDashboard />} />
-                        <Route path="/students" element={<CampusStudentManagement />} />
-                        <Route path="/batches" element={<CampusBatchManagement />} />
-                        <Route path="/courses" element={<CampusCourseManagement />} />
-                        <Route path="/results" element={<CampusReports />} />
-                        <Route path="/analytics" element={<CampusReports />} />
-                        <Route path="/reports" element={<CampusReports />} />
-                      </Routes>
-                    </ProtectedRoute>
-                  }
-                />
+                  {/* Campus Admin Routes */}
+                  <Route path="campus-admin" element={<AdminSidebar />}>
+                    <Route path="dashboard" element={<CampusAdminDashboard />} />
+                    <Route path="tests" element={<TestManagement />} />
+                    <Route path="student-upload" element={<StudentManagement />} />
+                    <Route path="results" element={<ResultsManagement />} />
+                  </Route>
 
-                {/* Course Admin Routes */}
-                <Route
-                  path="/course-admin/*"
-                  element={
-                    <ProtectedRoute allowedRoles={['course_admin']}>
-                      <Routes>
-                        <Route path="/" element={<CourseAdminDashboard />} />
-                        <Route path="/students" element={<CourseStudentManagement />} />
-                        <Route path="/progress" element={<StudentProgress />} />
-                      </Routes>
-                    </ProtectedRoute>
-                  }
-                />
+                  {/* Course Admin Routes */}
+                  <Route path="course-admin" element={<AdminSidebar />}>
+                    <Route path="dashboard" element={<CourseAdminDashboard />} />
+                    <Route path="tests" element={<TestManagement />} />
+                    <Route path="student-upload" element={<StudentManagement />} />
+                    <Route path="results" element={<ResultsManagement />} />
+                  </Route>
+                </Routes>
 
                 {/* Student Routes */}
                 <Route
