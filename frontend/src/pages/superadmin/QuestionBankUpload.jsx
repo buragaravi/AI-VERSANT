@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { toast } from 'react-hot-toast';
-import { api } from '../../services/api';
+import api from '../../services/api';
 
 const MCQ_MODULES = [
   { 
