@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { 
   Home, Users, FilePlus, Building2, BarChart, LayoutDashboard, 
   BookCopy, Briefcase, PlusSquare, BarChart3, GraduationCap, 
-  LineChart, DocumentPlusIcon, AcademicCapIcon, ChartBarIcon,
+  LineChart, DocumentPlusIcon, ChartBarIcon,
   Settings, LogOut
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
@@ -26,7 +26,7 @@ const AdminSidebar = () => {
         ...baseNav,
         { name: 'Campus Management', path: '/superadmin/campuses', icon: Building2 },
         { name: 'Course Management', path: '/superadmin/courses', icon: BookCopy },
-        { name: 'Batch-Course Instances', path: '/superadmin/batch-course-instances', icon: AcademicCapIcon },
+        { name: 'Batch-Course Instances', path: '/superadmin/batch-course-instances', icon: GraduationCap },
         { name: 'User Management', path: '/superadmin/users', icon: Users },
         { name: 'Test Management', path: '/superadmin/tests', icon: FilePlus },
         { name: 'Question Bank Upload', path: '/superadmin/question-bank-upload', icon: DocumentPlusIcon },
