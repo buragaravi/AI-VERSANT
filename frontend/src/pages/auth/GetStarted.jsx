@@ -226,14 +226,6 @@ const GetStarted = () => {
                 🚀 Start Learning Now
               </Link>
             </motion.div>
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <button className="inline-flex items-center justify-center px-10 py-4 text-lg font-bold rounded-2xl text-gray-700 bg-white border-2 border-gray-300 hover:border-blue-300 hover:text-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all duration-300 shadow-lg hover:shadow-xl">
-                📚 Explore Features
-              </button>
-            </motion.div>
           </motion.div>
 
           {/* Stats */}

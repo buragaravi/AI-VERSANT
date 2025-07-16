@@ -1331,6 +1331,7 @@ def upload_module_questions():
                 'level_id': level_id,
                 'question': q.get('question'),
                 'instructions': q.get('instructions', ''),
+                'set': q.get('set', 'Set-1'), # Store set info, default to 'Set-1' if not provided
                 'used_in_tests': [], # Track test_ids where used
                 'used_count': 0,
                 'last_used': None,

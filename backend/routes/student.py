@@ -394,7 +394,28 @@ def get_single_test(test_id):
         for key in ['campus_ids', 'course_ids', 'batch_ids']:
             if key in test_details:
                 test_details[key] = [str(item) for item in test_details[key]]
-
+        # --- SHUFFLE MCQ QUESTIONS AND OPTIONS ---
+        import random
+        if 'questions' in test_details and isinstance(test_details['questions'], list):
+            # Shuffle questions
+            random.shuffle(test_details['questions'])
+            for q in test_details['questions']:
+                if q.get('question_type') == 'mcq' and 'options' in q and isinstance(q['options'], dict):
+                    # Shuffle options
+                    items = list(q['options'].items())
+                    random.shuffle(items)
+                    new_options = {}
+                    answer_map = {}
+                    for idx, (old_key, value) in enumerate(items):
+                        new_key = chr(ord('A') + idx)
+                        new_options[new_key] = value
+                        answer_map[old_key] = new_key
+                    # Update options
+                    q['options'] = new_options
+                    # Update correct_answer to new key
+                    if 'correct_answer' in q and q['correct_answer'] in answer_map:
+                        q['correct_answer'] = answer_map[q['correct_answer']]
+        # --- END SHUFFLE ---
         return jsonify({'success': True, 'data': test_details})
 
     except Exception as e:

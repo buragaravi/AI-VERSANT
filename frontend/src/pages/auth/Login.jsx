@@ -191,14 +191,7 @@ const Login = () => {
                   Sign in
                 </button>
               </motion.div>
-              <div className="text-center mt-4">
-                <Link
-                  to="/"
-                  className="font-medium text-sm text-indigo-600 hover:text-indigo-500 transition-colors duration-200"
-                >
-                  &larr; Back to Home
-                </Link>
-              </div>
+              {/* Remove any <Link> or text related to forgot/reset password from the login form */}
             </form>
           </div>
         </motion.div>

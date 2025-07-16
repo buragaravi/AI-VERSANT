@@ -125,32 +125,6 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
-  const forgotPassword = async (email) => {
-    try {
-      setLoading(true)
-      setError(null)
-      await authService.forgotPassword(email)
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to send reset email')
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const resetPassword = async (token, newPassword) => {
-    try {
-      setLoading(true)
-      setError(null)
-      await authService.resetPassword(token, newPassword)
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to reset password')
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const refreshToken = async () => {
     try {
       const refresh_token = localStorage.getItem('refresh_token')
@@ -169,14 +143,13 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
+  // Remove forgotPassword and resetPassword functions
   const value = {
     user,
     loading,
     error,
     login,
     logout,
-    forgotPassword,
-    resetPassword,
     refreshToken,
     isAuthenticated: !!user,
   }

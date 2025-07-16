@@ -20,6 +20,12 @@ const grammarLevels = [
 
 const moduleOrder = ['Grammar', 'Vocabulary', 'Listening', 'Speaking', 'Reading', 'Writing'];
 
+const MCQ_MODULES = [
+  { id: 'GRAMMAR', name: 'Grammar', color: 'from-blue-500 to-blue-600' },
+  { id: 'VOCABULARY', name: 'Vocabulary', color: 'from-green-500 to-green-600' },
+  { id: 'READING', name: 'Reading', color: 'from-purple-500 to-purple-600' },
+];
+
 const MCQ_FORMAT_NOTE = `\nAccepted formats:\n- CSV/XLSX with headers: Question,A,B,C,D,Answer,Level\n- Plain text (one question per block):\n1. Which of the following is a proper noun?\nA) city\nB) school\nC) London\nD) teacher\nAnswer: C\n`;
 
 const renderPreviewTable = (questions, duplicateMap) => {
@@ -516,12 +522,50 @@ const QuestionBankUpload = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-gray-50 flex">
       <SuperAdminSidebar />
       <div className="flex-1 lg:pl-64">
         <Header />
         <main className="px-6 lg:px-10 py-12">
-          {mainContent}
+          <h1 className="text-3xl font-bold mb-8">Bulk MCQ Upload</h1>
+          {!selectedModule ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+              {MCQ_MODULES.map(module => (
+                <div
+                  key={module.id}
+                  className={`rounded-2xl shadow-lg p-8 cursor-pointer bg-gradient-to-br ${module.color} text-white hover:scale-105 transition-all duration-300`}
+                  onClick={() => handleModuleSelect(module)}
+                >
+                  <h2 className="text-2xl font-bold mb-2">{module.name}</h2>
+                  <p>Upload MCQs for {module.name} module</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-8">
+              <button onClick={handleBackToModules} className="mb-4 text-blue-600 hover:underline">&larr; Back to Modules</button>
+              <h2 className="text-xl font-bold mb-4">Upload MCQs for {selectedModule.name}</h2>
+              <label className="block mb-2 font-semibold">Upload CSV/XLSX (columns: Question, A, B, C, D, Answer, Level, Set)</label>
+              <input type="file" accept=".csv,.xlsx" onChange={handleFileUpload} className="mb-4" />
+              {errorMsg && <div className="text-red-600 mb-2">{errorMsg}</div>}
+              {showPreview && (
+                <div className="mb-4">
+                  <h3 className="font-semibold mb-2">Preview Questions ({questions.length})</h3>
+                  <div className="max-h-64 overflow-y-auto border rounded p-2 bg-gray-50">
+                    {questions.map((q, i) => (
+                      <div key={i} className="mb-2 border-b pb-2 last:border-b-0">
+                        <div className="font-bold">Q{i+1}: {q.question}</div>
+                        <div className="ml-4">A) {q.optionA}  B) {q.optionB}  C) {q.optionC}  D) {q.optionD}</div>
+                        <div className="ml-4 text-sm">Answer: <span className="font-semibold text-green-700">{q.answer}</span> | Level: {q.level} | Set: {q.set}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={handleUpload} disabled={loading} className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50">{loading ? 'Uploading...' : 'Upload to Backend'}</button>
+                  {successMsg && <div className="text-green-600 mt-2">{successMsg}</div>}
+                </div>
+              )}
+            </div>
+          )}
         </main>
       </div>
     </div>

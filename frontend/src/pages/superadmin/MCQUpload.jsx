@@ -106,6 +106,8 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
             optionC: row.optionC || row.OptionC || row.C || '',
             optionD: row.optionD || row.OptionD || row.D || '',
             answer: row.answer || row.Answer || '',
+            set: row.set || row.Set || 'Set-1',
+            level: row.level || row.Level || '',
           }));
         } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
           const workbook = XLSX.read(e.target.result, { type: 'array' });
@@ -121,6 +123,8 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
             optionC: row.optionC || row.OptionC || row.C || '',
             optionD: row.optionD || row.OptionD || row.D || '',
             answer: row.answer || row.Answer || '',
+            set: row.set || row.Set || 'Set-1',
+            level: row.level || row.Level || '',
           }));
         } else if (fileExtension === 'txt' || file.type === 'text/plain') {
           parsedQuestions = parseHumanReadableMCQ(e.target.result);

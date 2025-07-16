@@ -24,12 +24,4 @@ export const authService = {
   getCurrentUser: async () => {
     return api.get('/auth/me')
   },
-
-  forgotPassword: async (email) => {
-    return api.post('/auth/forgot-password', { email })
-  },
-
-  resetPassword: async (token, newPassword) => {
-    return api.post('/auth/reset-password', { token, new_password: newPassword })
-  },
 } 
