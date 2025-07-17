@@ -141,7 +141,7 @@ const SuperAdminDashboard = () => {
       <SuperAdminSidebar />
       <div className="flex-1">
         <Header />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+        <div className="px-4 mt-6">
           {/* Statistics Cards */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
