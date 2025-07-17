@@ -131,10 +131,26 @@ const CourseManagement = () => {
         }
     };
 
+    const handleDeleteBatch = async (courseId, batchId) => {
+        if(window.confirm('Are you sure you want to delete this batch? This will remove all associated students and data.')) {
+            try {
+                await api.delete(`/course-management/${courseId}/batches/${batchId}`);
+                success('Batch deleted successfully!');
+                // Refresh batches for the current course
+                if (expandedCourse === courseId) {
+                    const res = await api.get(`/course-management/${courseId}/batches`);
+                    setBatches(res.data.data);
+                }
+            } catch (err) {
+                error(err.response?.data?.message || 'Failed to delete batch.');
+            }
+        }
+    };
+
     return (
-        <div className="min-h-screen bg-background flex">
+        <div className="min-h-screen bg-gray-50">
             <SuperAdminSidebar />
-            <div className="flex-1 lg:pl-64 bg-white min-h-screen">
+            <div className="flex-1 lg:ml-64">
                 <Header />
                 <main className="px-6 lg:px-10 py-12">
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
