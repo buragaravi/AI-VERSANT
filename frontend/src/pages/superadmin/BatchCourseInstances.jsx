@@ -5,6 +5,8 @@ import Papa from 'papaparse';
 import api from '../../services/api';
 import Header from '../../components/common/Header';
 import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
+import { Plus, Building, BookOpen, Users, X } from 'lucide-react';
+import { Plus, X, Building, BookOpen, Users } from 'lucide-react';
 
 const BatchCourseInstances = () => {
   useEffect(() => {
@@ -16,10 +18,27 @@ const BatchCourseInstances = () => {
   const [showInstanceDetails, setShowInstanceDetails] = useState(false);
   const [instanceStudents, setInstanceStudents] = useState([]);
   const [showStudentUpload, setShowStudentUpload] = useState(false);
+  const [showCreateBatch, setShowCreateBatch] = useState(false);
+  const [campuses, setCampuses] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [selectedCampus, setSelectedCampus] = useState('');
+  const [selectedCourse, setSelectedCourse] = useState('');
+  const [batchName, setBatchName] = useState('');
+  const [batchDescription, setBatchDescription] = useState('');
+  const [creatingBatch, setCreatingBatch] = useState(false);
 
   useEffect(() => {
     fetchInstances();
+    fetchCampuses();
   }, []);
+
+  useEffect(() => {
+    if (selectedCampus) {
+      fetchCoursesByCampus(selectedCampus);
+    } else {
+      setCourses([]);
+    }
+  }, [selectedCampus]);
 
   const fetchInstances = async () => {
     try {
