@@ -165,7 +165,6 @@ const BatchCourseInstances = () => {
         <main className="ml-64 p-6 flex items-center justify-center min-h-[calc(100vh-4rem)]">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </main>
-    </div>
       </div>
     );
   }
@@ -435,8 +434,10 @@ const BatchCourseInstances = () => {
               </div>
             </div>
           )}
+
         </main>
+      </div>
   );
 };
 
-export default BatchCourseInstances; 
+export default BatchCourseInstances;
