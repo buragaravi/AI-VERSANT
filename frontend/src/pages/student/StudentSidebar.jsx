@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, Outlet } from 'react-router-dom';
 import { Home, Book, Calendar, BarChart2, PieChart, User } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -16,14 +16,15 @@ const StudentSidebar = () => {
     ];
 
     return (
-        <div className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:z-50 bg-white shadow-lg">
-            <div className="flex items-center justify-center h-20 border-b">
-                <img
-                    className="h-12 w-auto"
-                    src="https://static.wixstatic.com/media/bfee2e_7d499a9b2c40442e85bb0fa99e7d5d37~mv2.png/v1/fill/w_203,h_111,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/logo1.png"
-                    alt="VERSANT"
-                />
-            </div>
+        <div className="flex h-screen">
+            <div className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:z-50 bg-white shadow-lg">
+                <div className="flex items-center justify-center h-20 border-b">
+                    <img
+                        className="h-12 w-auto"
+                        src="https://static.wixstatic.com/media/bfee2e_7d499a9b2c40442e85bb0fa99e7d5d37~mv2.png/v1/fill/w_203,h_111,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/logo1.png"
+                        alt="Study Edge"
+                    />
+                </div>
             <div className="flex-1 flex flex-col overflow-y-auto">
                 <nav className="flex-1 px-4 py-6">
                     {navLinks.map((item) => (
@@ -52,6 +53,9 @@ const StudentSidebar = () => {
                         </div>
                     </Link>
                 </div>
+            </div>
+            <div className="lg:ml-64 flex-1">
+                <Outlet />
             </div>
         </div>
     );
