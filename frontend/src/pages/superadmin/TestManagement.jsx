@@ -61,6 +61,9 @@ const MODULE_CONFIG = {
 };
 
 const TestManagement = () => {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
   const location = useLocation()
   const [view, setView] = useState('list')
   const [currentTestId, setCurrentTestId] = useState(null)

@@ -28,6 +28,9 @@ const StatCard = ({ icon, title, value, color }) => {
 };
 
 const PracticeAnalytics = () => {
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, []);
     const [stats, setStats] = useState({ totalPracticeTests: 0, totalStudents: 0, modules: [] });
     const [loading, setLoading] = useState(true);
 

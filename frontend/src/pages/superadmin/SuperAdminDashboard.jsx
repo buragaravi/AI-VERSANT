@@ -9,6 +9,9 @@ import LoadingSpinner from '../../components/common/LoadingSpinner'
 import api, { getCoursesByCampus, getCampuses } from '../../services/api'
 
 const SuperAdminDashboard = () => {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
   const { user } = useAuth()
   const { success, error } = useNotification()
   const [stats, setStats] = useState(null)

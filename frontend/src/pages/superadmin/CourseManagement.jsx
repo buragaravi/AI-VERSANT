@@ -8,6 +8,9 @@ import api from '../../services/api';
 import { Book, PlusCircle, Search, Trash2, Edit, X, User, Mail, Key, Building, ChevronDown, ChevronUp, Briefcase, Users } from 'lucide-react';
 
 const CourseManagement = () => {
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, []);
     const [courses, setCourses] = useState([]);
     const [campuses, setCampuses] = useState([]);
     const [loading, setLoading] = useState(true);

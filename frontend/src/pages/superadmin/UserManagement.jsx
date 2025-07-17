@@ -31,6 +31,9 @@ const StatCard = ({ title, count, icon, color, onClick }) => (
 );
 
 const UserManagement = () => {
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, []);
     const [counts, setCounts] = useState({ campus: 0, course: 0, student: 0 });
     const [data, setData] = useState({ campus: [], course: [], student: [] });
     const [loading, setLoading] = useState(true);

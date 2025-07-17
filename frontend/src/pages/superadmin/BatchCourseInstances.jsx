@@ -7,6 +7,9 @@ import Header from '../../components/common/Header';
 import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
 
 const BatchCourseInstances = () => {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
   const [instances, setInstances] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedInstance, setSelectedInstance] = useState(null);
@@ -127,7 +130,7 @@ const BatchCourseInstances = () => {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex min-h-screen bg-gray-100">
       <SuperAdminSidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />

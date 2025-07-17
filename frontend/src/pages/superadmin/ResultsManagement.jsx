@@ -8,6 +8,9 @@ import api from '../../services/api';
 import { BookOpen, User, Calendar, Percent, Filter, Building, Briefcase, GraduationCap, ChevronDown, ChevronUp, Volume2, CheckCircle, XCircle } from 'lucide-react';
 
 const ResultsManagement = () => {
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, []);
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState("");
