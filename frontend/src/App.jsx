@@ -54,7 +54,7 @@ import NotificationToast from './components/common/NotificationToast'
 // Admin Components
 import AdminSidebar from './components/common/AdminSidebar'
 import SuperAdminSidebar from './components/common/SuperAdminSidebar'
-import StudentSidebar from './components/common/StudentSidebar'
+import StudentSidebar from './pages/student/StudentSidebar'
 
 function App() {
   return (
