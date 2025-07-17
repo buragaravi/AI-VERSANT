@@ -161,12 +161,11 @@ const BatchCourseInstances = () => {
     return (
       <div className="bg-gray-100 min-h-screen">
         <SuperAdminSidebar />
-        <div className="ml-64">
-          <Header />
-          <main className="p-6 flex items-center justify-center min-h-[calc(100vh-4rem)]">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          </main>
-        </div>
+        <Header />
+        <main className="ml-64 p-6 flex items-center justify-center min-h-[calc(100vh-4rem)]">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </main>
+    </div>
       </div>
     );
   }
@@ -174,10 +173,9 @@ const BatchCourseInstances = () => {
   return (
     <div className="bg-gray-100 min-h-screen">
       <SuperAdminSidebar />
-      <div className="ml-64">
-        <Header />
-        <main className="p-6">
-          <div>
+      <Header />
+      <main className="ml-64 p-6">
+        <div>
             {/* Header */}
             <div className="mb-8">
               <h1 className="text-3xl font-bold text-gray-800 mb-2">
@@ -438,8 +436,6 @@ const BatchCourseInstances = () => {
             </div>
           )}
         </main>
-      </div>
-    </div>
   );
 };
 
