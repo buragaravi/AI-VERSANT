@@ -138,10 +138,12 @@ const BatchCourseInstances = () => {
       const response = await api.get('/campus-management/campuses');
       if (response.data.success) {
         setCampuses(response.data.data);
+      } else {
+        toast.error(response.data.message || 'Failed to fetch campuses');
       }
     } catch (error) {
       console.error('Error fetching campuses:', error);
-      toast.error('Failed to fetch campuses');
+      toast.error(error.response?.data?.message || 'Failed to fetch campuses. Please check your backend connection.');
     }
   };
 
@@ -154,6 +156,38 @@ const BatchCourseInstances = () => {
     } catch (error) {
       console.error('Error fetching courses by campus:', error);
       toast.error('Failed to fetch courses');
+    }
+  };
+
+  // Create Batch logic
+  const handleCreateBatch = async (e) => {
+    e.preventDefault();
+    if (!batchName || !selectedCampus || !selectedCourse) {
+      toast.error('Please fill all required fields.');
+      return;
+    }
+    setCreatingBatch(true);
+    try {
+      const response = await api.post('/batch-management/', {
+        name: batchName,
+        campus_ids: [selectedCampus],
+        course_ids: [selectedCourse],
+      });
+      if (response.data.success) {
+        toast.success('Batch created successfully!');
+        setShowCreateBatch(false);
+        setBatchName('');
+        setBatchDescription('');
+        setSelectedCampus('');
+        setSelectedCourse('');
+        fetchInstances();
+      } else {
+        toast.error(response.data.message || 'Failed to create batch');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to create batch');
+    } finally {
+      setCreatingBatch(false);
     }
   };
 
@@ -174,6 +208,43 @@ const BatchCourseInstances = () => {
       <SuperAdminSidebar />
       <Header />
       <main className="ml-64 p-6">
+        {/* Create Batch Modal */}
+        {showCreateBatch && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+            <form onSubmit={handleCreateBatch} className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full relative">
+              <button type="button" onClick={() => setShowCreateBatch(false)} className="absolute top-3 right-3 text-gray-500 hover:text-red-600 text-xl">&times;</button>
+              <h2 className="text-2xl font-bold mb-6">Create New Batch</h2>
+              <div className="mb-4">
+                <label className="block font-semibold mb-1">Batch Name</label>
+                <input type="text" className="w-full border rounded px-3 py-2" value={batchName} onChange={e => setBatchName(e.target.value)} required />
+              </div>
+              <div className="mb-4">
+                <label className="block font-semibold mb-1">Campus</label>
+                <select className="w-full border rounded px-3 py-2" value={selectedCampus} onChange={e => setSelectedCampus(e.target.value)} required>
+                  <option value="">-- Select Campus --</option>
+                  {campuses.map(campus => (
+                    <option key={campus.id || campus._id} value={campus.id || campus._id}>{campus.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="mb-4">
+                <label className="block font-semibold mb-1">Course</label>
+                <select className="w-full border rounded px-3 py-2" value={selectedCourse} onChange={e => setSelectedCourse(e.target.value)} required>
+                  <option value="">-- Select Course --</option>
+                  {courses.map(course => (
+                    <option key={course.id || course._id} value={course.id || course._id}>{course.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end">
+                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors" disabled={creatingBatch}>
+                  {creatingBatch ? 'Creating...' : 'Create Batch'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
         <div>
             {/* Header */}
             <div className="mb-8">
