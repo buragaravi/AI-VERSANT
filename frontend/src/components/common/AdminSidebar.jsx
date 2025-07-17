@@ -122,7 +122,7 @@ const AdminSidebar = () => {
           </div>
         </div>
       </div>
-      <div className="ml-64 flex-1 bg-gray-50">
+      <div className="ml-64 flex-1 bg-gray-50 w-full">
         <Outlet />
       </div>
     </div>

@@ -86,7 +86,7 @@ const SuperAdminSidebar = ({ onModuleUpload }) => {
           </button>
         </div>
       </motion.div>
-      <div className="ml-64 flex-1 bg-gray-50">
+      <div className="ml-64 flex-1 bg-gray-50 w-full">
         <Outlet />
       </div>
     </div>

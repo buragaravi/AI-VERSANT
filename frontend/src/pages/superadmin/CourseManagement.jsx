@@ -150,7 +150,7 @@ const CourseManagement = () => {
     return (
         <div className="min-h-screen bg-gray-50">
             <SuperAdminSidebar />
-            <div className="flex-1 lg:ml-64">
+            <div className="flex-1">
                 <Header />
                 <main className="px-6 lg:px-10 py-8">
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>

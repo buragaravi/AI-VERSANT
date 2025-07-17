@@ -221,9 +221,9 @@ const TestManagement = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
+          <div className="min-h-screen bg-gray-50">
       <SuperAdminSidebar onModuleUpload={() => setView('module-upload')} />
-      <div className="flex-1 lg:pl-64">
+                  <div className="flex-1">
         <Header />
         <main className="px-6 lg:px-10 py-12">
           {renderContent()}

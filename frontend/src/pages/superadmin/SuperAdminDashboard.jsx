@@ -137,7 +137,7 @@ const SuperAdminDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-gray-50">
       <SuperAdminSidebar />
       <div className="flex-1">
         <Header />
