@@ -139,7 +139,7 @@ const SuperAdminDashboard = () => {
   return (
     <div className="min-h-screen bg-background flex">
       <SuperAdminSidebar />
-      <div className="flex-1 lg:pl-64">
+      <div className="flex-1">
         <Header />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
           {/* Statistics Cards */}
