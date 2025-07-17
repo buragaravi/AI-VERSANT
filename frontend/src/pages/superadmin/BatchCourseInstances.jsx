@@ -133,6 +133,30 @@ const BatchCourseInstances = () => {
     document.body.removeChild(link);
   };
 
+  const fetchCampuses = async () => {
+    try {
+      const response = await api.get('/campus-management/campuses');
+      if (response.data.success) {
+        setCampuses(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching campuses:', error);
+      toast.error('Failed to fetch campuses');
+    }
+  };
+
+  const fetchCoursesByCampus = async (campusId) => {
+    try {
+      const response = await api.get(`/course-management/courses?campus_id=${campusId}`);
+      if (response.data.success) {
+        setCourses(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching courses by campus:', error);
+      toast.error('Failed to fetch courses');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-screen bg-gray-100">
