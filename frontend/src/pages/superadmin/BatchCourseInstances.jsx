@@ -159,11 +159,11 @@ const BatchCourseInstances = () => {
 
   if (loading) {
     return (
-      <div className="flex h-screen bg-gray-100">
+      <div className="bg-gray-100 min-h-screen">
         <SuperAdminSidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="ml-64">
           <Header />
-          <main className="flex-1 overflow-x-hidden overflow-y-auto flex items-center justify-center">
+          <main className="p-6 flex items-center justify-center min-h-[calc(100vh-4rem)]">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </main>
         </div>
@@ -172,12 +172,12 @@ const BatchCourseInstances = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="bg-gray-100 min-h-screen">
       <SuperAdminSidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="ml-64">
         <Header />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto">
-          <div className="p-6">
+        <main className="p-6">
+          <div>
             {/* Header */}
             <div className="mb-8">
               <h1 className="text-3xl font-bold text-gray-800 mb-2">
