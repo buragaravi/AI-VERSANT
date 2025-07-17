@@ -54,10 +54,11 @@ const StudentSidebar = () => {
                     </Link>
                 </div>
             </div>
-            <div className="lg:ml-64 flex-1">
-                <Outlet />
-            </div>
         </div>
+        <div className="lg:ml-64 flex-1">
+            <Outlet />
+        </div>
+    </div>
     );
 };
 
