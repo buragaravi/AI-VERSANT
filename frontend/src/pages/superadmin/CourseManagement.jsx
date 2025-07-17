@@ -152,36 +152,36 @@ const CourseManagement = () => {
             <SuperAdminSidebar />
             <div className="flex-1 lg:ml-64">
                 <Header />
-                <main className="px-6 lg:px-10 py-12">
+                <main className="px-6 lg:px-10 py-8">
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                         <div className="flex justify-between items-center mb-8">
                             <div>
                                 <h1 className="text-3xl font-bold text-black">Course Management</h1>
                                 <p className="mt-2 text-black">Manage all academic courses across campuses.</p>
                             </div>
-                            <button onClick={() => openModal()} className="flex items-center gap-2 bg-highlight text-white font-semibold px-4 py-2 rounded-lg shadow-md hover:bg-highlight-hover transition">
+                            <button onClick={() => openModal()} className="flex items-center gap-2 bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg shadow-md hover:bg-blue-700 transition">
                                 <PlusCircle size={20} />
                                 Add Course
                             </button>
                         </div>
 
-                        <div className="mt-8 bg-white rounded-2xl shadow-lg border-l-8 border-highlight">
-                             <div className="p-6 border-b border-stroke">
+                        <div className="mt-8 bg-white rounded-lg shadow-md border border-gray-200">
+                             <div className="p-6 border-b border-gray-200">
                                 <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-tertiary" />
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                                     <input
                                         type="text"
                                         placeholder="Search by course, campus, or admin..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-2 border border-stroke rounded-md shadow-sm focus:ring-highlight focus:border-highlight text-black"
+                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                                     />
                                 </div>
                             </div>
                             
                             <div className="overflow-x-auto">
                                 {loading ? <LoadingSpinner /> : (
-                                    <table className="min-w-full divide-y divide-stroke">
+                                    <table className="min-w-full divide-y divide-gray-200">
                                         <thead className="bg-white">
                                             <tr>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Course</th>
@@ -190,26 +190,26 @@ const CourseManagement = () => {
                                                 <th className="px-6 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">Actions</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="bg-white divide-y divide-stroke">
+                                        <tbody className="bg-white divide-y divide-gray-200">
                                             {filteredCourses.map(course => (
                                                 <React.Fragment key={course.id}>
-                                                    <tr className="cursor-pointer hover:bg-tertiary/30" onClick={() => toggleCourseExpansion(course.id)}>
+                                                    <tr className="cursor-pointer hover:bg-gray-50" onClick={() => toggleCourseExpansion(course.id)}>
                                                         <td className="px-6 py-4 whitespace-nowrap">
                                                             <div className="flex items-center">
-                                                                <span className="text-sm font-medium text-black">{course.name}</span>
+                                                                <span className="text-sm font-medium text-gray-900">{course.name}</span>
                                                                 <div className="ml-2">
                                                                     {expandedCourse === course.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{course.campus?.name || 'N/A'}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{course.campus?.name || 'N/A'}</td>
                                                         <td className="px-6 py-4 whitespace-nowrap">
-                                                            <div className="text-sm font-medium text-black">{course.admin?.name || 'N/A'}</div>
-                                                            <div className="text-sm text-black">{course.admin?.email || 'N/A'}</div>
+                                                            <div className="text-sm font-medium text-gray-900">{course.admin?.name || 'N/A'}</div>
+                                                            <div className="text-sm text-gray-600">{course.admin?.email || 'N/A'}</div>
                                                         </td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                            <button onClick={(e) => { e.stopPropagation(); openModal(course); }} className="text-highlight hover:text-highlight-hover mr-4"><Edit size={18} /></button>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(course.id); }} className="text-highlight hover:text-highlight-hover"><Trash2 size={18}/></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); openModal(course); }} className="text-blue-600 hover:text-blue-800 mr-4"><Edit size={18} /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(course.id); }} className="text-red-600 hover:text-red-800"><Trash2 size={18}/></button>
                                                         </td>
                                                     </tr>
                                                     <AnimatePresence>
@@ -220,28 +220,40 @@ const CourseManagement = () => {
                                                                 exit={{ opacity: 0, height: 0 }}
                                                             >
                                                                 <td colSpan="4" className="p-0">
-                                                                    <div className="bg-tertiary/10 p-4">
+                                                                    <div className="bg-gray-50 p-4">
                                                                         {loadingBatches ? <LoadingSpinner size="sm" /> :
                                                                             batches.length > 0 ? (
                                                                                 <div>
-                                                                                    <h4 className="text-md font-semibold mb-2 text-black">Batches</h4>
+                                                                                    <h4 className="text-md font-semibold mb-3 text-gray-800">Batches</h4>
                                                                                     <ul className="space-y-2">
                                                                                         {batches.map(batch => (
-                                                                                            <li key={batch.id} className="bg-white p-3 rounded-md shadow-sm flex justify-between items-center border-l-4 border-highlight">
+                                                                                            <li key={batch.id} className="bg-white p-3 rounded-md shadow-sm flex justify-between items-center border-l-4 border-blue-500">
                                                                                                 <div className="flex items-center">
-                                                                                                    <Briefcase size={16} className="mr-2 text-highlight"/>
-                                                                                                    <span className="text-sm font-medium text-black">{batch.name}</span>
+                                                                                                    <Briefcase size={16} className="mr-2 text-blue-500"/>
+                                                                                                    <span className="text-sm font-medium text-gray-800">{batch.name}</span>
                                                                                                 </div>
-                                                                                                <div className="flex items-center text-sm text-black">
-                                                                                                    <Users size={14} className="mr-1 text-tertiary"/>
-                                                                                                    <span>{batch.student_count} Students</span>
+                                                                                                <div className="flex items-center space-x-4">
+                                                                                                    <div className="flex items-center text-sm text-gray-600">
+                                                                                                        <Users size={14} className="mr-1 text-gray-400"/>
+                                                                                                        <span>{batch.student_count} Students</span>
+                                                                                                    </div>
+                                                                                                    <button 
+                                                                                                        onClick={(e) => { 
+                                                                                                            e.stopPropagation(); 
+                                                                                                            handleDeleteBatch(course.id, batch.id); 
+                                                                                                        }} 
+                                                                                                        className="text-red-500 hover:text-red-700 transition-colors"
+                                                                                                        title="Delete Batch"
+                                                                                                    >
+                                                                                                        <Trash2 size={16}/>
+                                                                                                    </button>
                                                                                                 </div>
                                                                                             </li>
                                                                                         ))}
                                                                                     </ul>
                                                                                 </div>
                                                                             ) : (
-                                                                                <div className="text-center py-4 text-black">No batches found for this course.</div>
+                                                                                <div className="text-center py-4 text-gray-500">No batches found for this course.</div>
                                                                             )
                                                                         }
                                                                     </div>

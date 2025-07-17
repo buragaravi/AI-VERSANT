@@ -64,7 +64,7 @@ const AdminSidebar = () => {
     navigate('/login')
   }
 
-  return (
+    return (
     <div className="flex h-screen">
       <div className="fixed left-0 top-0 h-full w-64 bg-white shadow-lg z-50">
         <div className="flex flex-col h-full">
@@ -122,7 +122,7 @@ const AdminSidebar = () => {
           </div>
         </div>
       </div>
-      <div className="ml-64 flex-1">
+      <div className="ml-64 flex-1 bg-gray-50">
         <Outlet />
       </div>
     </div>

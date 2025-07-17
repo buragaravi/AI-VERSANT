@@ -94,40 +94,40 @@ function App() {
                 <Route path="/login" element={<Login />} />
 
                 {/* Admin Routes */}
-                {/* Super Admin Routes */}
+                  {/* Super Admin Routes */}
                 <Route path="/superadmin" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><SuperAdminSidebar /></ProtectedRoute>}>
                   <Route index element={<SuperAdminDashboard />} />
-                  <Route path="dashboard" element={<SuperAdminDashboard />} />
-                  <Route path="campuses" element={<CampusManagement />} />
-                  <Route path="courses" element={<CourseManagement />} />
-                  <Route path="users" element={<UserManagement />} />
-                  <Route path="students" element={<StudentManagement />} />
-                  <Route path="results" element={<ResultsManagement />} />
-                  <Route path="batches/:batchId" element={<BatchDetails />} />
+                    <Route path="dashboard" element={<SuperAdminDashboard />} />
+                    <Route path="campuses" element={<CampusManagement />} />
+                    <Route path="courses" element={<CourseManagement />} />
+                    <Route path="users" element={<UserManagement />} />
+                    <Route path="students" element={<StudentManagement />} />
+                    <Route path="results" element={<ResultsManagement />} />
+                    <Route path="batches/:batchId" element={<BatchDetails />} />
                   <Route path="practice-analytics" element={<PracticeAnalytics />} />
-                  <Route path="tests" element={<TestManagement />} />
-                  <Route path="tests/create" element={<TestManagement />} />
-                  <Route path="question-bank-upload" element={<QuestionBankUpload />} />
-                  <Route path="batch-course-instances" element={<BatchCourseInstances />} />
-                </Route>
+                    <Route path="tests" element={<TestManagement />} />
+                    <Route path="tests/create" element={<TestManagement />} />
+                    <Route path="question-bank-upload" element={<QuestionBankUpload />} />
+                    <Route path="batch-course-instances" element={<BatchCourseInstances />} />
+                  </Route>
 
-                {/* Campus Admin Routes */}
+                  {/* Campus Admin Routes */}
                 <Route path="/campus-admin" element={<ProtectedRoute allowedRoles={['campus_admin']}><AdminSidebar /></ProtectedRoute>}>
                   <Route index element={<CampusAdminDashboard />} />
-                  <Route path="dashboard" element={<CampusAdminDashboard />} />
-                  <Route path="tests" element={<TestManagement />} />
-                  <Route path="student-upload" element={<StudentManagement />} />
-                  <Route path="results" element={<ResultsManagement />} />
-                </Route>
+                    <Route path="dashboard" element={<CampusAdminDashboard />} />
+                    <Route path="tests" element={<TestManagement />} />
+                    <Route path="student-upload" element={<StudentManagement />} />
+                    <Route path="results" element={<ResultsManagement />} />
+                  </Route>
 
-                {/* Course Admin Routes */}
+                  {/* Course Admin Routes */}
                 <Route path="/course-admin" element={<ProtectedRoute allowedRoles={['course_admin']}><AdminSidebar /></ProtectedRoute>}>
                   <Route index element={<CourseAdminDashboard />} />
-                  <Route path="dashboard" element={<CourseAdminDashboard />} />
-                  <Route path="tests" element={<TestManagement />} />
-                  <Route path="student-upload" element={<StudentManagement />} />
-                  <Route path="results" element={<ResultsManagement />} />
-                </Route>
+                    <Route path="dashboard" element={<CourseAdminDashboard />} />
+                    <Route path="tests" element={<TestManagement />} />
+                    <Route path="student-upload" element={<StudentManagement />} />
+                    <Route path="results" element={<ResultsManagement />} />
+                  </Route>
 
                 {/* Student Routes */}
                 <Route path="/student" element={<ProtectedRoute allowedRoles={['student']}><StudentSidebar /></ProtectedRoute>}>

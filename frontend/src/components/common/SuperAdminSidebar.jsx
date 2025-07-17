@@ -36,10 +36,16 @@ const SuperAdminSidebar = ({ onModuleUpload }) => {
         initial={{ x: -100, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 80, damping: 18 }}
-        className="fixed top-0 left-0 h-screen w-64 bg-background shadow-xl z-30 flex flex-col rounded-tr-3xl rounded-br-3xl border-r border-border text-text transition-colors duration-300"
+        className="fixed top-0 left-0 h-screen w-64 bg-white shadow-xl z-30 flex flex-col border-r border-gray-200"
       >
+        {/* Logo/Brand */}
+        <div className="p-6 border-b border-gray-200">
+          <h1 className="text-2xl font-bold text-gray-800">Study Edge</h1>
+          <p className="text-sm text-gray-600">Super Admin Portal</p>
+        </div>
+
         <nav className="flex-1 flex flex-col justify-between">
-          <div className="flex flex-col space-y-2 px-4 mt-8">
+          <div className="flex flex-col space-y-2 px-4 mt-6">
             {navLinks.map((link, idx) => (
               <motion.div
                 key={link.name}
@@ -49,14 +55,13 @@ const SuperAdminSidebar = ({ onModuleUpload }) => {
               >
                 <Link
                   to={link.path}
-                  className={`group flex items-center px-3 py-2 text-base font-medium rounded-lg transition-all duration-300 animate-fade-in
+                  className={`group flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all duration-300
                     ${isActive(link.path)
-                      ? 'bg-highlight text-text shadow-lg border border-border scale-105'
-                      : 'text-text hover:bg-highlight hover:text-text hover:shadow-md border border-transparent hover:scale-105'}
+                      ? 'bg-blue-100 text-blue-700 shadow-md border-r-2 border-blue-700'
+                      : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'}
                   `}
-                  style={{ marginBottom: '2px' }}
                 >
-                  <link.icon className={`mr-3 h-5 w-5 transition-colors duration-200 ${isActive(link.path) ? 'text-secondary' : 'text-text group-hover:text-secondary'}`} />
+                  <link.icon className={`mr-3 h-5 w-5 transition-colors duration-200 ${isActive(link.path) ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
                   <span className="transition-transform duration-300 group-hover:translate-x-1">{link.name}</span>
                 </Link>
               </motion.div>
@@ -65,10 +70,9 @@ const SuperAdminSidebar = ({ onModuleUpload }) => {
           <div className="px-4 mt-8 mb-4">
             <button
               onClick={() => onModuleUpload ? onModuleUpload() : navigate('/superadmin/question-bank-upload')}
-              className="w-full flex items-center justify-center gap-2 bg-button text-text font-semibold px-4 py-3 rounded-xl shadow-lg hover:bg-buttonHover hover:text-text hover:shadow-xl transition-all duration-300 text-base mb-2 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-secondary animate-fade-in border border-border"
-              style={{ boxShadow: '0 4px 16px 0 rgba(22, 163, 74, 0.10)' }}
+              className="w-full flex items-center justify-center gap-2 bg-green-600 text-white font-semibold px-4 py-3 rounded-lg shadow-md hover:bg-green-700 transition-all duration-300 text-sm hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-500"
             >
-              <FilePlus className="h-5 w-5 text-text" />
+              <FilePlus className="h-5 w-5" />
               Question Bank Upload
             </button>
           </div>
@@ -76,13 +80,13 @@ const SuperAdminSidebar = ({ onModuleUpload }) => {
         <div className="px-4 pb-6 mt-auto">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 bg-secondary text-text font-medium px-4 py-2 rounded-lg hover:bg-tertiary hover:text-text transition-all duration-300 shadow-sm animate-fade-in border border-border hover:scale-105"
+            className="w-full flex items-center justify-center gap-2 bg-gray-600 text-white font-medium px-4 py-2 rounded-lg hover:bg-gray-700 transition-all duration-300 shadow-sm hover:scale-105"
           >
             Logout
           </button>
         </div>
       </motion.div>
-      <div className="ml-64 flex-1">
+      <div className="ml-64 flex-1 bg-gray-50">
         <Outlet />
       </div>
     </div>
