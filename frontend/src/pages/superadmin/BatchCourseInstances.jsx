@@ -6,7 +6,6 @@ import api from '../../services/api';
 import Header from '../../components/common/Header';
 import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
 import { Plus, Building, BookOpen, Users, X } from 'lucide-react';
-import { Plus, X, Building, BookOpen, Users } from 'lucide-react';
 
 const BatchCourseInstances = () => {
   useEffect(() => {
