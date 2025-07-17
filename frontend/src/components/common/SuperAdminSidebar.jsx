@@ -31,7 +31,7 @@ const SuperAdminSidebar = ({ onModuleUpload }) => {
   const isActive = (path) => location.pathname.startsWith(path)
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex">
       <motion.div
         initial={{ x: -100, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
@@ -86,7 +86,7 @@ const SuperAdminSidebar = ({ onModuleUpload }) => {
           </button>
         </div>
       </motion.div>
-      <div className="ml-64 flex-1 bg-gray-50 w-full overflow-y-auto">
+      <div className="ml-64 flex-1 bg-gray-50 w-full">
         <Outlet />
       </div>
     </div>
