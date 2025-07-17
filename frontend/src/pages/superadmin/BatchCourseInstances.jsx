@@ -246,9 +246,29 @@ const BatchCourseInstances = () => {
                 <h3 className="text-xl font-semibold text-gray-800 mb-2">
                   No Batch-Course Instances Found
                 </h3>
-                <p className="text-gray-600">
+                <p className="text-gray-600 mb-6">
                   Create batches with courses to generate instances automatically.
                 </p>
+                <button
+                  onClick={() => setShowCreateBatch(true)}
+                  className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="w-5 h-5 mr-2" />
+                  Create New Batch
+                </button>
+              </div>
+            )}
+
+            {/* Create Batch Button for when instances exist */}
+            {instances.length > 0 && (
+              <div className="mb-6 flex justify-end">
+                <button
+                  onClick={() => setShowCreateBatch(true)}
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create New Batch
+                </button>
               </div>
             )}
           </div>
