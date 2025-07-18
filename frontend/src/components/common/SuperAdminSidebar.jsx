@@ -1,10 +1,10 @@
 import React from 'react'
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
-import { Home, Users, FilePlus, Building2, BarChart, LayoutDashboard, BookCopy, Briefcase, PlusSquare, BarChart3, GraduationCap, LineChart } from 'lucide-react'
+import { Users, FilePlus, Building2, BarChart, LayoutDashboard, BookCopy, GraduationCap } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { motion } from 'framer-motion'
 
-const SuperAdminSidebar = ({ onModuleUpload }) => {
+const SuperAdminSidebar = () => {
   const location = useLocation()
   const { logout } = useAuth()
   const navigate = useNavigate()
@@ -24,8 +24,6 @@ const SuperAdminSidebar = ({ onModuleUpload }) => {
     { name: 'Question Bank Upload', path: '/superadmin/question-bank-upload', icon: FilePlus },
     { name: 'Student Management', path: '/superadmin/students', icon: GraduationCap },
     { name: 'Results Management', path: '/superadmin/results', icon: BarChart },
-    { name: 'Practice Analytics', path: '/superadmin/practice-analytics', icon: BarChart3 },
-    // { name: 'System Analytics', path: '/superadmin/analytics', icon: LineChart }
   ]
 
   const isActive = (path) => location.pathname.startsWith(path)
@@ -36,55 +34,97 @@ const SuperAdminSidebar = ({ onModuleUpload }) => {
         initial={{ x: -100, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 80, damping: 18 }}
-        className="fixed top-0 left-0 h-screen w-64 bg-white shadow-xl z-30 flex flex-col border-r border-gray-200"
+        className="fixed top-0 left-0 h-screen w-64 bg-gradient-to-b from-white to-gray-50 shadow-2xl z-30 flex flex-col border-r border-gray-200"
       >
         {/* Logo/Brand */}
-        <div className="p-6 border-b border-gray-200">
-          <h1 className="text-2xl font-bold text-gray-800">Study Edge</h1>
-          <p className="text-sm text-gray-600">Super Admin Portal</p>
-        </div>
+        <motion.div 
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.1, type: 'spring', stiffness: 100 }}
+          className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50"
+        >
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+            Study Edge
+          </h1>
+          <p className="text-sm text-gray-600 font-medium">Super Admin Portal</p>
+        </motion.div>
 
         <nav className="flex-1 flex flex-col justify-between">
-          <div className="flex flex-col space-y-2 px-4 mt-6">
+          <div className="flex flex-col space-y-1 px-4 mt-6">
             {navLinks.map((link, idx) => (
               <motion.div
                 key={link.name}
                 initial={{ x: -30, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ delay: 0.05 * idx, type: 'spring', stiffness: 80, damping: 18 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
                 <Link
                   to={link.path}
-                  className={`group flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all duration-300
+                  className={`group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-300 relative overflow-hidden
                     ${isActive(link.path)
-                      ? 'bg-blue-100 text-blue-700 shadow-md border-r-2 border-blue-700'
-                      : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'}
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105'
+                      : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 hover:text-gray-900 hover:shadow-md'}
                   `}
                 >
-                  <link.icon className={`mr-3 h-5 w-5 transition-colors duration-200 ${isActive(link.path) ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'}`} />
-                  <span className="transition-transform duration-300 group-hover:translate-x-1">{link.name}</span>
+                  {/* Active indicator */}
+                  {isActive(link.path) && (
+                    <motion.div
+                      layoutId="activeTab"
+                      className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl"
+                      initial={false}
+                      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    />
+                  )}
+                  
+                  <link.icon className={`mr-3 h-5 w-5 transition-all duration-300 relative z-10
+                    ${isActive(link.path) 
+                      ? 'text-white' 
+                      : 'text-gray-500 group-hover:text-blue-600 group-hover:scale-110'
+                    }`} 
+                  />
+                  <span className="relative z-10 transition-all duration-300 group-hover:translate-x-1 font-semibold">
+                    {link.name}
+                  </span>
+                  
+                  {/* Hover effect */}
+                  {!isActive(link.path) && (
+                    <motion.div
+                      className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 rounded-xl"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      whileHover={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.2 }}
+                    />
+                  )}
                 </Link>
               </motion.div>
             ))}
           </div>
-          <div className="px-4 mt-8 mb-4">
-            <button
-              onClick={() => onModuleUpload ? onModuleUpload() : navigate('/superadmin/question-bank-upload')}
-              className="w-full flex items-center justify-center gap-2 bg-green-600 text-white font-semibold px-4 py-3 rounded-lg shadow-md hover:bg-green-700 transition-all duration-300 text-sm hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-500"
-            >
-              <FilePlus className="h-5 w-5" />
-              Question Bank Upload
-            </button>
-          </div>
         </nav>
-        <div className="px-4 pb-6 mt-auto">
+        
+        {/* Logout Button */}
+        <motion.div 
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.3, type: 'spring', stiffness: 100 }}
+          className="px-4 pb-6 mt-auto"
+        >
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 bg-gray-600 text-white font-medium px-4 py-2 rounded-lg hover:bg-gray-700 transition-all duration-300 shadow-sm hover:scale-105"
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white font-semibold px-4 py-3 rounded-xl hover:from-gray-700 hover:to-gray-800 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
           >
+            <motion.div
+              whileHover={{ rotate: 180 }}
+              transition={{ duration: 0.3 }}
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </motion.div>
             Logout
           </button>
-        </div>
+        </motion.div>
       </motion.div>
       <div className="ml-64 flex-1 bg-gray-50 w-full">
         <Outlet />

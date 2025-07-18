@@ -18,7 +18,6 @@ import TestManagement from './pages/superadmin/TestManagement'
 import StudentManagement from './pages/superadmin/StudentManagement'
 import ResultsManagement from './pages/superadmin/ResultsManagement'
 import BatchDetails from './pages/superadmin/BatchDetails'
-import PracticeAnalytics from './pages/superadmin/PracticeAnalytics'
 import QuestionBankUpload from './pages/superadmin/QuestionBankUpload'
 import BatchCourseInstances from './pages/superadmin/BatchCourseInstances'
 import BatchManagement from './pages/superadmin/BatchManagement'
@@ -105,8 +104,7 @@ function App() {
                     <Route path="students" element={<StudentManagement />} />
                     <Route path="results" element={<ResultsManagement />} />
                     <Route path="batches/:batchId" element={<BatchDetails />} />
-                  <Route path="practice-analytics" element={<PracticeAnalytics />} />
-                    <Route path="tests" element={<TestManagement />} />
+                  <Route path="tests" element={<TestManagement />} />
                     <Route path="tests/create" element={<TestManagement />} />
                     <Route path="question-bank-upload" element={<QuestionBankUpload />} />
                     <Route path="batch-course-instances" element={<BatchCourseInstances />} />
