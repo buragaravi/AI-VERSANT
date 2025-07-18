@@ -1343,11 +1343,65 @@ def get_uploaded_files():
 def get_file_questions(file_id):
     """Get questions from a specific upload session"""
     try:
-        # Parse the file_id (which is actually a group key)
-        # For now, we'll get questions by module and level
-        questions = list(mongo_db.question_bank.find({
-            'module_id': file_id.split('_')[0] if '_' in file_id else file_id
-        }).sort('created_at', -1).limit(50))
+        # Parse the file_id (which is actually a group key from aggregation)
+        # The file_id format is: ObjectId with module_id, level_id, and date
+        # We need to decode this to get the actual module and level
+        import json
+        from bson import json_util
+        
+        # Try to parse the file_id as a JSON object first
+        try:
+            # The file_id is actually the _id from the aggregation result
+            # We need to find the original group that matches this file_id
+            pipeline = [
+                {
+                    '$group': {
+                        '_id': {
+                            'module_id': '$module_id',
+                            'level_id': '$level_id',
+                            'date': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$created_at'}}
+                        },
+                        'module_name': {'$first': '$module_id'},
+                        'level_name': {'$first': '$level_id'},
+                        'question_count': {'$sum': 1},
+                        'uploaded_at': {'$first': '$created_at'},
+                        'filename': {'$first': f'MCQ_Upload_{datetime.utcnow().strftime("%Y%m%d")}.csv'}
+                    }
+                },
+                {'$sort': {'uploaded_at': -1}},
+                {'$limit': 20}
+            ]
+            
+            uploaded_files = list(mongo_db.question_bank.aggregate(pipeline))
+            
+            # Find the file that matches the file_id
+            target_file = None
+            for file in uploaded_files:
+                if str(file['_id']) == file_id:
+                    target_file = file
+                    break
+            
+            if not target_file:
+                return jsonify({'success': False, 'message': 'File not found'}), 404
+            
+            # Extract module_id and level_id from the group key
+            group_key = target_file['_id']
+            module_id = group_key['module_id']
+            level_id = group_key['level_id']
+            
+            # Get questions for this specific module and level
+            questions = list(mongo_db.question_bank.find({
+                'module_id': module_id,
+                'level_id': level_id
+            }).sort('created_at', -1).limit(100))
+            
+        except Exception as parse_error:
+            # Fallback: try to extract module_id from file_id string
+            current_app.logger.warning(f"Could not parse file_id as group key: {parse_error}")
+            module_id = file_id.split('_')[0] if '_' in file_id else file_id
+            questions = list(mongo_db.question_bank.find({
+                'module_id': module_id
+            }).sort('created_at', -1).limit(50))
         
         # Convert ObjectIds to strings
         for q in questions:
@@ -1880,4 +1934,50 @@ def add_question_to_file(file_id):
             
     except Exception as e:
         current_app.logger.error(f"Error adding question: {e}")
+        return jsonify({'success': False, 'message': f'Failed to add question: {str(e)}'}), 500
+
+@test_management_bp.route('/questions/add', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def add_question_to_module():
+    """Add a new question to a specific module and level"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+        
+        # Validate required fields
+        required_fields = ['module_id', 'level_id', 'question', 'optionA', 'optionB', 'optionC', 'optionD', 'answer']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'success': False, 'message': f'{field} is required'}), 400
+        
+        # Create new question document
+        new_question = {
+            'module_id': data['module_id'],
+            'level_id': data['level_id'],
+            'question': data['question'],
+            'optionA': data['optionA'],
+            'optionB': data['optionB'],
+            'optionC': data['optionC'],
+            'optionD': data['optionD'],
+            'answer': data['answer'],
+            'instructions': data.get('instructions', ''),
+            'used_in_tests': [],
+            'used_count': 0,
+            'last_used': None,
+            'created_at': datetime.utcnow()
+        }
+        
+        # Insert the question
+        result = mongo_db.question_bank.insert_one(new_question)
+        
+        if result.inserted_id:
+            new_question['_id'] = str(result.inserted_id)
+            return jsonify({'success': True, 'message': 'Question added successfully', 'data': new_question}), 201
+        else:
+            return jsonify({'success': False, 'message': 'Failed to add question'}), 500
+            
+    except Exception as e:
+        current_app.logger.error(f"Error adding question to module: {e}")
         return jsonify({'success': False, 'message': f'Failed to add question: {str(e)}'}), 500 

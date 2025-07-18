@@ -113,6 +113,18 @@ const QuestionBankUpload = () => {
     }
   };
 
+  const fetchExistingQuestionsForLevel = async (moduleId, levelId) => {
+    try {
+      const response = await api.get(`/test-management/existing-questions?module_id=${moduleId}&level_id=${levelId}`);
+      if (response.data.success) {
+        setQuestions(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching existing questions for level:', error);
+      // Don't show error toast as this might be a new level
+    }
+  };
+
   const handleModuleSelect = (module) => {
     setSelectedModule(module.id);
     setCurrentStep('levels');
@@ -121,6 +133,7 @@ const QuestionBankUpload = () => {
   const handleLevelSelect = (level) => {
     setSelectedLevel(level);
     setCurrentStep('upload');
+    fetchExistingQuestionsForLevel(selectedModule, level.id);
   };
 
   const handleViewQuestions = (file) => {
@@ -148,10 +161,10 @@ const QuestionBankUpload = () => {
 
   const handleUploadSuccess = () => {
     fetchUploadedFiles();
-    setCurrentStep('modules');
-    setSelectedModule(null);
-    setSelectedLevel(null);
-    setQuestions([]);
+    // Refresh questions for current level if we're on upload step
+    if (currentStep === 'upload' && selectedModule && selectedLevel) {
+      fetchExistingQuestionsForLevel(selectedModule, selectedLevel.id);
+    }
   };
 
   const downloadTemplate = () => {
@@ -190,7 +203,12 @@ const QuestionBankUpload = () => {
     try {
       await api.delete(`/test-management/questions/${questionId}`);
       toast.success('Question deleted successfully');
-      fetchFileQuestions(selectedFile._id);
+      // Refresh questions based on current context
+      if (currentStep === 'questions' && selectedFile) {
+        fetchFileQuestions(selectedFile._id);
+      } else if (currentStep === 'upload' && selectedModule && selectedLevel) {
+        fetchExistingQuestionsForLevel(selectedModule, selectedLevel.id);
+      }
     } catch (error) {
       console.error('Error deleting question:', error);
       toast.error('Failed to delete question');
@@ -206,7 +224,12 @@ const QuestionBankUpload = () => {
       await api.put(`/test-management/questions/${editingQuestion._id}`, questionData);
       toast.success('Question updated successfully');
       setEditingQuestion(null);
-      fetchFileQuestions(selectedFile._id);
+      // Refresh questions based on current context
+      if (currentStep === 'questions' && selectedFile) {
+        fetchFileQuestions(selectedFile._id);
+      } else if (currentStep === 'upload' && selectedModule && selectedLevel) {
+        fetchExistingQuestionsForLevel(selectedModule, selectedLevel.id);
+      }
     } catch (error) {
       console.error('Error updating question:', error);
       toast.error('Failed to update question');
@@ -215,10 +238,34 @@ const QuestionBankUpload = () => {
 
   const handleAddQuestion = async (questionData) => {
     try {
-      await api.post(`/test-management/uploaded-files/${selectedFile._id}/questions`, questionData);
-      toast.success('Question added successfully');
-      setShowAddQuestion(false);
-      fetchFileQuestions(selectedFile._id);
+      let response;
+      if (currentStep === 'questions' && selectedFile) {
+        // Add to specific file
+        response = await api.post(`/test-management/uploaded-files/${selectedFile._id}/questions`, questionData);
+      } else if (currentStep === 'upload' && selectedModule && selectedLevel) {
+        // Add to module/level
+        const payload = {
+          ...questionData,
+          module_id: selectedModule,
+          level_id: selectedLevel.id
+        };
+        response = await api.post('/test-management/questions/add', payload);
+      } else {
+        throw new Error('Invalid context for adding question');
+      }
+      
+      if (response.data.success) {
+        toast.success('Question added successfully');
+        setShowAddQuestion(false);
+        // Refresh questions based on current context
+        if (currentStep === 'questions' && selectedFile) {
+          fetchFileQuestions(selectedFile._id);
+        } else if (currentStep === 'upload' && selectedModule && selectedLevel) {
+          fetchExistingQuestionsForLevel(selectedModule, selectedLevel.id);
+        }
+      } else {
+        toast.error(response.data.message || 'Failed to add question');
+      }
     } catch (error) {
       console.error('Error adding question:', error);
       toast.error('Failed to add question');
@@ -429,6 +476,74 @@ const QuestionBankUpload = () => {
               levelId={selectedLevel?.id}
             onUploadSuccess={handleUploadSuccess}
           />
+
+          {/* Add Question Button */}
+          <div className="flex justify-end mt-6">
+            <button
+              onClick={() => setShowAddQuestion(true)}
+              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-base flex items-center"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Add Question
+            </button>
+          </div>
+        </div>
+
+        {/* Existing Questions Section */}
+        <div className="bg-white rounded-2xl shadow-lg p-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-gray-800">
+              Existing Questions for {selectedModule} - {selectedLevel?.name}
+            </h2>
+            <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+              {questions.length} questions
+            </span>
+          </div>
+          
+          {questions.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {questions.map((question, index) => (
+                <div key={question._id || index} className="bg-gray-50 rounded-xl p-6 border border-gray-200 hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-gray-800 text-sm">
+                      Q{index + 1}: {question.question.length > 50 ? question.question.substring(0, 50) + '...' : question.question}
+                    </h3>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleEditQuestion(question)}
+                        className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteQuestion(question._id)}
+                        className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-xs text-gray-600">
+                    <div className="p-2 bg-white rounded border">A: {question.optionA}</div>
+                    <div className="p-2 bg-white rounded border">B: {question.optionB}</div>
+                    <div className="p-2 bg-white rounded border">C: {question.optionC}</div>
+                    <div className="p-2 bg-white rounded border">D: {question.optionD}</div>
+                  </div>
+                  <div className="mt-3 text-xs">
+                    <span className="font-medium text-green-600">Answer: {question.answer}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <div className="text-4xl mb-4">📝</div>
+              <p>No questions uploaded yet for this level</p>
+              <p className="text-sm">Upload your first question file to get started</p>
+            </div>
+          )}
         </div>
         </main>
       </div>
