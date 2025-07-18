@@ -295,11 +295,11 @@ const StudentManagement = () => {
     }, [accessStatus]);
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-100">
             <SuperAdminSidebar />
-            <div className="flex-1">
+            <div className="ml-64 flex-1">
                 <Header />
-                <main className="px-6 lg:px-10 py-12">
+                <main className="px-6 lg:px-10 py-8">
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                         <div className="flex justify-between items-center mb-8">
                             <div>
@@ -319,22 +319,22 @@ const StudentManagement = () => {
                             />
                         </div>
 
-                        <div className="bg-secondary rounded-2xl shadow-lg">
+                        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
                             <div className="overflow-x-auto">
                                 {loading ? <LoadingSpinner /> : (
-                                    <table className="min-w-full divide-y divide-stroke">
+                                    <table className="min-w-full">
                                         <thead className="bg-gray-50">
                                             <tr>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campus</th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course & Batch</th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-gray-200">Student</th>
+                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-gray-200">Campus</th>
+                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-gray-200">Course & Batch</th>
+                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-gray-200">Username</th>
+                                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-gray-200">Actions</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="bg-white divide-y divide-stroke">
+                                        <tbody className="bg-white divide-y divide-gray-200">
                                             {filteredStudents.map(student => (
-                                                <tr key={student._id} className="hover:bg-blue-50 cursor-pointer" onClick={() => handleStudentClick(student)}>
+                                                <tr key={student._id} className="hover:bg-gray-50 cursor-pointer transition-colors duration-150" onClick={() => handleStudentClick(student)}>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <div className="text-sm font-medium text-gray-900">{student.name}</div>
                                                         <div className="text-sm text-gray-500">{student.email}</div>
@@ -352,7 +352,7 @@ const StudentManagement = () => {
                                                                     e.stopPropagation();
                                                                     handleSendCredentialsAgain(student);
                                                                 }} 
-                                                                className="text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-50"
+                                                                className="text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-50 transition-colors duration-150"
                                                                 title="Send Credentials Again"
                                                             >
                                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -364,7 +364,7 @@ const StudentManagement = () => {
                                                                     e.stopPropagation();
                                                                     handleDownloadCredentials(student);
                                                                 }} 
-                                                                className="text-green-600 hover:text-green-800 p-2 rounded-full hover:bg-green-50"
+                                                                className="text-green-600 hover:text-green-800 p-2 rounded-full hover:bg-green-50 transition-colors duration-150"
                                                                 title="Download Credentials"
                                                             >
                                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -376,7 +376,7 @@ const StudentManagement = () => {
                                                                     e.stopPropagation();
                                                                     handleDeleteStudent(student._id);
                                                                 }} 
-                                                                className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-50"
+                                                                className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-50 transition-colors duration-150"
                                                                 title="Delete Student"
                                                             >
                                                                 <Trash2 size={18} />

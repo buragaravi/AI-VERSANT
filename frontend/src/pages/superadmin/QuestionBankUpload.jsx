@@ -174,7 +174,7 @@ const QuestionBankUpload = () => {
   const renderModuleCards = () => (
     <div className="min-h-screen bg-gray-100">
       <SuperAdminSidebar />
-      <div className="ml-64">
+      <div className="ml-64 flex-1">
         <Header />
         <main className="p-6">
           <div className="max-w-7xl mx-auto">
@@ -264,7 +264,7 @@ const QuestionBankUpload = () => {
   const renderLevelsSection = () => (
     <div className="min-h-screen bg-gray-100">
       <SuperAdminSidebar />
-      <div className="ml-64">
+      <div className="ml-64 flex-1">
         <Header />
         <main className="p-6">
           <div className="max-w-6xl mx-auto">
@@ -334,7 +334,7 @@ const QuestionBankUpload = () => {
   const renderUploadSection = () => (
     <div className="min-h-screen bg-gray-100">
       <SuperAdminSidebar />
-      <div className="ml-64">
+      <div className="ml-64 flex-1">
         <Header />
         <main className="p-6">
           <div className="max-w-6xl mx-auto">
