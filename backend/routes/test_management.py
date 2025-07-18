@@ -46,6 +46,10 @@ from utils.email_service import send_email, render_template
 import requests
 import pytz
 
+# OneCompiler API Configuration
+ONECOMPILER_API_KEY = 'f744734571mshb636ee6aecb15e3p16c0e7jsnd142c0e341e6'
+ONECOMPILER_API_HOST = 'onecompiler-apis.p.rapidapi.com'
+
 test_management_bp = Blueprint('test_management', __name__)
 
 def generate_unique_test_id(length=6):
@@ -1936,6 +1940,215 @@ def add_question_to_file(file_id):
     except Exception as e:
         current_app.logger.error(f"Error adding question: {e}")
         return jsonify({'success': False, 'message': f'Failed to add question: {str(e)}'}), 500
+
+@test_management_bp.route('/run-code', methods=['POST'])
+@jwt_required()
+def run_code():
+    """Run code using OneCompiler API"""
+    try:
+        data = request.get_json()
+        code = data.get('code')
+        language = data.get('language', 'python')
+        stdin = data.get('stdin', '')
+
+        if not code:
+            return jsonify({
+                'success': False,
+                'message': 'Code is required'
+            }), 400
+
+        # Prepare request for OneCompiler API
+        headers = {
+            'x-rapidapi-key': ONECOMPILER_API_KEY,
+            'x-rapidapi-host': ONECOMPILER_API_HOST,
+            'Content-Type': 'application/json'
+        }
+
+        payload = {
+            'language': language,
+            'stdin': stdin,
+            'files': [
+                {
+                    'name': f'main.{get_file_extension(language)}',
+                    'content': code
+                }
+            ]
+        }
+
+        # Make request to OneCompiler API
+        response = requests.post(
+            'https://onecompiler-apis.p.rapidapi.com/api/v1/run',
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            return jsonify({
+                'success': True,
+                'data': {
+                    'stdout': result.get('stdout', ''),
+                    'stderr': result.get('stderr', ''),
+                    'exitCode': result.get('exitCode', 0)
+                }
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to execute code'
+            }), 500
+
+    except requests.exceptions.Timeout:
+        return jsonify({
+            'success': False,
+            'message': 'Code execution timed out'
+        }), 408
+    except Exception as e:
+        current_app.logger.error(f"Error running code: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to run code: {str(e)}'
+        }), 500
+
+def get_file_extension(language):
+    """Get file extension for programming language"""
+    extensions = {
+        'python': 'py',
+        'java': 'java',
+        'javascript': 'js',
+        'cpp': 'cpp',
+        'c': 'c'
+    }
+    return extensions.get(language, 'txt')
+
+@test_management_bp.route('/submit-technical-test', methods=['POST'])
+@jwt_required()
+def submit_technical_test():
+    """Submit technical test with code solutions and validation results"""
+    try:
+        current_user_id = get_jwt_identity()
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data.get('test_id') or not data.get('answers') or not data.get('results'):
+            return jsonify({
+                'success': False,
+                'message': 'test_id, answers, and results are required'
+            }), 400
+        
+        test_id = ObjectId(data['test_id'])
+        test = mongo_db.tests.find_one({'_id': test_id})
+        
+        if not test:
+            return jsonify({
+                'success': False,
+                'message': 'Test not found'
+            }), 404
+        
+        # Check if student has access to this test
+        student = mongo_db.students.find_one({'user_id': current_user_id})
+        if not student:
+            return jsonify({
+                'success': False,
+                'message': 'Student profile not found'
+            }), 404
+        
+        # Validate access based on campus, course, batch
+        has_access = False
+        if test.get('campus_ids') and student.get('campus_id') in test['campus_ids']:
+            has_access = True
+        if test.get('course_ids') and student.get('course_id') in test['course_ids']:
+            has_access = True
+        if test.get('batch_ids') and student.get('batch_id') in test['batch_ids']:
+            has_access = True
+        
+        if not has_access:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied to this test'
+            }), 403
+        
+        # Process results and calculate scores
+        answers = data['answers']
+        results = data['results']
+        total_score = 0
+        correct_answers = 0
+        total_questions = len(test['questions'])
+        
+        processed_results = []
+        
+        for i, question in enumerate(test['questions']):
+            question_result = {
+                'question_index': i,
+                'question': question['question'],
+                'question_type': 'technical',
+                'student_code': answers.get(str(i), {}).get('code', ''),
+                'language': answers.get(str(i), {}).get('language', 'python'),
+                'test_cases': question.get('testCases', ''),
+                'expected_output': question.get('expectedOutput', '')
+            }
+            
+            # Get validation results for this question
+            question_validation = results.get(str(i))
+            if question_validation:
+                question_result.update({
+                    'passed': question_validation.get('passed', False),
+                    'score': question_validation.get('score', 0),
+                    'test_case_results': question_validation.get('results', [])
+                })
+                
+                total_score += question_validation.get('score', 0)
+                if question_validation.get('passed', False):
+                    correct_answers += 1
+            else:
+                question_result.update({
+                    'passed': False,
+                    'score': 0,
+                    'test_case_results': []
+                })
+            
+            processed_results.append(question_result)
+        
+        # Calculate average score
+        average_score = total_score / total_questions if total_questions > 0 else 0
+        
+        # Save test result
+        test_result = {
+            'test_id': test_id,
+            'student_id': current_user_id,
+            'module_id': test['module_id'],
+            'level_id': test.get('level_id'),
+            'subcategory': test.get('subcategory'),
+            'results': processed_results,
+            'total_score': total_score,
+            'average_score': average_score,
+            'correct_answers': correct_answers,
+            'total_questions': total_questions,
+            'submitted_at': datetime.utcnow(),
+            'test_type': 'technical'
+        }
+        
+        result_id = mongo_db.insert_test_result(test_result)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Technical test submitted successfully',
+            'data': {
+                'result_id': str(result_id),
+                'average_score': average_score,
+                'correct_answers': correct_answers,
+                'total_questions': total_questions,
+                'results': processed_results
+            }
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error submitting technical test: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to submit technical test: {str(e)}'
+        }), 500
 
 @test_management_bp.route('/questions/add', methods=['POST'])
 @jwt_required()

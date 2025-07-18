@@ -45,6 +45,7 @@ import StudentProfile from './pages/student/Profile'
 import OnlineExamTaking from './pages/student/OnlineExamTaking'
 import TestResult from './pages/student/TestResult'
 import PracticeModuleTaking from './pages/student/PracticeModuleTaking'
+import TechnicalTestTaking from './pages/student/TechnicalTestTaking'
 
 // Components
 import ProtectedRoute from './components/common/ProtectedRoute'
@@ -142,6 +143,7 @@ function App() {
                   <Route path="exam/:examId" element={<OnlineExamTaking />} />
                   <Route path="test-result/:resultId" element={<TestResult />} />
                   <Route path="practice-modules/:testId" element={<PracticeModuleTaking />} />
+                  <Route path="technical-test/:testId" element={<TechnicalTestTaking />} />
                 </Route>
 
                 {/* Fallback */}

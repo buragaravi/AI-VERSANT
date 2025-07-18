@@ -135,31 +135,50 @@ const CRTUpload = () => {
   };
 
   const downloadTemplate = () => {
-    const templateData = [
-      {
-        Question: 'What is the next number in the sequence: 2, 4, 8, 16, ?',
-        A: '24',
-        B: '32',
-        C: '30',
-        D: '28',
-        Answer: 'B'
-      },
-      {
-        Question: 'If a train travels 120 km in 2 hours, what is its speed?',
-        A: '40 km/h',
-        B: '50 km/h',
-        C: '60 km/h',
-        D: '70 km/h',
-        Answer: 'C'
-      }
-    ];
+    let templateData;
+    
+    if (selectedModule === 'TECHNICAL') {
+      templateData = [
+        {
+          Question: 'Perfect Number\nProblem Statement:\nWrite a program to check whether a given positive integer is a perfect number. A perfect number is a positive integer equal to the sum of its proper divisors except itself.\n\nSample Input/Output Test Cases:\nInput\tOutput\n6\t6 is a perfect number\n15\t15 is not a perfect number\n28\t28 is a perfect number',
+          TestCases: '6\n15\n28',
+          ExpectedOutput: '6 is a perfect number\n15 is not a perfect number\n28 is a perfect number',
+          Language: 'python'
+        },
+        {
+          Question: 'Anagram Check\nProblem Statement:\nWrite a program that checks if two given strings are anagrams of each other (contain the same characters in any order).\n\nSample Input/Output Test Cases:\nInput (String 1, String 2)\tOutput\nlisten, silent\tAnagram\nhello, world\tNot Anagram\ntriangle, integral\tAnagram',
+          TestCases: 'listen silent\nhello world\ntriangle integral',
+          ExpectedOutput: 'Anagram\nNot Anagram\nAnagram',
+          Language: 'python'
+        }
+      ];
+    } else {
+      templateData = [
+        {
+          Question: 'What is the next number in the sequence: 2, 4, 8, 16, ?',
+          A: '24',
+          B: '32',
+          C: '30',
+          D: '28',
+          Answer: 'B'
+        },
+        {
+          Question: 'If a train travels 120 km in 2 hours, what is its speed?',
+          A: '40 km/h',
+          B: '50 km/h',
+          C: '60 km/h',
+          D: '70 km/h',
+          Answer: 'C'
+        }
+      ];
+    }
 
     const csv = Papa.unparse(templateData);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', 'crt_questions_template.csv');
+    link.setAttribute('download', `${selectedModule.toLowerCase()}_questions_template.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -538,6 +557,7 @@ const CRTUpload = () => {
           <AddQuestionForm
             onSave={handleAddQuestion}
             onCancel={() => setShowAddQuestion(false)}
+            selectedModule={selectedModule}
           />
         </div>
       </div>
@@ -568,7 +588,10 @@ const EditQuestionForm = ({ question, onSave, onCancel }) => {
     optionB: question.optionB || '',
     optionC: question.optionC || '',
     optionD: question.optionD || '',
-    answer: question.answer || ''
+    answer: question.answer || '',
+    testCases: question.testCases || '',
+    expectedOutput: question.expectedOutput || '',
+    language: question.language || 'python'
   });
 
   const handleSubmit = (e) => {
@@ -636,21 +659,63 @@ const EditQuestionForm = ({ question, onSave, onCancel }) => {
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Correct Answer</label>
-        <select
-          value={formData.answer}
-          onChange={(e) => handleInputChange('answer', e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          required
-        >
-          <option value="">Select answer</option>
-          <option value="A">A</option>
-          <option value="B">B</option>
-          <option value="C">C</option>
-          <option value="D">D</option>
-        </select>
-      </div>
+      {selectedModule === 'TECHNICAL' ? (
+        <>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Test Cases (one per line)</label>
+            <textarea
+              value={formData.testCases}
+              onChange={(e) => handleInputChange('testCases', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows="4"
+              placeholder="6&#10;15&#10;28"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Expected Output (one per line)</label>
+            <textarea
+              value={formData.expectedOutput}
+              onChange={(e) => handleInputChange('expectedOutput', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows="4"
+              placeholder="6 is a perfect number&#10;15 is not a perfect number&#10;28 is a perfect number"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Programming Language</label>
+            <select
+              value={formData.language}
+              onChange={(e) => handleInputChange('language', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="python">Python</option>
+              <option value="java">Java</option>
+              <option value="javascript">JavaScript</option>
+              <option value="cpp">C++</option>
+              <option value="c">C</option>
+            </select>
+          </div>
+        </>
+      ) : (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Correct Answer</label>
+          <select
+            value={formData.answer}
+            onChange={(e) => handleInputChange('answer', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          >
+            <option value="">Select answer</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+            <option value="D">D</option>
+          </select>
+        </div>
+      )} 
 
       <div className="flex justify-end space-x-3">
         <button
@@ -671,14 +736,17 @@ const EditQuestionForm = ({ question, onSave, onCancel }) => {
   );
 };
 
-const AddQuestionForm = ({ onSave, onCancel }) => {
+const AddQuestionForm = ({ onSave, onCancel, selectedModule }) => {
   const [formData, setFormData] = useState({
     question: '',
     optionA: '',
     optionB: '',
     optionC: '',
     optionD: '',
-    answer: ''
+    answer: '',
+    testCases: '',
+    expectedOutput: '',
+    language: 'python'
   });
 
   const handleSubmit = (e) => {
@@ -746,21 +814,63 @@ const AddQuestionForm = ({ onSave, onCancel }) => {
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Correct Answer</label>
-        <select
-          value={formData.answer}
-          onChange={(e) => handleInputChange('answer', e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          required
-        >
-          <option value="">Select answer</option>
-          <option value="A">A</option>
-          <option value="B">B</option>
-          <option value="C">C</option>
-          <option value="D">D</option>
-        </select>
-      </div>
+      {selectedModule === 'TECHNICAL' ? (
+        <>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Test Cases (one per line)</label>
+            <textarea
+              value={formData.testCases}
+              onChange={(e) => handleInputChange('testCases', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows="4"
+              placeholder="6&#10;15&#10;28"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Expected Output (one per line)</label>
+            <textarea
+              value={formData.expectedOutput}
+              onChange={(e) => handleInputChange('expectedOutput', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows="4"
+              placeholder="6 is a perfect number&#10;15 is not a perfect number&#10;28 is a perfect number"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Programming Language</label>
+            <select
+              value={formData.language}
+              onChange={(e) => handleInputChange('language', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="python">Python</option>
+              <option value="java">Java</option>
+              <option value="javascript">JavaScript</option>
+              <option value="cpp">C++</option>
+              <option value="c">C</option>
+            </select>
+          </div>
+        </>
+      ) : (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Correct Answer</label>
+          <select
+            value={formData.answer}
+            onChange={(e) => handleInputChange('answer', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          >
+            <option value="">Select answer</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+            <option value="D">D</option>
+          </select>
+        </div>
+      )}
 
       <div className="flex justify-end space-x-3">
         <button
