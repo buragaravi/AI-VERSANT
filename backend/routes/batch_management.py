@@ -492,12 +492,19 @@ def upload_students_to_batch():
         if not rows:
             return jsonify({'success': False, 'message': 'File is empty or invalid.'}), 400
 
-        # Validate columns
+        # Validate columns - support both formats
         columns = list(rows[0].keys()) if rows else []
-        required_fields = ['Student Name', 'Roll Number', 'Email', 'Mobile Number']
-        missing_fields = [field for field in required_fields if field not in columns]
-        if missing_fields:
-            return jsonify({'success': False, 'message': f"Invalid file structure. Missing columns: {', '.join(missing_fields)}"}), 400
+        required_fields_v1 = ['Student Name', 'Roll Number', 'Email', 'Mobile Number']
+        required_fields_v2 = ['Campus Name', 'Course Name', 'Student Name', 'Roll Number', 'Email', 'Mobile Number']
+        
+        missing_fields_v1 = [field for field in required_fields_v1 if field not in columns]
+        missing_fields_v2 = [field for field in required_fields_v2 if field not in columns]
+        
+        if missing_fields_v1 and missing_fields_v2:
+            return jsonify({'success': False, 'message': f"Invalid file structure. Expected either: {', '.join(required_fields_v1)} OR {', '.join(required_fields_v2)}"}), 400
+
+        # Determine file format
+        is_v2_format = 'Campus Name' in columns and 'Course Name' in columns
 
         # Fetch batch and campus info
         batch = mongo_db.batches.find_one({'_id': ObjectId(batch_id)})
@@ -521,11 +528,35 @@ def upload_students_to_batch():
 
         created_students = []
         errors = []
+        uploaded_emails = []  # Track emails for verification
+        
         for row in rows:
-            student_name = str(row.get('Student Name', '')).strip()
-            roll_number = str(row.get('Roll Number', '')).strip()
-            email = str(row.get('Email', '')).strip().lower()
-            mobile_number = str(row.get('Mobile Number', '')).strip()
+            if is_v2_format:
+                student_name = str(row.get('Student Name', '')).strip()
+                roll_number = str(row.get('Roll Number', '')).strip()
+                email = str(row.get('Email', '')).strip().lower()
+                mobile_number = str(row.get('Mobile Number', '')).strip()
+                campus_name = str(row.get('Campus Name', '')).strip()
+                course_name = str(row.get('Course Name', '')).strip()
+                
+                # Validate campus and course for v2 format
+                campus = mongo_db.campuses.find_one({'_id': campus_id})
+                if campus and campus_name != campus.get('name', ''):
+                    errors.append(f"{student_name}: Campus '{campus_name}' doesn't match batch campus '{campus.get('name', '')}'.")
+                    continue
+                
+                # Find course by name
+                course = mongo_db.courses.find_one({'name': course_name, '_id': {'$in': [ObjectId(cid) for cid in course_ids]}})
+                if not course:
+                    errors.append(f"{student_name}: Course '{course_name}' not found in this batch.")
+                    continue
+                course_id = str(course['_id'])
+            else:
+                student_name = str(row.get('Student Name', '')).strip()
+                roll_number = str(row.get('Roll Number', '')).strip()
+                email = str(row.get('Email', '')).strip().lower()
+                mobile_number = str(row.get('Mobile Number', '')).strip()
+                course_id = course_ids[0]  # Use first course for v1 format
 
             # Validation
             errs = []
@@ -541,14 +572,11 @@ def upload_students_to_batch():
                 errors.append(f"{student_name or roll_number or email}: {', '.join(errs)}")
                 continue
 
-            for course_id in course_ids:
-                course = mongo_db.courses.find_one({'_id': ObjectId(course_id)})
-                if not course:
-                    errors.append(f"Course ID {course_id} not found for student '{student_name}'.")
-                    continue
+            try:
                 username = roll_number
                 password = f"{student_name.split()[0][:4].lower()}{roll_number[-4:]}"
                 password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+                
                 user_doc = {
                     'username': username,
                     'email': email,
@@ -563,7 +591,15 @@ def upload_students_to_batch():
                     'created_at': datetime.now(pytz.utc),
                     'mfa_enabled': False
                 }
-                user_id = mongo_db.users.insert_one(user_doc).inserted_id
+                
+                # Insert user first
+                user_result = mongo_db.users.insert_one(user_doc)
+                if not user_result.inserted_id:
+                    errors.append(f"{student_name}: Failed to create user account.")
+                    continue
+                
+                user_id = user_result.inserted_id
+                
                 student_doc = {
                     'user_id': user_id,
                     'name': student_name,
@@ -575,16 +611,29 @@ def upload_students_to_batch():
                     'batch_id': ObjectId(batch_id),
                     'created_at': datetime.now(pytz.utc)
                 }
-                mongo_db.students.insert_one(student_doc)
+                
+                # Insert student profile
+                student_result = mongo_db.students.insert_one(student_doc)
+                if not student_result.inserted_id:
+                    # Rollback user creation if student creation fails
+                    mongo_db.users.delete_one({'_id': user_id})
+                    errors.append(f"{student_name}: Failed to create student profile.")
+                    continue
+                
                 created_students.append({
-                    'student_name': student_name,
-                    'roll_number': roll_number,
+                    'name': student_name,
                     'email': email,
-                    'mobile_number': mobile_number,
                     'username': username,
-                    'password': password,
-                    'course_id': str(course_id)
+                    'password': password
                 })
+                uploaded_emails.append(email)
+                
+                # Update existing sets to prevent duplicates within the same upload
+                existing_roll_numbers.add(roll_number)
+                existing_emails.add(email)
+                if mobile_number:
+                    existing_mobile_numbers.add(mobile_number)
+                
                 # Send welcome email
                 try:
                     html_content = render_template(
@@ -594,27 +643,61 @@ def upload_students_to_batch():
                             'username': username,
                             'email': email,
                             'password': password,
-                            'login_url': "https://pydah-ai-versant.vercel.app/login"
+                            'login_url': "https://pydah-studyedge.vercel.app/login"
                         }
                     )
                     send_email(
                         to_email=email,
                         to_name=student_name,
-                        subject="Welcome to VERSANT - Your Student Credentials",
+                        subject="Welcome to Study Edge - Your Student Credentials",
                         html_content=html_content
                     )
                 except Exception as e:
                     errors.append(f"Failed to send email to {email}: {e}")
+                    
+            except Exception as e:
+                errors.append(f"{student_name}: Database error - {str(e)}")
+                continue
 
+        # Verify upload success
+        verification_results = []
+        if uploaded_emails:
+            students_verified = list(mongo_db.students.find({'email': {'$in': uploaded_emails}, 'batch_id': ObjectId(batch_id)}))
+            users_verified = list(mongo_db.users.find({'email': {'$in': uploaded_emails}, 'batch_id': ObjectId(batch_id)}))
+            
+            for email in uploaded_emails:
+                student_exists = any(s['email'] == email for s in students_verified)
+                user_exists = any(u['email'] == email for u in users_verified)
+                verification_results.append({
+                    'email': email,
+                    'student_profile_exists': student_exists,
+                    'user_account_exists': user_exists,
+                    'fully_uploaded': student_exists and user_exists
+                })
+
+        if errors:
+            return jsonify({
+                'success': bool(created_students), 
+                'message': f"Upload completed with {len(errors)} errors.", 
+                'data': {
+                    'created_students': created_students,
+                    'verification_results': verification_results
+                }, 
+                'errors': errors
+            }), 207
+        
         return jsonify({
-            'success': True,
-            'message': f"Successfully created {len(created_students)} students.",
-            'created_students': created_students,
-            'errors': errors
-        }), 200
+            'success': True, 
+            'message': f"Successfully uploaded {len(created_students)} students to the batch.", 
+            'data': {
+                'created_students': created_students,
+                'verification_results': verification_results
+            }
+        }), 201
+
     except Exception as e:
-        current_app.logger.error(f"Error creating students: {str(e)}")
-        return jsonify({'success': False, 'message': f'An unexpected server error occurred: {str(e)}'}), 500
+        current_app.logger.error(f"Error uploading students to batch: {e}")
+        return jsonify({'success': False, 'message': f'An unexpected error occurred: {str(e)}'}), 500
 
 @batch_management_bp.route('/batch/<batch_id>/students', methods=['GET'])
 @jwt_required()
@@ -1055,6 +1138,8 @@ def add_students_to_batch(batch_id):
             # Only add students with no errors
             created_students_details = []
             errors = []
+            uploaded_emails = []  # Track emails for verification
+            
             for student in preview_data:
                 if student['errors']:
                     errors.append(f"{student['student_name']}: {', '.join(student['errors'])}")
@@ -1064,6 +1149,7 @@ def add_students_to_batch(batch_id):
                     username = student['roll_number']
                     password = f"{student['student_name'].split()[0][:4].lower()}{student['roll_number'][-4:]}"
                     password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+                    
                     user_doc = {
                         'username': username,
                         'email': student['email'],
@@ -1078,7 +1164,15 @@ def add_students_to_batch(batch_id):
                         'created_at': datetime.now(pytz.utc),
                         'mfa_enabled': False
                     }
-                    user_id = mongo_db.users.insert_one(user_doc).inserted_id
+                    
+                    # Insert user first
+                    user_result = mongo_db.users.insert_one(user_doc)
+                    if not user_result.inserted_id:
+                        errors.append(f"{student['student_name']}: Failed to create user account.")
+                        continue
+                    
+                    user_id = user_result.inserted_id
+                    
                     student_doc = {
                         'user_id': user_id,
                         'name': student['student_name'],
@@ -1090,13 +1184,23 @@ def add_students_to_batch(batch_id):
                         'batch_id': batch_obj_id,
                         'created_at': datetime.now(pytz.utc)
                     }
-                    mongo_db.students.insert_one(student_doc)
+                    
+                    # Insert student profile
+                    student_result = mongo_db.students.insert_one(student_doc)
+                    if not student_result.inserted_id:
+                        # Rollback user creation if student creation fails
+                        mongo_db.users.delete_one({'_id': user_id})
+                        errors.append(f"{student['student_name']}: Failed to create student profile.")
+                        continue
+                    
                     created_students_details.append({
                         "student_name": student['student_name'],
                         "email": student['email'],
                         "username": username,
                         "password": password
                     })
+                    uploaded_emails.append(student['email'])
+                    
                     # Send welcome email
                     try:
                         html_content = render_template('student_credentials.html', params={
@@ -1104,16 +1208,50 @@ def add_students_to_batch(batch_id):
                             'username': username,
                             'email': student['email'],
                             'password': password,
-                            'login_url': "https://pydah-ai-versant.vercel.app/login"
+                            'login_url': "https://pydah-studyedge.vercel.app/login"
                         })
-                        send_email(to_email=student['email'], to_name=student['student_name'], subject="Welcome to VERSANT - Your Student Credentials", html_content=html_content)
+                        send_email(to_email=student['email'], to_name=student['student_name'], subject="Welcome to Study Edge - Your Student Credentials", html_content=html_content)
                     except Exception as e:
                         errors.append(f"Failed to send email to {student['email']}: {e}")
+                        
                 except Exception as student_error:
                     errors.append(f"An error occurred for student {student.get('student_name', 'N/A')}: {str(student_error)}")
+            
+            # Verify upload success
+            verification_results = []
+            if uploaded_emails:
+                students_verified = list(mongo_db.students.find({'email': {'$in': uploaded_emails}, 'batch_id': batch_obj_id}))
+                users_verified = list(mongo_db.users.find({'email': {'$in': uploaded_emails}, 'batch_id': batch_obj_id}))
+                
+                for email in uploaded_emails:
+                    student_exists = any(s['email'] == email for s in students_verified)
+                    user_exists = any(u['email'] == email for u in users_verified)
+                    verification_results.append({
+                        'email': email,
+                        'student_profile_exists': student_exists,
+                        'user_account_exists': user_exists,
+                        'fully_uploaded': student_exists and user_exists
+                    })
+            
             if errors:
-                return jsonify({'success': bool(created_students_details), 'message': f"Process completed with {len(errors)} errors.", 'data': {'created_students': created_students_details}, 'errors': errors}), 207
-            return jsonify({'success': True, 'message': f"Successfully added {len(created_students_details)} students to the batch.", 'data': {'created_students': created_students_details}}), 201
+                return jsonify({
+                    'success': bool(created_students_details), 
+                    'message': f"Process completed with {len(errors)} errors.", 
+                    'data': {
+                        'created_students': created_students_details,
+                        'verification_results': verification_results
+                    }, 
+                    'errors': errors
+                }), 207
+            
+            return jsonify({
+                'success': True, 
+                'message': f"Successfully added {len(created_students_details)} students to the batch.", 
+                'data': {
+                    'created_students': created_students_details,
+                    'verification_results': verification_results
+                }
+            }), 201
         # Fallback: legacy JSON method
         data = request.get_json()
         students_data = data.get('students', []) if data else []
@@ -1622,3 +1760,123 @@ def upload_students_to_instance(instance_id):
     except Exception as e:
         current_app.logger.error(f"Error uploading students to instance: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
+
+@batch_management_bp.route('/<batch_id>/verify-students', methods=['POST'])
+@jwt_required()
+def verify_students_upload(batch_id):
+    """Verify that students were actually uploaded to the batch"""
+    try:
+        data = request.get_json()
+        student_emails = data.get('student_emails', [])
+        student_roll_numbers = data.get('student_roll_numbers', [])
+        
+        if not student_emails and not student_roll_numbers:
+            return jsonify({'success': False, 'message': 'No student emails or roll numbers provided for verification.'}), 400
+        
+        batch_obj_id = ObjectId(batch_id)
+        batch = mongo_db.batches.find_one({'_id': batch_obj_id})
+        if not batch:
+            return jsonify({'success': False, 'message': 'Batch not found.'}), 404
+        
+        # Check for students in the batch
+        query = {'batch_id': batch_obj_id}
+        if student_emails:
+            query['email'] = {'$in': student_emails}
+        elif student_roll_numbers:
+            query['roll_number'] = {'$in': student_roll_numbers}
+        
+        students = list(mongo_db.students.find(query))
+        users = list(mongo_db.users.find({'batch_id': batch_obj_id, 'role': 'student'}))
+        
+        # Create lookup dictionaries
+        student_lookup = {s['email']: s for s in students}
+        user_lookup = {u['email']: u for u in users}
+        
+        verification_results = []
+        for email in student_emails:
+            student_exists = email in student_lookup
+            user_exists = email in user_lookup
+            
+            verification_results.append({
+                'email': email,
+                'student_profile_exists': student_exists,
+                'user_account_exists': user_exists,
+                'fully_uploaded': student_exists and user_exists,
+                'student_id': str(student_lookup[email]['_id']) if student_exists else None,
+                'user_id': str(user_lookup[email]['_id']) if user_exists else None
+            })
+        
+        total_students = len(student_emails)
+        successful_uploads = sum(1 for r in verification_results if r['fully_uploaded'])
+        failed_uploads = total_students - successful_uploads
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'verification_results': verification_results,
+                'summary': {
+                    'total_students': total_students,
+                    'successful_uploads': successful_uploads,
+                    'failed_uploads': failed_uploads,
+                    'success_rate': (successful_uploads / total_students * 100) if total_students > 0 else 0
+                }
+            }
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error verifying students upload: {e}")
+        return jsonify({'success': False, 'message': f'An unexpected error occurred: {str(e)}'}), 500
+
+@batch_management_bp.route('/<batch_id>/cleanup-failed-students', methods=['POST'])
+@jwt_required()
+def cleanup_failed_students(batch_id):
+    """Clean up any orphaned user accounts or student profiles"""
+    try:
+        data = request.get_json()
+        student_emails = data.get('student_emails', [])
+        
+        if not student_emails:
+            return jsonify({'success': False, 'message': 'No student emails provided for cleanup.'}), 400
+        
+        batch_obj_id = ObjectId(batch_id)
+        
+        # Find orphaned records (users without corresponding student profiles or vice versa)
+        cleanup_results = []
+        
+        for email in student_emails:
+            user = mongo_db.users.find_one({'email': email, 'batch_id': batch_obj_id})
+            student = mongo_db.students.find_one({'email': email, 'batch_id': batch_obj_id})
+            
+            if user and not student:
+                # Orphaned user account - delete it
+                mongo_db.users.delete_one({'_id': user['_id']})
+                cleanup_results.append({
+                    'email': email,
+                    'action': 'deleted_orphaned_user',
+                    'user_id': str(user['_id'])
+                })
+            elif student and not user:
+                # Orphaned student profile - delete it
+                mongo_db.students.delete_one({'_id': student['_id']})
+                cleanup_results.append({
+                    'email': email,
+                    'action': 'deleted_orphaned_student',
+                    'student_id': str(student['_id'])
+                })
+            elif not user and not student:
+                cleanup_results.append({
+                    'email': email,
+                    'action': 'no_records_found'
+                })
+        
+        return jsonify({
+            'success': True,
+            'message': f'Cleanup completed. {len(cleanup_results)} records processed.',
+            'data': {
+                'cleanup_results': cleanup_results
+            }
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error cleaning up failed students: {e}")
+        return jsonify({'success': False, 'message': f'An unexpected error occurred: {str(e)}'}), 500

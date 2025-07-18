@@ -183,6 +183,19 @@ export const uploadStudentsToBatch = async (campusId, batchId, students) => {
   });
 };
 
+export const verifyStudentsUpload = async (batchId, studentEmails, studentRollNumbers = []) => {
+  return api.post(`/batch-management/${batchId}/verify-students`, {
+    student_emails: studentEmails,
+    student_roll_numbers: studentRollNumbers,
+  });
+};
+
+export const cleanupFailedStudents = async (batchId, studentEmails) => {
+  return api.post(`/batch-management/${batchId}/cleanup-failed-students`, {
+    student_emails: studentEmails,
+  });
+};
+
 export const getBatchStudents = async (batchId, course_id) => {
   let url = `/batch-management/batch/${batchId}/students`;
   if (course_id) {

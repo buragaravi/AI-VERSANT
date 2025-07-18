@@ -7,8 +7,9 @@ import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import UploadPreviewModal from '../../components/common/UploadPreviewModal';
 import CredentialsDisplayModal from '../../components/common/CredentialsDisplayModal';
+import StudentUploadVerificationModal from '../../components/common/StudentUploadVerificationModal';
 import api, { getBatchCourses } from '../../services/api';
-import { Users, ArrowLeft, Upload, Edit, Trash2, Download, X, Save, User, Mail, Key, Building, Book, ListChecks, BarChart2, CheckCircle, XCircle } from 'lucide-react';
+import { Users, ArrowLeft, Upload, Edit, Trash2, Download, X, Save, User, Mail, Key, Building, Book, ListChecks, BarChart2, CheckCircle, XCircle, Shield } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 
 const BatchDetails = () => {
@@ -48,6 +49,10 @@ const BatchDetails = () => {
 
     const [studentForm, setStudentForm] = useState({ name: '', rollNumber: '', email: '', mobile: '', courseId: '' });
     const [addingStudent, setAddingStudent] = useState(false);
+    
+    // Verification modal state
+    const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
+    const [lastUploadedStudents, setLastUploadedStudents] = useState([]);
 
     const fetchBatchDetails = useCallback(async () => {
         try {
@@ -118,6 +123,7 @@ const BatchDetails = () => {
             if (response.data.success || response.status === 207) {
                 success(response.data.message || "Students added successfully.");
                 setCreatedStudents(response.data.data.created_students);
+                setLastUploadedStudents(response.data.data.created_students || []);
                 setIsCredentialsModalOpen(true);
                 setIsUploadModalOpen(false);
                 fetchBatchDetails();
@@ -241,7 +247,8 @@ const BatchDetails = () => {
             const res = await api.post('/batch-management/upload-students', formData);
             if (res.data.success) {
                 success(res.data.message);
-                setCreatedStudents(res.data.created_students || []);
+                setCreatedStudents(res.data.data?.created_students || res.data.created_students || []);
+                setLastUploadedStudents(res.data.data?.created_students || res.data.created_students || []);
                 setIsCredentialsModalOpen(true);
                 handleCloseStudentUploadModal();
                 fetchBatchDetails();
@@ -340,6 +347,15 @@ const BatchDetails = () => {
                                     <Upload className="mr-2 h-5 w-5" />
                                     Add Students
                                 </button>
+                                {lastUploadedStudents.length > 0 && (
+                                    <button
+                                        onClick={() => setIsVerificationModalOpen(true)}
+                                        className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                                    >
+                                        <Shield className="mr-2 h-5 w-5" />
+                                        Verify Upload
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -440,9 +456,75 @@ const BatchDetails = () => {
             )}
             {isStudentUploadModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-                    <div className="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full relative">
+                    <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full relative">
                         <button onClick={handleCloseStudentUploadModal} className="absolute top-3 right-3 text-gray-500 hover:text-red-600 text-xl">&times;</button>
-                        <h2 className="text-2xl font-bold mb-4">Add Student to Batch</h2>
+                        <h2 className="text-2xl font-bold mb-4">Add Students to Batch</h2>
+                        
+                        {/* File Upload Section */}
+                        <div className="mb-6">
+                            <h3 className="text-lg font-semibold mb-3">Upload Students File</h3>
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                                <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                                <p className="text-sm text-gray-600 mb-2">
+                                    Drag and drop a CSV file here, or click to select
+                                </p>
+                                <input
+                                    type="file"
+                                    accept=".csv,.xlsx"
+                                    onChange={(e) => setUploadFile(e.target.files[0])}
+                                    className="hidden"
+                                    id="file-upload"
+                                />
+                                <label
+                                    htmlFor="file-upload"
+                                    className="cursor-pointer bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                                >
+                                    Choose File
+                                </label>
+                                {uploadFile && (
+                                    <p className="mt-2 text-sm text-green-600">
+                                        Selected: {uploadFile.name}
+                                    </p>
+                                )}
+                            </div>
+                            
+                            {/* Course Selection */}
+                            <div className="mt-4">
+                                <label className="block font-semibold mb-2">Select Courses for Students</label>
+                                <div className="space-y-2">
+                                    {courseOptions.map(course => (
+                                        <label key={course.id} className="flex items-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedCourseIds.includes(course.id)}
+                                                onChange={() => handleCourseToggle(course.id)}
+                                                className="mr-2"
+                                            />
+                                            {course.name}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                            
+                            <div className="mt-4 flex gap-2">
+                                <button
+                                    onClick={handleStudentUpload}
+                                    disabled={!uploadFile || selectedCourseIds.length === 0 || uploading}
+                                    className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+                                >
+                                    {uploading ? 'Uploading...' : 'Upload Students'}
+                                </button>
+                                <button
+                                    onClick={handleDownloadStudentTemplate}
+                                    className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
+                                >
+                                    Download Template
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div className="border-t pt-6">
+                            <h3 className="text-lg font-semibold mb-3">Add Single Student</h3>
                         <div className="mb-4">
                             <label className="block font-semibold mb-1">Select Course</label>
                             <select
@@ -503,6 +585,91 @@ const BatchDetails = () => {
                             className="w-full bg-indigo-600 text-white font-semibold py-2 rounded-lg shadow hover:bg-indigo-700 transition disabled:opacity-50"
                         >
                             {addingStudent ? 'Adding...' : 'Add Student'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Upload Preview Modal */}
+            {isUploadModalOpen && (
+                <UploadPreviewModal
+                    isOpen={isUploadModalOpen}
+                    onClose={() => setIsUploadModalOpen(false)}
+                    previewData={previewData}
+                    onConfirm={handleConfirmUpload}
+                    isSubmitting={isSubmitting}
+                    onDownloadTemplate={handleDownloadTemplate}
+                />
+            )}
+
+            {/* Credentials Display Modal */}
+            {isCredentialsModalOpen && (
+                <CredentialsDisplayModal
+                    isOpen={isCredentialsModalOpen}
+                    onClose={() => setIsCredentialsModalOpen(false)}
+                    createdStudents={createdStudents}
+                    title="Student Credentials"
+                />
+            )}
+
+            {/* Student Upload Verification Modal */}
+            {isVerificationModalOpen && (
+                <StudentUploadVerificationModal
+                    isOpen={isVerificationModalOpen}
+                    onClose={() => setIsVerificationModalOpen(false)}
+                    batchId={batchId}
+                    uploadedStudents={lastUploadedStudents}
+                    onVerificationComplete={fetchBatchDetails}
+                />
+            )}
+
+            {/* Edit Student Modal */}
+            {isEditModalOpen && editingStudent && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+                    <div className="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full relative">
+                        <button onClick={() => setIsEditModalOpen(false)} className="absolute top-3 right-3 text-gray-500 hover:text-red-600 text-xl">&times;</button>
+                        <h2 className="text-2xl font-bold mb-4">Edit Student</h2>
+                        <div className="mb-4">
+                            <label className="block font-semibold mb-1">Student Name</label>
+                            <input
+                                type="text"
+                                value={editFormData.name}
+                                onChange={(e) => setEditFormData({...editFormData, name: e.target.value})}
+                                className="w-full px-3 py-2 border rounded"
+                            />
+                        </div>
+                        <div className="mb-4">
+                            <label className="block font-semibold mb-1">Roll Number</label>
+                            <input
+                                type="text"
+                                value={editFormData.roll_number}
+                                onChange={(e) => setEditFormData({...editFormData, roll_number: e.target.value})}
+                                className="w-full px-3 py-2 border rounded"
+                            />
+                        </div>
+                        <div className="mb-4">
+                            <label className="block font-semibold mb-1">Email</label>
+                            <input
+                                type="email"
+                                value={editFormData.email}
+                                onChange={(e) => setEditFormData({...editFormData, email: e.target.value})}
+                                className="w-full px-3 py-2 border rounded"
+                            />
+                        </div>
+                        <div className="mb-4">
+                            <label className="block font-semibold mb-1">Mobile Number</label>
+                            <input
+                                type="text"
+                                value={editFormData.mobile_number}
+                                onChange={(e) => setEditFormData({...editFormData, mobile_number: e.target.value})}
+                                className="w-full px-3 py-2 border rounded"
+                            />
+                        </div>
+                        <button
+                            onClick={handleUpdateStudent}
+                            className="w-full bg-indigo-600 text-white font-semibold py-2 rounded-lg shadow hover:bg-indigo-700 transition"
+                        >
+                            Update Student
                         </button>
                     </div>
                 </div>
