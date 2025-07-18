@@ -193,15 +193,28 @@ const CRTUpload = () => {
 
     setLoading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('module_id', selectedModule);
+      let questions = [];
+      
+      // Parse the file based on module type
+      if (selectedModule === 'TECHNICAL') {
+        questions = await parseTechnicalFile(file);
+      } else {
+        questions = await parseMCQFile(file);
+      }
 
-      const response = await api.post('/test-management/module-question-bank/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      if (questions.length === 0) {
+        toast.error('No valid questions found in the file');
+        return;
+      }
+
+      // Send questions to backend
+      const payload = {
+        module_id: selectedModule,
+        level_id: selectedModule, // For CRT modules, use module_id as level_id
+        questions: questions
+      };
+
+      const response = await api.post('/test-management/module-question-bank/upload', payload);
 
       if (response.data.success) {
         toast.success('Questions uploaded successfully!');
@@ -215,6 +228,133 @@ const CRTUpload = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const parseTechnicalFile = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const fileExtension = file.name.toLowerCase().split('.').pop();
+          let parsedQuestions = [];
+
+          if (fileExtension === 'csv' || file.type === 'text/csv') {
+            const result = Papa.parse(e.target.result, { 
+              header: true, 
+              skipEmptyLines: true, 
+              trimHeaders: true, 
+              trimValues: true 
+            });
+            
+            parsedQuestions = result.data.map(row => ({
+              question: row.Question || row.question || '',
+              testCases: row.TestCases || row.testCases || '',
+              expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
+              language: row.Language || row.language || 'python',
+              // For technical questions, we need to create MCQ format for compatibility
+              optionA: 'A',
+              optionB: 'B', 
+              optionC: 'C',
+              optionD: 'D',
+              answer: 'A' // Default answer for technical questions
+            }));
+          } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+            const workbook = XLSX.read(e.target.result, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            
+            parsedQuestions = jsonData.map(row => ({
+              question: row.Question || row.question || '',
+              testCases: row.TestCases || row.testCases || '',
+              expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
+              language: row.Language || row.language || 'python',
+              optionA: 'A',
+              optionB: 'B',
+              optionC: 'C', 
+              optionD: 'D',
+              answer: 'A'
+            }));
+          }
+
+          const validQuestions = parsedQuestions.filter(q => 
+            q.question && q.testCases && q.expectedOutput && q.language
+          );
+
+          resolve(validQuestions);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      
+      if (file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv')) {
+        reader.readAsText(file, 'UTF-8');
+      } else {
+        reader.readAsArrayBuffer(file);
+      }
+    });
+  };
+
+  const parseMCQFile = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const fileExtension = file.name.toLowerCase().split('.').pop();
+          let parsedQuestions = [];
+
+          if (fileExtension === 'csv' || file.type === 'text/csv') {
+            const result = Papa.parse(e.target.result, { 
+              header: true, 
+              skipEmptyLines: true, 
+              trimHeaders: true, 
+              trimValues: true 
+            });
+            
+            parsedQuestions = result.data.map(row => ({
+              question: row.Question || row.question || '',
+              optionA: row.A || row.optionA || '',
+              optionB: row.B || row.optionB || '',
+              optionC: row.C || row.optionC || '',
+              optionD: row.D || row.optionD || '',
+              answer: row.Answer || row.answer || ''
+            }));
+          } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+            const workbook = XLSX.read(e.target.result, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            
+            parsedQuestions = jsonData.map(row => ({
+              question: row.Question || row.question || '',
+              optionA: row.A || row.optionA || '',
+              optionB: row.B || row.optionB || '',
+              optionC: row.C || row.optionC || '',
+              optionD: row.D || row.optionD || '',
+              answer: row.Answer || row.answer || ''
+            }));
+          }
+
+          const validQuestions = parsedQuestions.filter(q => 
+            q.question && q.optionA && q.optionB && q.optionC && q.optionD && q.answer
+          );
+
+          resolve(validQuestions);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      
+      if (file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv')) {
+        reader.readAsText(file, 'UTF-8');
+      } else {
+        reader.readAsArrayBuffer(file);
+      }
+    });
   };
 
   const handleDeleteQuestion = async (questionId) => {
@@ -449,15 +589,33 @@ const CRTUpload = () => {
                 </div>
               </div>
               <p className="text-gray-900 mb-2">{question.question}</p>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>A: {question.optionA}</div>
-                <div>B: {question.optionB}</div>
-                <div>C: {question.optionC}</div>
-                <div>D: {question.optionD}</div>
-              </div>
-              <div className="mt-2 text-sm font-medium text-green-600">
-                Answer: {question.answer}
-              </div>
+              
+              {selectedModule === 'TECHNICAL' ? (
+                <div className="space-y-2 text-sm">
+                  <div className="p-2 bg-gray-50 rounded border">
+                    <strong>Test Cases:</strong> {question.testCases || 'N/A'}
+                  </div>
+                  <div className="p-2 bg-gray-50 rounded border">
+                    <strong>Expected Output:</strong> {question.expectedOutput || 'N/A'}
+                  </div>
+                  <div className="p-2 bg-gray-50 rounded border">
+                    <strong>Language:</strong> {question.language || 'python'}
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>A: {question.optionA}</div>
+                  <div>B: {question.optionB}</div>
+                  <div>C: {question.optionC}</div>
+                  <div>D: {question.optionD}</div>
+                </div>
+              )}
+              
+              {selectedModule !== 'TECHNICAL' && (
+                <div className="mt-2 text-sm font-medium text-green-600">
+                  Answer: {question.answer}
+                </div>
+              )}
             </div>
           ))}
         </div>

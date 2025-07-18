@@ -131,6 +131,9 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
       try {
         let parsedQuestions = [];
         
+        // Check if this is a technical module
+        const isTechnicalModule = levelId === 'CRT_TECHNICAL' || levelId === 'TECHNICAL';
+        
         if (fileExtension === 'csv' || file.type === 'text/csv') {
           const result = Papa.parse(e.target.result, { 
             header: true, 
@@ -143,15 +146,32 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
             throw new Error('No data found in CSV file.');
           }
           
-          parsedQuestions = result.data.map(row => ({
-            question: row.question || row.Question || '',
-            optionA: row.optionA || row.OptionA || row.A || '',
-            optionB: row.optionB || row.OptionB || row.B || '',
-            optionC: row.optionC || row.OptionC || row.C || '',
-            optionD: row.optionD || row.OptionD || row.D || '',
-            answer: row.answer || row.Answer || '',
-            instructions: row.instructions || row.Instructions || ''
-          }));
+          if (isTechnicalModule) {
+            // Handle technical question format
+            parsedQuestions = result.data.map(row => ({
+              question: row.Question || row.question || '',
+              testCases: row.TestCases || row.testCases || '',
+              expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
+              language: row.Language || row.language || 'python',
+              // For technical questions, we need to create MCQ format for compatibility
+              optionA: 'A',
+              optionB: 'B', 
+              optionC: 'C',
+              optionD: 'D',
+              answer: 'A' // Default answer for technical questions
+            }));
+          } else {
+            // Handle MCQ format
+            parsedQuestions = result.data.map(row => ({
+              question: row.question || row.Question || '',
+              optionA: row.optionA || row.OptionA || row.A || '',
+              optionB: row.optionB || row.OptionB || row.B || '',
+              optionC: row.optionC || row.OptionC || row.C || '',
+              optionD: row.optionD || row.OptionD || row.D || '',
+              answer: row.answer || row.Answer || '',
+              instructions: row.instructions || row.Instructions || ''
+            }));
+          }
         } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
           const workbook = XLSX.read(e.target.result, { type: 'array' });
           if (!workbook.SheetNames.length) {
@@ -165,25 +185,58 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
           }
           
           const jsonData = XLSX.utils.sheet_to_json(worksheet);
-          parsedQuestions = jsonData.map(row => ({
-            question: row.question || row.Question || '',
-            optionA: row.optionA || row.OptionA || row.A || '',
-            optionB: row.optionB || row.OptionB || row.B || '',
-            optionC: row.optionC || row.OptionC || row.C || '',
-            optionD: row.optionD || row.OptionD || row.D || '',
-            answer: row.answer || row.Answer || '',
-            instructions: row.instructions || row.Instructions || ''
-          }));
+          
+          if (isTechnicalModule) {
+            // Handle technical question format
+            parsedQuestions = jsonData.map(row => ({
+              question: row.Question || row.question || '',
+              testCases: row.TestCases || row.testCases || '',
+              expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
+              language: row.Language || row.language || 'python',
+              optionA: 'A',
+              optionB: 'B',
+              optionC: 'C', 
+              optionD: 'D',
+              answer: 'A'
+            }));
+          } else {
+            // Handle MCQ format
+            parsedQuestions = jsonData.map(row => ({
+              question: row.question || row.Question || '',
+              optionA: row.optionA || row.OptionA || row.A || '',
+              optionB: row.optionB || row.OptionB || row.B || '',
+              optionC: row.optionC || row.OptionC || row.C || '',
+              optionD: row.optionD || row.OptionD || row.D || '',
+              answer: row.answer || row.Answer || '',
+              instructions: row.instructions || row.Instructions || ''
+            }));
+          }
         } else if (fileExtension === 'txt' || file.type === 'text/plain') {
-          parsedQuestions = parseHumanReadableMCQ(e.target.result);
+          if (isTechnicalModule) {
+            throw new Error('Text files are not supported for technical questions. Please use CSV or Excel format.');
+          } else {
+            parsedQuestions = parseHumanReadableMCQ(e.target.result);
+          }
         } else {
-          // Try to parse as plain text as fallback
-          parsedQuestions = parseHumanReadableMCQ(e.target.result);
+          // Try to parse as plain text as fallback (only for MCQ)
+          if (isTechnicalModule) {
+            throw new Error('Text files are not supported for technical questions. Please use CSV or Excel format.');
+          } else {
+            parsedQuestions = parseHumanReadableMCQ(e.target.result);
+          }
         }
 
-        const finalQuestions = parsedQuestions.filter(q => 
-          q && q.question && q.optionA && q.optionB && q.optionC && q.optionD && q.answer
-        );
+        // Filter questions based on module type
+        let finalQuestions;
+        if (isTechnicalModule) {
+          finalQuestions = parsedQuestions.filter(q => 
+            q && q.question && q.testCases && q.expectedOutput && q.language
+          );
+        } else {
+          finalQuestions = parsedQuestions.filter(q => 
+            q && q.question && q.optionA && q.optionB && q.optionC && q.optionD && q.answer
+          );
+        }
 
         if (finalQuestions.length === 0) {
           throw new Error('No valid questions found in the file.');
@@ -222,16 +275,39 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
 
     setLoading(true);
     try {
-      const payload = {
-        module_id: moduleName,
-        level_id: levelId,
-        questions: newQuestions.map(q => ({
-          question: q.question,
-          options: [q.optionA, q.optionB, q.optionC, q.optionD],
-          answer: q.answer,
-          instructions: q.instructions || ''
-        }))
-      };
+      // Check if this is a technical module
+      const isTechnicalModule = levelId === 'CRT_TECHNICAL' || levelId === 'TECHNICAL';
+      
+      let payload;
+      if (isTechnicalModule) {
+        payload = {
+          module_id: moduleName,
+          level_id: levelId,
+          questions: newQuestions.map(q => ({
+            question: q.question,
+            testCases: q.testCases,
+            expectedOutput: q.expectedOutput,
+            language: q.language,
+            optionA: q.optionA,
+            optionB: q.optionB,
+            optionC: q.optionC,
+            optionD: q.optionD,
+            answer: q.answer,
+            instructions: q.instructions || ''
+          }))
+        };
+      } else {
+        payload = {
+          module_id: moduleName,
+          level_id: levelId,
+          questions: newQuestions.map(q => ({
+            question: q.question,
+            options: [q.optionA, q.optionB, q.optionC, q.optionD],
+            answer: q.answer,
+            instructions: q.instructions || ''
+          }))
+        };
+      }
 
       const response = await api.post('/test-management/module-question-bank/upload', payload);
       
@@ -259,7 +335,9 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="font-semibold text-lg mb-4">Upload MCQ Questions for {moduleName}</h3>
+        <h3 className="font-semibold text-lg mb-4">
+          Upload {levelId === 'CRT_TECHNICAL' || levelId === 'TECHNICAL' ? 'Technical' : 'MCQ'} Questions for {moduleName}
+        </h3>
         
         {/* File Upload Area */}
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
@@ -276,7 +354,10 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
               Choose a file or drag it here
             </p>
             <p className="text-sm text-gray-500 mb-4">
-              Supports CSV, XLSX, XLS, and TXT files with columns: Question, A, B, C, D, Answer
+              {levelId === 'CRT_TECHNICAL' || levelId === 'TECHNICAL' 
+                ? 'Supports CSV and Excel files with columns: Question, TestCases, ExpectedOutput, Language'
+                : 'Supports CSV, XLSX, XLS, and TXT files with columns: Question, A, B, C, D, Answer'
+              }
             </p>
             <button className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
               Select File
@@ -316,29 +397,51 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
             
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
               <div className="space-y-4">
-                {previewQuestions.map((q, i) => (
-                  <div key={i} className={`p-4 border rounded-lg ${
-                    q.status === 'Duplicate' ? 'border-yellow-200 bg-yellow-50' : 'border-green-200 bg-green-50'
-                  }`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <h5 className="font-medium text-gray-800">Q{i + 1}: {q.question}</h5>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        q.status === 'Duplicate' ? 'bg-yellow-200 text-yellow-800' : 'bg-green-200 text-green-800'
-                      }`}>
-                        {q.status}
-                      </span>
+                {previewQuestions.map((q, i) => {
+                  const isTechnicalModule = levelId === 'CRT_TECHNICAL' || levelId === 'TECHNICAL';
+                  
+                  return (
+                    <div key={i} className={`p-4 border rounded-lg ${
+                      q.status === 'Duplicate' ? 'border-yellow-200 bg-yellow-50' : 'border-green-200 bg-green-50'
+                    }`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <h5 className="font-medium text-gray-800">Q{i + 1}: {q.question}</h5>
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          q.status === 'Duplicate' ? 'bg-yellow-200 text-yellow-800' : 'bg-green-200 text-green-800'
+                        }`}>
+                          {q.status}
+                        </span>
+                      </div>
+                      
+                      {isTechnicalModule ? (
+                        <div className="space-y-2 text-sm text-gray-600">
+                          <div className="p-2 bg-white rounded border">
+                            <strong>Test Cases:</strong> {q.testCases}
+                          </div>
+                          <div className="p-2 bg-white rounded border">
+                            <strong>Expected Output:</strong> {q.expectedOutput}
+                          </div>
+                          <div className="p-2 bg-white rounded border">
+                            <strong>Language:</strong> {q.language}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600">
+                          <div>A: {q.optionA}</div>
+                          <div>B: {q.optionB}</div>
+                          <div>C: {q.optionC}</div>
+                          <div>D: {q.optionD}</div>
+                        </div>
+                      )}
+                      
+                      {!isTechnicalModule && (
+                        <div className="mt-2 text-sm">
+                          <span className="font-medium text-green-600">Answer: {q.answer}</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600">
-                      <div>A: {q.optionA}</div>
-                      <div>B: {q.optionB}</div>
-                      <div>C: {q.optionC}</div>
-                      <div>D: {q.optionD}</div>
-                    </div>
-                    <div className="mt-2 text-sm">
-                      <span className="font-medium text-green-600">Answer: {q.answer}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
             

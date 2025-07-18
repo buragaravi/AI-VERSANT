@@ -33,7 +33,7 @@ except ImportError:
 from difflib import SequenceMatcher
 import json
 from mongo import mongo_db
-from config.constants import ROLES, MODULES, LEVELS, TEST_TYPES, GRAMMAR_CATEGORIES, QUESTION_TYPES
+from config.constants import ROLES, MODULES, LEVELS, TEST_TYPES, GRAMMAR_CATEGORIES, CRT_CATEGORIES, QUESTION_TYPES
 from config.aws_config import s3_client, S3_BUCKET_NAME
 from utils.audio_generator import generate_audio_from_text, calculate_similarity_score, transcribe_audio
 import functools
@@ -546,6 +546,30 @@ def get_test_data():
         # Get batches
         batches = list(mongo_db.batches.find({}, {'name': 1, '_id': 1}))
         
+        # Use the imported constants directly
+        try:
+            grammar_categories = GRAMMAR_CATEGORIES
+        except NameError:
+            current_app.logger.warning("GRAMMAR_CATEGORIES not found, using default values")
+            grammar_categories = {
+                'NOUN': 'Noun',
+                'PRONOUN': 'Pronoun',
+                'ADJECTIVE': 'Adjective',
+                'VERB': 'Verb',
+                'ADVERB': 'Adverb',
+                'CONJUNCTION': 'Conjunction'
+            }
+            
+        try:
+            crt_categories = CRT_CATEGORIES
+        except NameError:
+            current_app.logger.warning("CRT_CATEGORIES not found, using default values")
+            crt_categories = {
+                'CRT_APTITUDE': 'Aptitude',
+                'CRT_REASONING': 'Reasoning', 
+                'CRT_TECHNICAL': 'Technical'
+            }
+        
         return jsonify({
             'success': True,
             'data': {
@@ -554,12 +578,13 @@ def get_test_data():
                 'batches': [{'id': str(b['_id']), 'name': b['name']} for b in batches],
                 'levels': [{'id': lid, 'name': name} for lid, name in LEVELS.items()],
                 'modules': [{'id': mid, 'name': name} for mid, name in MODULES.items()],
-                'grammar_categories': [{'id': cid, 'name': name} for cid, name in GRAMMAR_CATEGORIES.items()],
-                'crt_categories': [{'id': cid, 'name': name} for cid, name in CRT_CATEGORIES.items()]
+                'grammar_categories': [{'id': cid, 'name': name} for cid, name in grammar_categories.items()],
+                'crt_categories': [{'id': cid, 'name': name} for cid, name in crt_categories.items()]
             }
         }), 200
         
     except Exception as e:
+        current_app.logger.error(f"Error in get_test_data: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'Failed to get test data: {str(e)}'
@@ -1282,10 +1307,10 @@ def upload_module_questions():
                 'module_id': module_id,
                 'level_id': level_id,
                 'question': q.get('question'),
-                'optionA': q.get('options', [])[0] if q.get('options') else '',
-                'optionB': q.get('options', [])[1] if q.get('options') and len(q.get('options')) > 1 else '',
-                'optionC': q.get('options', [])[2] if q.get('options') and len(q.get('options')) > 2 else '',
-                'optionD': q.get('options', [])[3] if q.get('options') and len(q.get('options')) > 3 else '',
+                'optionA': q.get('options', [])[0] if q.get('options') else q.get('optionA', ''),
+                'optionB': q.get('options', [])[1] if q.get('options') and len(q.get('options')) > 1 else q.get('optionB', ''),
+                'optionC': q.get('options', [])[2] if q.get('options') and len(q.get('options')) > 2 else q.get('optionC', ''),
+                'optionD': q.get('options', [])[3] if q.get('options') and len(q.get('options')) > 3 else q.get('optionD', ''),
                 'answer': q.get('answer', ''),
                 'instructions': q.get('instructions', ''),
                 'used_in_tests': [], # Track test_ids where used
@@ -1293,9 +1318,20 @@ def upload_module_questions():
                 'last_used': None,
                 'created_at': datetime.utcnow()
             }
+            
+            # Handle technical questions with additional fields
+            if module_id == 'TECHNICAL' or level_id == 'TECHNICAL':
+                doc['testCases'] = q.get('testCases', '')
+                doc['expectedOutput'] = q.get('expectedOutput', '')
+                doc['language'] = q.get('language', 'python')
+                doc['question_type'] = 'technical'
+            else:
+                doc['question_type'] = 'mcq'
+            
             # Support sublevel/subcategory for grammar
             if 'subcategory' in q:
                 doc['subcategory'] = q['subcategory']
+                
             mongo_db.question_bank.insert_one(doc)
             inserted.append(doc['question'])
         
@@ -2195,3 +2231,40 @@ def add_question_to_module():
     except Exception as e:
         current_app.logger.error(f"Error adding question to module: {e}")
         return jsonify({'success': False, 'message': f'Failed to add question: {str(e)}'}), 500 
+
+@test_management_bp.route('/test-technical-upload', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def test_technical_upload():
+    """Test endpoint for technical question upload"""
+    try:
+        data = request.get_json()
+        current_app.logger.info(f"Test technical upload data: {data}")
+        
+        # Validate the data structure
+        if not data.get('module_id') or not data.get('level_id') or not data.get('questions'):
+            return jsonify({
+                'success': False,
+                'message': 'module_id, level_id, and questions are required'
+            }), 400
+        
+        # Log the questions for debugging
+        for i, q in enumerate(data['questions']):
+            current_app.logger.info(f"Question {i+1}: {q}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Technical upload test successful',
+            'data': {
+                'module_id': data['module_id'],
+                'level_id': data['level_id'],
+                'question_count': len(data['questions'])
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in test technical upload: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Test failed: {str(e)}'
+        }), 500

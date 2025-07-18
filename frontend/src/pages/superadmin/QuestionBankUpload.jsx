@@ -91,7 +91,14 @@ const QuestionBankUpload = () => {
       }
     } catch (error) {
       console.error('Error fetching modules:', error);
-      toast.error('Failed to fetch modules');
+      // Provide fallback modules
+      setModules([
+        { id: 'GRAMMAR', name: 'Grammar' },
+        { id: 'VOCABULARY', name: 'Vocabulary' },
+        { id: 'READING', name: 'Reading' },
+        { id: 'CRT', name: 'CRT' }
+      ]);
+      toast.error('Failed to fetch modules from server, using default values');
     }
   };
 
@@ -115,7 +122,30 @@ const QuestionBankUpload = () => {
       }
     } catch (error) {
       console.error('Error fetching levels:', error);
-      toast.error('Failed to fetch levels');
+      // Provide fallback levels based on module
+      if (selectedModule === 'GRAMMAR') {
+        setLevels([
+          { id: 'NOUN', name: 'Noun' },
+          { id: 'PRONOUN', name: 'Pronoun' },
+          { id: 'ADJECTIVE', name: 'Adjective' },
+          { id: 'VERB', name: 'Verb' },
+          { id: 'ADVERB', name: 'Adverb' },
+          { id: 'CONJUNCTION', name: 'Conjunction' }
+        ]);
+      } else if (selectedModule === 'CRT') {
+        setLevels([
+          { id: 'CRT_APTITUDE', name: 'Aptitude' },
+          { id: 'CRT_REASONING', name: 'Reasoning' },
+          { id: 'CRT_TECHNICAL', name: 'Technical' }
+        ]);
+      } else {
+        setLevels([
+          { id: `${selectedModule}_BEGINNER`, name: 'Beginner' },
+          { id: `${selectedModule}_INTERMEDIATE`, name: 'Intermediate' },
+          { id: `${selectedModule}_ADVANCED`, name: 'Advanced' }
+        ]);
+      }
+      toast.error('Failed to fetch levels from server, using default values');
         }
   };
 
@@ -200,31 +230,50 @@ const QuestionBankUpload = () => {
   };
 
   const downloadTemplate = () => {
-    const templateData = [
-      {
-        Question: 'What is a noun?',
-        A: 'A word that describes an action',
-        B: 'A word that names a person, place, thing, or idea',
-        C: 'A word that describes a quality',
-        D: 'A word that connects words',
-        Answer: 'B'
-      },
-      {
-        Question: 'Which of the following is a pronoun?',
-        A: 'Happy',
-        B: 'Quickly',
-        C: 'He',
-        D: 'Running',
-        Answer: 'C'
-      }
-    ];
+    let templateData;
+    
+    if (selectedModule === 'CRT' && selectedLevel?.id === 'CRT_TECHNICAL') {
+      templateData = [
+        {
+          Question: 'Perfect Number\nProblem Statement:\nWrite a program to check whether a given positive integer is a perfect number. A perfect number is a positive integer equal to the sum of its proper divisors except itself.\n\nSample Input/Output Test Cases:\nInput\tOutput\n6\t6 is a perfect number\n15\t15 is not a perfect number\n28\t28 is a perfect number',
+          TestCases: '6\n15\n28',
+          ExpectedOutput: '6 is a perfect number\n15 is not a perfect number\n28 is a perfect number',
+          Language: 'python'
+        },
+        {
+          Question: 'Anagram Check\nProblem Statement:\nWrite a program that checks if two given strings are anagrams of each other (contain the same characters in any order).\n\nSample Input/Output Test Cases:\nInput (String 1, String 2)\tOutput\nlisten, silent\tAnagram\nhello, world\tNot Anagram\ntriangle, integral\tAnagram',
+          TestCases: 'listen silent\nhello world\ntriangle integral',
+          ExpectedOutput: 'Anagram\nNot Anagram\nAnagram',
+          Language: 'python'
+        }
+      ];
+    } else {
+      templateData = [
+        {
+          Question: 'What is the next number in the sequence: 2, 4, 8, 16, ?',
+          A: '24',
+          B: '32',
+          C: '30',
+          D: '28',
+          Answer: 'B'
+        },
+        {
+          Question: 'If a train travels 120 km in 2 hours, what is its speed?',
+          A: '40 km/h',
+          B: '50 km/h',
+          C: '60 km/h',
+          D: '70 km/h',
+          Answer: 'C'
+        }
+      ];
+    }
 
     const csv = Papa.unparse(templateData);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `${selectedModule}_MCQ_Template.csv`);
+    link.setAttribute('download', `${selectedModule}_${selectedLevel?.name || 'MCQ'}_Template.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
