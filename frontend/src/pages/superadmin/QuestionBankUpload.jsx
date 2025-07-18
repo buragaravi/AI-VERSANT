@@ -152,8 +152,11 @@ const QuestionBankUpload = () => {
         } else {
           // For VOCABULARY, READING, LISTENING, SPEAKING, WRITING - filter levels that start with the module name
           const moduleLevels = response.data.data.levels?.filter(level => 
-            level.id && level.id.startsWith(selectedModule)
-          ) || [];
+            level && level.id && level.name && level.id.startsWith(selectedModule)
+          ).map(level => ({
+            id: level.id,
+            name: level.name
+          })) || [];
           
           // If no levels found, create default levels
           if (moduleLevels.length === 0) {
@@ -257,10 +260,20 @@ const QuestionBankUpload = () => {
 
   const handleLevelSelect = (level) => {
     // Ensure we're passing a level object with proper structure
-    const levelData = typeof level === 'object' ? level : { id: level, name: level };
+    let levelData;
+    if (typeof level === 'object' && level !== null) {
+      // Extract only the id and name properties to avoid any unexpected properties
+      levelData = {
+        id: level.id || level.module_id || '',
+        name: level.name || ''
+      };
+    } else {
+      levelData = { id: level, name: level };
+    }
+    
     console.log('Selected level:', levelData);
     
-    if (!levelData || !levelData.id) {
+    if (!levelData || !levelData.id || !levelData.name) {
       console.error('Invalid level selected:', level);
       toast.error('Invalid level selection');
       return;
@@ -627,38 +640,46 @@ const QuestionBankUpload = () => {
           {/* Levels Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {levels && levels.length > 0 ? (
-              levels.map((level, index) => (
-                <motion.div
-                  key={level.id || index}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer border border-gray-200"
-                  onClick={() => handleLevelSelect(level)}
-                >
-                  <div className="p-8">
-                    <div className="flex items-center mb-6">
-                      <div className="w-16 h-16 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold">
-                        {level.id && level.id.includes('_') ? level.id.split('_')[1] : (level.name ? level.name.charAt(0) : 'L')}
+              levels.map((level, index) => {
+                // Ensure level has the expected structure
+                const safeLevel = {
+                  id: level?.id || level?.module_id || `level_${index}`,
+                  name: level?.name || 'Unknown Level'
+                };
+                
+                return (
+                  <motion.div
+                    key={safeLevel.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: index * 0.1 }}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer border border-gray-200"
+                    onClick={() => handleLevelSelect(safeLevel)}
+                  >
+                    <div className="p-8">
+                      <div className="flex items-center mb-6">
+                        <div className="w-16 h-16 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold">
+                          {safeLevel.id && safeLevel.id.includes('_') ? safeLevel.id.split('_')[1] : (safeLevel.name ? safeLevel.name.charAt(0) : 'L')}
+                        </div>
+                      </div>
+                      <h3 className="text-2xl font-bold text-gray-800 mb-3">
+                        {safeLevel.name}
+                      </h3>
+                      <p className="text-gray-600 text-base mb-6 leading-relaxed">
+                        Upload questions for {safeLevel.name} level
+                      </p>
+                      <div className="flex items-center text-blue-600 font-semibold text-base">
+                        <span>Upload Questions</span>
+                        <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
                       </div>
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-800 mb-3">
-                      {level.name || 'Unknown Level'}
-                    </h3>
-                    <p className="text-gray-600 text-base mb-6 leading-relaxed">
-                      Upload questions for {level.name || 'this'} level
-                    </p>
-                    <div className="flex items-center text-blue-600 font-semibold text-base">
-                      <span>Upload Questions</span>
-                      <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
-                  </div>
-                </motion.div>
-              ))
+                  </motion.div>
+                );
+              })
             ) : (
               <div className="col-span-full text-center py-12">
                 <div className="text-4xl mb-4">📚</div>

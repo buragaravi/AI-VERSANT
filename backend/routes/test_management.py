@@ -576,7 +576,7 @@ def get_test_data():
                 'campuses': [{'id': str(c['_id']), 'name': c['name']} for c in campuses],
                 'courses': [{'id': str(c['_id']), 'name': c['name']} for c in courses],
                 'batches': [{'id': str(b['_id']), 'name': b['name']} for b in batches],
-                'levels': [{'id': lid, 'name': name} for lid, name in LEVELS.items()],
+                'levels': [{'id': lid, 'name': level_data['name']} for lid, level_data in LEVELS.items()],
                 'modules': [{'id': mid, 'name': name} for mid, name in MODULES.items()],
                 'grammar_categories': [{'id': cid, 'name': name} for cid, name in grammar_categories.items()],
                 'crt_categories': [{'id': cid, 'name': name} for cid, name in crt_categories.items()]
@@ -797,7 +797,7 @@ def get_practice_tests():
                 'id': str(test['_id']),
                 'name': test['name'],
                 'module': MODULES.get(str(test['module_id']), 'Unknown'),
-                'level': LEVELS.get(str(test['level_id']), 'Unknown'),
+                'level': LEVELS.get(str(test['level_id']), {}).get('name', 'Unknown'),
                 'question_count': len(test['questions']),
                 'max_attempts': test.get('max_attempts', 3),
                 'created_at': test['created_at'].isoformat()
@@ -989,7 +989,7 @@ def get_all_tests():
             if module_id == 'GRAMMAR' and subcategory:
                 level_name = GRAMMAR_CATEGORIES.get(subcategory, 'N/A')
             else:
-                level_name = LEVELS.get(level_id, 'N/A') if level_id else 'N/A'
+                level_name = LEVELS.get(level_id, {}).get('name', 'N/A') if level_id else 'N/A'
 
             campus_names = ', '.join(test.get('campus_names', []))
             batches = ', '.join(test.get('batches', []))
@@ -1651,7 +1651,7 @@ def notify_students(test_id):
         if module == 'GRAMMAR' and subcategory:
             level_display_name = GRAMMAR_CATEGORIES.get(subcategory, subcategory)
         else:
-            level_display_name = LEVELS.get(level, level)
+            level_display_name = LEVELS.get(level, {}).get('name', level)
         test_name = test.get('name', 'N/A')
         start_dt = test.get('startDateTime')
         end_dt = test.get('endDateTime')

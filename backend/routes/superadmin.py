@@ -733,7 +733,7 @@ def get_vocabulary_analytics():
         
         # Process results
         for result in results:
-            result['level_display_name'] = LEVELS.get(result['level_name'], result['level_name'])
+            result['level_display_name'] = LEVELS.get(result['level_name'], {}).get('name', result['level_name'])
             result['total_students'] = len(result['total_students'])
             result['accuracy'] = (result['total_correct'] / result['total_questions'] * 100) if result['total_questions'] > 0 else 0
             result['completion_rate'] = result['completion_rate'] * 100
@@ -870,7 +870,7 @@ def get_student_assigned_modules():
                 'module_id': str(test['module_id']),
                 'module_display_name': MODULES.get(test['module_id'], 'Unknown'),
                 'level_id': test.get('level_id'),
-                'level_display_name': LEVELS.get(test.get('level_id'), 'Unknown'),
+                'level_display_name': LEVELS.get(test.get('level_id'), {}).get('name', 'Unknown'),
                 'assigned': True
             }
             if tid in attempts_by_test:

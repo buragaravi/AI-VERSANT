@@ -436,7 +436,7 @@ def get_online_exams():
             if exam.get('module_id') == 'GRAMMAR':
                 level_name = GRAMMAR_CATEGORIES.get(exam.get('subcategory'), 'N/A')
             else:
-                level_name = LEVELS.get(exam.get('level_id'), 'N/A')
+                level_name = LEVELS.get(exam.get('level_id'), {}).get('name', 'N/A')
 
             # Add start/end time fields
             start_dt = exam.get('startDateTime')
@@ -571,7 +571,7 @@ def get_test_history():
         for result in results:
             result['_id'] = str(result['_id'])
             result['module_name'] = MODULES.get(result.get('module_id'), 'Unknown')
-            result['level_name'] = LEVELS.get(result.get('level_id'), 'Unknown')
+            result['level_name'] = LEVELS.get(result.get('level_id'), {}).get('name', 'Unknown')
             if 'submitted_at' in result:
                 result['submitted_at'] = result['submitted_at'].isoformat()
         
@@ -785,7 +785,7 @@ def get_vocabulary_detailed_results():
         
         # Process results
         for result in results:
-            result['level_display_name'] = LEVELS.get(result['level_name'], result['level_name'])
+            result['level_display_name'] = LEVELS.get(result['level_name'], {}).get('name', result['level_name'])
             result['accuracy'] = (result['total_correct'] / result['total_questions'] * 100) if result['total_questions'] > 0 else 0
             result['last_attempt'] = result['last_attempt'].isoformat() if result['last_attempt'] else None
             result['status'] = 'completed' if result['highest_score'] >= 60 else 'needs_improvement'
