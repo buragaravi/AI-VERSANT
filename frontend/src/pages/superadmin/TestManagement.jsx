@@ -1467,16 +1467,24 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
 
   const handleQuestionCountConfirm = async () => {
     setShowQuestionCountModal(false);
-    // Sample with replacement
-    const fetchedQuestions = await fetchQuestionsFromBank(questionCount * 2); // fetch more to allow repeats
+    const fetchedQuestions = await fetchQuestionsFromBank(questionCount * 3); // fetch more to ensure we have enough unique questions
     if (fetchedQuestions.length > 0) {
-      // Sample with replacement
-      const selectedQuestions = [];
-      for (let i = 0; i < questionCount; i++) {
-        const idx = Math.floor(Math.random() * fetchedQuestions.length);
-        selectedQuestions.push(fetchedQuestions[idx]);
+      // Sample WITHOUT replacement to avoid repeats within the same test
+      const shuffledQuestions = shuffleArray([...fetchedQuestions]);
+      const selectedQuestions = shuffledQuestions.slice(0, Math.min(questionCount, fetchedQuestions.length));
+      
+      if (selectedQuestions.length < questionCount) {
+        showError(`Only ${selectedQuestions.length} unique questions available in the bank. Please reduce the count or add more questions.`);
+        return;
       }
-      setPreviewQuestions(selectedQuestions);
+      
+      // Add repeat count information to each question
+      const questionsWithRepeatInfo = selectedQuestions.map(question => ({
+        ...question,
+        repeatCount: question.used_count || 0 // used_count from backend indicates how many times this question has been used in tests
+      }));
+      
+      setPreviewQuestions(questionsWithRepeatInfo);
       setShowQuestionPreview(true);
     } else {
       setError('No questions found in the bank for the selected criteria');
@@ -1651,11 +1659,11 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="h-5 w-5 text-green-600" />
                   <span className="text-green-800 font-medium">
-                    {questions.length} questions randomly selected from the question bank
+                    {questions.length} unique questions randomly selected from the question bank
                   </span>
                 </div>
                 <p className="text-green-700 text-sm mt-1">
-                  Questions have been shuffled for randomization. Click "Next" to proceed.
+                  Questions have been shuffled and no duplicates within this test. Click "Next" to proceed.
                 </p>
               </div>
               
@@ -1695,7 +1703,14 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
                             </div>
                           )}
                         </div>
-                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Random</span>
+                        <div className="flex items-center space-x-1">
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Selected</span>
+                          {question.used_count > 0 && (
+                            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                              Used {question.used_count}x
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -1777,6 +1792,9 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
             <p className="text-gray-600">
               How many questions would you like to select from the question bank?
             </p>
+            <p className="text-sm text-blue-600 bg-blue-50 p-2 rounded">
+              Note: Questions will be randomly selected without duplicates within this test. Questions used in previous tests will show their usage count.
+            </p>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Number of Questions
@@ -1818,49 +1836,39 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
           size="lg"
         >
           <div className="space-y-4 max-h-96 overflow-y-auto">
-            {(() => {
-              // Count repeats
-              const counts = {};
-              previewQuestions.forEach(q => {
-                const key = q._id || q.question;
-                counts[key] = (counts[key] || 0) + 1;
-              });
-              return previewQuestions.map((question, index) => {
-                const key = question._id || question.question;
-                const repeatCount = counts[key];
-                // Only show the badge the first time this question appears
-                const isFirst = previewQuestions.findIndex(q => (q._id || q.question) === key) === index;
-                return (
-                  <div key={index} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-500">Question {index + 1}</span>
-                      <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Randomly Selected</span>
-                      {isFirst && repeatCount > 1 && (
-                        <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Repeated x{repeatCount}</span>
-                      )}
-                    </div>
-                    <p className="text-gray-800 mb-3">{question.question}</p>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div className="bg-gray-50 p-2 rounded">
-                        <span className="font-medium">A:</span> {question.optionA}
-                      </div>
-                      <div className="bg-gray-50 p-2 rounded">
-                        <span className="font-medium">B:</span> {question.optionB}
-                      </div>
-                      <div className="bg-gray-50 p-2 rounded">
-                        <span className="font-medium">C:</span> {question.optionC}
-                      </div>
-                      <div className="bg-gray-50 p-2 rounded">
-                        <span className="font-medium">D:</span> {question.optionD}
-                      </div>
-                    </div>
-                    <div className="mt-2 text-sm">
-                      <span className="font-medium text-green-600">Answer:</span> {question.answer}
-                    </div>
+            {previewQuestions.map((question, index) => (
+              <div key={index} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-500">Question {index + 1}</span>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Randomly Selected</span>
+                    {question.repeatCount > 0 && (
+                      <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                        Used {question.repeatCount} time{question.repeatCount > 1 ? 's' : ''} before
+                      </span>
+                    )}
                   </div>
-                );
-              });
-            })()}
+                </div>
+                <p className="text-gray-800 mb-3">{question.question}</p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="bg-gray-50 p-2 rounded">
+                    <span className="font-medium">A:</span> {question.optionA}
+                  </div>
+                  <div className="bg-gray-50 p-2 rounded">
+                    <span className="font-medium">B:</span> {question.optionB}
+                  </div>
+                  <div className="bg-gray-50 p-2 rounded">
+                    <span className="font-medium">C:</span> {question.optionC}
+                  </div>
+                  <div className="bg-gray-50 p-2 rounded">
+                    <span className="font-medium">D:</span> {question.optionD}
+                  </div>
+                </div>
+                <div className="mt-2 text-sm">
+                  <span className="font-medium text-green-600">Answer:</span> {question.answer}
+                </div>
+              </div>
+            ))}
           </div>
           <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
             <button
