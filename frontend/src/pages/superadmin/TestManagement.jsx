@@ -931,16 +931,74 @@ const Step2TestType = ({ nextStep, prevStep, updateTestData, testData }) => {
 const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
   const [module, setModule] = useState(testData.module || '');
   const [level, setLevel] = useState(testData.level || '');
+  const [subcategory, setSubcategory] = useState(testData.subcategory || '');
   const [testName, setTestName] = useState(testData.testName || '');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [levels, setLevels] = useState([]);
+  const [grammarCategories, setGrammarCategories] = useState([]);
+  const { error: showError } = useNotification();
+
+  // Fetch levels and grammar categories when component mounts
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const response = await api.get('/test-management/get-test-data');
+        if (response.data.success) {
+          setLevels(response.data.data.levels || []);
+          setGrammarCategories(response.data.data.grammar_categories || []);
+        }
+      } catch (error) {
+        console.error('Error fetching levels:', error);
+        showError('Failed to fetch levels');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  // Filter levels based on selected module
+  const getFilteredLevels = () => {
+    if (!module) return [];
+    if (module === 'GRAMMAR') {
+      return grammarCategories;
+    } else if (module === 'CRT') {
+      return [
+        { id: 'Aptitude', name: 'Aptitude' },
+        { id: 'Reasoning', name: 'Reasoning' },
+        { id: 'Technical', name: 'Technical' }
+      ];
+    } else {
+      // Find all levels for this module from backend
+      const moduleLevels = levels.filter(level =>
+        level && level.id && level.name && level.id.startsWith(module)
+      );
+      if (moduleLevels.length > 0) {
+        return moduleLevels;
+      }
+      // Fallback to default levels
+      return [
+        { id: `${module}_BEGINNER`, name: 'Beginner' },
+        { id: `${module}_INTERMEDIATE`, name: 'Intermediate' },
+        { id: `${module}_ADVANCED`, name: 'Advanced' }
+      ];
+    }
+  };
 
   const handleModuleChange = (e) => {
     setModule(e.target.value);
     setLevel(''); // Reset level when module changes
+    setSubcategory(''); // Reset subcategory when module changes
   };
 
   const handleLevelChange = (e) => {
     setLevel(e.target.value);
+  };
+
+  const handleSubcategoryChange = (e) => {
+    setSubcategory(e.target.value);
   };
 
   const handleNext = () => {
@@ -949,9 +1007,10 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
       return;
     }
     
-    // Check if module has levels and level is required
-    const moduleConfig = MODULE_CONFIG[module];
-    if (moduleConfig?.levels && moduleConfig.levels.length > 0 && !level) {
+    if (module === 'GRAMMAR' && !subcategory) {
+      setError('Please select a grammar category.');
+      return;
+    } else if (module !== 'GRAMMAR' && !level) {
       setError('Please select a level.');
       return;
     }
@@ -962,7 +1021,12 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
     }
     
     setError('');
-    updateTestData({ module, level, testName });
+    updateTestData({ 
+      module, 
+      level: module === 'GRAMMAR' ? subcategory : level, 
+      subcategory: module === 'GRAMMAR' ? subcategory : null,
+      testName 
+    });
     nextStep();
   };
 
@@ -990,17 +1054,35 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
           </select>
         </div>
 
-        {module && MODULE_CONFIG[module]?.levels && MODULE_CONFIG[module].levels.length > 0 && (
+        {module && module === 'GRAMMAR' && (
+          <div>
+            <label className="block font-semibold mb-2">Grammar Category</label>
+            <select 
+              value={subcategory} 
+              onChange={handleSubcategoryChange} 
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={loading}
+            >
+              <option value="">Select Grammar Category</option>
+              {grammarCategories.map(category => (
+                <option key={category.id} value={category.id}>{category.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {module && module !== 'GRAMMAR' && (
           <div>
             <label className="block font-semibold mb-2">Level</label>
             <select 
               value={level} 
               onChange={handleLevelChange} 
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={loading}
             >
               <option value="">Select Level</option>
-              {MODULE_CONFIG[module].levels.map(lvl => (
-                <option key={lvl} value={lvl}>{lvl}</option>
+              {getFilteredLevels().map(lvl => (
+                <option key={lvl.id} value={lvl.id}>{lvl.name}</option>
               ))}
             </select>
           </div>
@@ -1304,6 +1386,11 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
   const [bankQuestions, setBankQuestions] = useState([]);
   const [selectedBankQuestions, setSelectedBankQuestions] = useState([]);
   const [loadingBankQuestions, setLoadingBankQuestions] = useState(false);
+  const [showQuestionCountModal, setShowQuestionCountModal] = useState(false);
+  const [questionCount, setQuestionCount] = useState(10);
+  const [showQuestionPreview, setShowQuestionPreview] = useState(false);
+  const [previewQuestions, setPreviewQuestions] = useState([]);
+  const { error: showError } = useNotification();
 
   // Fetch questions from bank when source changes
   useEffect(() => {
@@ -1312,7 +1399,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
     }
   }, [questionSource, testData.module, testData.level, testData.subcategory]);
 
-  const fetchQuestionsFromBank = async () => {
+  const fetchQuestionsFromBank = async (count = 50) => {
     setLoadingBankQuestions(true);
     try {
       // Determine the correct level_id based on module type
@@ -1340,29 +1427,72 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
       console.log('Fetching questions for:', {
         module_id: testData.module,
         level_id: levelId,
-        subcategory: subcategory
+        subcategory: subcategory,
+        count: count
       });
       
       const response = await api.post('/test-management/question-bank/fetch-for-test', {
         module_id: testData.module,
         level_id: levelId,
         subcategory: subcategory,
-        count: 50 // Fetch more questions for selection
+        count: count
       });
       
       if (response.data.success) {
         setBankQuestions(response.data.questions);
         console.log('Fetched questions:', response.data.questions.length);
+        return response.data.questions;
       } else {
         console.error('Failed to fetch questions:', response.data.message);
         setError('Failed to fetch questions from bank');
+        return [];
       }
     } catch (error) {
       console.error('Error fetching questions from bank:', error);
       setError('Failed to fetch questions from bank');
+      return [];
     } finally {
       setLoadingBankQuestions(false);
     }
+  };
+
+  const handleQuestionBankSelect = async () => {
+    setShowQuestionCountModal(true);
+  };
+
+  const handleQuestionCountConfirm = async () => {
+    setShowQuestionCountModal(false);
+    // Sample with replacement
+    const fetchedQuestions = await fetchQuestionsFromBank(questionCount * 2); // fetch more to allow repeats
+    if (fetchedQuestions.length > 0) {
+      // Sample with replacement
+      const selectedQuestions = [];
+      for (let i = 0; i < questionCount; i++) {
+        const idx = Math.floor(Math.random() * fetchedQuestions.length);
+        selectedQuestions.push(fetchedQuestions[idx]);
+      }
+      setPreviewQuestions(selectedQuestions);
+      setShowQuestionPreview(true);
+    } else {
+      setError('No questions found in the bank for the selected criteria');
+      showError('No questions found in the bank for the selected criteria');
+    }
+  };
+
+  const handlePreviewConfirm = () => {
+    setQuestions(previewQuestions);
+    setSelectedBankQuestions(previewQuestions);
+    setShowQuestionPreview(false);
+    setQuestionSource('bank');
+  };
+
+  const shuffleArray = (array) => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
   };
 
   const handleQuestionSourceChange = (source) => {
@@ -1477,7 +1607,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
           </button>
 
           <button
-            onClick={() => handleQuestionSourceChange('bank')}
+            onClick={handleQuestionBankSelect}
             className={`p-4 border-2 rounded-lg text-left transition-colors ${
               questionSource === 'bank'
                 ? 'border-blue-500 bg-blue-50'
@@ -1499,38 +1629,40 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
       {questionSource === 'bank' && (
         <div className="bg-white rounded-lg shadow-md p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Select Questions from Bank</h3>
+            <h3 className="text-lg font-semibold">Selected Questions from Bank</h3>
             <div className="text-sm text-gray-600">
-              {selectedBankQuestions.length} selected
+              {questions.length} questions selected
             </div>
           </div>
 
-          {loadingBankQuestions ? (
-            <div className="text-center py-8">
-              <LoadingSpinner size="md" />
-              <p className="text-gray-600 mt-2">Loading questions from bank...</p>
-            </div>
-          ) : bankQuestions.length === 0 ? (
+          {questions.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              <p>No questions found in the bank for {getModuleDisplayName()} - {getLevelDisplayName()}.</p>
-              <p className="text-sm mt-2">Please upload questions to the bank first using the Question Bank Upload section.</p>
+              <p>No questions selected from the bank.</p>
+              <p className="text-sm mt-2">Click on "Question Bank" to select questions.</p>
             </div>
           ) : (
             <div className="space-y-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <span className="text-green-800 font-medium">
+                    {questions.length} questions randomly selected from the question bank
+                  </span>
+                </div>
+                <p className="text-green-700 text-sm mt-1">
+                  Questions have been shuffled for randomization. Click "Next" to proceed.
+                </p>
+              </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {bankQuestions.map((question, index) => {
+                {questions.map((question, index) => {
                   const isTechnicalQuestion = question.question_type === 'technical' || 
                     (testData.module === 'CRT' && testData.level === 'Technical');
                   
                   return (
                     <div
-                      key={question._id}
-                      className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                        selectedBankQuestions.find(q => q._id === question._id)
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                      onClick={() => handleBankQuestionToggle(question)}
+                      key={index}
+                      className="border border-gray-200 rounded-lg p-4 bg-gray-50"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -1558,29 +1690,12 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
                             </div>
                           )}
                         </div>
-                        <CheckCircle
-                          className={`h-5 w-5 ${
-                            selectedBankQuestions.find(q => q._id === question._id)
-                              ? 'text-blue-500'
-                              : 'text-gray-300'
-                          }`}
-                        />
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Random</span>
                       </div>
                     </div>
                   );
                 })}
               </div>
-
-              {selectedBankQuestions.length > 0 && (
-                <div className="flex justify-end">
-                  <button
-                    onClick={handleConfirmBankQuestions}
-                    className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600"
-                  >
-                    Confirm {selectedBankQuestions.length} Questions
-                  </button>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -1645,6 +1760,119 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
           Next
         </button>
       </div>
+
+      {/* Question Count Modal */}
+      {showQuestionCountModal && (
+        <Modal
+          isOpen={showQuestionCountModal}
+          onClose={() => setShowQuestionCountModal(false)}
+          title="Select Number of Questions"
+        >
+          <div className="space-y-4">
+            <p className="text-gray-600">
+              How many questions would you like to select from the question bank?
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Number of Questions
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="100"
+                value={questionCount}
+                onChange={(e) => setQuestionCount(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter number of questions"
+              />
+            </div>
+            <div className="flex justify-end space-x-3 pt-4">
+              <button
+                onClick={() => setShowQuestionCountModal(false)}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleQuestionCountConfirm}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Question Preview Modal */}
+      {showQuestionPreview && (
+        <Modal
+          isOpen={showQuestionPreview}
+          onClose={() => setShowQuestionPreview(false)}
+          title={`Preview Questions (${previewQuestions.length} selected)`}
+          size="lg"
+        >
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {(() => {
+              // Count repeats
+              const counts = {};
+              previewQuestions.forEach(q => {
+                const key = q._id || q.question;
+                counts[key] = (counts[key] || 0) + 1;
+              });
+              return previewQuestions.map((question, index) => {
+                const key = question._id || question.question;
+                const repeatCount = counts[key];
+                // Only show the badge the first time this question appears
+                const isFirst = previewQuestions.findIndex(q => (q._id || q.question) === key) === index;
+                return (
+                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-500">Question {index + 1}</span>
+                      <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Randomly Selected</span>
+                      {isFirst && repeatCount > 1 && (
+                        <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Repeated x{repeatCount}</span>
+                      )}
+                    </div>
+                    <p className="text-gray-800 mb-3">{question.question}</p>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="bg-gray-50 p-2 rounded">
+                        <span className="font-medium">A:</span> {question.optionA}
+                      </div>
+                      <div className="bg-gray-50 p-2 rounded">
+                        <span className="font-medium">B:</span> {question.optionB}
+                      </div>
+                      <div className="bg-gray-50 p-2 rounded">
+                        <span className="font-medium">C:</span> {question.optionC}
+                      </div>
+                      <div className="bg-gray-50 p-2 rounded">
+                        <span className="font-medium">D:</span> {question.optionD}
+                      </div>
+                    </div>
+                    <div className="mt-2 text-sm">
+                      <span className="font-medium text-green-600">Answer:</span> {question.answer}
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+            <button
+              onClick={() => setShowQuestionPreview(false)}
+              className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handlePreviewConfirm}
+              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+            >
+              Use These Questions
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
