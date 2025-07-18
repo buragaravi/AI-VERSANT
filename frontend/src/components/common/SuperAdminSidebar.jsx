@@ -22,6 +22,7 @@ const SuperAdminSidebar = () => {
     { name: 'User Management', path: '/superadmin/users', icon: Users },
     { name: 'Test Management', path: '/superadmin/tests', icon: FilePlus },
     { name: 'Question Bank Upload', path: '/superadmin/question-bank-upload', icon: FilePlus },
+    { name: 'CRT Upload', path: '/superadmin/crt-upload', icon: FilePlus },
     { name: 'Student Management', path: '/superadmin/students', icon: GraduationCap },
     { name: 'Results Management', path: '/superadmin/results', icon: BarChart },
   ]

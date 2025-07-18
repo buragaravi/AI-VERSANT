@@ -30,6 +30,13 @@ const MCQ_MODULES = [
     icon: '📖',
     description: 'Upload reading comprehension questions'
   },
+  { 
+    id: 'CRT', 
+    name: 'CRT', 
+    color: 'from-orange-500 to-orange-600',
+    icon: '🧮',
+    description: 'Upload CRT questions covering Aptitude, Reasoning, and Technical'
+  },
 ];
 
 const QuestionBankUpload = () => {
@@ -46,6 +53,8 @@ const QuestionBankUpload = () => {
   const [fileQuestions, setFileQuestions] = useState([]);
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [showAddQuestion, setShowAddQuestion] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredQuestions, setFilteredQuestions] = useState([]);
 
   useEffect(() => {
     fetchModules();
@@ -57,6 +66,22 @@ const QuestionBankUpload = () => {
       fetchLevels();
     }
   }, [selectedModule]);
+
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setFilteredQuestions(questions);
+    } else {
+      const filtered = questions.filter(question =>
+        question.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        question.optionA.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        question.optionB.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        question.optionC.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        question.optionD.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        question.answer.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredQuestions(filtered);
+    }
+  }, [questions, searchTerm]);
 
   const fetchModules = async () => {
     try {
@@ -76,6 +101,12 @@ const QuestionBankUpload = () => {
       if (response.data.success) {
         if (selectedModule === 'GRAMMAR') {
           setLevels(response.data.data.grammar_categories);
+        } else if (selectedModule === 'CRT') {
+          setLevels(response.data.data.crt_categories || [
+            { id: 'CRT_APTITUDE', name: 'Aptitude' },
+            { id: 'CRT_REASONING', name: 'Reasoning' },
+            { id: 'CRT_TECHNICAL', name: 'Technical' }
+          ]);
         } else {
           setLevels(response.data.data.levels.filter(level => 
             level.id.startsWith(selectedModule)
@@ -118,6 +149,7 @@ const QuestionBankUpload = () => {
       const response = await api.get(`/test-management/existing-questions?module_id=${moduleId}&level_id=${levelId}`);
       if (response.data.success) {
         setQuestions(response.data.data);
+        setFilteredQuestions(response.data.data);
       }
     } catch (error) {
       console.error('Error fetching existing questions for level:', error);
@@ -498,13 +530,41 @@ const QuestionBankUpload = () => {
               Existing Questions for {selectedModule} - {selectedLevel?.name}
             </h2>
             <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-              {questions.length} questions
+              {filteredQuestions.length} of {questions.length} questions
             </span>
           </div>
+
+          {/* Search Bar */}
+          <div className="mb-6">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search questions, options, or answers..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                >
+                  <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
           
-          {questions.length > 0 ? (
+          {filteredQuestions.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {questions.map((question, index) => (
+              {filteredQuestions.map((question, index) => (
                 <div key={question._id || index} className="bg-gray-50 rounded-xl p-6 border border-gray-200 hover:shadow-md transition-shadow">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-gray-800 text-sm">
@@ -536,6 +596,12 @@ const QuestionBankUpload = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          ) : searchTerm ? (
+            <div className="text-center py-8 text-gray-500">
+              <div className="text-4xl mb-4">🔍</div>
+              <p>No questions found matching "{searchTerm}"</p>
+              <p className="text-sm">Try a different search term</p>
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">
@@ -675,17 +741,24 @@ const QuestionBankUpload = () => {
 // Edit Question Form Component
 const EditQuestionForm = ({ question, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
-    question: question.question,
-    optionA: question.optionA,
-    optionB: question.optionB,
-    optionC: question.optionC,
-    optionD: question.optionD,
-    answer: question.answer
+    question: question.question || '',
+    optionA: question.optionA || '',
+    optionB: question.optionB || '',
+    optionC: question.optionC || '',
+    optionD: question.optionD || '',
+    answer: question.answer || ''
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
     onSave(formData);
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   return (
@@ -694,7 +767,7 @@ const EditQuestionForm = ({ question, onSave, onCancel }) => {
         <label className="block text-sm font-medium text-gray-700 mb-2">Question</label>
         <textarea
           value={formData.question}
-          onChange={(e) => setFormData({...formData, question: e.target.value})}
+          onChange={(e) => handleInputChange('question', e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           rows="3"
           required

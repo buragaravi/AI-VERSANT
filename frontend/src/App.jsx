@@ -19,6 +19,7 @@ import StudentManagement from './pages/superadmin/StudentManagement'
 import ResultsManagement from './pages/superadmin/ResultsManagement'
 import BatchDetails from './pages/superadmin/BatchDetails'
 import QuestionBankUpload from './pages/superadmin/QuestionBankUpload'
+import CRTUpload from './pages/superadmin/CRTUpload'
 import BatchCourseInstances from './pages/superadmin/BatchCourseInstances'
 import BatchManagement from './pages/superadmin/BatchManagement'
 
@@ -107,6 +108,7 @@ function App() {
                   <Route path="tests" element={<TestManagement />} />
                     <Route path="tests/create" element={<TestManagement />} />
                     <Route path="question-bank-upload" element={<QuestionBankUpload />} />
+                    <Route path="crt-upload" element={<CRTUpload />} />
                     <Route path="batch-course-instances" element={<BatchCourseInstances />} />
                     <Route path="batch-management" element={<BatchManagement />} />
                   </Route>

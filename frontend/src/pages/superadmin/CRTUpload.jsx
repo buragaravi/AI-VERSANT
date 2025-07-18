@@ -1,0 +1,784 @@
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
+import { toast } from 'react-hot-toast';
+import api from '../../services/api';
+import Header from '../../components/common/Header';
+import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
+
+const CRT_MODULES = [
+  { 
+    id: 'APTITUDE', 
+    name: 'Aptitude', 
+    color: 'from-blue-500 to-blue-600',
+    icon: '🧮',
+    description: 'Upload aptitude questions covering numerical, verbal, and logical reasoning'
+  },
+  { 
+    id: 'REASONING', 
+    name: 'Reasoning', 
+    color: 'from-green-500 to-green-600',
+    icon: '🧩',
+    description: 'Upload reasoning questions including analytical and critical thinking'
+  },
+  { 
+    id: 'TECHNICAL', 
+    name: 'Technical', 
+    color: 'from-purple-500 to-purple-600',
+    icon: '⚙️',
+    description: 'Upload technical questions covering programming, algorithms, and system design'
+  },
+];
+
+const CRTUpload = () => {
+  const [selectedModule, setSelectedModule] = useState(null);
+  const [questions, setQuestions] = useState([]);
+  const [currentStep, setCurrentStep] = useState('modules');
+  const [loading, setLoading] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [showFileDetails, setShowFileDetails] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [fileQuestions, setFileQuestions] = useState([]);
+  const [editingQuestion, setEditingQuestion] = useState(null);
+  const [showAddQuestion, setShowAddQuestion] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredQuestions, setFilteredQuestions] = useState([]);
+
+  useEffect(() => {
+    fetchUploadedFiles();
+  }, []);
+
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setFilteredQuestions(questions);
+    } else {
+      const filtered = questions.filter(question =>
+        question.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        question.optionA.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        question.optionB.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        question.optionC.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        question.optionD.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        question.answer.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredQuestions(filtered);
+    }
+  }, [questions, searchTerm]);
+
+  const fetchUploadedFiles = async () => {
+    try {
+      const response = await api.get('/test-management/uploaded-files');
+      if (response.data.success) {
+        // Filter for CRT files only
+        const crtFiles = response.data.data.filter(file => 
+          file.module_id === 'CRT' || file.module_id?.startsWith('CRT_')
+        );
+        setUploadedFiles(crtFiles);
+      }
+    } catch (error) {
+      console.error('Error fetching uploaded files:', error);
+    }
+  };
+
+  const fetchFileQuestions = async (fileId) => {
+    try {
+      const response = await api.get(`/test-management/uploaded-files/${fileId}/questions`);
+      if (response.data.success) {
+        setFileQuestions(response.data.data);
+        setShowFileDetails(true);
+      }
+    } catch (error) {
+      console.error('Error fetching file questions:', error);
+      toast.error('Failed to fetch file questions');
+    }
+  };
+
+  const fetchExistingQuestionsForModule = async (moduleId) => {
+    try {
+      const response = await api.get(`/test-management/existing-questions?module_id=${moduleId}`);
+      if (response.data.success) {
+        setQuestions(response.data.data);
+        setFilteredQuestions(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching existing questions for module:', error);
+    }
+  };
+
+  const handleModuleSelect = (module) => {
+    setSelectedModule(module.id);
+    setCurrentStep('upload');
+    fetchExistingQuestionsForModule(module.id);
+  };
+
+  const handleViewQuestions = (file) => {
+    setSelectedFile(file);
+    setCurrentStep('questions');
+    fetchFileQuestions(file._id);
+  };
+
+  const handleBackToModules = () => {
+    setSelectedModule(null);
+    setCurrentStep('modules');
+    setQuestions([]);
+    setShowFileDetails(false);
+    setSelectedFile(null);
+    setEditingQuestion(null);
+    setShowAddQuestion(false);
+  };
+
+  const handleUploadSuccess = () => {
+    fetchUploadedFiles();
+    if (currentStep === 'upload' && selectedModule) {
+      fetchExistingQuestionsForModule(selectedModule);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const templateData = [
+      {
+        Question: 'What is the next number in the sequence: 2, 4, 8, 16, ?',
+        A: '24',
+        B: '32',
+        C: '30',
+        D: '28',
+        Answer: 'B'
+      },
+      {
+        Question: 'If a train travels 120 km in 2 hours, what is its speed?',
+        A: '40 km/h',
+        B: '50 km/h',
+        C: '60 km/h',
+        D: '70 km/h',
+        Answer: 'C'
+      }
+    ];
+
+    const csv = Papa.unparse(templateData);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'crt_questions_template.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleFileUpload = async (file) => {
+    if (!selectedModule) {
+      toast.error('Please select a module first');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('module_id', selectedModule);
+
+      const response = await api.post('/test-management/module-question-bank/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (response.data.success) {
+        toast.success('Questions uploaded successfully!');
+        handleUploadSuccess();
+      } else {
+        toast.error(response.data.message || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error('Upload failed. Please check your file format.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteQuestion = async (questionId) => {
+    try {
+      const response = await api.delete(`/test-management/questions/${questionId}`);
+      if (response.data.success) {
+        toast.success('Question deleted successfully');
+        if (currentStep === 'upload' && selectedModule) {
+          fetchExistingQuestionsForModule(selectedModule);
+        } else if (currentStep === 'questions' && selectedFile) {
+          fetchFileQuestions(selectedFile._id);
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting question:', error);
+      toast.error('Failed to delete question');
+    }
+  };
+
+  const handleEditQuestion = (question) => {
+    setEditingQuestion(question);
+  };
+
+  const handleSaveEdit = async (questionData) => {
+    try {
+      const response = await api.put(`/test-management/questions/${editingQuestion._id}`, questionData);
+      if (response.data.success) {
+        toast.success('Question updated successfully');
+        setEditingQuestion(null);
+        if (currentStep === 'upload' && selectedModule) {
+          fetchExistingQuestionsForModule(selectedModule);
+        } else if (currentStep === 'questions' && selectedFile) {
+          fetchFileQuestions(selectedFile._id);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating question:', error);
+      toast.error('Failed to update question');
+    }
+  };
+
+  const handleAddQuestion = async (questionData) => {
+    try {
+      const response = await api.post('/test-management/questions/add', {
+        ...questionData,
+        module_id: selectedModule
+      });
+      if (response.data.success) {
+        toast.success('Question added successfully');
+        setShowAddQuestion(false);
+        if (currentStep === 'upload' && selectedModule) {
+          fetchExistingQuestionsForModule(selectedModule);
+        }
+      }
+    } catch (error) {
+      console.error('Error adding question:', error);
+      toast.error('Failed to add question');
+    }
+  };
+
+  const renderModuleCards = () => (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-4">CRT Question Bank Management</h1>
+        <p className="text-gray-600 max-w-2xl mx-auto">
+          Upload and manage CRT (Aptitude, Reasoning, Technical) questions for your question bank.
+          Select a module to get started.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {CRT_MODULES.map((module) => (
+          <motion.div
+            key={module.id}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 cursor-pointer transition-all duration-300 hover:shadow-xl"
+            onClick={() => handleModuleSelect(module)}
+          >
+            <div className={`w-16 h-16 rounded-full bg-gradient-to-r ${module.color} flex items-center justify-center text-white text-2xl mb-4 mx-auto`}>
+              {module.icon}
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2 text-center">{module.name}</h3>
+            <p className="text-gray-600 text-sm text-center">{module.description}</p>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Uploaded Files Section */}
+      {uploadedFiles.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="mt-12"
+        >
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Uploaded Files</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {uploadedFiles.map((file) => (
+              <div key={file._id} className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-900">{file.filename}</span>
+                  <span className="text-xs text-gray-500">{new Date(file.upload_date).toLocaleDateString()}</span>
+                </div>
+                <p className="text-xs text-gray-600 mb-3">{file.question_count || 0} questions</p>
+                <button
+                  onClick={() => handleViewQuestions(file)}
+                  className="w-full bg-blue-500 text-white py-2 px-4 rounded-md text-sm hover:bg-blue-600 transition-colors"
+                >
+                  View Questions
+                </button>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+    </motion.div>
+  );
+
+  const renderUploadSection = () => (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Upload CRT Questions</h1>
+          <p className="text-gray-600">Module: {CRT_MODULES.find(m => m.id === selectedModule)?.name}</p>
+        </div>
+        <button
+          onClick={handleBackToModules}
+          className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors"
+        >
+          Back to Modules
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Upload Section */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Upload Questions</h2>
+          
+          <div className="mb-6">
+            <button
+              onClick={downloadTemplate}
+              className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors mb-4"
+            >
+              Download Template
+            </button>
+            <p className="text-sm text-gray-600">
+              Download the CSV template to see the required format for uploading questions.
+            </p>
+          </div>
+
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+            <input
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) handleFileUpload(file);
+              }}
+              className="hidden"
+              id="file-upload"
+              disabled={loading}
+            />
+            <label
+              htmlFor="file-upload"
+              className="cursor-pointer block"
+            >
+              <div className="text-4xl mb-4">📁</div>
+              <p className="text-lg font-medium text-gray-900 mb-2">
+                {loading ? 'Uploading...' : 'Click to upload file'}
+              </p>
+              <p className="text-sm text-gray-600">
+                Supports CSV, Excel files
+              </p>
+            </label>
+          </div>
+        </div>
+
+        {/* Add Question Manually */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Add Question Manually</h2>
+          <button
+            onClick={() => setShowAddQuestion(true)}
+            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+          >
+            Add New Question
+          </button>
+        </div>
+      </div>
+
+      {/* Questions List */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-900">Existing Questions</h2>
+          <input
+            type="text"
+            placeholder="Search questions..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div className="space-y-4">
+          {filteredQuestions.map((question, index) => (
+            <div key={question._id || index} className="border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-900">Question {index + 1}</span>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handleEditQuestion(question)}
+                    className="text-blue-500 hover:text-blue-700 text-sm"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteQuestion(question._id)}
+                    className="text-red-500 hover:text-red-700 text-sm"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+              <p className="text-gray-900 mb-2">{question.question}</p>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>A: {question.optionA}</div>
+                <div>B: {question.optionB}</div>
+                <div>C: {question.optionC}</div>
+                <div>D: {question.optionD}</div>
+              </div>
+              <div className="mt-2 text-sm font-medium text-green-600">
+                Answer: {question.answer}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+
+  const renderFileDetails = () => (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">File Questions</h1>
+          <p className="text-gray-600">{selectedFile?.filename}</p>
+        </div>
+        <button
+          onClick={handleBackToModules}
+          className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors"
+        >
+          Back to Modules
+        </button>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-900">Questions</h2>
+          <input
+            type="text"
+            placeholder="Search questions..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div className="space-y-4">
+          {fileQuestions.map((question, index) => (
+            <div key={question._id || index} className="border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-900">Question {index + 1}</span>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handleEditQuestion(question)}
+                    className="text-blue-500 hover:text-blue-700 text-sm"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteQuestion(question._id)}
+                    className="text-red-500 hover:text-red-700 text-sm"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+              <p className="text-gray-900 mb-2">{question.question}</p>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>A: {question.optionA}</div>
+                <div>B: {question.optionB}</div>
+                <div>C: {question.optionC}</div>
+                <div>D: {question.optionD}</div>
+              </div>
+              <div className="mt-2 text-sm font-medium text-green-600">
+                Answer: {question.answer}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+
+  const renderEditQuestionModal = () => (
+    editingQuestion && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Edit Question</h2>
+          <EditQuestionForm
+            question={editingQuestion}
+            onSave={handleSaveEdit}
+            onCancel={() => setEditingQuestion(null)}
+          />
+        </div>
+      </div>
+    )
+  );
+
+  const renderAddQuestionModal = () => (
+    showAddQuestion && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Add New Question</h2>
+          <AddQuestionForm
+            onSave={handleAddQuestion}
+            onCancel={() => setShowAddQuestion(false)}
+          />
+        </div>
+      </div>
+    )
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <SuperAdminSidebar />
+      <div className="flex-1">
+        <Header />
+        <div className="px-4 mt-6">
+          {currentStep === 'modules' && renderModuleCards()}
+          {currentStep === 'upload' && renderUploadSection()}
+          {currentStep === 'questions' && renderFileDetails()}
+        </div>
+      </div>
+      {renderEditQuestionModal()}
+      {renderAddQuestionModal()}
+    </div>
+  );
+};
+
+const EditQuestionForm = ({ question, onSave, onCancel }) => {
+  const [formData, setFormData] = useState({
+    question: question.question || '',
+    optionA: question.optionA || '',
+    optionB: question.optionB || '',
+    optionC: question.optionC || '',
+    optionD: question.optionD || '',
+    answer: question.answer || ''
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Question</label>
+        <textarea
+          value={formData.question}
+          onChange={(e) => handleInputChange('question', e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          rows="3"
+          required
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Option A</label>
+          <input
+            type="text"
+            value={formData.optionA}
+            onChange={(e) => handleInputChange('optionA', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Option B</label>
+          <input
+            type="text"
+            value={formData.optionB}
+            onChange={(e) => handleInputChange('optionB', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Option C</label>
+          <input
+            type="text"
+            value={formData.optionC}
+            onChange={(e) => handleInputChange('optionC', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Option D</label>
+          <input
+            type="text"
+            value={formData.optionD}
+            onChange={(e) => handleInputChange('optionD', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Correct Answer</label>
+        <select
+          value={formData.answer}
+          onChange={(e) => handleInputChange('answer', e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          required
+        >
+          <option value="">Select answer</option>
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+          <option value="D">D</option>
+        </select>
+      </div>
+
+      <div className="flex justify-end space-x-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+        >
+          Save Changes
+        </button>
+      </div>
+    </form>
+  );
+};
+
+const AddQuestionForm = ({ onSave, onCancel }) => {
+  const [formData, setFormData] = useState({
+    question: '',
+    optionA: '',
+    optionB: '',
+    optionC: '',
+    optionD: '',
+    answer: ''
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Question</label>
+        <textarea
+          value={formData.question}
+          onChange={(e) => handleInputChange('question', e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          rows="3"
+          required
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Option A</label>
+          <input
+            type="text"
+            value={formData.optionA}
+            onChange={(e) => handleInputChange('optionA', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Option B</label>
+          <input
+            type="text"
+            value={formData.optionB}
+            onChange={(e) => handleInputChange('optionB', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Option C</label>
+          <input
+            type="text"
+            value={formData.optionC}
+            onChange={(e) => handleInputChange('optionC', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Option D</label>
+          <input
+            type="text"
+            value={formData.optionD}
+            onChange={(e) => handleInputChange('optionD', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Correct Answer</label>
+        <select
+          value={formData.answer}
+          onChange={(e) => handleInputChange('answer', e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          required
+        >
+          <option value="">Select answer</option>
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+          <option value="D">D</option>
+        </select>
+      </div>
+
+      <div className="flex justify-end space-x-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+        >
+          Add Question
+        </button>
+      </div>
+    </form>
+  );
+};
+
+export default CRTUpload;

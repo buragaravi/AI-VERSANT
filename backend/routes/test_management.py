@@ -550,7 +550,8 @@ def get_test_data():
                 'batches': [{'id': str(b['_id']), 'name': b['name']} for b in batches],
                 'levels': [{'id': lid, 'name': name} for lid, name in LEVELS.items()],
                 'modules': [{'id': mid, 'name': name} for mid, name in MODULES.items()],
-                'grammar_categories': [{'id': cid, 'name': name} for cid, name in GRAMMAR_CATEGORIES.items()]
+                'grammar_categories': [{'id': cid, 'name': name} for cid, name in GRAMMAR_CATEGORIES.items()],
+                'crt_categories': [{'id': cid, 'name': name} for cid, name in CRT_CATEGORIES.items()]
             }
         }), 200
         

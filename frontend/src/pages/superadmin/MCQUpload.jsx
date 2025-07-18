@@ -380,11 +380,6 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
         >
           Back
         </button>
-        <div className="text-sm text-gray-600">
-          {existingQuestions.length > 0 && (
-            <span>Existing questions in this level: {existingQuestions.length}</span>
-          )}
-        </div>
       </div>
     </div>
   );

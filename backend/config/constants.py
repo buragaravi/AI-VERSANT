@@ -13,7 +13,8 @@ MODULES = {
     'READING': 'Reading',
     'WRITING': 'Writing',
     'GRAMMAR': 'Grammar',
-    'VOCABULARY': 'Vocabulary'
+    'VOCABULARY': 'Vocabulary',
+    'CRT': 'CRT'
 }
 
 # Grammar Subcategories
@@ -30,6 +31,13 @@ GRAMMAR_CATEGORIES = {
     'ARTICLE': 'Article',
     'TENSE': 'Tense',
     'PREPOSITION': 'Preposition'
+}
+
+# CRT Subcategories
+CRT_CATEGORIES = {
+    'APTITUDE': 'Aptitude',
+    'REASONING': 'Reasoning',
+    'TECHNICAL': 'Technical'
 }
 
 # Difficulty Levels
@@ -59,6 +67,12 @@ LEVELS = {
 LEVELS.update({
     f'GRAMMAR_{cat_id}': {'name': cat_name, 'module_id': 'GRAMMAR'}
     for cat_id, cat_name in GRAMMAR_CATEGORIES.items()
+})
+
+# CRT (categories as levels)
+LEVELS.update({
+    f'CRT_{cat_id}': {'name': cat_name, 'module_id': 'CRT'}
+    for cat_id, cat_name in CRT_CATEGORIES.items()
 })
 
 # Test Types
