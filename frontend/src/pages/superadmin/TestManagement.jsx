@@ -1800,7 +1800,7 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
             <div><strong className="text-gray-500 block">Name:</strong><p className="text-gray-800">{testData.testName}</p></div>
             <div><strong className="text-gray-500 block">Type:</strong><p className="text-gray-800">{testData.testType}</p></div>
-            <div><strong className="text-gray-500 block">Module:</strong><p className="text-gray-800">{testData.module}</p></div>
+            <div><strong className="text-gray-500 block">Module:</strong><p className="text-gray-800">{typeof testData.module === 'object' ? testData.module.name || testData.module.label : testData.module}</p></div>
             {testData.subcategory ? (
               <div><strong className="text-gray-500 block">Category:</strong><p className="text-gray-800">{testData.subcategory}</p></div>
             ) : testData.level ? (
@@ -1907,6 +1907,7 @@ const ModuleQuestionUpload = ({ onBack }) => {
   const [modules, setModules] = useState([]);
   const [levels, setLevels] = useState([]);
   const [currentStep, setCurrentStep] = useState('modules'); // 'modules' or 'levels'
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const { success, error } = useNotification();
   const [loading, setLoading] = useState(false);
   const [notifyModalOpen, setNotifyModalOpen] = useState(false);
