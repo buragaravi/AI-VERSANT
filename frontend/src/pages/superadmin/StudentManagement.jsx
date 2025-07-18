@@ -295,16 +295,16 @@ const StudentManagement = () => {
     }, [accessStatus]);
 
     return (
-        <div className="min-h-screen bg-gray-100">
+        <div className="min-h-screen bg-gray-50">
             <SuperAdminSidebar />
-            <div className="ml-64 flex-1">
+            <div className="flex-1">
                 <Header />
-                <main className="px-6 lg:px-10 py-8">
+                <main className="px-4 mt-6">
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                         <div className="flex justify-between items-center mb-8">
                             <div>
-                                <h1 className="text-4xl font-extrabold text-headline tracking-tight">Student Management</h1>
-                                <p className="mt-2 text-lg text-paragraph">View and manage student information across the system.</p>
+                                <h1 className="text-2xl font-semibold text-gray-800 mb-2">Student Management</h1>
+                                <p className="text-gray-600">View and manage student information across the system.</p>
                             </div>
                         </div>
 
