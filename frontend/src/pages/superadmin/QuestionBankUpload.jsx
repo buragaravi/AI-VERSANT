@@ -441,6 +441,20 @@ const QuestionBankUpload = () => {
           </p>
         </div>
 
+        {/* Module Info */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-medium text-blue-800">Available Modules:</span>
+              <span className="text-sm text-blue-900 bg-blue-100 px-2 py-1 rounded">{MCQ_MODULES.length}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-medium text-blue-800">Total Uploaded Files:</span>
+              <span className="text-sm text-blue-900 bg-blue-100 px-2 py-1 rounded">{uploadedFiles.length}</span>
+            </div>
+          </div>
+        </div>
+
         {/* Module Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
           {MCQ_MODULES.map((module, index) => (
@@ -542,6 +556,20 @@ const QuestionBankUpload = () => {
           </p>
           </div>
 
+          {/* Selected Module Info */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-medium text-blue-800">Selected Module:</span>
+                <span className="text-sm text-blue-900 bg-blue-100 px-2 py-1 rounded">{selectedModule}</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-medium text-blue-800">Available Levels:</span>
+                <span className="text-sm text-blue-900 bg-blue-100 px-2 py-1 rounded">{levels.length}</span>
+              </div>
+            </div>
+          </div>
+
           {/* Levels Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {levels.map((level, index) => (
@@ -601,11 +629,29 @@ const QuestionBankUpload = () => {
             </button>
             
             <h1 className="text-2xl font-semibold text-gray-800 mb-2">
-              Upload MCQs for {selectedModule} - {selectedLevel?.name}
+              Upload Questions for {selectedModule} - {selectedLevel?.name}
             </h1>
             <p className="text-gray-600">
-              Upload your CSV or XLSX file with MCQ questions for {selectedLevel?.name}
+              Upload your CSV or XLSX file with questions for {selectedLevel?.name}
             </p>
+          </div>
+
+          {/* Selected Module and Level Info */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-medium text-blue-800">Module:</span>
+                <span className="text-sm text-blue-900 bg-blue-100 px-2 py-1 rounded">{selectedModule}</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-medium text-blue-800">Level:</span>
+                <span className="text-sm text-blue-900 bg-blue-100 px-2 py-1 rounded">{selectedLevel?.name}</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-medium text-blue-800">Level ID:</span>
+                <span className="text-sm text-blue-900 bg-blue-100 px-2 py-1 rounded">{selectedLevel?.id}</span>
+              </div>
+            </div>
           </div>
 
           {/* Upload Card */}
@@ -731,7 +777,7 @@ const QuestionBankUpload = () => {
           ) : (
             <div className="text-center py-8 text-gray-500">
               <div className="text-4xl mb-4">📝</div>
-              <p>No questions uploaded yet for this level</p>
+              <p>No questions uploaded yet for {selectedModule} - {selectedLevel?.name}</p>
               <p className="text-sm">Upload your first question file to get started</p>
             </div>
           )}

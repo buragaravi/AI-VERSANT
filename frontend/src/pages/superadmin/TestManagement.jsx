@@ -1255,30 +1255,51 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
   const fetchQuestionsFromBank = async () => {
     setLoadingBankQuestions(true);
     try {
-      // Map CRT levels to proper backend categories
+      // Determine the correct level_id based on module type
       let levelId = testData.level;
+      let subcategory = testData.subcategory;
+      
       if (testData.module === 'CRT') {
+        // Map CRT levels to proper backend categories
         const crtLevelMapping = {
           'Aptitude': 'CRT_APTITUDE',
           'Reasoning': 'CRT_REASONING', 
           'Technical': 'CRT_TECHNICAL'
         };
         levelId = crtLevelMapping[testData.level] || testData.level;
+      } else if (testData.module === 'GRAMMAR') {
+        // For Grammar, use subcategory as level_id
+        levelId = testData.subcategory;
+        subcategory = testData.subcategory;
+      } else {
+        // For other modules (VOCABULARY, READING, LISTENING, SPEAKING, WRITING)
+        levelId = testData.level;
+        subcategory = null;
       }
+      
+      console.log('Fetching questions for:', {
+        module_id: testData.module,
+        level_id: levelId,
+        subcategory: subcategory
+      });
       
       const response = await api.post('/test-management/question-bank/fetch-for-test', {
         module_id: testData.module,
-        level_id: levelId || testData.subcategory,
-        subcategory: testData.subcategory,
+        level_id: levelId,
+        subcategory: subcategory,
         count: 50 // Fetch more questions for selection
       });
       
       if (response.data.success) {
         setBankQuestions(response.data.questions);
+        console.log('Fetched questions:', response.data.questions.length);
+      } else {
+        console.error('Failed to fetch questions:', response.data.message);
+        setError('Failed to fetch questions from bank');
       }
     } catch (error) {
       console.error('Error fetching questions from bank:', error);
-      error('Failed to fetch questions from bank');
+      setError('Failed to fetch questions from bank');
     } finally {
       setLoadingBankQuestions(false);
     }
@@ -1286,6 +1307,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
 
   const handleQuestionSourceChange = (source) => {
     setQuestionSource(source);
+    setError(''); // Clear any previous errors
     if (source === 'manual') {
       setQuestions([]);
       setSelectedBankQuestions([]);
@@ -1320,6 +1342,30 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
     nextStep();
   };
 
+  // Get display names for module and level
+  const getModuleDisplayName = () => {
+    const moduleNames = {
+      'GRAMMAR': 'Grammar',
+      'VOCABULARY': 'Vocabulary', 
+      'READING': 'Reading',
+      'LISTENING': 'Listening',
+      'SPEAKING': 'Speaking',
+      'WRITING': 'Writing',
+      'CRT': 'CRT'
+    };
+    return moduleNames[testData.module] || testData.module;
+  };
+
+  const getLevelDisplayName = () => {
+    if (testData.module === 'GRAMMAR') {
+      return testData.subcategory || 'Unknown Category';
+    } else if (testData.module === 'CRT') {
+      return testData.level || 'Unknown Level';
+    } else {
+      return testData.level || 'Unknown Level';
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-3">
@@ -1327,6 +1373,26 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
           <FileQuestion className="h-6 w-6"/>
         </div>
         <h2 className="text-2xl font-bold">Question Upload</h2>
+      </div>
+
+      {/* Selected Module and Level Info */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-blue-800">Module:</span>
+            <span className="text-sm text-blue-900 bg-blue-100 px-2 py-1 rounded">{getModuleDisplayName()}</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-blue-800">Level:</span>
+            <span className="text-sm text-blue-900 bg-blue-100 px-2 py-1 rounded">{getLevelDisplayName()}</span>
+          </div>
+          {testData.module === 'GRAMMAR' && testData.subcategory && (
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-medium text-blue-800">Category:</span>
+              <span className="text-sm text-blue-900 bg-blue-100 px-2 py-1 rounded">{testData.subcategory}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Question Source Selection */}
@@ -1386,15 +1452,15 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
             </div>
           ) : bankQuestions.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              <p>No questions found in the bank for this module/level.</p>
-              <p className="text-sm mt-2">Please upload questions to the bank first.</p>
+              <p>No questions found in the bank for {getModuleDisplayName()} - {getLevelDisplayName()}.</p>
+              <p className="text-sm mt-2">Please upload questions to the bank first using the Question Bank Upload section.</p>
             </div>
           ) : (
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {bankQuestions.map((question, index) => {
                   const isTechnicalQuestion = question.question_type === 'technical' || 
-                    (testData.module === 'CRT' && testData.level === 'CRT_TECHNICAL');
+                    (testData.module === 'CRT' && testData.level === 'Technical');
                   
                   return (
                     <div
@@ -1481,27 +1547,46 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
 
       {/* Selected Questions Summary */}
       {questions.length > 0 && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="font-semibold text-green-800">
-                {questions.length} Questions Selected
-              </h4>
-              <p className="text-sm text-green-600">
-                Ready to proceed to next step
-              </p>
-            </div>
-            <button
-              onClick={handleNext}
-              className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600"
-            >
-              Continue
-            </button>
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-lg font-semibold mb-4">Selected Questions ({questions.length})</h3>
+          <div className="space-y-2">
+            {questions.map((question, index) => (
+              <div key={index} className="p-3 bg-gray-50 rounded border">
+                <div className="font-medium">Q{index + 1}: {question.question}</div>
+                {question.optionA && (
+                  <div className="text-sm text-gray-600 mt-1">
+                    A: {question.optionA} | B: {question.optionB} | C: {question.optionC} | D: {question.optionD}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {error && <div className="text-red-600 mt-2">{error}</div>}
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-600">{error}</p>
+        </div>
+      )}
+
+      {/* Navigation Buttons */}
+      <div className="flex justify-between">
+        <button
+          onClick={prevStep}
+          className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+        >
+          Previous
+        </button>
+        <button
+          onClick={handleNext}
+          disabled={questions.length === 0}
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
 };
