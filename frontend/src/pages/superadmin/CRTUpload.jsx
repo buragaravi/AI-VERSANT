@@ -140,15 +140,15 @@ const CRTUpload = () => {
     if (selectedModule === 'TECHNICAL') {
       templateData = [
         {
-          Question: 'Perfect Number\nProblem Statement:\nWrite a program to check whether a given positive integer is a perfect number. A perfect number is a positive integer equal to the sum of its proper divisors except itself.\n\nSample Input/Output Test Cases:\nInput\tOutput\n6\t6 is a perfect number\n15\t15 is not a perfect number\n28\t28 is a perfect number',
+          Question: 'Question 1: Perfect Number\nProblem:\nWrite a program to check whether a given positive integer is a perfect number. A perfect number is a positive integer equal to the sum of its proper divisors except itself.\n\nSample Test Cases:\n\nInput\tOutput\n6\t6 is a perfect number\n15\t15 is not a perfect number\n28\t28 is a perfect number',
           TestCases: '6\n15\n28',
           ExpectedOutput: '6 is a perfect number\n15 is not a perfect number\n28 is a perfect number',
           Language: 'python'
         },
         {
-          Question: 'Anagram Check\nProblem Statement:\nWrite a program that checks if two given strings are anagrams of each other (contain the same characters in any order).\n\nSample Input/Output Test Cases:\nInput (String 1, String 2)\tOutput\nlisten, silent\tAnagram\nhello, world\tNot Anagram\ntriangle, integral\tAnagram',
-          TestCases: 'listen silent\nhello world\ntriangle integral',
-          ExpectedOutput: 'Anagram\nNot Anagram\nAnagram',
+          Question: 'Question 2: Non-Repeating Elements in Array\nProblem:\nWrite a program to print all elements that do not repeat in a given array of integers.\n\nSample Test Cases:\n\nInput\tOutput\n4 5 4 3 6 3 7\t5 6 7\n1 2 1 2 3 4 5\t3 4 5\n10 10 20 30 20\t30',
+          TestCases: '4 5 4 3 6 3 7\n1 2 1 2 3 4 5\n10 10 20 30 20',
+          ExpectedOutput: '5 6 7\n3 4 5\n30',
           Language: 'python'
         }
       ];
@@ -593,10 +593,12 @@ const CRTUpload = () => {
               {selectedModule === 'TECHNICAL' ? (
                 <div className="space-y-2 text-sm">
                   <div className="p-2 bg-gray-50 rounded border">
-                    <strong>Test Cases:</strong> {question.testCases || 'N/A'}
+                    <strong>Test Cases:</strong>
+                    <pre className="mt-1 text-xs font-mono bg-white p-2 rounded border">{question.testCases || 'N/A'}</pre>
                   </div>
                   <div className="p-2 bg-gray-50 rounded border">
-                    <strong>Expected Output:</strong> {question.expectedOutput || 'N/A'}
+                    <strong>Expected Output:</strong>
+                    <pre className="mt-1 text-xs font-mono bg-white p-2 rounded border">{question.expectedOutput || 'N/A'}</pre>
                   </div>
                   <div className="p-2 bg-gray-50 rounded border">
                     <strong>Language:</strong> {question.language || 'python'}

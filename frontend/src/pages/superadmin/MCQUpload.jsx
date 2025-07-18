@@ -355,7 +355,7 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
             </p>
             <p className="text-sm text-gray-500 mb-4">
               {levelId === 'CRT_TECHNICAL' || levelId === 'TECHNICAL' 
-                ? 'Supports CSV and Excel files with columns: Question, TestCases, ExpectedOutput, Language'
+                ? 'Supports CSV and Excel files with columns: Question (with problem statement and sample test cases), TestCases, ExpectedOutput, Language'
                 : 'Supports CSV, XLSX, XLS, and TXT files with columns: Question, A, B, C, D, Answer'
               }
             </p>
@@ -416,10 +416,12 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
                       {isTechnicalModule ? (
                         <div className="space-y-2 text-sm text-gray-600">
                           <div className="p-2 bg-white rounded border">
-                            <strong>Test Cases:</strong> {q.testCases}
+                            <strong>Test Cases:</strong>
+                            <pre className="mt-1 text-xs font-mono bg-gray-50 p-2 rounded">{q.testCases}</pre>
                           </div>
                           <div className="p-2 bg-white rounded border">
-                            <strong>Expected Output:</strong> {q.expectedOutput}
+                            <strong>Expected Output:</strong>
+                            <pre className="mt-1 text-xs font-mono bg-gray-50 p-2 rounded">{q.expectedOutput}</pre>
                           </div>
                           <div className="p-2 bg-white rounded border">
                             <strong>Language:</strong> {q.language}
