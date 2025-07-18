@@ -1267,8 +1267,20 @@ def upload_module_questions():
         module_id = data.get('module_id')
         level_id = data.get('level_id')
         questions = data.get('questions')
-        if not module_id or not level_id or not questions:
-            return jsonify({'success': False, 'message': 'module_id, level_id, and questions are required.'}), 400
+        if not module_id or not questions:
+            return jsonify({'success': False, 'message': 'module_id and questions are required.'}), 400
+        
+        # Handle default level case
+        if not level_id or level_id == 'DEFAULT':
+            # Set a default level based on module
+            if module_id == 'GRAMMAR':
+                level_id = 'GRAMMAR_BASIC'
+            elif module_id == 'VOCABULARY':
+                level_id = 'VOCABULARY_BASIC'
+            elif module_id == 'READING':
+                level_id = 'READING_BASIC'
+            else:
+                level_id = f'{module_id}_BASIC'
         
         # Store each question in a question_bank collection
         inserted = []
@@ -1723,4 +1735,161 @@ def get_tests_for_instance(instance_id):
         return jsonify({'success': True, 'data': test_list}), 200
     except Exception as e:
         current_app.logger.error(f"Error fetching tests for instance: {e}")
-        return jsonify({'success': False, 'message': str(e)}), 500 
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+# --- QUESTION CRUD ENDPOINTS ---
+
+@test_management_bp.route('/questions/<question_id>', methods=['DELETE'])
+@jwt_required()
+@require_superadmin
+def delete_question(question_id):
+    """Delete a specific question from the question bank"""
+    try:
+        # Validate question_id format
+        if not ObjectId.is_valid(question_id):
+            return jsonify({'success': False, 'message': 'Invalid question ID format'}), 400
+        
+        # Check if question exists
+        question = mongo_db.question_bank.find_one({'_id': ObjectId(question_id)})
+        if not question:
+            return jsonify({'success': False, 'message': 'Question not found'}), 404
+        
+        # Check if question is used in any tests
+        if question.get('used_in_tests') and len(question['used_in_tests']) > 0:
+            return jsonify({
+                'success': False, 
+                'message': 'Cannot delete question as it is used in existing tests'
+            }), 400
+        
+        # Delete the question
+        result = mongo_db.question_bank.delete_one({'_id': ObjectId(question_id)})
+        
+        if result.deleted_count > 0:
+            return jsonify({'success': True, 'message': 'Question deleted successfully'}), 200
+        else:
+            return jsonify({'success': False, 'message': 'Failed to delete question'}), 500
+            
+    except Exception as e:
+        current_app.logger.error(f"Error deleting question: {e}")
+        return jsonify({'success': False, 'message': f'Failed to delete question: {str(e)}'}), 500
+
+@test_management_bp.route('/questions/<question_id>', methods=['PUT'])
+@jwt_required()
+@require_superadmin
+def update_question(question_id):
+    """Update a specific question in the question bank"""
+    try:
+        # Validate question_id format
+        if not ObjectId.is_valid(question_id):
+            return jsonify({'success': False, 'message': 'Invalid question ID format'}), 400
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+        
+        # Validate required fields
+        required_fields = ['question', 'optionA', 'optionB', 'optionC', 'optionD', 'answer']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'success': False, 'message': f'{field} is required'}), 400
+        
+        # Check if question exists
+        question = mongo_db.question_bank.find_one({'_id': ObjectId(question_id)})
+        if not question:
+            return jsonify({'success': False, 'message': 'Question not found'}), 404
+        
+        # Prepare update data
+        update_data = {
+            'question': data['question'],
+            'optionA': data['optionA'],
+            'optionB': data['optionB'],
+            'optionC': data['optionC'],
+            'optionD': data['optionD'],
+            'answer': data['answer'],
+            'instructions': data.get('instructions', ''),
+            'updated_at': datetime.utcnow()
+        }
+        
+        # Update the question
+        result = mongo_db.question_bank.update_one(
+            {'_id': ObjectId(question_id)},
+            {'$set': update_data}
+        )
+        
+        if result.modified_count > 0:
+            return jsonify({'success': True, 'message': 'Question updated successfully'}), 200
+        else:
+            return jsonify({'success': False, 'message': 'No changes made to question'}), 400
+            
+    except Exception as e:
+        current_app.logger.error(f"Error updating question: {e}")
+        return jsonify({'success': False, 'message': f'Failed to update question: {str(e)}'}), 500
+
+@test_management_bp.route('/uploaded-files/<file_id>/questions', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def add_question_to_file(file_id):
+    """Add a new question to a specific upload session"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+        
+        # Validate required fields
+        required_fields = ['question', 'optionA', 'optionB', 'optionC', 'optionD', 'answer']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'success': False, 'message': f'{field} is required'}), 400
+        
+        # Parse file_id to get module and level info
+        # The file_id is actually a group key from the aggregation pipeline
+        # We need to extract module_id from it
+        if '_' in file_id:
+            module_id = file_id.split('_')[0]
+        else:
+            module_id = file_id
+        
+        # Get the most recent question for this module to extract level_id
+        recent_question = mongo_db.question_bank.find_one(
+            {'module_id': module_id},
+            sort=[('created_at', -1)]
+        )
+        
+        if not recent_question:
+            return jsonify({'success': False, 'message': 'No existing questions found for this module'}), 404
+        
+        level_id = recent_question.get('level_id')
+        
+        # Create new question document
+        new_question = {
+            'module_id': module_id,
+            'level_id': level_id,
+            'question': data['question'],
+            'optionA': data['optionA'],
+            'optionB': data['optionB'],
+            'optionC': data['optionC'],
+            'optionD': data['optionD'],
+            'answer': data['answer'],
+            'instructions': data.get('instructions', ''),
+            'used_in_tests': [],
+            'used_count': 0,
+            'last_used': None,
+            'created_at': datetime.utcnow()
+        }
+        
+        # Insert the new question
+        result = mongo_db.question_bank.insert_one(new_question)
+        
+        if result.inserted_id:
+            new_question['_id'] = str(result.inserted_id)
+            return jsonify({
+                'success': True, 
+                'message': 'Question added successfully',
+                'data': new_question
+            }), 201
+        else:
+            return jsonify({'success': False, 'message': 'Failed to add question'}), 500
+            
+    except Exception as e:
+        current_app.logger.error(f"Error adding question: {e}")
+        return jsonify({'success': False, 'message': f'Failed to add question: {str(e)}'}), 500 
