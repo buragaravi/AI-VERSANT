@@ -2,8 +2,10 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from bson import ObjectId
 import bcrypt
+import csv
+import io
 from mongo import mongo_db
-from config.constants import ROLES, MODULES, LEVELS, TEST_TYPES
+from config.constants import ROLES, MODULES, LEVELS, TEST_TYPES, WRITING_CONFIG
 from datetime import datetime
 
 superadmin_bp = Blueprint('superadmin', __name__)
@@ -979,6 +981,307 @@ def get_or_create_batch_course_instance():
         return jsonify({'success': False, 'message': 'Missing batch_id or course_id'}), 400
     instance_id = mongo_db.find_or_create_batch_course_instance(ObjectId(batch_id), ObjectId(course_id))
     return jsonify({'success': True, 'instance_id': str(instance_id)}), 200
+
+@superadmin_bp.route('/writing-upload', methods=['POST'])
+@jwt_required()
+def writing_upload():
+    """Upload writing paragraphs with validation"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': 'No file uploaded'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'message': 'No file selected'}), 400
+        
+        if not file.filename.endswith('.csv'):
+            return jsonify({'success': False, 'message': 'Please upload a CSV file'}), 400
+        
+        # Read CSV content
+        csv_content = file.read().decode('utf-8')
+        csv_reader = csv.DictReader(io.StringIO(csv_content))
+        
+        # Validate required columns
+        required_columns = ['level', 'topic', 'paragraph', 'instructions']
+        headers = csv_reader.fieldnames
+        
+        if not headers:
+            return jsonify({'success': False, 'message': 'CSV file is empty'}), 400
+        
+        missing_columns = [col for col in required_columns if col not in headers]
+        if missing_columns:
+            return jsonify({
+                'success': False, 
+                'message': f'Missing required columns: {", ".join(missing_columns)}'
+            }), 400
+        
+        # Process and validate paragraphs
+        paragraphs = []
+        errors = []
+        valid_levels = ['Beginner', 'Intermediate', 'Advanced']
+        
+        for row_num, row in enumerate(csv_reader, start=2):  # Start from 2 because row 1 is headers
+            try:
+                level = row['level'].strip()
+                topic = row['topic'].strip()
+                paragraph = row['paragraph'].strip()
+                instructions = row.get('instructions', '').strip()
+                
+                # Validate level
+                if level not in valid_levels:
+                    errors.append(f"Row {row_num}: Invalid level '{level}'. Must be one of {valid_levels}")
+                    continue
+                
+                # Validate paragraph content
+                if not paragraph:
+                    errors.append(f"Row {row_num}: Paragraph is empty")
+                    continue
+                
+                # Validate character count
+                char_count = len(paragraph)
+                if char_count < WRITING_CONFIG['MIN_CHARACTERS']:
+                    errors.append(f"Row {row_num}: Character count ({char_count}) is below minimum ({WRITING_CONFIG['MIN_CHARACTERS']})")
+                    continue
+                if char_count > WRITING_CONFIG['MAX_CHARACTERS']:
+                    errors.append(f"Row {row_num}: Character count ({char_count}) exceeds maximum ({WRITING_CONFIG['MAX_CHARACTERS']})")
+                    continue
+                
+                # Validate word count
+                word_count = len(paragraph.split())
+                if word_count < WRITING_CONFIG['MIN_WORDS']:
+                    errors.append(f"Row {row_num}: Word count ({word_count}) is below minimum ({WRITING_CONFIG['MIN_WORDS']})")
+                    continue
+                if word_count > WRITING_CONFIG['MAX_WORDS']:
+                    errors.append(f"Row {row_num}: Word count ({word_count}) exceeds maximum ({WRITING_CONFIG['MAX_WORDS']})")
+                    continue
+                
+                # Validate sentence count
+                sentence_count = len([s for s in paragraph.split('.') if s.strip()])
+                if sentence_count < WRITING_CONFIG['MIN_SENTENCES']:
+                    errors.append(f"Row {row_num}: Sentence count ({sentence_count}) is below minimum ({WRITING_CONFIG['MIN_SENTENCES']})")
+                    continue
+                if sentence_count > WRITING_CONFIG['MAX_SENTENCES']:
+                    errors.append(f"Row {row_num}: Sentence count ({sentence_count}) exceeds maximum ({WRITING_CONFIG['MAX_SENTENCES']})")
+                    continue
+                
+                # Store paragraph data
+                paragraph_data = {
+                    'module_id': 'WRITING',
+                    'level_id': f'WRITING_{level.upper()}',
+                    'level': level,
+                    'topic': topic,
+                    'paragraph': paragraph,
+                    'instructions': instructions,
+                    'character_count': char_count,
+                    'word_count': word_count,
+                    'sentence_count': sentence_count,
+                    'question_type': 'paragraph',
+                    'created_by': current_user_id,
+                    'created_at': datetime.utcnow()
+                }
+                
+                paragraphs.append(paragraph_data)
+                
+            except Exception as e:
+                errors.append(f"Row {row_num}: Error processing row - {str(e)}")
+        
+        if errors:
+            return jsonify({
+                'success': False,
+                'message': f'Validation failed with {len(errors)} errors',
+                'errors': errors
+            }), 400
+        
+        if not paragraphs:
+            return jsonify({'success': False, 'message': 'No valid paragraphs found'}), 400
+        
+        # Insert paragraphs into database
+        inserted_count = 0
+        for paragraph_data in paragraphs:
+            try:
+                mongo_db.question_bank.insert_one(paragraph_data)
+                inserted_count += 1
+            except Exception as e:
+                errors.append(f"Failed to insert paragraph '{paragraph_data['topic']}': {str(e)}")
+        
+        if errors:
+            return jsonify({
+                'success': bool(inserted_count),
+                'message': f'Upload completed with {len(errors)} errors',
+                'data': {
+                    'inserted_count': inserted_count,
+                    'total_count': len(paragraphs)
+                },
+                'errors': errors
+            }), 207 if inserted_count > 0 else 500
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully uploaded {inserted_count} writing paragraphs',
+            'data': {
+                'inserted_count': inserted_count,
+                'total_count': len(paragraphs)
+            }
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in writing upload: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Upload failed: {str(e)}'
+        }), 500
+
+@superadmin_bp.route('/sentence-upload', methods=['POST'])
+@jwt_required()
+def sentence_upload():
+    """Upload sentences for listening and speaking modules"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': 'No file uploaded'}), 400
+        
+        file = request.files['file']
+        module_id = request.form.get('module_id')
+        level_id = request.form.get('level_id')
+        level = request.form.get('level')
+        
+        if file.filename == '':
+            return jsonify({'success': False, 'message': 'No file selected'}), 400
+        
+        if not file.filename.endswith(('.csv', '.txt')):
+            return jsonify({'success': False, 'message': 'Please upload a CSV or TXT file'}), 400
+        
+        if not module_id or not level_id or not level:
+            return jsonify({'success': False, 'message': 'Module ID, Level ID, and Level are required'}), 400
+        
+        # Validate module and level
+        valid_modules = ['LISTENING', 'SPEAKING']
+        valid_levels = ['Beginner', 'Intermediate', 'Advanced']
+        
+        if module_id not in valid_modules:
+            return jsonify({'success': False, 'message': f'Invalid module. Must be one of {valid_modules}'}), 400
+        
+        if level not in valid_levels:
+            return jsonify({'success': False, 'message': f'Invalid level. Must be one of {valid_levels}'}), 400
+        
+        # Read file content
+        content = file.read().decode('utf-8')
+        
+        # Parse sentences based on file type
+        sentences = []
+        if file.filename.endswith('.csv'):
+            # Parse CSV content
+            csv_reader = csv.reader(io.StringIO(content))
+            for row in csv_reader:
+                if row and row[0].strip():
+                    sentences.extend([s.strip() for s in row[0].split('.') if s.strip()])
+        else:
+            # Parse TXT content
+            sentences = [s.strip() for s in content.split('\n') if s.strip()]
+        
+        # Validate sentences
+        valid_sentences = []
+        errors = []
+        
+        for i, sentence in enumerate(sentences, start=1):
+            try:
+                # Basic validation
+                if not sentence:
+                    continue
+                
+                if len(sentence) < 10:
+                    errors.append(f"Sentence {i}: Too short (minimum 10 characters)")
+                    continue
+                
+                if len(sentence) > 200:
+                    errors.append(f"Sentence {i}: Too long (maximum 200 characters)")
+                    continue
+                
+                # Check punctuation
+                if not sentence.rstrip().endswith(('.', '!', '?')):
+                    errors.append(f"Sentence {i}: Must end with proper punctuation (.!?)")
+                    continue
+                
+                valid_sentences.append(sentence)
+                
+            except Exception as e:
+                errors.append(f"Sentence {i}: Error processing - {str(e)}")
+        
+        if errors:
+            return jsonify({
+                'success': False,
+                'message': f'Validation failed with {len(errors)} errors',
+                'errors': errors[:10]  # Limit to first 10 errors
+            }), 400
+        
+        if not valid_sentences:
+            return jsonify({'success': False, 'message': 'No valid sentences found'}), 400
+        
+        # Insert sentences into database
+        inserted_count = 0
+        for sentence in valid_sentences:
+            try:
+                sentence_data = {
+                    'module_id': module_id,
+                    'level_id': level_id,
+                    'level': level,
+                    'sentence': sentence,
+                    'question_type': 'sentence',
+                    'created_by': current_user_id,
+                    'created_at': datetime.utcnow()
+                }
+                
+                mongo_db.question_bank.insert_one(sentence_data)
+                inserted_count += 1
+                
+            except Exception as e:
+                errors.append(f"Failed to insert sentence '{sentence[:50]}...': {str(e)}")
+        
+        if errors:
+            return jsonify({
+                'success': bool(inserted_count),
+                'message': f'Upload completed with {len(errors)} errors',
+                'data': {
+                    'inserted_count': inserted_count,
+                    'total_count': len(valid_sentences)
+                },
+                'errors': errors[:10]
+            }), 207 if inserted_count > 0 else 500
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully uploaded {inserted_count} sentences for {module_id} - {level}',
+            'data': {
+                'inserted_count': inserted_count,
+                'total_count': len(valid_sentences),
+                'module_id': module_id,
+                'level': level
+            }
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in sentence upload: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Upload failed: {str(e)}'
+        }), 500
 
 @superadmin_bp.route('/migrate-batch-course-instances', methods=['POST'])
 @jwt_required()

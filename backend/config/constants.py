@@ -84,7 +84,9 @@ TEST_TYPES = {
 # Question Types
 QUESTION_TYPES = {
     'AUDIO': 'audio',
-    'MCQ': 'mcq'
+    'MCQ': 'mcq',
+    'SENTENCE': 'sentence',
+    'PARAGRAPH': 'paragraph'
 }
 
 # Status Values
@@ -99,6 +101,16 @@ STATUS = {
 # JWT Configuration
 JWT_ACCESS_TOKEN_EXPIRES = 3600  # 1 hour
 JWT_REFRESH_TOKEN_EXPIRES = 86400  # 24 hours
+
+# Writing Module Configuration
+WRITING_CONFIG = {
+    'MIN_CHARACTERS': 200,
+    'MAX_CHARACTERS': 400,
+    'MIN_WORDS': 80,
+    'MAX_WORDS': 120,
+    'MIN_SENTENCES': 5,
+    'MAX_SENTENCES': 8
+}
 
 # File Upload Limits
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB

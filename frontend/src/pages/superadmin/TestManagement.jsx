@@ -23,6 +23,7 @@ import AudioUpload from './AudioUpload';
 import SentenceUpload from './SentenceUpload';
 import ReadingUpload from './ReadingUpload';
 import TestQuestionUpload from './TestQuestionUpload';
+import WritingUpload from './WritingUpload';
 
 // Config for modules and levels
 const MODULE_CONFIG = {
@@ -44,26 +45,29 @@ const MODULE_CONFIG = {
     levels: ['Beginner', 'Intermediate', 'Advanced'],
     uploadComponent: ReadingUpload,
   },
-  CRT: {
-    label: 'CRT',
-    type: 'MCQ',
-    levels: ['Aptitude', 'Reasoning', 'Technical'],
-    uploadComponent: MCQUpload,
-  },
   LISTENING: {
     label: 'Listening',
-    type: 'AUDIO',
+    type: 'SENTENCE',
+    levels: ['Beginner', 'Intermediate', 'Advanced'],
     uploadComponent: SentenceUpload,
   },
   SPEAKING: {
     label: 'Speaking',
     type: 'SENTENCE',
+    levels: ['Beginner', 'Intermediate', 'Advanced'],
     uploadComponent: SentenceUpload,
   },
   WRITING: {
     label: 'Writing',
-    type: 'TEXT',
-    uploadComponent: SentenceUpload, // Replace with WritingUpload if available
+    type: 'PARAGRAPH',
+    levels: ['Beginner', 'Intermediate', 'Advanced'],
+    uploadComponent: WritingUpload,
+  },
+  CRT: {
+    label: 'CRT',
+    type: 'MCQ',
+    levels: ['Aptitude', 'Reasoning', 'Technical'],
+    uploadComponent: MCQUpload,
   },
 };
 

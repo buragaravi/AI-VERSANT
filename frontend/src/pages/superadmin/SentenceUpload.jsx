@@ -1,93 +1,405 @@
 import React, { useState } from 'react';
+import { FaUpload, FaFileAlt, FaTrash, FaHeadphones, FaMicrophone } from 'react-icons/fa';
 import Papa from 'papaparse';
 
-export default function SentenceUpload({ sentences, setSentences, onNext, onBack, moduleName }) {
+const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [selectedLevel, setSelectedLevel] = useState('Beginner');
   const [previewSentences, setPreviewSentences] = useState([]);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
-  const [error, setError] = useState('');
 
-  const processSentencesForPreview = (parsed) => {
-    const existing = new Set(sentences.map(s => s.trim().toLowerCase()));
-    const preview = [];
-    parsed.forEach(s => {
-      const text = s.trim();
-      if (!text) return;
-      if (existing.has(text.toLowerCase())) {
-        preview.push({ text, status: 'Duplicate' });
-      } else {
-        preview.push({ text, status: 'New' });
-        existing.add(text.toLowerCase());
-      }
-    });
-    if (preview.length === 0) {
-      setError('No valid sentences found.');
-      return;
+  const levels = ['Beginner', 'Intermediate', 'Advanced'];
+  
+  const moduleConfig = {
+    LISTENING: {
+      icon: FaHeadphones,
+      title: 'Listening Comprehension',
+      description: 'Upload listening comprehension sentences with audio prompts',
+      color: 'yellow'
+    },
+    SPEAKING: {
+      icon: FaMicrophone,
+      title: 'Speaking Practice',
+      description: 'Upload speaking practice sentences with prompts',
+      color: 'pink'
     }
-    setPreviewSentences(preview);
-    setIsPreviewModalOpen(true);
   };
 
-  const handleConfirmPreview = () => {
-    const newSentences = previewSentences.filter(s => s.status === 'New').map(s => s.text);
-    setSentences(current => [...current, ...newSentences]);
-    setIsPreviewModalOpen(false);
-    setPreviewSentences([]);
+  const config = moduleConfig[moduleType] || moduleConfig.LISTENING;
+  const IconComponent = config.icon;
+
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      // Validate file type
+      if (!selectedFile.name.endsWith('.csv') && !selectedFile.name.endsWith('.txt')) {
+        setError('Please upload a CSV or TXT file');
+        return;
+      }
+      setFile(selectedFile);
+      setError('');
+    }
+  };
+
+  const validateSentence = (sentence) => {
+    const trimmed = sentence.trim();
+    if (!trimmed) return { valid: false, error: 'Empty sentence' };
+    
+    if (trimmed.length < 10) {
+      return { valid: false, error: 'Sentence too short (minimum 10 characters)' };
+    }
+    
+    if (trimmed.length > 200) {
+      return { valid: false, error: 'Sentence too long (maximum 200 characters)' };
+    }
+    
+    // Check if sentence ends with proper punctuation
+    if (!trimmed.match(/[.!?]$/)) {
+      return { valid: false, error: 'Sentence must end with proper punctuation (.!?)' };
+    }
+    
+    return { valid: true };
+  };
+
+  const processFileForPreview = () => {
+    if (!file) return;
+
+    const processContent = (content) => {
+      const sentences = content.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 0);
+      const preview = [];
+      const existing = new Set();
+
+      sentences.forEach((sentence, index) => {
+        const validation = validateSentence(sentence);
+        if (validation.valid) {
+          if (existing.has(sentence.toLowerCase())) {
+            preview.push({ text: sentence, status: 'Duplicate', error: null });
+          } else {
+            preview.push({ text: sentence, status: 'New', error: null });
+            existing.add(sentence.toLowerCase());
+          }
+        } else {
+          preview.push({ text: sentence, status: 'Invalid', error: validation.error });
+        }
+      });
+
+      return preview;
+    };
+
+    if (file.name.endsWith('.csv')) {
+      Papa.parse(file, {
+        complete: (result) => {
+          const sentences = result.data.flat().filter(Boolean);
+          const preview = processContent(sentences.join('. '));
+          setPreviewSentences(preview);
+          setIsPreviewModalOpen(true);
+        },
+        error: () => setError('Failed to parse CSV file'),
+      });
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target.result;
+        const preview = processContent(content);
+        setPreviewSentences(preview);
+        setIsPreviewModalOpen(true);
+      };
+      reader.onerror = () => setError('Failed to read file');
+      reader.readAsText(file);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) {
+      setError('Please select a file to upload');
+      return;
+    }
+
+    if (!selectedLevel) {
+      setError('Please select a level');
+      return;
+    }
+
+    setUploading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('module_id', moduleType);
+      formData.append('level_id', `${moduleType}_${selectedLevel.toUpperCase()}`);
+      formData.append('level', selectedLevel);
+
+      const response = await fetch('/api/superadmin/sentence-upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setSuccess(`${config.title} sentences uploaded successfully!`);
+        if (onUpload) {
+          onUpload(result.data);
+        }
+        setTimeout(() => {
+          onClose();
+        }, 2000);
+      } else {
+        setError(result.message || 'Upload failed');
+      }
+    } catch (err) {
+      setError('Upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeFile = () => {
+    setFile(null);
     setError('');
   };
 
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    if (file.type === 'text/csv') {
-      Papa.parse(file, {
-        complete: (result) => {
-          const parsed = result.data.flat().filter(Boolean);
-          processSentencesForPreview(parsed);
-        },
-        error: () => setError('Failed to parse CSV.'),
-      });
-    } else if (file.type === 'text/plain') {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const lines = e.target.result.split('\n').map(l => l.trim()).filter(Boolean);
-        processSentencesForPreview(lines);
-      };
-      reader.onerror = () => setError('Failed to read file.');
-      reader.readAsText(file);
-    } else {
-      setError('Only .txt or .csv files are allowed.');
+  const handleConfirmPreview = () => {
+    const validSentences = previewSentences.filter(s => s.status === 'New');
+    if (validSentences.length === 0) {
+      setError('No valid sentences to upload');
+      setIsPreviewModalOpen(false);
+      return;
     }
-    event.target.value = null;
+    setIsPreviewModalOpen(false);
+    handleUpload();
   };
 
   return (
-    <div>
-      <h3 className="font-semibold text-lg mb-2">Upload Sentences for {moduleName}</h3>
-      <input type="file" accept=".txt,.csv" onChange={handleFileUpload} />
-      {error && <div className="text-red-600 mt-2">{error}</div>}
+    <div className="bg-white rounded-lg shadow-lg p-6 max-w-2xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center">
+          <IconComponent className={`h-8 w-8 text-${config.color}-500 mr-3`} />
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">{config.title}</h2>
+            <p className="text-sm text-gray-600">{config.description}</p>
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          className="text-gray-500 hover:text-gray-700"
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold text-gray-700 mb-3">Requirements:</h3>
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <ul className="text-sm text-gray-600 space-y-1">
+            <li>• Sentence length: 10-200 characters</li>
+            <li>• Must end with proper punctuation (.!?)</li>
+            <li>• CSV or TXT format</li>
+            <li>• Levels: Beginner, Intermediate, Advanced</li>
+            <li>• One sentence per line (TXT) or column (CSV)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Select Level
+        </label>
+        <select
+          value={selectedLevel}
+          onChange={(e) => setSelectedLevel(e.target.value)}
+          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        >
+          {levels.map(level => (
+            <option key={level} value={level}>{level}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Select File
+        </label>
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+          {!file ? (
+            <div>
+              <FaUpload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <input
+                type="file"
+                accept=".csv,.txt"
+                onChange={handleFileChange}
+                className="hidden"
+                id="file-upload"
+              />
+              <label
+                htmlFor="file-upload"
+                className="cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+              >
+                Choose File
+              </label>
+              <p className="mt-2 text-sm text-gray-500">
+                or drag and drop a CSV or TXT file here
+              </p>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <FaFileAlt className="h-8 w-8 text-blue-500 mr-3" />
+                <div>
+                  <p className="text-sm font-medium text-gray-700">{file.name}</p>
+                  <p className="text-xs text-gray-500">
+                    {(file.size / 1024).toFixed(2)} KB
+                  </p>
+                </div>
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={processFileForPreview}
+                  className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                >
+                  Preview
+                </button>
+                <button
+                  onClick={removeFile}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  <FaTrash className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
+          {success}
+        </div>
+      )}
+
+      <div className="flex justify-end space-x-3">
+        <button
+          onClick={onClose}
+          className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleUpload}
+          disabled={!file || !selectedLevel || uploading}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+        >
+          {uploading ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              Uploading...
+            </>
+          ) : (
+            'Upload Sentences'
+          )}
+        </button>
+      </div>
+
       {/* Preview Modal */}
       {isPreviewModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-lg w-full">
-            <h4 className="font-bold mb-2">Preview Sentences</h4>
-            <ul className="max-h-60 overflow-y-auto mb-4">
-              {previewSentences.map((s, i) => (
-                <li key={i} className={s.status === 'Duplicate' ? 'text-yellow-600' : 'text-green-700'}>
-                  {s.text} <span className="text-xs">({s.status})</span>
-                </li>
-              ))}
-            </ul>
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setIsPreviewModalOpen(false)} className="px-4 py-2 bg-gray-200 rounded">Cancel</button>
-              <button onClick={handleConfirmPreview} className="px-4 py-2 bg-blue-600 text-white rounded">Add New</button>
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[80vh] overflow-hidden">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="font-bold text-lg">Preview Sentences</h4>
+              <button 
+                onClick={() => setIsPreviewModalOpen(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="max-h-96 overflow-y-auto mb-4">
+              <div className="grid grid-cols-1 gap-2">
+                {previewSentences.map((sentence, i) => (
+                  <div 
+                    key={i} 
+                    className={`p-3 rounded border ${
+                      sentence.status === 'New' ? 'bg-green-50 border-green-200' :
+                      sentence.status === 'Duplicate' ? 'bg-yellow-50 border-yellow-200' :
+                      'bg-red-50 border-red-200'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className={`text-sm ${
+                          sentence.status === 'New' ? 'text-green-800' :
+                          sentence.status === 'Duplicate' ? 'text-yellow-800' :
+                          'text-red-800'
+                        }`}>
+                          {sentence.text}
+                        </p>
+                        {sentence.error && (
+                          <p className="text-xs text-red-600 mt-1">{sentence.error}</p>
+                        )}
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded ml-2 ${
+                        sentence.status === 'New' ? 'bg-green-200 text-green-800' :
+                        sentence.status === 'Duplicate' ? 'bg-yellow-200 text-yellow-800' :
+                        'bg-red-200 text-red-800'
+                      }`}>
+                        {sentence.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                <span className="text-green-600 font-medium">
+                  {previewSentences.filter(s => s.status === 'New').length} new
+                </span>
+                {' • '}
+                <span className="text-yellow-600 font-medium">
+                  {previewSentences.filter(s => s.status === 'Duplicate').length} duplicate
+                </span>
+                {' • '}
+                <span className="text-red-600 font-medium">
+                  {previewSentences.filter(s => s.status === 'Invalid').length} invalid
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setIsPreviewModalOpen(false)} 
+                  className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleConfirmPreview}
+                  disabled={previewSentences.filter(s => s.status === 'New').length === 0}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                >
+                  Upload Valid Sentences
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
-      <div className="flex gap-2 mt-4">
-        <button onClick={onBack} className="px-4 py-2 bg-gray-200 rounded">Back</button>
-        <button onClick={onNext} className="px-4 py-2 bg-blue-600 text-white rounded">Next</button>
-      </div>
     </div>
   );
-} 
+};
+
+export default SentenceUpload; 
