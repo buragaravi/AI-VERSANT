@@ -115,9 +115,21 @@ const QuestionBankUpload = () => {
             { id: 'CRT_TECHNICAL', name: 'Technical' }
           ]);
         } else {
-          setLevels(response.data.data.levels.filter(level => 
+          // For VOCABULARY, READING, etc. - filter levels that start with the module name
+          const moduleLevels = response.data.data.levels.filter(level => 
             level.id.startsWith(selectedModule)
-          ));
+          );
+          
+          // If no levels found, create default levels
+          if (moduleLevels.length === 0) {
+            setLevels([
+              { id: `${selectedModule}_BEGINNER`, name: 'Beginner' },
+              { id: `${selectedModule}_INTERMEDIATE`, name: 'Intermediate' },
+              { id: `${selectedModule}_ADVANCED`, name: 'Advanced' }
+            ]);
+          } else {
+            setLevels(moduleLevels);
+          }
         }
       }
     } catch (error) {

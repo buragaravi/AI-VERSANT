@@ -1750,15 +1750,32 @@ def fetch_questions_for_test():
     level_id = data.get('level_id')
     subcategory = data.get('subcategory')  # For grammar
     n = int(data.get('count', 20))
-    query = {'module_id': module_id, 'level_id': level_id}
+    
+    # Build query based on module type
+    query = {'module_id': module_id}
+    
     if module_id == 'GRAMMAR' and subcategory:
         query['subcategory'] = subcategory
+        query['level_id'] = level_id
+    elif module_id == 'CRT':
+        # For CRT modules, level_id contains the category (e.g., CRT_APTITUDE, CRT_TECHNICAL)
+        query['level_id'] = level_id
+    else:
+        # For other modules (VOCABULARY, READING, etc.)
+        query['level_id'] = level_id
+    
+    current_app.logger.info(f"Fetching questions with query: {query}")
+    
     questions = list(mongo_db.question_bank.find(query).sort([
         ('used_count', 1),
         ('last_used', 1)
     ]).limit(n))
+    
     for q in questions:
         q['_id'] = str(q['_id'])
+    
+    current_app.logger.info(f"Found {len(questions)} questions for module {module_id}, level {level_id}")
+    
     return jsonify({'success': True, 'questions': questions}), 200
 
 @test_management_bp.route('/question-bank/check-duplicates', methods=['POST'])

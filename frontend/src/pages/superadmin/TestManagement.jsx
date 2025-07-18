@@ -43,6 +43,12 @@ const MODULE_CONFIG = {
     levels: ['Beginner', 'Intermediate', 'Advanced'],
     uploadComponent: ReadingUpload,
   },
+  CRT: {
+    label: 'CRT',
+    type: 'MCQ',
+    levels: ['Aptitude', 'Reasoning', 'Technical'],
+    uploadComponent: MCQUpload,
+  },
   LISTENING: {
     label: 'Listening',
     type: 'AUDIO',
@@ -1177,26 +1183,251 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
   const UploadComponent = MODULE_CONFIG[module]?.uploadComponent || (() => <div>Unknown module</div>);
   const [questions, setQuestions] = useState(testData.questions || []);
   const [error, setError] = useState('');
+  const [questionSource, setQuestionSource] = useState('manual'); // 'manual' or 'bank'
+  const [bankQuestions, setBankQuestions] = useState([]);
+  const [selectedBankQuestions, setSelectedBankQuestions] = useState([]);
+  const [loadingBankQuestions, setLoadingBankQuestions] = useState(false);
+
+  // Fetch questions from bank when source changes
+  useEffect(() => {
+    if (questionSource === 'bank') {
+      fetchQuestionsFromBank();
+    }
+  }, [questionSource, testData.module, testData.level, testData.subcategory]);
+
+  const fetchQuestionsFromBank = async () => {
+    setLoadingBankQuestions(true);
+    try {
+      const response = await api.post('/test-management/question-bank/fetch-for-test', {
+        module_id: testData.module,
+        level_id: testData.level || testData.subcategory,
+        subcategory: testData.subcategory,
+        count: 50 // Fetch more questions for selection
+      });
+      
+      if (response.data.success) {
+        setBankQuestions(response.data.questions);
+      }
+    } catch (error) {
+      console.error('Error fetching questions from bank:', error);
+      error('Failed to fetch questions from bank');
+    } finally {
+      setLoadingBankQuestions(false);
+    }
+  };
+
+  const handleQuestionSourceChange = (source) => {
+    setQuestionSource(source);
+    if (source === 'manual') {
+      setQuestions([]);
+      setSelectedBankQuestions([]);
+    } else {
+      setQuestions([]);
+    }
+  };
+
+  const handleBankQuestionToggle = (question) => {
+    setSelectedBankQuestions(prev => {
+      const isSelected = prev.find(q => q._id === question._id);
+      if (isSelected) {
+        return prev.filter(q => q._id !== question._id);
+      } else {
+        return [...prev, question];
+      }
+    });
+  };
+
+  const handleConfirmBankQuestions = () => {
+    setQuestions(selectedBankQuestions);
+    setQuestionSource('manual'); // Switch back to manual view to show selected questions
+  };
 
   const handleNext = () => {
-    if (MODULE_CONFIG[module]?.type === 'MCQ' && questions.length === 0) {
-      setError('Please upload at least one question.');
+    if (questions.length === 0) {
+      setError('Please add at least one question.');
       return;
     }
     setError('');
-      updateTestData({ questions });
+    updateTestData({ questions });
     nextStep();
   };
 
-    return (
-    <div>
-      <UploadComponent
-        questions={questions}
-        setQuestions={setQuestions}
-        onNext={handleNext}
-        onBack={prevStep}
-        moduleName={MODULE_CONFIG[module]?.label}
-      />
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center space-x-3">
+        <div className="bg-blue-500 p-2 rounded-full text-white">
+          <FileQuestion className="h-6 w-6"/>
+        </div>
+        <h2 className="text-2xl font-bold">Question Upload</h2>
+      </div>
+
+      {/* Question Source Selection */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h3 className="text-lg font-semibold mb-4">Choose Question Source</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <button
+            onClick={() => handleQuestionSourceChange('manual')}
+            className={`p-4 border-2 rounded-lg text-left transition-colors ${
+              questionSource === 'manual'
+                ? 'border-blue-500 bg-blue-50'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <div className="flex items-center space-x-3">
+              <Upload className="h-6 w-6 text-blue-500" />
+              <div>
+                <h4 className="font-semibold">Manual Upload</h4>
+                <p className="text-sm text-gray-600">Upload questions manually via file or form</p>
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => handleQuestionSourceChange('bank')}
+            className={`p-4 border-2 rounded-lg text-left transition-colors ${
+              questionSource === 'bank'
+                ? 'border-blue-500 bg-blue-50'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <div className="flex items-center space-x-3">
+              <Briefcase className="h-6 w-6 text-blue-500" />
+              <div>
+                <h4 className="font-semibold">Question Bank</h4>
+                <p className="text-sm text-gray-600">Select questions from existing question bank</p>
+              </div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {/* Question Bank Selection */}
+      {questionSource === 'bank' && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Select Questions from Bank</h3>
+            <div className="text-sm text-gray-600">
+              {selectedBankQuestions.length} selected
+            </div>
+          </div>
+
+          {loadingBankQuestions ? (
+            <div className="text-center py-8">
+              <LoadingSpinner size="md" />
+              <p className="text-gray-600 mt-2">Loading questions from bank...</p>
+            </div>
+          ) : bankQuestions.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <p>No questions found in the bank for this module/level.</p>
+              <p className="text-sm mt-2">Please upload questions to the bank first.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {bankQuestions.map((question, index) => {
+                  const isTechnicalQuestion = question.question_type === 'technical' || 
+                    (testData.module === 'CRT' && testData.level === 'CRT_TECHNICAL');
+                  
+                  return (
+                    <div
+                      key={question._id}
+                      className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                        selectedBankQuestions.find(q => q._id === question._id)
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                      onClick={() => handleBankQuestionToggle(question)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h4 className="font-medium text-sm mb-2">
+                            Q{index + 1}: {question.question.substring(0, 100)}...
+                          </h4>
+                          
+                          {isTechnicalQuestion ? (
+                            <div className="text-xs text-gray-600 space-y-1">
+                              <div className="font-medium">Test Cases:</div>
+                              <pre className="text-xs bg-gray-100 p-1 rounded">{question.testCases || 'N/A'}</pre>
+                              <div className="font-medium">Expected Output:</div>
+                              <pre className="text-xs bg-gray-100 p-1 rounded">{question.expectedOutput || 'N/A'}</pre>
+                              <div className="font-medium">Language: {question.language || 'python'}</div>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-gray-600 space-y-1">
+                              <div>A: {question.optionA}</div>
+                              <div>B: {question.optionB}</div>
+                              <div>C: {question.optionC}</div>
+                              <div>D: {question.optionD}</div>
+                              <div className="font-medium text-green-600">
+                                Answer: {question.answer}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <CheckCircle
+                          className={`h-5 w-5 ${
+                            selectedBankQuestions.find(q => q._id === question._id)
+                              ? 'text-blue-500'
+                              : 'text-gray-300'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {selectedBankQuestions.length > 0 && (
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleConfirmBankQuestions}
+                    className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600"
+                  >
+                    Confirm {selectedBankQuestions.length} Questions
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Manual Upload */}
+      {questionSource === 'manual' && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-lg font-semibold mb-4">Manual Question Upload</h3>
+          <UploadComponent
+            questions={questions}
+            setQuestions={setQuestions}
+            onNext={handleNext}
+            onBack={prevStep}
+            moduleName={MODULE_CONFIG[module]?.label}
+          />
+        </div>
+      )}
+
+      {/* Selected Questions Summary */}
+      {questions.length > 0 && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-semibold text-green-800">
+                {questions.length} Questions Selected
+              </h4>
+              <p className="text-sm text-green-600">
+                Ready to proceed to next step
+              </p>
+            </div>
+            <button
+              onClick={handleNext}
+              className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600"
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
+
       {error && <div className="text-red-600 mt-2">{error}</div>}
     </div>
   );
@@ -1296,6 +1527,15 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
       } else if (testData.module === 'VOCABULARY') {
         payload.subcategory = null;
         payload.level_id = null;
+      } else if (testData.module === 'CRT') {
+        // For CRT modules, map the level to the appropriate CRT category
+        const crtLevelMapping = {
+          'Aptitude': 'CRT_APTITUDE',
+          'Reasoning': 'CRT_REASONING', 
+          'Technical': 'CRT_TECHNICAL'
+        };
+        payload.level_id = crtLevelMapping[testData.level] || testData.level;
+        payload.subcategory = null;
       } else {
         payload.level_id = testData.level;
         payload.subcategory = null;
