@@ -22,6 +22,7 @@ import MCQUpload from './MCQUpload';
 import AudioUpload from './AudioUpload';
 import SentenceUpload from './SentenceUpload';
 import ReadingUpload from './ReadingUpload';
+import TestQuestionUpload from './TestQuestionUpload';
 
 // Config for modules and levels
 const MODULE_CONFIG = {
@@ -689,7 +690,7 @@ const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }
   const normalizedLevel = typeof testData.level === 'object' ? testData.level?.id : testData.level;
   const normalizedSubcategory = typeof testData.subcategory === 'object' ? testData.subcategory?.id : testData.subcategory;
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm({
     defaultValues: {
       module: normalizedModule || '',
       level: normalizedLevel || '',
@@ -699,7 +700,8 @@ const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }
   const { error } = useNotification()
   const selectedModule = watch('module')
   const [modules, setModules] = useState([])
-  const [levels, setLevels] = useState([])
+  const [allLevels, setAllLevels] = useState([])
+  const [filteredLevels, setFilteredLevels] = useState([])
   const [grammarCategories, setGrammarCategories] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -708,7 +710,7 @@ const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }
       try {
         const res = await api.get('/test-management/get-test-data')
         setModules(res.data.data.modules || [])
-        setLevels(res.data.data.levels || [])
+        setAllLevels(res.data.data.levels || [])
         setGrammarCategories(res.data.data.grammar_categories || [])
       } catch (err) {
         error("Failed to fetch modules and levels")
@@ -718,6 +720,48 @@ const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }
     }
     fetchOptions()
   }, [error])
+
+  // Filter levels based on selected module
+  useEffect(() => {
+    if (selectedModule && allLevels.length > 0) {
+      let filtered = [];
+      
+      if (selectedModule === 'GRAMMAR') {
+        // For Grammar, use grammar categories instead of levels
+        setFilteredLevels([]);
+        return;
+      } else if (selectedModule === 'CRT') {
+        // For CRT, use predefined levels
+        filtered = [
+          { id: 'Aptitude', name: 'Aptitude' },
+          { id: 'Reasoning', name: 'Reasoning' },
+          { id: 'Technical', name: 'Technical' }
+        ];
+      } else {
+        // For other modules, filter levels that start with the module name
+        filtered = allLevels.filter(level => 
+          level.id && level.id.startsWith(selectedModule)
+        );
+        
+        // If no levels found, create default levels
+        if (filtered.length === 0) {
+          filtered = [
+            { id: `${selectedModule}_BEGINNER`, name: 'Beginner' },
+            { id: `${selectedModule}_INTERMEDIATE`, name: 'Intermediate' },
+            { id: `${selectedModule}_ADVANCED`, name: 'Advanced' }
+          ];
+        }
+      }
+      
+      setFilteredLevels(filtered);
+      
+      // Reset level selection when module changes
+      setValue('level', '');
+      setValue('subcategory', '');
+    } else {
+      setFilteredLevels([]);
+    }
+  }, [selectedModule, allLevels, setValue])
 
   const onSubmit = async (data) => {
     // Only update test data and go to next step, do not check test name here
@@ -768,7 +812,7 @@ const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }
               </select>
               {errors.subcategory && <p className="text-red-500 text-xs mt-1">{errors.subcategory.message}</p>}
             </div>
-          ) : (
+          ) : selectedModule && filteredLevels.length > 0 ? (
             <div>
               <label htmlFor="level" className="block text-sm font-medium text-gray-800 mb-1">Level</label>
               <select
@@ -777,13 +821,25 @@ const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }
                 className="mt-1 block w-full rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition bg-gray-700 text-white border-gray-600"
               >
                 <option value="">Select Level</option>
-                {levels.map(level => (
+                {filteredLevels.map(level => (
                   <option key={level.id} value={level.id}>{level.name}</option>
                 ))}
               </select>
               {errors.level && <p className="text-red-500 text-xs mt-1">{errors.level.message}</p>}
             </div>
-          )}
+          ) : selectedModule ? (
+            <div>
+              <label htmlFor="level" className="block text-sm font-medium text-gray-800 mb-1">Level</label>
+              <select
+                id="level"
+                disabled
+                className="mt-1 block w-full rounded-md shadow-sm bg-gray-300 text-gray-500 sm:text-sm border-gray-300"
+              >
+                <option value="">No levels available</option>
+              </select>
+              <p className="text-yellow-600 text-xs mt-1">No levels found for this module</p>
+            </div>
+          ) : null}
         </div>
         <div className="flex justify-between items-center pt-4">
           <button type="button" onClick={prevStep} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors">
@@ -1530,11 +1586,9 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
       {questionSource === 'manual' && (
         <div className="bg-white rounded-lg shadow-md p-6">
           <h3 className="text-lg font-semibold mb-4">Manual Question Upload</h3>
-          <UploadComponent
+          <TestQuestionUpload
             questions={questions}
             setQuestions={setQuestions}
-            onNext={handleNext}
-            onBack={prevStep}
             moduleName={MODULE_CONFIG[module]?.label}
             levelId={testData.module === 'CRT' ? 
               (testData.level === 'Aptitude' ? 'CRT_APTITUDE' : 

@@ -8,6 +8,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import UploadPreviewModal from '../../components/common/UploadPreviewModal';
 import CredentialsDisplayModal from '../../components/common/CredentialsDisplayModal';
 import StudentUploadVerificationModal from '../../components/common/StudentUploadVerificationModal';
+import ErrorDisplayModal from '../../components/common/ErrorDisplayModal';
 import api, { getBatchCourses } from '../../services/api';
 import { Users, ArrowLeft, Upload, Edit, Trash2, Download, X, Save, User, Mail, Key, Building, Book, ListChecks, BarChart2, CheckCircle, XCircle, Shield } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
@@ -53,6 +54,10 @@ const BatchDetails = () => {
     // Verification modal state
     const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
     const [lastUploadedStudents, setLastUploadedStudents] = useState([]);
+    
+    // Error modal state
+    const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
+    const [detailedErrors, setDetailedErrors] = useState([]);
 
     const fetchBatchDetails = useCallback(async () => {
         try {
@@ -120,18 +125,80 @@ const BatchDetails = () => {
             const response = await api.post(`/batch-management/${batchId}/add-students`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
+            
+            // Handle both success and partial success (207 status)
             if (response.data.success || response.status === 207) {
-                success(response.data.message || "Students added successfully.");
-                setCreatedStudents(response.data.data.created_students);
-                setLastUploadedStudents(response.data.data.created_students || []);
-                setIsCredentialsModalOpen(true);
-                setIsUploadModalOpen(false);
-                fetchBatchDetails();
+                const createdStudents = response.data.data?.created_students || response.data.created_students || [];
+                const uploadErrors = response.data.errors || [];
+                
+                if (createdStudents.length > 0) {
+                    success(`Successfully uploaded ${createdStudents.length} student(s).`);
+                    setCreatedStudents(createdStudents);
+                    setLastUploadedStudents(createdStudents);
+                    setIsCredentialsModalOpen(true);
+                    setIsUploadModalOpen(false);
+                    fetchBatchDetails();
+                }
+                
+                // Show detailed error messages if any
+                if (uploadErrors.length > 0) {
+                    if (uploadErrors.length > 1) {
+                        setDetailedErrors(uploadErrors);
+                        setIsErrorModalOpen(true);
+                    } else {
+                        error(`Upload error: ${uploadErrors[0]}`);
+                    }
+                }
+                
+                // If no students were created, show general error
+                if (createdStudents.length === 0) {
+                    error('No students were uploaded. Please check your file and try again.');
+                }
             } else {
                 error(response.data.message || 'Failed to add students.');
             }
         } catch (err) {
-            error(err.response?.data?.message || 'An error occurred.');
+            console.error('Upload error:', err);
+            
+            // Handle different types of errors
+            if (err.response?.status === 207) {
+                // Partial success - some students uploaded, some failed
+                const responseData = err.response.data;
+                const createdStudents = responseData.data?.created_students || responseData.created_students || [];
+                const uploadErrors = responseData.errors || [];
+                
+                if (createdStudents.length > 0) {
+                    success(`Partially successful: ${createdStudents.length} student(s) uploaded.`);
+                    setCreatedStudents(createdStudents);
+                    setLastUploadedStudents(createdStudents);
+                    setIsCredentialsModalOpen(true);
+                    setIsUploadModalOpen(false);
+                    fetchBatchDetails();
+                }
+                
+                if (uploadErrors.length > 0) {
+                    if (uploadErrors.length > 1) {
+                        setDetailedErrors(uploadErrors);
+                        setIsErrorModalOpen(true);
+                    } else {
+                        error(`Upload error: ${uploadErrors[0]}`);
+                    }
+                }
+            } else if (err.response?.data?.errors && Array.isArray(err.response.data.errors)) {
+                // Multiple validation errors
+                const errorMessages = err.response.data.errors;
+                if (errorMessages.length > 1) {
+                    setDetailedErrors(errorMessages);
+                    setIsErrorModalOpen(true);
+                } else {
+                    error(`Validation error: ${errorMessages[0]}`);
+                }
+            } else if (err.response?.data?.message) {
+                // Single error message
+                error(err.response.data.message);
+            } else {
+                error('An error occurred during upload. Please check your file format and try again.');
+            }
         } finally {
             setIsSubmitting(false);
         }
@@ -245,18 +312,80 @@ const BatchDetails = () => {
             formData.append('batch_id', batchId);
             selectedCourseIds.forEach(cid => formData.append('course_ids', cid));
             const res = await api.post('/batch-management/upload-students', formData);
-            if (res.data.success) {
-                success(res.data.message);
-                setCreatedStudents(res.data.data?.created_students || res.data.created_students || []);
-                setLastUploadedStudents(res.data.data?.created_students || res.data.created_students || []);
-                setIsCredentialsModalOpen(true);
-                handleCloseStudentUploadModal();
-                fetchBatchDetails();
+            
+            // Handle both success and partial success (207 status)
+            if (res.data.success || res.status === 207) {
+                const createdStudents = res.data.data?.created_students || res.data.created_students || [];
+                const uploadErrors = res.data.errors || [];
+                
+                if (createdStudents.length > 0) {
+                    success(`Successfully uploaded ${createdStudents.length} student(s).`);
+                    setCreatedStudents(createdStudents);
+                    setLastUploadedStudents(createdStudents);
+                    setIsCredentialsModalOpen(true);
+                    handleCloseStudentUploadModal();
+                    fetchBatchDetails();
+                }
+                
+                // Show detailed error messages if any
+                if (uploadErrors.length > 0) {
+                    if (uploadErrors.length > 1) {
+                        setDetailedErrors(uploadErrors);
+                        setIsErrorModalOpen(true);
+                    } else {
+                        error(`Upload error: ${uploadErrors[0]}`);
+                    }
+                }
+                
+                // If no students were created, show general error
+                if (createdStudents.length === 0) {
+                    error('No students were uploaded. Please check your file and try again.');
+                }
             } else {
                 error(res.data.message || 'Failed to upload students.');
             }
         } catch (err) {
-            error(err.response?.data?.message || 'An error occurred during upload.');
+            console.error('Upload error:', err);
+            
+            // Handle different types of errors
+            if (err.response?.status === 207) {
+                // Partial success - some students uploaded, some failed
+                const responseData = err.response.data;
+                const createdStudents = responseData.data?.created_students || responseData.created_students || [];
+                const uploadErrors = responseData.errors || [];
+                
+                if (createdStudents.length > 0) {
+                    success(`Partially successful: ${createdStudents.length} student(s) uploaded.`);
+                    setCreatedStudents(createdStudents);
+                    setLastUploadedStudents(createdStudents);
+                    setIsCredentialsModalOpen(true);
+                    handleCloseStudentUploadModal();
+                    fetchBatchDetails();
+                }
+                
+                if (uploadErrors.length > 0) {
+                    if (uploadErrors.length > 1) {
+                        setDetailedErrors(uploadErrors);
+                        setIsErrorModalOpen(true);
+                    } else {
+                        error(`Upload error: ${uploadErrors[0]}`);
+                    }
+                }
+            } else if (err.response?.data?.errors && Array.isArray(err.response.data.errors)) {
+                // Multiple validation errors
+                const errorMessages = err.response.data.errors;
+                if (errorMessages.length > 1) {
+                    setDetailedErrors(errorMessages);
+                    setIsErrorModalOpen(true);
+                } else {
+                    error(`Validation error: ${errorMessages[0]}`);
+                }
+            } else if (err.response?.data?.message) {
+                // Single error message
+                error(err.response.data.message);
+            } else {
+                error('An error occurred during upload. Please check your file format and try again.');
+            }
         } finally {
             setUploading(false);
         }
@@ -311,7 +440,12 @@ const BatchDetails = () => {
                 error(res.data.message || 'Failed to add student.');
             }
         } catch (err) {
-            error(err.response?.data?.message || 'An error occurred while adding student.');
+            console.error('Add student error:', err);
+            if (err.response?.data?.message) {
+                error(err.response.data.message);
+            } else {
+                error('An error occurred while adding student.');
+            }
         } finally {
             setAddingStudent(false);
         }
@@ -675,6 +809,14 @@ const BatchDetails = () => {
                     </div>
                 </div>
             )}
+
+            {/* Error Display Modal */}
+            <ErrorDisplayModal
+                isOpen={isErrorModalOpen}
+                onClose={() => setIsErrorModalOpen(false)}
+                errors={detailedErrors}
+                title="Upload Errors"
+            />
         </div>
     );
 };

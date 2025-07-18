@@ -181,23 +181,70 @@ const BatchManagement = () => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      if (response.data.success) {
-        toast.success('Students uploaded successfully!');
-        setShowUploadStudents(false);
-        setUploadFile(null);
-        setSelectedBatch(null);
-        setPreviewData([]);
-        fetchBatches();
+      // Handle both success and partial success (207 status)
+      if (response.data.success || response.status === 207) {
+        const createdStudents = response.data.data?.created_students || response.data.created_students || [];
+        const uploadErrors = response.data.errors || [];
+        
+        if (createdStudents.length > 0) {
+          toast.success(`Successfully uploaded ${createdStudents.length} student(s)!`);
+          setShowUploadStudents(false);
+          setUploadFile(null);
+          setSelectedBatch(null);
+          setPreviewData([]);
+          fetchBatches();
+        }
+        
+        // Show detailed error messages if any
+        if (uploadErrors.length > 0) {
+          const errorMessage = uploadErrors.length > 3 
+            ? `${uploadErrors.slice(0, 3).join('; ')}... and ${uploadErrors.length - 3} more errors.`
+            : uploadErrors.join('; ');
+          toast.error(`Upload completed with errors: ${errorMessage}`);
+        }
+        
+        // If no students were created, show general error
+        if (createdStudents.length === 0) {
+          toast.error('No students were uploaded. Please check your file and try again.');
+        }
       } else {
         toast.error(response.data.message || 'Failed to upload students');
       }
     } catch (error) {
       console.error('Upload error:', error);
-      if (error.response?.data?.message) {
+      
+      // Handle different types of errors
+      if (error.response?.status === 207) {
+        // Partial success - some students uploaded, some failed
+        const responseData = error.response.data;
+        const createdStudents = responseData.data?.created_students || responseData.created_students || [];
+        const uploadErrors = responseData.errors || [];
+        
+        if (createdStudents.length > 0) {
+          toast.success(`Partially successful: ${createdStudents.length} student(s) uploaded.`);
+          setShowUploadStudents(false);
+          setUploadFile(null);
+          setSelectedBatch(null);
+          setPreviewData([]);
+          fetchBatches();
+        }
+        
+        if (uploadErrors.length > 0) {
+          const errorMessage = uploadErrors.length > 3 
+            ? `${uploadErrors.slice(0, 3).join('; ')}... and ${uploadErrors.length - 3} more errors.`
+            : uploadErrors.join('; ');
+          toast.error(`Upload errors: ${errorMessage}`);
+        }
+      } else if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
+        // Multiple validation errors
+        const errorMessages = error.response.data.errors;
+        const displayMessage = errorMessages.length > 3 
+          ? `${errorMessages.slice(0, 3).join('; ')}... and ${errorMessages.length - 3} more errors.`
+          : errorMessages.join('; ');
+        toast.error(`Validation errors: ${displayMessage}`);
+      } else if (error.response?.data?.message) {
+        // Single error message
         toast.error(error.response.data.message);
-      } else if (error.response?.data?.errors) {
-        const errorMessages = error.response.data.errors.join(', ');
-        toast.error(`Upload failed: ${errorMessages}`);
       } else {
         toast.error('Failed to upload students. Please check your file format and try again.');
       }
