@@ -21,6 +21,7 @@ import BatchDetails from './pages/superadmin/BatchDetails'
 import PracticeAnalytics from './pages/superadmin/PracticeAnalytics'
 import QuestionBankUpload from './pages/superadmin/QuestionBankUpload'
 import BatchCourseInstances from './pages/superadmin/BatchCourseInstances'
+import BatchManagement from './pages/superadmin/BatchManagement'
 
 // Campus Admin Pages
 import CampusAdminDashboard from './pages/campus-admin/CampusAdminDashboard'
@@ -109,6 +110,7 @@ function App() {
                     <Route path="tests/create" element={<TestManagement />} />
                     <Route path="question-bank-upload" element={<QuestionBankUpload />} />
                     <Route path="batch-course-instances" element={<BatchCourseInstances />} />
+                    <Route path="batch-management" element={<BatchManagement />} />
                   </Route>
 
                   {/* Campus Admin Routes */}

@@ -18,7 +18,7 @@ const SuperAdminSidebar = ({ onModuleUpload }) => {
     { name: 'Dashboard', path: '/superadmin/dashboard', icon: LayoutDashboard },
     { name: 'Campus Management', path: '/superadmin/campuses', icon: Building2 },
     { name: 'Course Management', path: '/superadmin/courses', icon: BookCopy },
-    { name: 'Batch Creation', path: '/superadmin/batch-course-instances', icon: GraduationCap },
+    { name: 'Batch Management', path: '/superadmin/batch-management', icon: GraduationCap },
     { name: 'User Management', path: '/superadmin/users', icon: Users },
     { name: 'Test Management', path: '/superadmin/tests', icon: FilePlus },
     { name: 'Question Bank Upload', path: '/superadmin/question-bank-upload', icon: FilePlus },
