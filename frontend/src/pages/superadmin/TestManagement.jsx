@@ -597,7 +597,7 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
     speed: 1.0,
   })
 
-  const nextStep = () => setStep(prev => prev < 6 ? prev + 1 : prev)
+  const nextStep = () => setStep(prev => prev < 5 ? prev + 1 : prev)
   const prevStep = () => setStep(prev => prev > 1 ? prev - 1 : prev)
 
   const updateTestData = (data) => {
@@ -633,19 +633,17 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
   const renderStep = () => {
     switch (step) {
       case 1:
-        return <Step4AudienceSelection nextStep={nextStep} updateTestData={updateTestData} testData={testData} />;
-      case 2:
         return <Step2TestType nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
+      case 2:
+        return <Step3TestName nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
       case 3:
-        return <Step3TestName nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
+        return <Step4AudienceSelection nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
       case 4:
-        return <Step3TestName nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
-      case 5:
         return <Step5QuestionUpload nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
-      case 6:
+      case 5:
         return <Step4ConfirmAndGenerate prevStep={prevStep} testData={testData} onTestCreated={onTestCreated} />;
       default:
-        return <Step4AudienceSelection nextStep={nextStep} updateTestData={updateTestData} testData={testData} />;
+        return <Step2TestType nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
     }
   }
 
@@ -665,18 +663,17 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
           <div className="w-full bg-gray-200 rounded-full h-2.5">
             <motion.div 
               className="bg-blue-500 h-2.5 rounded-full" 
-              animate={{ width: `${((step - 1) / 5) * 100}%` }}
+              animate={{ width: `${((step - 1) / 4) * 100}%` }}
               transition={{ duration: 0.5 }}
             />
           </div>
           <p className="text-right text-sm text-gray-500 mt-2">
-            Step {step} of 6: {
-              step === 1 ? 'Select Campus, Batch, and Course' :
-              step === 2 ? 'Select Test Type' :
-              step === 3 ? 'Select Module and Level' :
-              step === 4 ? 'Enter Test Name' :
-              step === 5 ? 'Upload Questions' :
-              step === 6 ? 'Final Confirmation' : ''
+            Step {step} of 5: {
+              step === 1 ? 'Select Test Type' :
+              step === 2 ? 'Select Module and Level' :
+              step === 3 ? 'Select Audience' :
+              step === 4 ? 'Upload Questions' :
+              step === 5 ? 'Final Confirmation' : ''
             }
           </p>
         </div>
@@ -812,6 +809,10 @@ const Step2TestType = ({ nextStep, prevStep, updateTestData, testData }) => {
   const testType = watch('testType')
 
   const onSubmit = (data) => {
+    if (!data.testType) {
+      error("Please select a test type");
+      return;
+    }
     updateTestData({ testType: data.testType })
     nextStep()
   }
@@ -833,7 +834,7 @@ const Step2TestType = ({ nextStep, prevStep, updateTestData, testData }) => {
               <label className={clsx('relative flex p-4 border rounded-lg cursor-pointer hover:bg-blue-50 transition', {
                 'bg-blue-50 border-blue-500 ring-2 ring-blue-500': testType === 'Practice'
               })}>
-                <input type="radio" {...register('testType')} value="Practice" className="sr-only" />
+                <input type="radio" {...register('testType', { required: 'Please select a test type' })} value="Practice" className="sr-only" />
                 <div className="flex-1">
                   <span className="font-medium text-gray-800">Practice Module</span>
                   <p className="text-sm text-gray-500">Low-stakes module for student practice.</p>
@@ -843,7 +844,7 @@ const Step2TestType = ({ nextStep, prevStep, updateTestData, testData }) => {
               <label className={clsx('relative flex p-4 border rounded-lg cursor-pointer hover:bg-blue-50 transition', {
                 'bg-blue-50 border-blue-500 ring-2 ring-blue-500': testType === 'Online'
               })}>
-                <input type="radio" {...register('testType')} value="Online" className="sr-only" />
+                <input type="radio" {...register('testType', { required: 'Please select a test type' })} value="Online" className="sr-only" />
                 <div className="flex-1">
                   <span className="font-medium text-gray-800">Online Exam</span>
                   <p className="text-sm text-gray-500">Formal, graded assessment.</p>
@@ -875,7 +876,7 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
 
   const handleModuleChange = (e) => {
     setModule(e.target.value);
-    setLevel('');
+    setLevel(''); // Reset level when module changes
   };
 
   const handleLevelChange = (e) => {
@@ -885,53 +886,93 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
   const handleNext = () => {
     if (!module) {
       setError('Please select a module.');
-        return;
-      }
-    if (MODULE_CONFIG[module]?.levels && !level) {
+      return;
+    }
+    
+    // Check if module has levels and level is required
+    const moduleConfig = MODULE_CONFIG[module];
+    if (moduleConfig?.levels && moduleConfig.levels.length > 0 && !level) {
       setError('Please select a level.');
-          return;
-        }
+      return;
+    }
+    
     if (!testName.trim()) {
       setError('Please enter a test name.');
       return;
     }
+    
     setError('');
     updateTestData({ module, level, testName });
     nextStep();
   };
 
   return (
-    <div className="max-w-xl mx-auto bg-white p-8 rounded-xl shadow">
-      <h2 className="text-2xl font-bold mb-6">Select Module, Level, and Enter Test Name</h2>
-      <div className="mb-4">
-        <label className="block font-semibold mb-2">Module</label>
-        <select value={module} onChange={handleModuleChange} className="w-full p-2 border rounded">
-          <option value="">Select Module</option>
-          {Object.entries(MODULE_CONFIG).map(([key, mod]) => (
-            <option key={key} value={key}>{mod.label}</option>
-          ))}
-        </select>
-          </div>
-      {module && MODULE_CONFIG[module]?.levels && (
-        <div className="mb-4">
-          <label className="block font-semibold mb-2">Level</label>
-          <select value={level} onChange={handleLevelChange} className="w-full p-2 border rounded">
-            <option value="">Select Level</option>
-            {MODULE_CONFIG[module].levels.map(lvl => (
-              <option key={lvl} value={lvl}>{lvl}</option>
+    <div className="space-y-6">
+      <div className="flex items-center space-x-3">
+        <div className="bg-blue-500 p-2 rounded-full text-white">
+          <FileQuestion className="h-6 w-6"/>
+        </div>
+        <h2 className="text-2xl font-bold">Select Module, Level, and Enter Test Name</h2>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
+        <div>
+          <label className="block font-semibold mb-2">Module</label>
+          <select 
+            value={module} 
+            onChange={handleModuleChange} 
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Select Module</option>
+            {Object.entries(MODULE_CONFIG).map(([key, mod]) => (
+              <option key={key} value={key}>{mod.label}</option>
             ))}
           </select>
-            </div>
-          )}
-        <div className="mb-4">
-        <label className="block font-semibold mb-2">Test Name</label>
-        <input value={testName} onChange={e => setTestName(e.target.value)} className="w-full p-2 border rounded" placeholder="Enter test name" />
         </div>
-      {error && <div className="text-red-600 mb-4">{error}</div>}
-      <div className="flex gap-2">
-        <button onClick={prevStep} className="px-4 py-2 bg-gray-200 rounded">Back</button>
-        <button onClick={handleNext} className="px-4 py-2 bg-blue-600 text-white rounded">Next</button>
+
+        {module && MODULE_CONFIG[module]?.levels && MODULE_CONFIG[module].levels.length > 0 && (
+          <div>
+            <label className="block font-semibold mb-2">Level</label>
+            <select 
+              value={level} 
+              onChange={handleLevelChange} 
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">Select Level</option>
+              {MODULE_CONFIG[module].levels.map(lvl => (
+                <option key={lvl} value={lvl}>{lvl}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div>
+          <label className="block font-semibold mb-2">Test Name</label>
+          <input 
+            value={testName} 
+            onChange={e => setTestName(e.target.value)} 
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+            placeholder="Enter test name" 
+          />
         </div>
+
+        {error && <div className="text-red-600 p-3 bg-red-50 border border-red-200 rounded-lg">{error}</div>}
+
+        <div className="flex justify-between items-center pt-4">
+          <button 
+            onClick={prevStep} 
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+          >
+            Back
+          </button>
+          <button 
+            onClick={handleNext} 
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Next
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -1032,16 +1073,32 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
   }, [selectedBatchIds, setValue, error])
 
   const onSubmit = (data) => {
-    const selectedCampus = campuses.find(c => c.value === data.campus_id)
-    const selectedBatches = batches.filter(b => data.batch_ids.includes(b.value))
-    const selectedCourses = courses.filter(c => data.course_ids.includes(c.value))
+    // Validate that we have the required selections
+    if (!data.campus_id) {
+      error("Please select a campus");
+      return;
+    }
+    
+    if (!data.batch_ids || data.batch_ids.length === 0) {
+      error("Please select at least one batch");
+      return;
+    }
+    
+    if (!data.course_ids || data.course_ids.length === 0) {
+      error("Please select at least one course");
+      return;
+    }
+    
+    const selectedCampus = campuses.find(c => c.value === data.campus_id);
+    const selectedBatches = batches.filter(b => data.batch_ids.includes(b.value));
+    const selectedCourses = courses.filter(c => data.course_ids.includes(c.value));
     
     updateTestData({
       campus: selectedCampus,
       batches: selectedBatches,
       courses: selectedCourses,
-    })
-    nextStep()
+    });
+    nextStep();
   }
 
   return (
@@ -1198,9 +1255,20 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
   const fetchQuestionsFromBank = async () => {
     setLoadingBankQuestions(true);
     try {
+      // Map CRT levels to proper backend categories
+      let levelId = testData.level;
+      if (testData.module === 'CRT') {
+        const crtLevelMapping = {
+          'Aptitude': 'CRT_APTITUDE',
+          'Reasoning': 'CRT_REASONING', 
+          'Technical': 'CRT_TECHNICAL'
+        };
+        levelId = crtLevelMapping[testData.level] || testData.level;
+      }
+      
       const response = await api.post('/test-management/question-bank/fetch-for-test', {
         module_id: testData.module,
-        level_id: testData.level || testData.subcategory,
+        level_id: levelId || testData.subcategory,
         subcategory: testData.subcategory,
         count: 50 // Fetch more questions for selection
       });
@@ -1402,6 +1470,11 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
             onNext={handleNext}
             onBack={prevStep}
             moduleName={MODULE_CONFIG[module]?.label}
+            levelId={testData.module === 'CRT' ? 
+              (testData.level === 'Aptitude' ? 'CRT_APTITUDE' : 
+               testData.level === 'Reasoning' ? 'CRT_REASONING' : 
+               testData.level === 'Technical' ? 'CRT_TECHNICAL' : testData.level) : 
+              testData.level}
           />
         </div>
       )}
@@ -1464,7 +1537,7 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
   })
 
   // Check if this is an MCQ module
-  const isMcqModule = testData.module && ['GRAMMAR', 'VOCABULARY'].includes(testData.module)
+  const isMcqModule = testData.module && ['GRAMMAR', 'VOCABULARY', 'CRT'].includes(testData.module)
 
   // Helper to format date/time
   const formatDateTime = (dateString) => {
