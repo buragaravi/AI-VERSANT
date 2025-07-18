@@ -2286,3 +2286,97 @@ def test_technical_upload():
             'success': False,
             'message': f'Test failed: {str(e)}'
         }), 500
+
+@test_management_bp.route('/create-test', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def create_test_with_instances():
+    """Create a new test with proper batch-course instance handling to prevent duplication"""
+    try:
+        data = request.get_json()
+        test_name = data.get('test_name')
+        test_type = data.get('test_type')
+        module_id = data.get('module_id')
+        level_id = data.get('level_id')
+        subcategory = data.get('subcategory')
+        campus_id = data.get('campus_id')
+        course_ids = data.get('course_ids', [])
+        batch_ids = data.get('batch_ids', [])
+        questions = data.get('questions', [])
+        audio_config = data.get('audio_config', {})
+        assigned_student_ids = data.get('assigned_student_ids', [])
+        startDateTime = data.get('startDateTime')
+        endDateTime = data.get('endDateTime')
+        duration = data.get('duration')
+
+        # Validate required fields
+        if not all([test_name, test_type, module_id, campus_id, course_ids, batch_ids]):
+            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+
+        # Generate unique test ID
+        test_id = generate_unique_test_id()
+
+        # Create batch-course instances for each batch-course combination
+        batch_course_instance_ids = []
+        for batch_id in batch_ids:
+            for course_id in course_ids:
+                # Find or create batch-course instance
+                instance_id = mongo_db.find_or_create_batch_course_instance(
+                    ObjectId(batch_id), 
+                    ObjectId(course_id)
+                )
+                batch_course_instance_ids.append(instance_id)
+
+        # Create test document
+        test_doc = {
+            'test_id': test_id,
+            'name': test_name,
+            'test_type': test_type.lower(),
+            'module_id': module_id,
+            'level_id': level_id,
+            'subcategory': subcategory,
+            'campus_ids': [ObjectId(campus_id)],
+            'course_ids': [ObjectId(cid) for cid in course_ids],
+            'batch_ids': [ObjectId(bid) for bid in batch_ids],
+            'batch_course_instance_ids': batch_course_instance_ids,  # Store instance IDs
+            'questions': questions,
+            'audio_config': audio_config,
+            'assigned_student_ids': [ObjectId(sid) for sid in assigned_student_ids],
+            'created_by': ObjectId(get_jwt_identity()),
+            'created_at': datetime.now(pytz.utc),
+            'status': 'active',
+            'is_active': True
+        }
+
+        # Add online test specific fields
+        if test_type.lower() == 'online':
+            if not all([startDateTime, endDateTime, duration]):
+                return jsonify({'success': False, 'message': 'Start date, end date, and duration are required for online tests'}), 400
+            
+            test_doc.update({
+                'startDateTime': datetime.fromisoformat(startDateTime.replace('Z', '+00:00')),
+                'endDateTime': datetime.fromisoformat(endDateTime.replace('Z', '+00:00')),
+                'duration': int(duration)
+            })
+
+        # Insert test
+        result = mongo_db.tests.insert_one(test_doc)
+        
+        # For non-MCQ modules, start audio generation in background
+        if not is_mcq_module(module_id) and questions:
+            # Start audio generation in background
+            with current_app.app_context():
+                audio_generation_worker(current_app, str(result.inserted_id), questions, audio_config)
+
+        return jsonify({
+            'success': True,
+            'message': 'Test created successfully',
+            'data': {
+                'test_id': test_id,
+                'batch_course_instances_created': len(batch_course_instance_ids)
+            }
+        }), 201
+
+    except Exception as e:
+        current_app.logger.error(f"Error creating test: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500

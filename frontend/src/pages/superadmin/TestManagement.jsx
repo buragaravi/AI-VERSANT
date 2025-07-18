@@ -612,8 +612,11 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
     Object.keys(data).forEach(key => {
       const value = data[key];
       if (typeof value === 'object' && value !== null) {
-        // Handle different object types
-        if (value.id !== undefined) {
+        // Special handling for audience selection data (campus, batches, courses)
+        if (key === 'campus' || key === 'batches' || key === 'courses') {
+          // Keep the full objects for display purposes
+          normalizedData[key] = value;
+        } else if (value.id !== undefined) {
           normalizedData[key] = value.id;
         } else if (value.name !== undefined) {
           normalizedData[key] = value.name;
@@ -631,6 +634,9 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
         normalizedData[key] = value;
       }
     });
+    
+    console.log('updateTestData - Input:', data);
+    console.log('updateTestData - Normalized:', normalizedData);
     
     setTestData(prev => ({ ...prev, ...normalizedData }))
   }
@@ -1234,6 +1240,12 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
     const selectedCampus = campuses.find(c => c.value === data.campus_id);
     const selectedBatches = batches.filter(b => data.batch_ids.includes(b.value));
     const selectedCourses = courses.filter(c => data.course_ids.includes(c.value));
+    
+    console.log('Step4AudienceSelection - Selected data:', {
+      campus: selectedCampus,
+      batches: selectedBatches,
+      courses: selectedCourses,
+    });
     
     updateTestData({
       campus: selectedCampus,
@@ -1895,6 +1907,11 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
   const [studentList, setStudentList] = useState([]);
   useEffect(() => {
     const fetchStudentCount = async () => {
+      console.log('Step4ConfirmAndGenerate - testData:', testData);
+      console.log('Campus:', testData.campus);
+      console.log('Batches:', testData.batches);
+      console.log('Courses:', testData.courses);
+      
       try {
         const res = await getStudentCount({
           campus: testData.campus?.value,
@@ -1903,7 +1920,8 @@ const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
         });
         setStudentCount(res.data.count);
         setStudentList(res.data.students || []);
-      } catch {
+      } catch (error) {
+        console.error('Error fetching student count:', error);
         setStudentCount('N/A');
         setStudentList([]);
       }
