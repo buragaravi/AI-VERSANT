@@ -1754,9 +1754,10 @@ def fetch_questions_for_test():
     # Build query based on module type
     query = {'module_id': module_id}
     
-    if module_id == 'GRAMMAR' and subcategory:
-        query['subcategory'] = subcategory
+    if module_id == 'GRAMMAR':
+        # For Grammar, use level_id (which contains the grammar category like 'NOUN', 'VERB', etc.)
         query['level_id'] = level_id
+        # Don't add subcategory to query as it's not used in the stored data
     elif module_id == 'CRT':
         # For CRT modules, level_id contains the category (e.g., CRT_APTITUDE, CRT_TECHNICAL)
         query['level_id'] = level_id

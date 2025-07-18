@@ -1415,8 +1415,8 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
         };
         levelId = crtLevelMapping[testData.level] || testData.level;
       } else if (testData.module === 'GRAMMAR') {
-        // For Grammar, use subcategory as level_id
-        levelId = testData.subcategory;
+        // For Grammar, use level as level_id (since level contains the grammar category)
+        levelId = testData.level;
         subcategory = testData.subcategory;
       } else {
         // For other modules (VOCABULARY, READING, LISTENING, SPEAKING, WRITING)
@@ -1428,20 +1428,25 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
         module_id: testData.module,
         level_id: levelId,
         subcategory: subcategory,
-        count: count
+        count: count,
+        original_level: testData.level,
+        original_subcategory: testData.subcategory
       });
       
-      const response = await api.post('/test-management/question-bank/fetch-for-test', {
-        module_id: testData.module,
-        level_id: levelId,
-        subcategory: subcategory,
-        count: count
-      });
+      // Use the same endpoint as Question Bank Upload page
+      let response = await api.get(`/test-management/existing-questions?module_id=${testData.module}&level_id=${levelId}`);
+      
+      // If no questions found and it's Grammar, try with subcategory as level_id
+      if (testData.module === 'GRAMMAR' && (!response.data.success || !response.data.data || response.data.data.length === 0)) {
+        console.log('No questions found with level, trying with subcategory as level_id');
+        response = await api.get(`/test-management/existing-questions?module_id=${testData.module}&level_id=${testData.subcategory}`);
+      }
       
       if (response.data.success) {
-        setBankQuestions(response.data.questions);
-        console.log('Fetched questions:', response.data.questions.length);
-        return response.data.questions;
+        const questions = response.data.data || [];
+        setBankQuestions(questions);
+        console.log('Fetched questions:', questions.length);
+        return questions;
       } else {
         console.error('Failed to fetch questions:', response.data.message);
         setError('Failed to fetch questions from bank');
