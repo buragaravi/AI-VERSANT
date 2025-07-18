@@ -31,12 +31,26 @@ const MCQ_MODULES = [
     description: 'Upload reading comprehension questions'
   },
   { 
-    id: 'CRT', 
-    name: 'CRT', 
-    color: 'from-orange-500 to-orange-600',
-    icon: '🧮',
-    description: 'Upload CRT questions covering Aptitude, Reasoning, and Technical'
+    id: 'LISTENING', 
+    name: 'Listening', 
+    color: 'from-yellow-500 to-yellow-600',
+    icon: '🎧',
+    description: 'Upload listening comprehension questions with audio'
   },
+  { 
+    id: 'SPEAKING', 
+    name: 'Speaking', 
+    color: 'from-red-500 to-red-600',
+    icon: '🎤',
+    description: 'Upload speaking practice questions with prompts'
+  },
+  { 
+    id: 'WRITING', 
+    name: 'Writing', 
+    color: 'from-indigo-500 to-indigo-600',
+    icon: '✍️',
+    description: 'Upload writing practice questions and prompts'
+  }
 ];
 
 const QuestionBankUpload = () => {
@@ -96,7 +110,9 @@ const QuestionBankUpload = () => {
         { id: 'GRAMMAR', name: 'Grammar' },
         { id: 'VOCABULARY', name: 'Vocabulary' },
         { id: 'READING', name: 'Reading' },
-        { id: 'CRT', name: 'CRT' }
+        { id: 'LISTENING', name: 'Listening' },
+        { id: 'SPEAKING', name: 'Speaking' },
+        { id: 'WRITING', name: 'Writing' }
       ]);
       toast.error('Failed to fetch modules from server, using default values');
     }
@@ -108,14 +124,8 @@ const QuestionBankUpload = () => {
       if (response.data.success) {
         if (selectedModule === 'GRAMMAR') {
           setLevels(response.data.data.grammar_categories);
-        } else if (selectedModule === 'CRT') {
-          setLevels(response.data.data.crt_categories || [
-            { id: 'CRT_APTITUDE', name: 'Aptitude' },
-            { id: 'CRT_REASONING', name: 'Reasoning' },
-            { id: 'CRT_TECHNICAL', name: 'Technical' }
-          ]);
         } else {
-          // For VOCABULARY, READING, etc. - filter levels that start with the module name
+          // For VOCABULARY, READING, LISTENING, SPEAKING, WRITING - filter levels that start with the module name
           const moduleLevels = response.data.data.levels.filter(level => 
             level.id.startsWith(selectedModule)
           );
@@ -143,12 +153,6 @@ const QuestionBankUpload = () => {
           { id: 'VERB', name: 'Verb' },
           { id: 'ADVERB', name: 'Adverb' },
           { id: 'CONJUNCTION', name: 'Conjunction' }
-        ]);
-      } else if (selectedModule === 'CRT') {
-        setLevels([
-          { id: 'CRT_APTITUDE', name: 'Aptitude' },
-          { id: 'CRT_REASONING', name: 'Reasoning' },
-          { id: 'CRT_TECHNICAL', name: 'Technical' }
         ]);
       } else {
         setLevels([
@@ -200,14 +204,20 @@ const QuestionBankUpload = () => {
   };
 
   const handleModuleSelect = (module) => {
-    setSelectedModule(module.id);
+    // Ensure we're passing a string ID, not an object
+    const moduleId = typeof module === 'object' ? module.id : module;
+    console.log('Selected module:', moduleId, 'Type:', typeof moduleId);
+    setSelectedModule(moduleId);
     setCurrentStep('levels');
   };
 
   const handleLevelSelect = (level) => {
-    setSelectedLevel(level);
+    // Ensure we're passing a level object with proper structure
+    const levelData = typeof level === 'object' ? level : { id: level, name: level };
+    console.log('Selected level:', levelData);
+    setSelectedLevel(levelData);
     setCurrentStep('upload');
-    fetchExistingQuestionsForLevel(selectedModule, level.id);
+    fetchExistingQuestionsForLevel(selectedModule, levelData.id);
   };
 
   const handleViewQuestions = (file) => {
@@ -244,22 +254,72 @@ const QuestionBankUpload = () => {
   const downloadTemplate = () => {
     let templateData;
     
-    if (selectedModule === 'CRT' && selectedLevel?.id === 'CRT_TECHNICAL') {
+    // Create template based on module type
+    if (selectedModule === 'LISTENING') {
       templateData = [
         {
-          Question: 'Question 1: Perfect Number\nProblem:\nWrite a program to check whether a given positive integer is a perfect number. A perfect number is a positive integer equal to the sum of its proper divisors except itself.\n\nSample Test Cases:\n\nInput\tOutput\n6\t6 is a perfect number\n15\t15 is not a perfect number\n28\t28 is a perfect number',
-          TestCases: '6\n15\n28',
-          ExpectedOutput: '6 is a perfect number\n15 is not a perfect number\n28 is a perfect number',
-          Language: 'python'
+          Question: 'Listen to the audio and answer the question: What is the main topic of the conversation?',
+          A: 'Weather',
+          B: 'Travel',
+          C: 'Food',
+          D: 'Sports',
+          Answer: 'B',
+          AudioPrompt: 'Audio file or transcript of the conversation'
         },
         {
-          Question: 'Question 2: Non-Repeating Elements in Array\nProblem:\nWrite a program to print all elements that do not repeat in a given array of integers.\n\nSample Test Cases:\n\nInput\tOutput\n4 5 4 3 6 3 7\t5 6 7\n1 2 1 2 3 4 5\t3 4 5\n10 10 20 30 20\t30',
-          TestCases: '4 5 4 3 6 3 7\n1 2 1 2 3 4 5\n10 10 20 30 20',
-          ExpectedOutput: '5 6 7\n3 4 5\n30',
-          Language: 'python'
+          Question: 'Based on the audio, what time does the meeting start?',
+          A: '9:00 AM',
+          B: '10:00 AM',
+          C: '11:00 AM',
+          D: '2:00 PM',
+          Answer: 'C',
+          AudioPrompt: 'Audio file or transcript mentioning meeting time'
+        }
+      ];
+    } else if (selectedModule === 'SPEAKING') {
+      templateData = [
+        {
+          Question: 'Describe your hometown in detail. What makes it special?',
+          A: 'Speaking prompt - no multiple choice',
+          B: 'Speaking prompt - no multiple choice',
+          C: 'Speaking prompt - no multiple choice',
+          D: 'Speaking prompt - no multiple choice',
+          Answer: 'A',
+          Instructions: 'Student should speak for 2-3 minutes about their hometown'
+        },
+        {
+          Question: 'What are the advantages and disadvantages of online learning?',
+          A: 'Speaking prompt - no multiple choice',
+          B: 'Speaking prompt - no multiple choice',
+          C: 'Speaking prompt - no multiple choice',
+          D: 'Speaking prompt - no multiple choice',
+          Answer: 'A',
+          Instructions: 'Student should speak for 3-4 minutes about online learning pros and cons'
+        }
+      ];
+    } else if (selectedModule === 'WRITING') {
+      templateData = [
+        {
+          Question: 'Write an essay about the importance of environmental conservation. (Minimum 200 words)',
+          A: 'Writing prompt - no multiple choice',
+          B: 'Writing prompt - no multiple choice',
+          C: 'Writing prompt - no multiple choice',
+          D: 'Writing prompt - no multiple choice',
+          Answer: 'A',
+          Instructions: 'Student should write a well-structured essay with introduction, body, and conclusion'
+        },
+        {
+          Question: 'Write a formal letter to your local government requesting better public transportation.',
+          A: 'Writing prompt - no multiple choice',
+          B: 'Writing prompt - no multiple choice',
+          C: 'Writing prompt - no multiple choice',
+          D: 'Writing prompt - no multiple choice',
+          Answer: 'A',
+          Instructions: 'Student should write a formal letter with proper format and tone'
         }
       ];
     } else {
+      // Default MCQ template for Grammar, Vocabulary, Reading
       templateData = [
         {
           Question: 'What is the next number in the sequence: 2, 4, 8, 16, ?',
@@ -382,7 +442,7 @@ const QuestionBankUpload = () => {
         </div>
 
         {/* Module Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
           {MCQ_MODULES.map((module, index) => (
               <motion.div
                 key={module.id}
@@ -399,7 +459,11 @@ const QuestionBankUpload = () => {
                     <div className={`w-16 h-16 rounded-xl flex items-center justify-center text-3xl ${
                       module.id === 'GRAMMAR' ? 'bg-red-100 text-red-600' :
                       module.id === 'VOCABULARY' ? 'bg-blue-100 text-blue-600' :
-                      'bg-purple-100 text-purple-600'
+                      module.id === 'READING' ? 'bg-purple-100 text-purple-600' :
+                      module.id === 'LISTENING' ? 'bg-yellow-100 text-yellow-600' :
+                      module.id === 'SPEAKING' ? 'bg-red-100 text-red-600' :
+                      module.id === 'WRITING' ? 'bg-indigo-100 text-indigo-600' :
+                      'bg-gray-100 text-gray-600'
                     }`}>
                       {module.icon}
                     </div>
@@ -566,7 +630,7 @@ const QuestionBankUpload = () => {
             onNext={handleUploadSuccess}
             onBack={handleBackToModules}
             moduleName={selectedModule}
-              levelId={selectedLevel?.id}
+            levelId={selectedLevel?.id}
             onUploadSuccess={handleUploadSuccess}
           />
 
@@ -751,18 +815,18 @@ const QuestionBankUpload = () => {
                     <div className="p-3 bg-white rounded border">B: {question.optionB}</div>
                     <div className="p-3 bg-white rounded border">C: {question.optionC}</div>
                     <div className="p-3 bg-white rounded border">D: {question.optionD}</div>
-              </div>
-              <div className="mt-3 text-sm">
-                <span className="font-medium text-green-600">Answer: {question.answer}</span>
-              </div>
+                  </div>
+                  <div className="mt-3 text-sm">
+                    <span className="font-medium text-green-600">Answer: {question.answer}</span>
+                  </div>
                 </div>
               )}
             </div>
           ))}
-          </div>
         </div>
       </div>
-    );
+    </div>
+  );
 
   const renderAddQuestionModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
