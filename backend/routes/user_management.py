@@ -274,10 +274,12 @@ def update_user(user_id):
                 login_url = "https://pydah-ai-versant.vercel.app/login"
                 html_content = render_template(
                     'reset_password_notification.html',
-                    name=name,
-                    email=email,
-                    password=new_password,
-                    login_url=login_url
+                    params={
+                        'name': name,
+                        'email': email,
+                        'password': new_password,
+                        'login_url': login_url
+                    }
                 )
                 send_email(
                     to_email=email,
@@ -319,4 +321,95 @@ def delete_user(user_id):
         return jsonify({'success': True, 'message': 'User deleted successfully'}), 200
     except Exception as e:
         current_app.logger.error(f"Error deleting user: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@user_management_bp.route('/<user_id>/send-credentials', methods=['POST'])
+@jwt_required()
+def send_credentials_again(user_id):
+    """Send credentials again to a student"""
+    try:
+        user = mongo_db.users.find_one({'_id': ObjectId(user_id)})
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+        
+        if user.get('role') != 'student':
+            return jsonify({'success': False, 'message': 'This endpoint is only for students'}), 400
+        
+        # Get student details
+        student = mongo_db.students.find_one({'user_id': ObjectId(user_id)})
+        if not student:
+            return jsonify({'success': False, 'message': 'Student record not found'}), 404
+        
+        # Generate password (same logic as original creation)
+        username = student.get('roll_number', user.get('username', ''))
+        password = f"{user.get('name', '').split()[0][:4].lower()}{username[-4:]}"
+        
+        # Send welcome email
+        try:
+            html_content = render_template(
+                'student_credentials.html',
+                params={
+                    'name': user.get('name', 'Student'),
+                    'username': username,
+                    'email': user.get('email', ''),
+                    'password': password,
+                    'login_url': "https://pydah-ai-versant.vercel.app/login"
+                }
+            )
+            send_email(
+                to_email=user.get('email'),
+                to_name=user.get('name', 'Student'),
+                subject="Your VERSANT Student Credentials",
+                html_content=html_content
+            )
+            return jsonify({'success': True, 'message': 'Credentials sent successfully'}), 200
+        except Exception as e:
+            return jsonify({'success': False, 'message': f'Failed to send email: {str(e)}'}), 500
+            
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@user_management_bp.route('/<user_id>/credentials', methods=['GET'])
+@jwt_required()
+def download_credentials(user_id):
+    """Download student credentials as CSV"""
+    try:
+        user = mongo_db.users.find_one({'_id': ObjectId(user_id)})
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+        
+        if user.get('role') != 'student':
+            return jsonify({'success': False, 'message': 'This endpoint is only for students'}), 400
+        
+        # Get student details
+        student = mongo_db.students.find_one({'user_id': ObjectId(user_id)})
+        if not student:
+            return jsonify({'success': False, 'message': 'Student record not found'}), 404
+        
+        # Generate password
+        username = student.get('roll_number', user.get('username', ''))
+        password = f"{user.get('name', '').split()[0][:4].lower()}{username[-4:]}"
+        
+        # Create CSV content
+        import csv
+        import io
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Name', 'Roll Number', 'Email', 'Username', 'Password'])
+        writer.writerow([
+            user.get('name', ''),
+            student.get('roll_number', ''),
+            user.get('email', ''),
+            username,
+            password
+        ])
+        
+        output.seek(0)
+        return output.getvalue(), 200, {
+            'Content-Type': 'text/csv',
+            'Content-Disposition': f'attachment; filename="{user.get("name", "student")}_credentials.csv"'
+        }
+        
+    except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500 

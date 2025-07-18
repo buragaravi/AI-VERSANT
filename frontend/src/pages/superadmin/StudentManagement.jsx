@@ -75,6 +75,42 @@ const StudentManagement = () => {
         }
     };
 
+    const handleSendCredentialsAgain = async (student) => {
+        try {
+            const response = await api.post(`/user-management/${student._id}/send-credentials`);
+            if (response.data.success) {
+                success('Credentials sent successfully to ' + student.email);
+            } else {
+                error(response.data.message || 'Failed to send credentials');
+            }
+        } catch (err) {
+            error(err.response?.data?.message || 'Failed to send credentials');
+        }
+    };
+
+    const handleDownloadCredentials = async (student) => {
+        try {
+            const response = await api.get(`/user-management/${student._id}/credentials`, {
+                responseType: 'blob'
+            });
+            
+            // Create a blob URL and download the file
+            const blob = new Blob([response.data], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${student.name}_credentials.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+            success('Credentials downloaded successfully');
+        } catch (err) {
+            error(err.response?.data?.message || 'Failed to download credentials');
+        }
+    };
+
     const filteredStudents = useMemo(() => {
         return students.filter(student =>
             (student.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
@@ -314,9 +350,42 @@ const StudentManagement = () => {
                                                         {/* Optionally, show a summary like '6 modules' or leave blank */}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                        <button onClick={() => handleDeleteStudent(student._id)} className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-50">
-                                                            <Trash2 size={18} />
-                                                        </button>
+                                                        <div className="flex items-center justify-end space-x-2">
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleSendCredentialsAgain(student);
+                                                                }} 
+                                                                className="text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-50"
+                                                                title="Send Credentials Again"
+                                                            >
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                                </svg>
+                                                            </button>
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDownloadCredentials(student);
+                                                                }} 
+                                                                className="text-green-600 hover:text-green-800 p-2 rounded-full hover:bg-green-50"
+                                                                title="Download Credentials"
+                                                            >
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                </svg>
+                                                            </button>
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteStudent(student._id);
+                                                                }} 
+                                                                className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-50"
+                                                                title="Delete Student"
+                                                            >
+                                                                <Trash2 size={18} />
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))}

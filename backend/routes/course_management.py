@@ -162,11 +162,13 @@ def create_course(campus_id):
         try:
             html_content = render_template(
                 'course_admin_credentials.html',
-                name=admin_name,
-                username=admin_name,
-                email=admin_email,
-                password=admin_password,
-                login_url="https://pydah-ai-versant.vercel.app/login"
+                params={
+                    'name': admin_name,
+                    'username': admin_name,
+                    'email': admin_email,
+                    'password': admin_password,
+                    'login_url': "https://pydah-ai-versant.vercel.app/login"
+                }
             )
             send_email(
                 to_email=admin_email,

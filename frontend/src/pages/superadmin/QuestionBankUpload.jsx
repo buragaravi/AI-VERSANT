@@ -113,7 +113,13 @@ const QuestionBankUpload = () => {
 
   const handleModuleSelect = (module) => {
     setSelectedModule(module.id);
-    setCurrentStep('upload');
+    setCurrentStep('levels');
+  };
+
+  const handleViewQuestions = (file) => {
+    setSelectedFile(file);
+    setCurrentStep('questions');
+    fetchFileQuestions(file._id);
   };
 
   const handleBackToModules = () => {
@@ -121,6 +127,8 @@ const QuestionBankUpload = () => {
     setCurrentStep('modules');
     setQuestions([]);
     setLevelId('');
+    setShowFileDetails(false);
+    setSelectedFile(null);
   };
 
   const handleUploadSuccess = () => {
@@ -164,155 +172,244 @@ const QuestionBankUpload = () => {
   };
 
   const renderModuleCards = () => (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="max-w-6xl mx-auto p-6">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-800 mb-4">
-            Bulk MCQ Upload
-          </h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Upload multiple choice questions for different modules. Select a module to get started.
-          </p>
-        </div>
+    <div className="min-h-screen bg-gray-100">
+      <SuperAdminSidebar />
+      <div className="ml-64">
+        <Header />
+        <main className="p-6">
+          <div className="max-w-6xl mx-auto">
+            {/* Header */}
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                Question Bank Upload
+              </h1>
+              <p className="text-gray-600">
+                Upload questions for different modules and manage your question bank
+              </p>
+            </div>
 
-        {/* Module Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {MCQ_MODULES.map((module, index) => (
-              <motion.div
-                key={module.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer border border-gray-100"
-                onClick={() => handleModuleSelect(module)}
-              >
-              <div className={`h-3 bg-gradient-to-r ${module.color} rounded-t-2xl`}></div>
-              <div className="p-8">
-                <div className="text-4xl mb-4">{module.icon}</div>
-                <h3 className="text-2xl font-bold text-gray-800 mb-3">
-                  {module.name}
-                </h3>
-                <p className="text-gray-600 leading-relaxed">
-                  {module.description}
-                </p>
-                <div className="mt-6 flex items-center text-blue-600 font-semibold">
-                  <span>Upload Questions</span>
-                  <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+            {/* Module Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+              {MCQ_MODULES.map((module, index) => (
+                <motion.div
+                  key={module.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer border border-gray-200"
+                  onClick={() => handleModuleSelect(module)}
+                >
+                  <div className="p-6">
+                    <div className="flex items-center mb-4">
+                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl ${
+                        module.id === 'GRAMMAR' ? 'bg-red-100 text-red-600' :
+                        module.id === 'VOCABULARY' ? 'bg-blue-100 text-blue-600' :
+                        'bg-purple-100 text-purple-600'
+                      }`}>
+                        {module.icon}
+                      </div>
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-800 mb-2">
+                      {module.name}
+                    </h3>
+                    <p className="text-gray-600 text-sm mb-4">
+                      {module.description}
+                    </p>
+                    <div className="flex items-center text-blue-600 font-medium text-sm">
+                      <span>Upload Questions</span>
+                      <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Uploaded Files Section */}
+            {uploadedFiles.length > 0 && (
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-6">Recently Uploaded Files</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {uploadedFiles.slice(0, 6).map((file) => (
+                    <div key={file._id} className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-semibold text-gray-800">{file.module_name}</h3>
+                        <span className="text-xs text-gray-500">{file.level_name}</span>
+                      </div>
+                      <div className="text-sm text-gray-600 mb-3">
+                        <p><strong>File:</strong> {file.filename}</p>
+                        <p><strong>Questions:</strong> {file.question_count}</p>
+                        <p><strong>Uploaded:</strong> {new Date(file.uploaded_at).toLocaleDateString()}</p>
+                      </div>
+                      <button
+                        onClick={() => handleViewQuestions(file)}
+                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                      >
+                        View Questions
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
-              </motion.div>
-            ))}
-        </div>
-
-        {/* Uploaded Files Section */}
-        {uploadedFiles.length > 0 && (
-          <div className="mt-12">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">Recently Uploaded Files</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {uploadedFiles.slice(0, 6).map((file) => (
-                <div key={file._id} className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-gray-800">{file.module_name}</h3>
-                    <span className="text-xs text-gray-500">{file.level_name}</span>
+            )}
           </div>
-                  <div className="text-sm text-gray-600 mb-3">
-                    <p><strong>File:</strong> {file.filename}</p>
-                    <p><strong>Questions:</strong> {file.question_count}</p>
-                    <p><strong>Uploaded:</strong> {new Date(file.uploaded_at).toLocaleDateString()}</p>
-        </div>
-                <button
-                    onClick={() => fetchFileQuestions(file._id)}
-                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                  >
-                    View Questions
-                  </button>
-                </div>
+        </main>
+      </div>
+    </div>
+  );
+
+  const renderLevelsSection = () => (
+    <div className="min-h-screen bg-gray-100">
+      <SuperAdminSidebar />
+      <div className="ml-64">
+        <Header />
+        <main className="p-6">
+          <div className="max-w-4xl mx-auto">
+            {/* Header */}
+            <div className="mb-8">
+              <button
+                onClick={handleBackToModules}
+                className="flex items-center text-blue-600 hover:text-blue-800 font-semibold mb-4 transition-colors"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Back to Modules
+              </button>
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                Select Level for {selectedModule}
+              </h1>
+              <p className="text-gray-600">
+                Choose a level to upload questions for {selectedModule}
+              </p>
+            </div>
+
+            {/* Levels Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {levels.map((level, index) => (
+                <motion.div
+                  key={level.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer border border-gray-200"
+                  onClick={() => {
+                    setLevelId(level.id);
+                    setCurrentStep('upload');
+                  }}
+                >
+                  <div className="p-6">
+                    <div className="flex items-center mb-4">
+                      <div className="w-12 h-12 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-xl font-bold">
+                        {level.id.split('_')[1] || level.id}
+                      </div>
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-800 mb-2">
+                      {level.name}
+                    </h3>
+                    <p className="text-gray-600 text-sm mb-4">
+                      Upload questions for {level.name} level
+                    </p>
+                    <div className="flex items-center text-blue-600 font-medium text-sm">
+                      <span>Upload Questions</span>
+                      <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                </motion.div>
               ))}
             </div>
           </div>
-        )}
+        </main>
       </div>
-          </div>
+    </div>
   );
 
   const renderUploadSection = () => (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <button
-            onClick={handleBackToModules}
-            className="flex items-center text-blue-600 hover:text-blue-800 font-semibold mb-4 transition-colors"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to Modules
-          </button>
-          
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Upload MCQs for {selectedModule}
-          </h1>
-          <p className="text-gray-600">
-            Upload your CSV or XLSX file with MCQ questions
-          </p>
-          </div>
+    <div className="min-h-screen bg-gray-100">
+      <SuperAdminSidebar />
+      <div className="ml-64">
+        <Header />
+        <main className="p-6">
+          <div className="max-w-4xl mx-auto">
+            {/* Header */}
+            <div className="mb-8">
+              <button
+                onClick={() => setCurrentStep('levels')}
+                className="flex items-center text-blue-600 hover:text-blue-800 font-semibold mb-4 transition-colors"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Back to Levels
+              </button>
+              
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                Upload MCQs for {selectedModule} - {levels.find(l => l.id === levelId)?.name || 'Level'}
+              </h1>
+              <p className="text-gray-600">
+                Upload your CSV or XLSX file with MCQ questions for {levels.find(l => l.id === levelId)?.name || 'selected level'}
+              </p>
+            </div>
 
-        {/* Upload Card */}
-        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
-          {/* Level Selection */}
-          <div className="mb-6">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Select Level
-            </label>
-            <select
-              value={levelId}
-              onChange={(e) => setLevelId(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Choose a level...</option>
-              {levels.map((level) => (
-                <option key={level.id} value={level.id}>
-                  {level.name}
-                </option>
-                ))}
-            </select>
-          </div>
-
-          {/* Template Download */}
-          <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-blue-800 mb-1">Download Template</h3>
-                <p className="text-sm text-blue-600">
-                  Download the CSV template to see the exact format required for upload
-                </p>
+            {/* Upload Card */}
+            <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+              {/* Level Selection */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Select Level
+                </label>
+                <select
+                  value={levelId}
+                  onChange={(e) => setLevelId(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Choose a level...</option>
+                  {levels.map((level) => (
+                    <option key={level.id} value={level.id}>
+                      {level.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-            <button
-                onClick={downloadTemplate}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-                Download Template
-            </button>
+
+              {/* Template Download */}
+              <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-blue-800 mb-1">Download Template</h3>
+                    <p className="text-sm text-blue-600">
+                      Download the CSV template to see the exact format required for upload
+                    </p>
+                  </div>
+                  <button
+                    onClick={downloadTemplate}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    Download Template
+                  </button>
+                </div>
+              </div>
+
+              {/* MCQ Upload Component */}
+              <MCQUpload
+                questions={questions}
+                setQuestions={setQuestions}
+                onNext={handleUploadSuccess}
+                onBack={handleBackToModules}
+                moduleName={selectedModule}
+                levelId={levelId}
+                onUploadSuccess={handleUploadSuccess}
+              />
             </div>
           </div>
-
-          {/* MCQ Upload Component */}
-          <MCQUpload
-            questions={questions}
-            setQuestions={setQuestions}
-            onNext={handleUploadSuccess}
-            onBack={handleBackToModules}
-            moduleName={selectedModule}
-            levelId={levelId}
-            onUploadSuccess={handleUploadSuccess}
-          />
-        </div>
+        </main>
       </div>
     </div>
   );
@@ -326,7 +423,10 @@ const QuestionBankUpload = () => {
               File Questions - {selectedFile?.filename}
             </h2>
             <button
-              onClick={() => setShowFileDetails(false)}
+              onClick={() => {
+                setShowFileDetails(false);
+                setCurrentStep('modules');
+              }}
               className="text-gray-500 hover:text-gray-700"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -357,22 +457,17 @@ const QuestionBankUpload = () => {
               </div>
             </div>
           ))}
-          </div>
         </div>
       </div>
-    );
+    </div>
+  );
 
   return (
-    <div className="bg-gray-100 min-h-screen">
-      <SuperAdminSidebar />
-      <div className="ml-64">
-        <Header />
-        <main className="p-6">
-          {currentStep === 'modules' && renderModuleCards()}
-          {currentStep === 'upload' && renderUploadSection()}
-          {showFileDetails && renderFileDetails()}
-        </main>
-      </div>
+    <div>
+      {currentStep === 'modules' && renderModuleCards()}
+      {currentStep === 'levels' && renderLevelsSection()}
+      {currentStep === 'upload' && renderUploadSection()}
+      {currentStep === 'questions' && renderFileDetails()}
     </div>
   );
 };

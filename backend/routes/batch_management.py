@@ -247,11 +247,13 @@ def create_batch():
             try:
                 html_content = render_template(
                     'student_credentials.html',
-                    name=student['student_name'],
-                    username=username,
-                    email=student['email_id'],
-                    password=password,
-                    login_url="https://pydah-ai-versant.vercel.app/login"
+                    params={
+                        'name': student['student_name'],
+                        'username': username,
+                        'email': student['email_id'],
+                        'password': password,
+                        'login_url': "https://pydah-ai-versant.vercel.app/login"
+                    }
                 )
                 send_email(
                     to_email=student['email_id'],
@@ -587,11 +589,13 @@ def upload_students_to_batch():
                 try:
                     html_content = render_template(
                         'student_credentials.html',
-                        name=student_name,
-                        username=username,
-                        email=email,
-                        password=password,
-                        login_url="https://pydah-ai-versant.vercel.app/login"
+                        params={
+                            'name': student_name,
+                            'username': username,
+                            'email': email,
+                            'password': password,
+                            'login_url': "https://pydah-ai-versant.vercel.app/login"
+                        }
                     )
                     send_email(
                         to_email=email,
@@ -966,7 +970,13 @@ def create_batch_with_students():
         # 3. Send emails
         for student_details in created_students_details:
              try:
-                html_content = render_template('student_credentials.html', **student_details, login_url="https://pydah-ai-versant.vercel.app/login")
+                html_content = render_template('student_credentials.html', params={
+                    'name': student_details['student_name'],
+                    'username': student_details['username'],
+                    'email': student_details['email'],
+                    'password': student_details['password'],
+                    'login_url': "https://pydah-ai-versant.vercel.app/login"
+                })
                 send_email(to_email=student_details['email'], to_name=student_details['student_name'], subject="Welcome to VERSANT - Your Student Credentials", html_content=html_content)
              except Exception as email_error:
                 current_app.logger.error(f"Failed to send welcome email to {student_details['email']}: {email_error}")
@@ -1089,7 +1099,13 @@ def add_students_to_batch(batch_id):
                     })
                     # Send welcome email
                     try:
-                        html_content = render_template('student_credentials.html', name=student['student_name'], username=username, email=student['email'], password=password, login_url="https://pydah-ai-versant.vercel.app/login")
+                        html_content = render_template('student_credentials.html', params={
+                            'name': student['student_name'],
+                            'username': username,
+                            'email': student['email'],
+                            'password': password,
+                            'login_url': "https://pydah-ai-versant.vercel.app/login"
+                        })
                         send_email(to_email=student['email'], to_name=student['student_name'], subject="Welcome to VERSANT - Your Student Credentials", html_content=html_content)
                     except Exception as e:
                         errors.append(f"Failed to send email to {student['email']}: {e}")
@@ -1173,7 +1189,13 @@ def add_students_to_batch(batch_id):
                 })
                 # Send welcome email
                 try:
-                    html_content = render_template('student_credentials.html', name=student['student_name'], username=username, email=student['email'], password=password, login_url="https://pydah-ai-versant.vercel.app/login")
+                    html_content = render_template('student_credentials.html', params={
+                        'name': student['student_name'],
+                        'username': username,
+                        'email': student['email'],
+                        'password': password,
+                        'login_url': "https://pydah-ai-versant.vercel.app/login"
+                    })
                     send_email(to_email=student['email'], to_name=student['student_name'], subject="Welcome to VERSANT - Your Student Credentials", html_content=html_content)
                 except Exception as e:
                     errors.append(f"Failed to send email to {student['email']}: {e}")
@@ -1256,11 +1278,13 @@ def add_single_student():
         try:
             html_content = render_template(
                 'student_credentials.html',
-                name=name,
-                username=roll_number,
-                email=email,
-                password=password,
-                login_url="https://pydah-ai-versant.vercel.app/login"
+                params={
+                    'name': name,
+                    'username': roll_number,
+                    'email': email,
+                    'password': password,
+                    'login_url': "https://pydah-ai-versant.vercel.app/login"
+                }
             )
             send_email(
                 to_email=email,
