@@ -36,7 +36,7 @@ function parseHumanReadableMCQ(text) {
   return questions;
 }
 
-export default function MCQUpload({ questions, setQuestions, onNext, onBack, moduleName, levelId = null, onUploadSuccess }) {
+export default function MCQUpload({ questions, setQuestions, onNext, onBack, moduleName, levelId, onUploadSuccess }) {
   const [existingQuestions, setExistingQuestions] = useState([]);
   const [previewQuestions, setPreviewQuestions] = useState([]);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
@@ -44,19 +44,13 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (moduleName) {
+    if (moduleName && levelId) {
       fetchExistingQuestions();
     }
-  }, [moduleName]);
+  }, [moduleName, levelId]);
 
   const fetchExistingQuestions = async () => {
     try {
-      // If levelId is not provided, we'll skip fetching existing questions for now
-      if (!levelId) {
-        setExistingQuestions([]);
-        return;
-      }
-      
       const response = await api.get(`/test-management/existing-questions?module_id=${moduleName}&level_id=${levelId}`);
       if (response.data.success) {
         setExistingQuestions(response.data.data);
@@ -230,7 +224,7 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
     try {
       const payload = {
         module_id: moduleName,
-        level_id: levelId || 'DEFAULT', // Use default level if not provided
+        level_id: levelId,
         questions: newQuestions.map(q => ({
           question: q.question,
           options: [q.optionA, q.optionB, q.optionC, q.optionD],
@@ -314,7 +308,7 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
                 </button>
               </div>
               <div className="text-sm text-gray-600 mt-2">
-                <p><strong>Module:</strong> {moduleName} | <strong>Level:</strong> {levelId || 'N/A'}</p>
+                <p><strong>Module:</strong> {moduleName} | <strong>Level:</strong> {levelId}</p>
                 <p><strong>New Questions:</strong> {previewQuestions.filter(q => q.status === 'New').length} | 
                    <strong>Duplicates:</strong> {previewQuestions.filter(q => q.status === 'Duplicate').length}</p>
               </div>

@@ -34,6 +34,7 @@ const MCQ_MODULES = [
 
 const QuestionBankUpload = () => {
   const [selectedModule, setSelectedModule] = useState(null);
+  const [selectedLevel, setSelectedLevel] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [modules, setModules] = useState([]);
   const [levels, setLevels] = useState([]);
@@ -114,6 +115,11 @@ const QuestionBankUpload = () => {
 
   const handleModuleSelect = (module) => {
     setSelectedModule(module.id);
+    setCurrentStep('levels');
+  };
+
+  const handleLevelSelect = (level) => {
+    setSelectedLevel(level);
     setCurrentStep('upload');
   };
 
@@ -125,6 +131,7 @@ const QuestionBankUpload = () => {
 
   const handleBackToModules = () => {
     setSelectedModule(null);
+    setSelectedLevel(null);
     setCurrentStep('modules');
     setQuestions([]);
     setShowFileDetails(false);
@@ -133,10 +140,17 @@ const QuestionBankUpload = () => {
     setShowAddQuestion(false);
   };
 
+  const handleBackToLevels = () => {
+    setSelectedLevel(null);
+    setCurrentStep('levels');
+    setQuestions([]);
+  };
+
   const handleUploadSuccess = () => {
     fetchUploadedFiles();
     setCurrentStep('modules');
     setSelectedModule(null);
+    setSelectedLevel(null);
     setQuestions([]);
   };
 
@@ -299,7 +313,7 @@ const QuestionBankUpload = () => {
     </div>
   );
 
-  const renderUploadSection = () => (
+  const renderLevelsSection = () => (
     <div className="min-h-screen bg-gray-50">
       <SuperAdminSidebar />
       <div className="flex-1">
@@ -316,12 +330,77 @@ const QuestionBankUpload = () => {
               </svg>
               Back to Modules
             </button>
-            
             <h1 className="text-2xl font-semibold text-gray-800 mb-2">
-              Upload MCQs for {selectedModule}
+              Select Level for {selectedModule}
             </h1>
             <p className="text-gray-600">
-              Upload your CSV or XLSX file with MCQ questions for {selectedModule}
+              Choose a level to upload questions for {selectedModule}
+            </p>
+          </div>
+
+          {/* Levels Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {levels.map((level, index) => (
+              <motion.div
+                key={level.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer border border-gray-200"
+                onClick={() => handleLevelSelect(level)}
+              >
+                <div className="p-8">
+                  <div className="flex items-center mb-6">
+                    <div className="w-16 h-16 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold">
+                      {level.id.split('_')[1] || level.id}
+                    </div>
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-800 mb-3">
+                    {level.name}
+                  </h3>
+                  <p className="text-gray-600 text-base mb-6 leading-relaxed">
+                    Upload questions for {level.name} level
+                  </p>
+                  <div className="flex items-center text-blue-600 font-semibold text-base">
+                    <span>Upload Questions</span>
+                    <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+
+  const renderUploadSection = () => (
+    <div className="min-h-screen bg-gray-50">
+      <SuperAdminSidebar />
+      <div className="flex-1">
+        <Header />
+        <main className="px-4 mt-6">
+          {/* Header */}
+          <div className="mb-8">
+            <button
+              onClick={handleBackToLevels}
+              className="flex items-center text-blue-600 hover:text-blue-800 font-semibold mb-4 transition-colors"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to Levels
+            </button>
+            
+            <h1 className="text-2xl font-semibold text-gray-800 mb-2">
+              Upload MCQs for {selectedModule} - {selectedLevel?.name}
+            </h1>
+            <p className="text-gray-600">
+              Upload your CSV or XLSX file with MCQ questions for {selectedLevel?.name}
             </p>
           </div>
 
@@ -347,6 +426,7 @@ const QuestionBankUpload = () => {
               onNext={handleUploadSuccess}
               onBack={handleBackToModules}
               moduleName={selectedModule}
+              levelId={selectedLevel?.id}
               onUploadSuccess={handleUploadSuccess}
             />
           </div>
@@ -469,6 +549,7 @@ const QuestionBankUpload = () => {
   return (
     <div>
       {currentStep === 'modules' && renderModuleCards()}
+      {currentStep === 'levels' && renderLevelsSection()}
       {currentStep === 'upload' && renderUploadSection()}
       {currentStep === 'questions' && renderFileDetails()}
       {showAddQuestion && renderAddQuestionModal()}

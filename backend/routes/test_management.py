@@ -1267,20 +1267,8 @@ def upload_module_questions():
         module_id = data.get('module_id')
         level_id = data.get('level_id')
         questions = data.get('questions')
-        if not module_id or not questions:
-            return jsonify({'success': False, 'message': 'module_id and questions are required.'}), 400
-        
-        # Handle default level case
-        if not level_id or level_id == 'DEFAULT':
-            # Set a default level based on module
-            if module_id == 'GRAMMAR':
-                level_id = 'GRAMMAR_BASIC'
-            elif module_id == 'VOCABULARY':
-                level_id = 'VOCABULARY_BASIC'
-            elif module_id == 'READING':
-                level_id = 'READING_BASIC'
-            else:
-                level_id = f'{module_id}_BASIC'
+        if not module_id or not level_id or not questions:
+            return jsonify({'success': False, 'message': 'module_id, level_id, and questions are required.'}), 400
         
         # Store each question in a question_bank collection
         inserted = []
