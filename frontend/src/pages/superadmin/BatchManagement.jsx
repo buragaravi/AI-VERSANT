@@ -26,7 +26,7 @@ const BatchManagement = () => {
   const [selectedCampus, setSelectedCampus] = useState('');
   const [selectedCourse, setSelectedCourse] = useState('');
   const [batchName, setBatchName] = useState('');
-  const [batchDescription, setBatchDescription] = useState('');
+
   const [creatingBatch, setCreatingBatch] = useState(false);
   
   // Upload states
@@ -111,7 +111,6 @@ const BatchManagement = () => {
     try {
       const response = await api.post('/batch-management/', {
         name: batchName,
-        description: batchDescription,
         campus_ids: [selectedCampus],
         course_ids: [selectedCourse],
       });
@@ -119,7 +118,6 @@ const BatchManagement = () => {
         toast.success('Batch created successfully!');
         setShowCreateBatch(false);
         setBatchName('');
-        setBatchDescription('');
         setSelectedCampus('');
         setSelectedCourse('');
         fetchBatches();
@@ -167,7 +165,17 @@ const BatchManagement = () => {
       const formData = new FormData();
       formData.append('file', uploadFile);
       formData.append('batch_id', selectedBatch.id);
-      formData.append('course_ids', selectedBatch.course_ids.join(','));
+      selectedBatch.courses.forEach(course => {
+        formData.append('course_ids', course.id);
+      });
+
+      // Debug logging
+      console.log('Uploading students with:', {
+        batch_id: selectedBatch.id,
+        course_ids: selectedBatch.courses.map(c => c.id),
+        file_name: uploadFile.name,
+        file_size: uploadFile.size
+      });
 
       const response = await api.post('/batch-management/upload-students', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -184,7 +192,15 @@ const BatchManagement = () => {
         toast.error(response.data.message || 'Failed to upload students');
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to upload students');
+      console.error('Upload error:', error);
+      if (error.response?.data?.message) {
+        toast.error(error.response.data.message);
+      } else if (error.response?.data?.errors) {
+        const errorMessages = error.response.data.errors.join(', ');
+        toast.error(`Upload failed: ${errorMessages}`);
+      } else {
+        toast.error('Failed to upload students. Please check your file format and try again.');
+      }
     } finally {
       setUploadingStudents(false);
     }
@@ -255,31 +271,35 @@ const BatchManagement = () => {
       <main className="ml-64 p-6">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Batch Management
-          </h1>
-          <p className="text-gray-600">
-            Create and manage batches with student uploads
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                Batch Management
+              </h1>
+              <p className="text-gray-600">
+                Create and manage batches with student uploads
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCreateBatch(true)}
+                className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-all duration-200 shadow-md hover:shadow-lg"
+              >
+                <Plus className="w-5 h-5 mr-2" />
+                Create New Batch
+              </button>
+              <button
+                onClick={() => setShowUploadStudents(true)}
+                className="inline-flex items-center px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-all duration-200 shadow-md hover:shadow-lg"
+              >
+                <Upload className="w-5 h-5 mr-2" />
+                Upload Students
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-4 mb-8">
-          <button
-            onClick={() => setShowCreateBatch(true)}
-            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Create New Batch
-          </button>
-          <button
-            onClick={() => setShowUploadStudents(true)}
-            className="inline-flex items-center px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
-          >
-            <Upload className="w-5 h-5 mr-2" />
-            Upload Students
-          </button>
-        </div>
+
 
         {/* Batches Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -382,16 +402,22 @@ const BatchManagement = () => {
 
         {/* Create Batch Modal */}
         {showCreateBatch && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-            <form onSubmit={handleCreateBatch} className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full relative">
-              <button type="button" onClick={() => setShowCreateBatch(false)} className="absolute top-3 right-3 text-gray-500 hover:text-red-600 text-xl">&times;</button>
-              <h2 className="text-2xl font-bold mb-6">Create New Batch</h2>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+            <form onSubmit={handleCreateBatch} className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full relative transform transition-all">
+              <button type="button" onClick={() => setShowCreateBatch(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-600 text-2xl font-bold transition-colors">&times;</button>
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Plus className="w-8 h-8 text-blue-600" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-800">Create New Batch</h2>
+                <p className="text-gray-600 mt-2">Set up a new batch for student management</p>
+              </div>
               
-              <div className="mb-4">
-                <label className="block font-semibold mb-1">Batch Name *</label>
+              <div className="mb-6">
+                <label className="block font-semibold text-gray-700 mb-2">Batch Name *</label>
                 <input 
                   type="text" 
-                  className="w-full border rounded px-3 py-2" 
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200" 
                   value={batchName} 
                   onChange={e => setBatchName(e.target.value)} 
                   required 
@@ -399,21 +425,12 @@ const BatchManagement = () => {
                 />
               </div>
               
-              <div className="mb-4">
-                <label className="block font-semibold mb-1">Description</label>
-                <textarea 
-                  className="w-full border rounded px-3 py-2" 
-                  value={batchDescription} 
-                  onChange={e => setBatchDescription(e.target.value)}
-                  rows="3"
-                  placeholder="Optional batch description"
-                />
-              </div>
+
               
-              <div className="mb-4">
-                <label className="block font-semibold mb-1">Campus *</label>
+              <div className="mb-6">
+                <label className="block font-semibold text-gray-700 mb-2">Campus *</label>
                 <select 
-                  className="w-full border rounded px-3 py-2" 
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200" 
                   value={selectedCampus} 
                   onChange={e => setSelectedCampus(e.target.value)} 
                   required
@@ -426,9 +443,9 @@ const BatchManagement = () => {
               </div>
               
               <div className="mb-6">
-                <label className="block font-semibold mb-1">Course *</label>
+                <label className="block font-semibold text-gray-700 mb-2">Course *</label>
                 <select 
-                  className="w-full border rounded px-3 py-2" 
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 disabled:bg-gray-100 disabled:cursor-not-allowed" 
                   value={selectedCourse} 
                   onChange={e => setSelectedCourse(e.target.value)} 
                   required
@@ -445,13 +462,13 @@ const BatchManagement = () => {
                 <button 
                   type="button" 
                   onClick={() => setShowCreateBatch(false)}
-                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+                  className="px-6 py-3 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 font-medium"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors" 
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 font-medium shadow-md hover:shadow-lg" 
                   disabled={creatingBatch}
                 >
                   {creatingBatch ? 'Creating...' : 'Create Batch'}
@@ -463,34 +480,40 @@ const BatchManagement = () => {
 
         {/* Upload Students Modal */}
         {showUploadStudents && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-            <form onSubmit={handleUploadStudents} className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full relative">
-              <button type="button" onClick={() => setShowUploadStudents(false)} className="absolute top-3 right-3 text-gray-500 hover:text-red-600 text-xl">&times;</button>
-              <h2 className="text-2xl font-bold mb-6">Upload Students</h2>
-              
-              {!selectedBatch && (
-                <div className="mb-6">
-                  <label className="block font-semibold mb-1">Select Batch *</label>
-                  <select 
-                    className="w-full border rounded px-3 py-2" 
-                    onChange={e => {
-                      const batch = batches.find(b => b.id === e.target.value);
-                      setSelectedBatch(batch);
-                    }}
-                    required
-                  >
-                    <option value="">-- Select Batch --</option>
-                    {batches.map(batch => (
-                      <option key={batch.id} value={batch.id}>{batch.name}</option>
-                    ))}
-                  </select>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+            <form onSubmit={handleUploadStudents} className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full relative transform transition-all">
+              <button type="button" onClick={() => setShowUploadStudents(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-600 text-2xl font-bold transition-colors">&times;</button>
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Upload className="w-8 h-8 text-green-600" />
                 </div>
-              )}
+                <h2 className="text-2xl font-bold text-gray-800">Upload Students</h2>
+                <p className="text-gray-600 mt-2">Add students to an existing batch</p>
+              </div>
+              
+                              {!selectedBatch && (
+                  <div className="mb-6">
+                    <label className="block font-semibold text-gray-700 mb-2">Select Batch *</label>
+                    <select 
+                      className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200" 
+                      onChange={e => {
+                        const batch = batches.find(b => b.id === e.target.value);
+                        setSelectedBatch(batch);
+                      }}
+                      required
+                    >
+                      <option value="">-- Select Batch --</option>
+                      {batches.map(batch => (
+                        <option key={batch.id} value={batch.id}>{batch.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               
               {selectedBatch && (
-                <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-                  <h3 className="font-semibold text-blue-800 mb-2">Selected Batch: {selectedBatch.name}</h3>
-                  <p className="text-sm text-blue-600">
+                <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
+                  <h3 className="font-semibold text-green-800 mb-2">Selected Batch: {selectedBatch.name}</h3>
+                  <p className="text-sm text-green-600">
                     Campus: {selectedBatch.campuses?.map(c => c.name).join(', ')} | 
                     Course: {selectedBatch.courses?.map(c => c.name).join(', ')}
                   </p>
@@ -498,15 +521,15 @@ const BatchManagement = () => {
               )}
               
               <div className="mb-6">
-                <label className="block font-semibold mb-1">Upload Student File *</label>
+                <label className="block font-semibold text-gray-700 mb-2">Upload Student File *</label>
                 <input 
                   type="file" 
                   accept=".csv,.xlsx"
                   onChange={handleFileUpload}
-                  className="w-full border rounded px-3 py-2" 
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100" 
                   required
                 />
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-gray-500 mt-2">
                   Upload CSV or Excel file with student details
                 </p>
               </div>
@@ -552,13 +575,13 @@ const BatchManagement = () => {
                 <button 
                   type="button" 
                   onClick={() => setShowUploadStudents(false)}
-                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+                  className="px-6 py-3 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 font-medium"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
-                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors" 
+                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 font-medium shadow-md hover:shadow-lg" 
                   disabled={uploadingStudents || !selectedBatch || !uploadFile}
                 >
                   {uploadingStudents ? 'Uploading...' : 'Upload Students'}

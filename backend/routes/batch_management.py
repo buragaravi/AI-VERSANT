@@ -5,7 +5,6 @@ from bson import ObjectId
 import csv
 import openpyxl
 from werkzeug.utils import secure_filename
-import bcrypt
 from config.constants import ROLES
 from datetime import datetime
 import pytz
