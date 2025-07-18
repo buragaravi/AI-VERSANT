@@ -586,6 +586,7 @@ const BatchDetails = () => {
                         >
                             {addingStudent ? 'Adding...' : 'Add Student'}
                         </button>
+                        </div>
                     </div>
                 </div>
             )}
