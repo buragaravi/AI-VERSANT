@@ -42,6 +42,29 @@ def get_courses():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
+@course_management_bp.route('/courses', methods=['GET'])
+@jwt_required()
+def get_courses_filtered():
+    """Get courses filtered by campus_id query parameter"""
+    try:
+        campus_id = request.args.get('campus_id')
+        if not campus_id:
+            return jsonify({'success': False, 'message': 'campus_id parameter is required'}), 400
+        
+        # Fetch courses for the specific campus
+        courses = list(mongo_db.courses.find({'campus_id': ObjectId(campus_id)}))
+        course_list = [
+            {
+                'id': str(course['_id']),
+                'name': course.get('name'),
+                'campus_id': str(course.get('campus_id'))
+            }
+            for course in courses
+        ]
+        return jsonify({'success': True, 'data': course_list}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @course_management_bp.route('/batch/<batch_id>/courses', methods=['GET'])
 @jwt_required()
 def get_courses_by_batch(batch_id):

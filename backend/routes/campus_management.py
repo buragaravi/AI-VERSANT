@@ -28,6 +28,23 @@ def get_campuses():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
+@campus_management_bp.route('/campuses', methods=['GET'])
+@jwt_required()
+def get_campuses_simple():
+    """Get all campuses (simple format for batch creation)"""
+    try:
+        campuses = list(mongo_db.campuses.find())
+        campus_list = [
+            {
+                'id': str(campus['_id']),
+                'name': campus.get('name')
+            }
+            for campus in campuses
+        ]
+        return jsonify({'success': True, 'data': campus_list}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @campus_management_bp.route('/', methods=['POST'])
 @jwt_required()
 def create_campus():
