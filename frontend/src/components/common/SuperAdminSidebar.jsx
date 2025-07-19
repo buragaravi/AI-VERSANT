@@ -68,6 +68,28 @@ const SuperAdminSidebar = () => {
     }
   }, [isMobileMenuOpen])
 
+  // Handle click outside to close mobile menu
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      const sidebar = document.querySelector('[data-sidebar]')
+      const toggleButton = document.querySelector('[data-toggle-button]')
+      
+      if (isMobileMenuOpen && sidebar && !sidebar.contains(e.target) && !toggleButton?.contains(e.target)) {
+        setIsMobileMenuOpen(false)
+      }
+    }
+
+    if (isMobileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('touchstart', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('touchstart', handleClickOutside)
+    }
+  }, [isMobileMenuOpen])
+
   const fetchUserPermissions = async () => {
     if (!user) {
       setLoading(false)
@@ -194,6 +216,7 @@ const SuperAdminSidebar = () => {
       {/* Mobile Menu Toggle */}
       <div className="lg:hidden fixed top-4 left-4 z-50">
         <button
+          data-toggle-button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
@@ -202,16 +225,9 @@ const SuperAdminSidebar = () => {
         </button>
       </div>
 
-      {/* Mobile Overlay */}
-      {isMobileMenuOpen && (
-        <div 
-          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
-
       {/* Sidebar */}
       <motion.div
+        data-sidebar
         initial={false}
         animate={{ 
           x: isMobileMenuOpen ? 0 : '-100%'
@@ -226,7 +242,7 @@ const SuperAdminSidebar = () => {
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.1, type: 'spring', stiffness: 100 }}
-          className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50"
+          className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 flex-shrink-0"
         >
           <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
             Study Edge
@@ -245,8 +261,8 @@ const SuperAdminSidebar = () => {
           )}
         </motion.div>
 
-        <nav className="flex-1 flex flex-col justify-between overflow-y-auto">
-          <div className="flex flex-col space-y-1 px-4 mt-6">
+        <nav className="flex-1 flex flex-col justify-between min-h-0">
+          <div className="flex flex-col space-y-1 px-4 mt-6 overflow-y-auto flex-1">
             {navLinks.length > 0 ? (
               navLinks.map((link, idx) => {
                 const isRestricted = link.isUpload && (user?.role === 'campus_admin' || user?.role === 'course_admin')
@@ -361,7 +377,7 @@ const SuperAdminSidebar = () => {
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.3, type: 'spring', stiffness: 100 }}
-          className="px-4 pb-6 mt-auto"
+          className="px-4 pb-6 mt-auto flex-shrink-0"
         >
           <button
             onClick={() => {
