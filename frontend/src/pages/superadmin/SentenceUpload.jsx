@@ -1,15 +1,31 @@
 import React, { useState } from 'react';
-import { FaUpload, FaFileAlt, FaTrash, FaHeadphones, FaMicrophone } from 'react-icons/fa';
+import { FaUpload, FaFileAlt, FaTrash, FaHeadphones, FaMicrophone, FaVolumeUp, FaPlay, FaPause } from 'react-icons/fa';
 import Papa from 'papaparse';
 
 const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
   const [file, setFile] = useState(null);
+  const [audioFile, setAudioFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [selectedLevel, setSelectedLevel] = useState('Beginner');
   const [previewSentences, setPreviewSentences] = useState([]);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  
+  // Audio configuration for Listening module
+  const [audioConfig, setAudioConfig] = useState({
+    speed: 1.0,
+    accent: 'en-US',
+    volume: 1.0
+  });
+  
+  // Transcript validation settings
+  const [transcriptValidation, setTranscriptValidation] = useState({
+    enabled: true,
+    tolerance: 0.8, // Similarity threshold
+    checkMismatchedWords: true,
+    allowPartialMatches: true
+  });
 
   const levels = ['Beginner', 'Intermediate', 'Advanced'];
   
@@ -17,14 +33,16 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
     LISTENING: {
       icon: FaHeadphones,
       title: 'Listening Comprehension',
-      description: 'Upload listening comprehension sentences with audio prompts',
-      color: 'yellow'
+      description: 'Upload listening comprehension sentences with audio prompts and transcript validation',
+      color: 'yellow',
+      supportsAudio: true
     },
     SPEAKING: {
       icon: FaMicrophone,
       title: 'Speaking Practice',
       description: 'Upload speaking practice sentences with prompts',
-      color: 'pink'
+      color: 'pink',
+      supportsAudio: false
     }
   };
 
@@ -40,6 +58,20 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
         return;
       }
       setFile(selectedFile);
+      setError('');
+    }
+  };
+
+  const handleAudioFileChange = (e) => {
+    const selectedAudioFile = e.target.files[0];
+    if (selectedAudioFile) {
+      // Validate audio file type
+      const validAudioTypes = ['audio/mp3', 'audio/wav', 'audio/m4a', 'audio/ogg'];
+      if (!validAudioTypes.includes(selectedAudioFile.type)) {
+        setError('Please upload a valid audio file (MP3, WAV, M4A, OGG)');
+        return;
+      }
+      setAudioFile(selectedAudioFile);
       setError('');
     }
   };
@@ -123,6 +155,12 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
       return;
     }
 
+    // For Listening module, require audio file
+    if (moduleType === 'LISTENING' && !audioFile) {
+      setError('Please upload an audio file for listening comprehension');
+      return;
+    }
+
     setUploading(true);
     setError('');
     setSuccess('');
@@ -133,6 +171,13 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
       formData.append('module_id', moduleType);
       formData.append('level_id', `${moduleType}_${selectedLevel.toUpperCase()}`);
       formData.append('level', selectedLevel);
+      
+      // Add audio configuration for Listening module
+      if (moduleType === 'LISTENING') {
+        formData.append('audio_file', audioFile);
+        formData.append('audio_config', JSON.stringify(audioConfig));
+        formData.append('transcript_validation', JSON.stringify(transcriptValidation));
+      }
 
       const response = await fetch('/api/superadmin/sentence-upload', {
         method: 'POST',
@@ -164,6 +209,11 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
 
   const removeFile = () => {
     setFile(null);
+    setError('');
+  };
+
+  const removeAudioFile = () => {
+    setAudioFile(null);
     setError('');
   };
 
@@ -205,6 +255,13 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
             <li>• CSV or TXT format</li>
             <li>• Levels: Beginner, Intermediate, Advanced</li>
             <li>• One sentence per line (TXT) or column (CSV)</li>
+            {moduleType === 'LISTENING' && (
+              <>
+                <li>• Audio file required (MP3, WAV, M4A, OGG)</li>
+                <li>• Transcript validation with configurable tolerance</li>
+                <li>• Mismatched words detection enabled</li>
+              </>
+            )}
           </ul>
         </div>
       </div>
@@ -224,14 +281,140 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
         </select>
       </div>
 
+      {/* Audio Configuration for Listening Module */}
+      {moduleType === 'LISTENING' && (
+        <div className="mb-6 space-y-4">
+          <h3 className="text-lg font-semibold text-gray-700">Audio Configuration</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Playback Speed
+              </label>
+              <select
+                value={audioConfig.speed}
+                onChange={(e) => setAudioConfig(prev => ({ ...prev, speed: parseFloat(e.target.value) }))}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              >
+                <option value={0.5}>0.5x (Slow)</option>
+                <option value={0.75}>0.75x</option>
+                <option value={1.0}>1.0x (Normal)</option>
+                <option value={1.25}>1.25x</option>
+                <option value={1.5}>1.5x (Fast)</option>
+                <option value={2.0}>2.0x (Very Fast)</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Accent
+              </label>
+              <select
+                value={audioConfig.accent}
+                onChange={(e) => setAudioConfig(prev => ({ ...prev, accent: e.target.value }))}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="en-US">American English</option>
+                <option value="en-GB">British English</option>
+                <option value="en-AU">Australian English</option>
+                <option value="en-IN">Indian English</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Volume
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="2"
+                step="0.1"
+                value={audioConfig.volume}
+                onChange={(e) => setAudioConfig(prev => ({ ...prev, volume: parseFloat(e.target.value) }))}
+                className="w-full"
+              />
+              <span className="text-xs text-gray-500">{audioConfig.volume}x</span>
+            </div>
+          </div>
+
+          {/* Transcript Validation Settings */}
+          <div className="border-t pt-4">
+            <h4 className="text-md font-semibold text-gray-700 mb-3">Transcript Validation</h4>
+            <div className="space-y-3">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="enableValidation"
+                  checked={transcriptValidation.enabled}
+                  onChange={(e) => setTranscriptValidation(prev => ({ ...prev, enabled: e.target.checked }))}
+                  className="mr-2"
+                />
+                <label htmlFor="enableValidation" className="text-sm text-gray-700">
+                  Enable transcript validation
+                </label>
+              </div>
+              
+              {transcriptValidation.enabled && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Similarity Tolerance
+                    </label>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="1.0"
+                      step="0.1"
+                      value={transcriptValidation.tolerance}
+                      onChange={(e) => setTranscriptValidation(prev => ({ ...prev, tolerance: parseFloat(e.target.value) }))}
+                      className="w-full"
+                    />
+                    <span className="text-xs text-gray-500">{Math.round(transcriptValidation.tolerance * 100)}%</span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="checkMismatched"
+                        checked={transcriptValidation.checkMismatchedWords}
+                        onChange={(e) => setTranscriptValidation(prev => ({ ...prev, checkMismatchedWords: e.target.checked }))}
+                        className="mr-2"
+                      />
+                      <label htmlFor="checkMismatched" className="text-sm text-gray-700">
+                        Check mismatched words
+                      </label>
+                    </div>
+                    
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="allowPartial"
+                        checked={transcriptValidation.allowPartialMatches}
+                        onChange={(e) => setTranscriptValidation(prev => ({ ...prev, allowPartialMatches: e.target.checked }))}
+                        className="mr-2"
+                      />
+                      <label htmlFor="allowPartial" className="text-sm text-gray-700">
+                        Allow partial matches
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Select File
+          Select Sentences File
         </label>
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
           {!file ? (
             <div>
-              <FaUpload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <FaFileAlt className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <input
                 type="file"
                 accept=".csv,.txt"
@@ -279,6 +462,67 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
         </div>
       </div>
 
+      {/* Audio File Upload for Listening Module */}
+      {moduleType === 'LISTENING' && (
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Select Audio File
+          </label>
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+            {!audioFile ? (
+              <div>
+                <FaVolumeUp className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <input
+                  type="file"
+                  accept="audio/*"
+                  onChange={handleAudioFileChange}
+                  className="hidden"
+                  id="audio-upload"
+                />
+                <label
+                  htmlFor="audio-upload"
+                  className="cursor-pointer bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                >
+                  Choose Audio File
+                </label>
+                <p className="mt-2 text-sm text-gray-500">
+                  MP3, WAV, M4A, or OGG format
+                </p>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <FaVolumeUp className="h-8 w-8 text-green-500 mr-3" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">{audioFile.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {(audioFile.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => {
+                      const audio = new Audio(URL.createObjectURL(audioFile));
+                      audio.play();
+                    }}
+                    className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                  >
+                    <FaPlay className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={removeAudioFile}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <FaTrash className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
           {error}
@@ -300,7 +544,7 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
         </button>
         <button
           onClick={handleUpload}
-          disabled={!file || !selectedLevel || uploading}
+          disabled={!file || !selectedLevel || uploading || (moduleType === 'LISTENING' && !audioFile)}
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
         >
           {uploading ? (

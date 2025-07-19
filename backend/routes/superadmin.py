@@ -4,6 +4,7 @@ from bson import ObjectId
 import bcrypt
 import csv
 import io
+import json
 from mongo import mongo_db
 from config.constants import ROLES, MODULES, LEVELS, TEST_TYPES, WRITING_CONFIG
 from datetime import datetime
@@ -1143,7 +1144,7 @@ def writing_upload():
 @superadmin_bp.route('/sentence-upload', methods=['POST'])
 @jwt_required()
 def sentence_upload():
-    """Upload sentences for listening and speaking modules"""
+    """Upload sentences for listening and speaking modules with audio support"""
     try:
         current_user_id = get_jwt_identity()
         user = mongo_db.find_user_by_id(current_user_id)
@@ -1161,6 +1162,11 @@ def sentence_upload():
         module_id = request.form.get('module_id')
         level_id = request.form.get('level_id')
         level = request.form.get('level')
+        
+        # Audio file handling for Listening module
+        audio_file = request.files.get('audio_file')
+        audio_config = request.form.get('audio_config')
+        transcript_validation = request.form.get('transcript_validation')
         
         if file.filename == '':
             return jsonify({'success': False, 'message': 'No file selected'}), 400
@@ -1180,6 +1186,38 @@ def sentence_upload():
         
         if level not in valid_levels:
             return jsonify({'success': False, 'message': f'Invalid level. Must be one of {valid_levels}'}), 400
+        
+        # For Listening module, require audio file
+        if module_id == 'LISTENING' and not audio_file:
+            return jsonify({'success': False, 'message': 'Audio file is required for Listening module'}), 400
+        
+        # Process audio file for Listening module
+        audio_url = None
+        if module_id == 'LISTENING' and audio_file:
+            try:
+                # Validate audio file
+                allowed_audio_types = ['audio/mp3', 'audio/wav', 'audio/m4a', 'audio/ogg', 'audio/mpeg']
+                if audio_file.content_type not in allowed_audio_types:
+                    return jsonify({'success': False, 'message': 'Invalid audio file type. Please upload MP3, WAV, M4A, or OGG'}), 400
+                
+                # Upload audio to S3
+                import uuid
+                audio_filename = f"listening_audio/{uuid.uuid4()}_{audio_file.filename}"
+                
+                # Upload to S3
+                from config.aws_config import s3_client, S3_BUCKET_NAME
+                s3_client.upload_fileobj(
+                    audio_file,
+                    S3_BUCKET_NAME,
+                    audio_filename,
+                    ExtraArgs={'ContentType': audio_file.content_type}
+                )
+                
+                audio_url = f"https://{S3_BUCKET_NAME}.s3.amazonaws.com/{audio_filename}"
+                
+            except Exception as e:
+                current_app.logger.error(f"Error uploading audio file: {str(e)}")
+                return jsonify({'success': False, 'message': f'Failed to upload audio file: {str(e)}'}), 500
         
         # Read file content
         content = file.read().decode('utf-8')
@@ -1234,6 +1272,22 @@ def sentence_upload():
         if not valid_sentences:
             return jsonify({'success': False, 'message': 'No valid sentences found'}), 400
         
+        # Parse configuration
+        parsed_audio_config = {}
+        parsed_transcript_validation = {}
+        
+        if audio_config:
+            try:
+                parsed_audio_config = json.loads(audio_config)
+            except:
+                parsed_audio_config = {'speed': 1.0, 'accent': 'en-US', 'volume': 1.0}
+        
+        if transcript_validation:
+            try:
+                parsed_transcript_validation = json.loads(transcript_validation)
+            except:
+                parsed_transcript_validation = {'enabled': True, 'tolerance': 0.8, 'checkMismatchedWords': True, 'allowPartialMatches': True}
+        
         # Insert sentences into database
         inserted_count = 0
         for sentence in valid_sentences:
@@ -1248,6 +1302,15 @@ def sentence_upload():
                     'created_at': datetime.utcnow()
                 }
                 
+                # Add audio-specific data for Listening module
+                if module_id == 'LISTENING':
+                    sentence_data.update({
+                        'audio_url': audio_url,
+                        'audio_config': parsed_audio_config,
+                        'transcript_validation': parsed_transcript_validation,
+                        'has_audio': True
+                    })
+                
                 mongo_db.question_bank.insert_one(sentence_data)
                 inserted_count += 1
                 
@@ -1260,7 +1323,8 @@ def sentence_upload():
                 'message': f'Upload completed with {len(errors)} errors',
                 'data': {
                     'inserted_count': inserted_count,
-                    'total_count': len(valid_sentences)
+                    'total_count': len(valid_sentences),
+                    'audio_url': audio_url if module_id == 'LISTENING' else None
                 },
                 'errors': errors[:10]
             }), 207 if inserted_count > 0 else 500
@@ -1272,7 +1336,10 @@ def sentence_upload():
                 'inserted_count': inserted_count,
                 'total_count': len(valid_sentences),
                 'module_id': module_id,
-                'level': level
+                'level': level,
+                'audio_url': audio_url if module_id == 'LISTENING' else None,
+                'audio_config': parsed_audio_config if module_id == 'LISTENING' else None,
+                'transcript_validation': parsed_transcript_validation if module_id == 'LISTENING' else None
             }
         }), 201
         

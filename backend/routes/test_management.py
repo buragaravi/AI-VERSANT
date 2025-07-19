@@ -2291,6 +2291,72 @@ def get_file_extension(language):
     }
     return extensions.get(language, 'txt')
 
+@test_management_bp.route('/validate-transcript', methods=['POST'])
+@jwt_required()
+def validate_transcript():
+    """Validate student transcript against original sentence for listening tests"""
+    try:
+        data = request.get_json()
+        original_sentence = data.get('original_sentence')
+        student_transcript = data.get('student_transcript')
+        validation_config = data.get('validation_config', {})
+        
+        if not original_sentence or not student_transcript:
+            return jsonify({
+                'success': False,
+                'message': 'Original sentence and student transcript are required'
+            }), 400
+        
+        # Get validation settings
+        tolerance = validation_config.get('tolerance', 0.8)
+        check_mismatched_words = validation_config.get('checkMismatchedWords', True)
+        allow_partial_matches = validation_config.get('allowPartialMatches', True)
+        
+        # Calculate similarity score
+        similarity_score = calculate_similarity_score(original_sentence, student_transcript)
+        
+        # Determine if transcript is valid
+        is_valid = similarity_score >= tolerance
+        
+        # Find mismatched words if enabled
+        mismatched_words = []
+        if check_mismatched_words and not is_valid:
+            original_words = set(original_sentence.lower().split())
+            student_words = set(student_transcript.lower().split())
+            
+            # Find words in original but not in student transcript
+            missing_words = original_words - student_words
+            # Find extra words in student transcript
+            extra_words = student_words - original_words
+            
+            mismatched_words = {
+                'missing': list(missing_words),
+                'extra': list(extra_words)
+            }
+        
+        # Calculate detailed analysis
+        analysis = {
+            'similarity_score': similarity_score,
+            'is_valid': is_valid,
+            'tolerance_threshold': tolerance,
+            'word_count_original': len(original_sentence.split()),
+            'word_count_student': len(student_transcript.split()),
+            'mismatched_words': mismatched_words if check_mismatched_words else None,
+            'partial_match_allowed': allow_partial_matches
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': analysis
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in transcript validation: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Transcript validation failed: {str(e)}'
+        }), 500
+
 @test_management_bp.route('/submit-technical-test', methods=['POST'])
 @jwt_required()
 def submit_technical_test():
