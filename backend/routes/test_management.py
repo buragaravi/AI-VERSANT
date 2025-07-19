@@ -2446,6 +2446,245 @@ def transcribe_audio():
             'message': f'Audio transcription failed: {str(e)}'
         }), 500
 
+@test_management_bp.route('/validate-writing', methods=['POST'])
+@jwt_required()
+def validate_writing():
+    """Validate writing text for grammar and spelling errors"""
+    try:
+        data = request.get_json()
+        text = data.get('text', '')
+        level = data.get('level', 'Beginner')
+        
+        if not text.strip():
+            return jsonify({
+                'success': True,
+                'data': {
+                    'grammar_errors': [],
+                    'spelling_errors': [],
+                    'overall_score': 100
+                }
+            }), 200
+        
+        # Basic grammar validation (can be enhanced with language-tool or similar)
+        grammar_errors = []
+        spelling_errors = []
+        
+        # Simple grammar checks
+        sentences = text.split('.')
+        for i, sentence in enumerate(sentences):
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+                
+            # Check for sentence capitalization
+            if sentence and not sentence[0].isupper():
+                grammar_errors.append({
+                    'type': 'capitalization',
+                    'message': f'Sentence {i+1} should start with a capital letter',
+                    'position': text.find(sentence)
+                })
+            
+            # Check for basic punctuation
+            if sentence and not sentence.endswith(('.', '!', '?')):
+                grammar_errors.append({
+                    'type': 'punctuation',
+                    'message': f'Sentence {i+1} should end with proper punctuation',
+                    'position': text.find(sentence) + len(sentence)
+                })
+        
+        # Basic spelling check (can be enhanced with spellchecker library)
+        words = text.split()
+        common_misspellings = {
+            'teh': 'the',
+            'recieve': 'receive',
+            'seperate': 'separate',
+            'occured': 'occurred',
+            'begining': 'beginning',
+            'definately': 'definitely',
+            'accomodate': 'accommodate',
+            'embarass': 'embarrass',
+            'occassion': 'occasion',
+            'priviledge': 'privilege'
+        }
+        
+        for word in words:
+            clean_word = word.lower().strip('.,!?;:')
+            if clean_word in common_misspellings:
+                spelling_errors.append({
+                    'word': word,
+                    'suggestion': common_misspellings[clean_word],
+                    'position': text.find(word)
+                })
+        
+        # Calculate overall score
+        total_words = len(words)
+        total_errors = len(grammar_errors) + len(spelling_errors)
+        overall_score = max(0, 100 - (total_errors * 5))  # Each error reduces score by 5%
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'grammar_errors': grammar_errors,
+                'spelling_errors': spelling_errors,
+                'overall_score': overall_score,
+                'total_words': total_words,
+                'total_errors': total_errors
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in writing validation: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Writing validation failed: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/submit-writing-test', methods=['POST'])
+@jwt_required()
+def submit_writing_test():
+    """Submit writing test with student responses and typing statistics"""
+    try:
+        current_user_id = get_jwt_identity()
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data.get('test_id'):
+            return jsonify({
+                'success': False,
+                'message': 'Test ID is required'
+            }), 400
+        
+        test_id = ObjectId(data['test_id'])
+        test = mongo_db.tests.find_one({'_id': test_id})
+        
+        if not test:
+            return jsonify({
+                'success': False,
+                'message': 'Test not found'
+            }), 404
+        
+        # Check if student has access to this test
+        student = mongo_db.students.find_one({'user_id': current_user_id})
+        if not student:
+            return jsonify({
+                'success': False,
+                'message': 'Student profile not found'
+            }), 404
+        
+        # Validate access based on campus, course, batch
+        has_access = False
+        if test.get('campus_ids') and student.get('campus_id') in test['campus_ids']:
+            has_access = True
+        if test.get('course_ids') and student.get('course_id') in test['course_ids']:
+            has_access = True
+        if test.get('batch_ids') and student.get('batch_id') in test['batch_ids']:
+            has_access = True
+        
+        if not has_access:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied to this test'
+            }), 403
+        
+        # Process writing responses
+        answers = data.get('answers', {})
+        typing_stats = data.get('typing_stats', {})
+        time_taken = data.get('time_taken', 0)
+        
+        results = []
+        total_score = 0
+        grammar_errors_total = 0
+        spelling_errors_total = 0
+        
+        for i, question in enumerate(test['questions']):
+            student_answer = answers.get(str(i), '')
+            
+            # Validate writing for each paragraph
+            validation_response = requests.post(
+                f'{request.host_url.rstrip("/")}/api/test-management/validate-writing',
+                json={'text': student_answer, 'level': test.get('level', 'Beginner')},
+                headers={'Authorization': request.headers.get('Authorization')}
+            )
+            
+            validation_data = {}
+            if validation_response.status_code == 200:
+                validation_data = validation_response.json().get('data', {})
+                grammar_errors_total += len(validation_data.get('grammar_errors', []))
+                spelling_errors_total += len(validation_data.get('spelling_errors', []))
+            
+            # Calculate score based on length, grammar, and spelling
+            word_count = len(student_answer.split())
+            char_count = len(student_answer)
+            
+            # Score calculation (can be customized based on requirements)
+            length_score = min(100, (word_count / 50) * 100)  # Base score on word count
+            grammar_score = validation_data.get('overall_score', 100)
+            
+            paragraph_score = (length_score + grammar_score) / 2
+            total_score += paragraph_score
+            
+            results.append({
+                'question_index': i,
+                'topic': question.get('topic', ''),
+                'student_answer': student_answer,
+                'word_count': word_count,
+                'char_count': char_count,
+                'grammar_errors': validation_data.get('grammar_errors', []),
+                'spelling_errors': validation_data.get('spelling_errors', []),
+                'grammar_score': grammar_score,
+                'length_score': length_score,
+                'paragraph_score': paragraph_score
+            })
+        
+        # Calculate average score
+        average_score = total_score / len(results) if results else 0
+        
+        # Save test result
+        test_result = {
+            'test_id': test_id,
+            'student_id': current_user_id,
+            'module_id': test['module_id'],
+            'level_id': test.get('level_id'),
+            'level': test.get('level', 'Beginner'),
+            'results': results,
+            'typing_stats': typing_stats,
+            'time_taken': time_taken,
+            'total_score': total_score,
+            'average_score': average_score,
+            'grammar_errors': grammar_errors_total,
+            'spelling_errors': spelling_errors_total,
+            'total_questions': len(results),
+            'submitted_at': datetime.utcnow(),
+            'test_type': 'writing'
+        }
+        
+        result_id = mongo_db.insert_test_result(test_result)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Writing test submitted successfully',
+            'data': {
+                'result_id': str(result_id),
+                'average_score': average_score,
+                'total_questions': len(results),
+                'grammar_errors': grammar_errors_total,
+                'spelling_errors': spelling_errors_total,
+                'average_wpm': typing_stats.get('wordsPerMinute', 0),
+                'total_mistakes': typing_stats.get('mistakes', 0),
+                'overall_accuracy': typing_stats.get('accuracy', 100),
+                'time_taken': time_taken,
+                'grammar_score': 100 - (grammar_errors_total * 2),  # Each error reduces score by 2%
+                'results': results
+            }
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error submitting writing test: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to submit writing test: {str(e)}'
+        }), 500
+
 @test_management_bp.route('/submit-technical-test', methods=['POST'])
 @jwt_required()
 def submit_technical_test():
