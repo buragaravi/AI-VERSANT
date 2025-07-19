@@ -1,30 +1,51 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from mongo import mongo_db
 from bson import ObjectId
-from config.shared import bcrypt
-from config.constants import ROLES
-from datetime import datetime
+import bcrypt
 import pytz
-from utils.email_service import send_email, render_template
+from datetime import datetime
+from mongo import mongo_db
+from config.constants import ROLES
+from routes.access_control import require_permission
 
 campus_management_bp = Blueprint('campus_management', __name__)
 
 @campus_management_bp.route('/', methods=['GET'])
 @jwt_required()
+@require_permission(module='campus_management')
 def get_campuses():
-    """Get all campuses with admin info"""
+    """Get all campuses"""
     try:
-        campuses = mongo_db.get_all_campuses_with_admin()
-        campus_list = [
-            {
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Super admin can see all campuses
+        if user.get('role') in ['super_admin', 'superadmin']:
+            campuses = list(mongo_db.campuses.find())
+        else:
+            # Other admins can only see their assigned campus
+            campus_id = user.get('campus_id')
+            if not campus_id:
+                return jsonify({'success': False, 'message': 'No campus assigned'}), 400
+            campuses = list(mongo_db.campuses.find({'_id': ObjectId(campus_id)}))
+        
+        campus_list = []
+        for campus in campuses:
+            admin = mongo_db.users.find_one({'_id': campus.get('admin_id')})
+            admin_info = {
+                'id': str(admin['_id']),
+                'name': admin.get('name'),
+                'email': admin.get('email')
+            } if admin else None
+            campus_list.append({
                 'id': str(campus['_id']),
                 'name': campus.get('name'),
-                'admin': campus.get('admin')
-            }
-            for campus in campuses
-        ]
+                'admin': admin_info,
+                'created_at': campus.get('created_at')
+            })
+        
         return jsonify({'success': True, 'data': campus_list}), 200
+        
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -47,6 +68,7 @@ def get_campuses_simple():
 
 @campus_management_bp.route('/', methods=['POST'])
 @jwt_required()
+@require_permission(module='campus_management', action='create_campus')
 def create_campus():
     """Create a new campus and assign an admin - SUPER ADMIN ONLY"""
     try:
@@ -95,28 +117,7 @@ def create_campus():
         
         # Update user with campus_id
         mongo_db.users.update_one({'_id': user_id}, {'$set': {'campus_id': campus_id}})
-
-        # Send welcome email
-        try:
-            html_content = render_template(
-                'campus_admin_credentials.html',
-                params={
-                    'name': admin_name,
-                    'username': admin_name,
-                    'email': admin_email,
-                    'password': admin_password,
-                    'login_url': "https://pydah-ai-versant.vercel.app/login"
-                }
-            )
-            send_email(
-                to_email=admin_email,
-                to_name=admin_name,
-                subject="Welcome to VERSANT - Your Admin Credentials",
-                html_content=html_content
-            )
-        except Exception as e:
-            print(f"Failed to send welcome email to {admin_email}: {e}")
-
+        
         return jsonify({
             'success': True,
             'message': 'Campus created successfully',
@@ -127,10 +128,7 @@ def create_campus():
         }), 201
         
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'message': f'Failed to create campus: {str(e)}'
-        }), 500
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @campus_management_bp.route('/<campus_id>', methods=['PUT'])
 @jwt_required()

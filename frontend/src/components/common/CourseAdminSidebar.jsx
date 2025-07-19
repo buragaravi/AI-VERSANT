@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
 import { 
-  Users, FilePlus, Building2, BarChart, LayoutDashboard, 
-  BookCopy, GraduationCap, FileText, LogOut
+  LayoutDashboard, GraduationCap, Users, 
+  FilePlus, BarChart, Activity, LogOut, BookOpen
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { motion } from 'framer-motion'
 import api from '../../services/api'
 
-const AdminSidebar = () => {
+const CourseAdminSidebar = () => {
   const location = useLocation()
   const navigate = useNavigate()
   const { logout, user } = useAuth()
@@ -26,26 +26,6 @@ const AdminSidebar = () => {
     }
 
     try {
-      // For super admin, no need to fetch permissions as they have all access
-      if (user.role === 'super_admin' || user.role === 'superadmin') {
-        setUserPermissions({
-          modules: ['dashboard', 'campus_management', 'course_management', 'batch_management', 'user_management', 'student_management', 'test_management', 'question_bank_upload', 'crt_upload', 'results_management', 'analytics', 'reports'],
-          can_create_campus: true,
-          can_create_course: true,
-          can_create_batch: true,
-          can_manage_users: true,
-          can_manage_tests: true,
-          can_view_all_data: true
-        })
-        setLoading(false)
-        return
-      }
-
-      // For other admins, fetch their permissions
-      const response = await api.post('/access-control/check-permission', {
-        module: 'dashboard'
-      })
-      
       // Get user's full permissions from the backend
       const userResponse = await api.get(`/user-management/${user.id || user._id}`)
       const permissions = userResponse.data.data?.permissions || {}
@@ -53,152 +33,80 @@ const AdminSidebar = () => {
       setUserPermissions(permissions)
     } catch (err) {
       console.error('Failed to fetch permissions:', err)
-      // Use default permissions based on role
-      const defaultPermissions = {
-        campus_admin: {
-          modules: ['dashboard', 'course_management', 'batch_management', 'student_management', 'test_management', 'results_management', 'analytics', 'reports'],
-          can_create_campus: false,
-          can_create_course: true,
-          can_create_batch: true,
-          can_manage_users: false,
-          can_manage_tests: true,
-          can_view_all_data: false
-        },
-        course_admin: {
-          modules: ['dashboard', 'batch_management', 'student_management', 'test_management', 'results_management', 'analytics'],
-          can_create_campus: false,
-          can_create_course: false,
-          can_create_batch: true,
-          can_manage_users: false,
-          can_manage_tests: true,
-          can_view_all_data: false
-        }
-      }
-      setUserPermissions(defaultPermissions[user.role] || {})
+      // Use default permissions for course admin
+      setUserPermissions({
+        modules: ['dashboard', 'batch_management', 'student_management', 'test_management', 'results_management', 'analytics'],
+        can_create_campus: false,
+        can_create_course: false,
+        can_create_batch: true,
+        can_manage_users: false,
+        can_manage_tests: true,
+        can_view_all_data: false
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  // Define navigation based on admin role and permissions
+  // Define navigation based on course admin permissions
   const getNavigation = () => {
     if (loading || !userPermissions) {
       return []
     }
 
-    const basePath = user.role === 'campus_admin' ? '/campus-admin' : '/course-admin'
     const navigation = []
 
     // Dashboard - always available
     if (userPermissions.modules?.includes('dashboard')) {
       navigation.push({ 
         name: 'Dashboard', 
-        path: `${basePath}/dashboard`, 
+        path: '/course-admin/dashboard', 
         icon: LayoutDashboard 
       })
     }
 
-    // Campus Management - only for super admin
-    if (user.role === 'super_admin' || user.role === 'superadmin') {
-      navigation.push({ 
-        name: 'Campus Management', 
-        path: '/superadmin/campuses', 
-        icon: Building2 
-      })
-    }
-
-    // Course Management - for campus admin and super admin
-    if (userPermissions.modules?.includes('course_management') && 
-        (user.role === 'campus_admin' || user.role === 'super_admin' || user.role === 'superadmin')) {
-      navigation.push({ 
-        name: 'Course Management', 
-        path: user.role === 'campus_admin' ? `${basePath}/courses` : '/superadmin/courses', 
-        icon: BookCopy 
-      })
-    }
-
-    // Batch Management - for all admins
+    // Batch Management - course admin can manage batches
     if (userPermissions.modules?.includes('batch_management')) {
       navigation.push({ 
         name: 'Batch Management', 
-        path: user.role === 'super_admin' || user.role === 'superadmin' ? '/superadmin/batch-management' : `${basePath}/batches`, 
+        path: '/course-admin/batches', 
         icon: GraduationCap 
       })
     }
 
-    // User Management - only for super admin
-    if (userPermissions.modules?.includes('user_management') && 
-        (user.role === 'super_admin' || user.role === 'superadmin')) {
-      navigation.push({ 
-        name: 'User Management', 
-        path: '/superadmin/users', 
-        icon: Users 
-      })
-    }
-
-    // Student Management - for all admins
+    // Student Management - course admin can manage students
     if (userPermissions.modules?.includes('student_management')) {
       navigation.push({ 
         name: 'Student Management', 
-        path: user.role === 'super_admin' || user.role === 'superadmin' ? '/superadmin/students' : `${basePath}/students`, 
+        path: '/course-admin/students', 
         icon: Users 
       })
     }
 
-    // Test Management - for all admins
+    // Test Management - course admin can manage tests
     if (userPermissions.modules?.includes('test_management')) {
       navigation.push({ 
         name: 'Test Management', 
-        path: user.role === 'super_admin' || user.role === 'superadmin' ? '/superadmin/tests' : `${basePath}/tests`, 
+        path: '/course-admin/tests', 
         icon: FilePlus 
       })
     }
 
-    // Question Bank Upload - only for super admin
-    if (userPermissions.modules?.includes('question_bank_upload') && 
-        (user.role === 'super_admin' || user.role === 'superadmin')) {
-      navigation.push({ 
-        name: 'Question Bank Upload', 
-        path: '/superadmin/question-bank-upload', 
-        icon: FileText 
-      })
-    }
-
-    // CRT Upload - only for super admin
-    if (userPermissions.modules?.includes('crt_upload') && 
-        (user.role === 'super_admin' || user.role === 'superadmin')) {
-      navigation.push({ 
-        name: 'CRT Upload', 
-        path: '/superadmin/crt-upload', 
-        icon: FileText 
-      })
-    }
-
-    // Results Management - for all admins
+    // Results Management - course admin can view results
     if (userPermissions.modules?.includes('results_management')) {
       navigation.push({ 
         name: 'Results Management', 
-        path: user.role === 'super_admin' || user.role === 'superadmin' ? '/superadmin/results' : `${basePath}/results`, 
+        path: '/course-admin/results', 
         icon: BarChart 
       })
     }
 
-    // Analytics - for all admins
+    // Analytics - course admin can view analytics
     if (userPermissions.modules?.includes('analytics')) {
       navigation.push({ 
         name: 'Analytics', 
-        path: `${basePath}/analytics`, 
-        icon: BarChart 
-      })
-    }
-
-    // Reports - for campus admin and super admin
-    if (userPermissions.modules?.includes('reports') && 
-        (user.role === 'campus_admin' || user.role === 'super_admin' || user.role === 'superadmin')) {
-      navigation.push({ 
-        name: 'Reports', 
-        path: `${basePath}/reports`, 
-        icon: BarChart 
+        path: '/course-admin/analytics', 
+        icon: Activity 
       })
     }
 
@@ -218,14 +126,14 @@ const AdminSidebar = () => {
     return (
       <div className="flex">
         <div className="fixed top-0 left-0 h-screen w-64 bg-gradient-to-b from-white to-gray-50 shadow-2xl z-30 flex flex-col border-r border-gray-200">
-          <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50">
             <div className="animate-pulse">
               <div className="h-8 bg-gray-300 rounded mb-2"></div>
               <div className="h-4 bg-gray-300 rounded"></div>
             </div>
           </div>
           <div className="flex-1 flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-2 border-green-500 border-t-transparent"></div>
           </div>
         </div>
         <div className="ml-64 flex-1 bg-gray-50 w-full">
@@ -248,12 +156,12 @@ const AdminSidebar = () => {
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.1, type: 'spring', stiffness: 100 }}
-          className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50"
+          className="p-6 border-b border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50"
         >
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
             Study Edge
           </h1>
-          <p className="text-sm text-gray-600 font-medium capitalize">{user?.role?.replace('_', ' ')} Portal</p>
+          <p className="text-sm text-gray-600 font-medium">Course Admin Portal</p>
         </motion.div>
 
         <nav className="flex-1 flex flex-col justify-between">
@@ -271,15 +179,15 @@ const AdminSidebar = () => {
                   to={link.path}
                   className={`group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-300 relative overflow-hidden
                     ${isActive(link.path)
-                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105'
-                      : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 hover:text-gray-900 hover:shadow-md'}
+                      ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg transform scale-105'
+                      : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-100 hover:to-green-50 hover:text-gray-900 hover:shadow-md'}
                   `}
                 >
                   {/* Active indicator */}
                   {isActive(link.path) && (
                     <motion.div
                       layoutId="activeTab"
-                      className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl"
+                      className="absolute inset-0 bg-gradient-to-r from-green-500 to-green-600 rounded-xl"
                       initial={false}
                       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                     />
@@ -288,7 +196,7 @@ const AdminSidebar = () => {
                   <link.icon className={`mr-3 h-5 w-5 transition-all duration-300 relative z-10
                     ${isActive(link.path) 
                       ? 'text-white' 
-                      : 'text-gray-500 group-hover:text-blue-600 group-hover:scale-110'
+                      : 'text-gray-500 group-hover:text-green-600 group-hover:scale-110'
                     }`} 
                   />
                   <span className="relative z-10 transition-all duration-300 group-hover:translate-x-1 font-semibold">
@@ -298,7 +206,7 @@ const AdminSidebar = () => {
                   {/* Hover effect */}
                   {!isActive(link.path) && (
                     <motion.div
-                      className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 rounded-xl"
+                      className="absolute inset-0 bg-gradient-to-r from-green-500/10 to-emerald-500/10 rounded-xl"
                       initial={{ opacity: 0, scale: 0.8 }}
                       whileHover={{ opacity: 1, scale: 1 }}
                       transition={{ duration: 0.2 }}
@@ -317,15 +225,13 @@ const AdminSidebar = () => {
           transition={{ delay: 0.3, type: 'spring', stiffness: 100 }}
           className="px-4 pb-6 mt-auto"
         >
-          <div className="flex items-center mb-4 p-3 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl">
-            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full flex items-center justify-center shadow-md">
-              <span className="text-white text-sm font-medium">
-                {user?.name?.charAt(0)?.toUpperCase() || 'A'}
-              </span>
+          <div className="flex items-center mb-4 p-3 bg-gradient-to-r from-gray-50 to-green-50 rounded-xl">
+            <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center shadow-md">
+              <BookOpen className="h-4 w-4 text-white" />
             </div>
             <div className="ml-3">
               <p className="text-sm font-semibold text-gray-900">{user?.name}</p>
-              <p className="text-xs text-gray-600 capitalize">{user?.role?.replace('_', ' ')}</p>
+              <p className="text-xs text-gray-600">Course Admin</p>
             </div>
           </div>
           
@@ -350,4 +256,4 @@ const AdminSidebar = () => {
   )
 }
 
-export default AdminSidebar 
+export default CourseAdminSidebar 

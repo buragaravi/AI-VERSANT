@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
 import { 
-  Users, FilePlus, Building2, BarChart, LayoutDashboard, 
-  BookCopy, GraduationCap, FileText, LogOut
+  LayoutDashboard, BookCopy, GraduationCap, Users, 
+  FilePlus, BarChart, Activity, LogOut, Building2
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { motion } from 'framer-motion'
 import api from '../../services/api'
 
-const AdminSidebar = () => {
+const CampusAdminSidebar = () => {
   const location = useLocation()
   const navigate = useNavigate()
   const { logout, user } = useAuth()
@@ -26,26 +26,6 @@ const AdminSidebar = () => {
     }
 
     try {
-      // For super admin, no need to fetch permissions as they have all access
-      if (user.role === 'super_admin' || user.role === 'superadmin') {
-        setUserPermissions({
-          modules: ['dashboard', 'campus_management', 'course_management', 'batch_management', 'user_management', 'student_management', 'test_management', 'question_bank_upload', 'crt_upload', 'results_management', 'analytics', 'reports'],
-          can_create_campus: true,
-          can_create_course: true,
-          can_create_batch: true,
-          can_manage_users: true,
-          can_manage_tests: true,
-          can_view_all_data: true
-        })
-        setLoading(false)
-        return
-      }
-
-      // For other admins, fetch their permissions
-      const response = await api.post('/access-control/check-permission', {
-        module: 'dashboard'
-      })
-      
       // Get user's full permissions from the backend
       const userResponse = await api.get(`/user-management/${user.id || user._id}`)
       const permissions = userResponse.data.data?.permissions || {}
@@ -53,151 +33,97 @@ const AdminSidebar = () => {
       setUserPermissions(permissions)
     } catch (err) {
       console.error('Failed to fetch permissions:', err)
-      // Use default permissions based on role
-      const defaultPermissions = {
-        campus_admin: {
-          modules: ['dashboard', 'course_management', 'batch_management', 'student_management', 'test_management', 'results_management', 'analytics', 'reports'],
-          can_create_campus: false,
-          can_create_course: true,
-          can_create_batch: true,
-          can_manage_users: false,
-          can_manage_tests: true,
-          can_view_all_data: false
-        },
-        course_admin: {
-          modules: ['dashboard', 'batch_management', 'student_management', 'test_management', 'results_management', 'analytics'],
-          can_create_campus: false,
-          can_create_course: false,
-          can_create_batch: true,
-          can_manage_users: false,
-          can_manage_tests: true,
-          can_view_all_data: false
-        }
-      }
-      setUserPermissions(defaultPermissions[user.role] || {})
+      // Use default permissions for campus admin
+      setUserPermissions({
+        modules: ['dashboard', 'course_management', 'batch_management', 'student_management', 'test_management', 'results_management', 'analytics', 'reports'],
+        can_create_campus: false,
+        can_create_course: true,
+        can_create_batch: true,
+        can_manage_users: false,
+        can_manage_tests: true,
+        can_view_all_data: false
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  // Define navigation based on admin role and permissions
+  // Define navigation based on campus admin permissions
   const getNavigation = () => {
     if (loading || !userPermissions) {
       return []
     }
 
-    const basePath = user.role === 'campus_admin' ? '/campus-admin' : '/course-admin'
     const navigation = []
 
     // Dashboard - always available
     if (userPermissions.modules?.includes('dashboard')) {
       navigation.push({ 
         name: 'Dashboard', 
-        path: `${basePath}/dashboard`, 
+        path: '/campus-admin/dashboard', 
         icon: LayoutDashboard 
       })
     }
 
-    // Campus Management - only for super admin
-    if (user.role === 'super_admin' || user.role === 'superadmin') {
-      navigation.push({ 
-        name: 'Campus Management', 
-        path: '/superadmin/campuses', 
-        icon: Building2 
-      })
-    }
-
-    // Course Management - for campus admin and super admin
-    if (userPermissions.modules?.includes('course_management') && 
-        (user.role === 'campus_admin' || user.role === 'super_admin' || user.role === 'superadmin')) {
+    // Course Management - campus admin can manage courses
+    if (userPermissions.modules?.includes('course_management')) {
       navigation.push({ 
         name: 'Course Management', 
-        path: user.role === 'campus_admin' ? `${basePath}/courses` : '/superadmin/courses', 
+        path: '/campus-admin/courses', 
         icon: BookCopy 
       })
     }
 
-    // Batch Management - for all admins
+    // Batch Management - campus admin can manage batches
     if (userPermissions.modules?.includes('batch_management')) {
       navigation.push({ 
         name: 'Batch Management', 
-        path: user.role === 'super_admin' || user.role === 'superadmin' ? '/superadmin/batch-management' : `${basePath}/batches`, 
+        path: '/campus-admin/batches', 
         icon: GraduationCap 
       })
     }
 
-    // User Management - only for super admin
-    if (userPermissions.modules?.includes('user_management') && 
-        (user.role === 'super_admin' || user.role === 'superadmin')) {
-      navigation.push({ 
-        name: 'User Management', 
-        path: '/superadmin/users', 
-        icon: Users 
-      })
-    }
-
-    // Student Management - for all admins
+    // Student Management - campus admin can manage students
     if (userPermissions.modules?.includes('student_management')) {
       navigation.push({ 
         name: 'Student Management', 
-        path: user.role === 'super_admin' || user.role === 'superadmin' ? '/superadmin/students' : `${basePath}/students`, 
+        path: '/campus-admin/students', 
         icon: Users 
       })
     }
 
-    // Test Management - for all admins
+    // Test Management - campus admin can manage tests
     if (userPermissions.modules?.includes('test_management')) {
       navigation.push({ 
         name: 'Test Management', 
-        path: user.role === 'super_admin' || user.role === 'superadmin' ? '/superadmin/tests' : `${basePath}/tests`, 
+        path: '/campus-admin/tests', 
         icon: FilePlus 
       })
     }
 
-    // Question Bank Upload - only for super admin
-    if (userPermissions.modules?.includes('question_bank_upload') && 
-        (user.role === 'super_admin' || user.role === 'superadmin')) {
-      navigation.push({ 
-        name: 'Question Bank Upload', 
-        path: '/superadmin/question-bank-upload', 
-        icon: FileText 
-      })
-    }
-
-    // CRT Upload - only for super admin
-    if (userPermissions.modules?.includes('crt_upload') && 
-        (user.role === 'super_admin' || user.role === 'superadmin')) {
-      navigation.push({ 
-        name: 'CRT Upload', 
-        path: '/superadmin/crt-upload', 
-        icon: FileText 
-      })
-    }
-
-    // Results Management - for all admins
+    // Results Management - campus admin can view results
     if (userPermissions.modules?.includes('results_management')) {
       navigation.push({ 
         name: 'Results Management', 
-        path: user.role === 'super_admin' || user.role === 'superadmin' ? '/superadmin/results' : `${basePath}/results`, 
+        path: '/campus-admin/results', 
         icon: BarChart 
       })
     }
 
-    // Analytics - for all admins
+    // Analytics - campus admin can view analytics
     if (userPermissions.modules?.includes('analytics')) {
       navigation.push({ 
         name: 'Analytics', 
-        path: `${basePath}/analytics`, 
-        icon: BarChart 
+        path: '/campus-admin/analytics', 
+        icon: Activity 
       })
     }
 
-    // Reports - for campus admin and super admin
-    if (userPermissions.modules?.includes('reports') && 
-        (user.role === 'campus_admin' || user.role === 'super_admin' || user.role === 'superadmin')) {
+    // Reports - campus admin can view reports
+    if (userPermissions.modules?.includes('reports')) {
       navigation.push({ 
         name: 'Reports', 
-        path: `${basePath}/reports`, 
+        path: '/campus-admin/reports', 
         icon: BarChart 
       })
     }
@@ -253,7 +179,7 @@ const AdminSidebar = () => {
           <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
             Study Edge
           </h1>
-          <p className="text-sm text-gray-600 font-medium capitalize">{user?.role?.replace('_', ' ')} Portal</p>
+          <p className="text-sm text-gray-600 font-medium">Campus Admin Portal</p>
         </motion.div>
 
         <nav className="flex-1 flex flex-col justify-between">
@@ -319,13 +245,11 @@ const AdminSidebar = () => {
         >
           <div className="flex items-center mb-4 p-3 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl">
             <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full flex items-center justify-center shadow-md">
-              <span className="text-white text-sm font-medium">
-                {user?.name?.charAt(0)?.toUpperCase() || 'A'}
-              </span>
+              <Building2 className="h-4 w-4 text-white" />
             </div>
             <div className="ml-3">
               <p className="text-sm font-semibold text-gray-900">{user?.name}</p>
-              <p className="text-xs text-gray-600 capitalize">{user?.role?.replace('_', ' ')}</p>
+              <p className="text-xs text-gray-600">Campus Admin</p>
             </div>
           </div>
           
@@ -350,4 +274,4 @@ const AdminSidebar = () => {
   )
 }
 
-export default AdminSidebar 
+export default CampusAdminSidebar 

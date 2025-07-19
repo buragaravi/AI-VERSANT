@@ -14,6 +14,7 @@ import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard'
 import CampusManagement from './pages/superadmin/CampusManagement'
 import CourseManagement from './pages/superadmin/CourseManagement'
 import UserManagement from './pages/superadmin/UserManagement'
+import AdminPermissions from './pages/superadmin/AdminPermissions'
 import TestManagement from './pages/superadmin/TestManagement'
 import StudentManagement from './pages/superadmin/StudentManagement'
 import ResultsManagement from './pages/superadmin/ResultsManagement'
@@ -28,7 +29,7 @@ import CampusAdminDashboard from './pages/campus-admin/CampusAdminDashboard'
 import CampusStudentManagement from './pages/campus-admin/CampusStudentManagement'
 import CampusReports from './pages/campus-admin/CampusReports'
 import CampusBatchManagement from './pages/campus-admin/BatchManagement'
-import CampusCourseManagement from './pages/campus-admin/CourseManagement'
+import CampusCourseManagement from './pages/campus-admin/CampusCourseManagement'
 
 // Course Admin Pages
 import CourseAdminDashboard from './pages/course-admin/CourseAdminDashboard'
@@ -58,6 +59,8 @@ import NotificationToast from './components/common/NotificationToast'
 // Admin Components
 import AdminSidebar from './components/common/AdminSidebar'
 import SuperAdminSidebar from './components/common/SuperAdminSidebar'
+import CampusAdminSidebar from './components/common/CampusAdminSidebar'
+import CourseAdminSidebar from './components/common/CourseAdminSidebar'
 import StudentSidebar from './pages/student/StudentSidebar'
 
 function App() {
@@ -105,6 +108,7 @@ function App() {
                     <Route path="campuses" element={<CampusManagement />} />
                     <Route path="courses" element={<CourseManagement />} />
                     <Route path="users" element={<UserManagement />} />
+                    <Route path="admin-permissions" element={<AdminPermissions />} />
                     <Route path="students" element={<StudentManagement />} />
                     <Route path="results" element={<ResultsManagement />} />
                     <Route path="batches/:batchId" element={<BatchDetails />} />
@@ -117,21 +121,27 @@ function App() {
                   </Route>
 
                   {/* Campus Admin Routes */}
-                <Route path="/campus-admin" element={<ProtectedRoute allowedRoles={['campus_admin']}><AdminSidebar /></ProtectedRoute>}>
+                <Route path="/campus-admin" element={<ProtectedRoute allowedRoles={['campus_admin']}><CampusAdminSidebar /></ProtectedRoute>}>
                   <Route index element={<CampusAdminDashboard />} />
                     <Route path="dashboard" element={<CampusAdminDashboard />} />
+                    <Route path="courses" element={<CampusCourseManagement />} />
+                    <Route path="batches" element={<CampusBatchManagement />} />
+                    <Route path="students" element={<CampusStudentManagement />} />
                     <Route path="tests" element={<TestManagement />} />
-                    <Route path="student-upload" element={<StudentManagement />} />
                     <Route path="results" element={<ResultsManagement />} />
+                    <Route path="analytics" element={<CampusReports />} />
+                    <Route path="reports" element={<CampusReports />} />
                   </Route>
 
                   {/* Course Admin Routes */}
-                <Route path="/course-admin" element={<ProtectedRoute allowedRoles={['course_admin']}><AdminSidebar /></ProtectedRoute>}>
+                <Route path="/course-admin" element={<ProtectedRoute allowedRoles={['course_admin']}><CourseAdminSidebar /></ProtectedRoute>}>
                   <Route index element={<CourseAdminDashboard />} />
                     <Route path="dashboard" element={<CourseAdminDashboard />} />
+                    <Route path="batches" element={<CampusBatchManagement />} />
+                    <Route path="students" element={<CourseStudentManagement />} />
                     <Route path="tests" element={<TestManagement />} />
-                    <Route path="student-upload" element={<StudentManagement />} />
                     <Route path="results" element={<ResultsManagement />} />
+                    <Route path="analytics" element={<StudentProgress />} />
                   </Route>
 
                 {/* Student Routes */}

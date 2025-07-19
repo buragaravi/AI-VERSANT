@@ -2,43 +2,60 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from mongo import mongo_db
 from bson import ObjectId
-from config.shared import bcrypt
-from config.constants import ROLES
-from datetime import datetime
-from pymongo.errors import DuplicateKeyError
+import bcrypt
 import pytz
+from datetime import datetime
+from config.constants import ROLES
+from routes.access_control import require_permission
 from utils.email_service import send_email, render_template
 
 course_management_bp = Blueprint('course_management', __name__)
 
 @course_management_bp.route('/', methods=['GET'])
 @jwt_required()
+@require_permission(module='course_management')
 def get_courses():
+    """Get all courses"""
     try:
-        # Fetch all courses
-        courses = list(mongo_db.db.courses.find())
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Super admin can see all courses
+        if user.get('role') in ['super_admin', 'superadmin']:
+            courses = list(mongo_db.courses.find())
+        else:
+            # Campus and course admins can only see courses in their campus
+            campus_id = user.get('campus_id')
+            if not campus_id:
+                return jsonify({'success': False, 'message': 'No campus assigned'}), 400
+            courses = list(mongo_db.courses.find({'campus_id': ObjectId(campus_id)}))
+        
         course_list = []
         for course in courses:
-            # Get campus info
-            campus = mongo_db.campuses.find_one({'_id': course.get('campus_id')})
-            campus_info = {
-                'id': str(campus['_id']),
-                'name': campus.get('name')
-            } if campus else None
-            # Get admin info
             admin = mongo_db.users.find_one({'_id': course.get('admin_id')})
+            campus = mongo_db.campuses.find_one({'_id': course.get('campus_id')})
+            
             admin_info = {
                 'id': str(admin['_id']),
                 'name': admin.get('name'),
                 'email': admin.get('email')
             } if admin else None
+            
+            campus_info = {
+                'id': str(campus['_id']),
+                'name': campus.get('name')
+            } if campus else None
+            
             course_list.append({
                 'id': str(course['_id']),
                 'name': course.get('name'),
+                'admin': admin_info,
                 'campus': campus_info,
-                'admin': admin_info
+                'created_at': course.get('created_at')
             })
+        
         return jsonify({'success': True, 'data': course_list}), 200
+        
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -106,18 +123,27 @@ def get_courses_by_campus(campus_id):
 
 @course_management_bp.route('/<campus_id>', methods=['POST'])
 @jwt_required()
+@require_permission(module='course_management', action='create_course')
 def create_course(campus_id):
-    """Create a new course - SUPER ADMIN ONLY"""
+    """Create a new course - SUPER ADMIN AND CAMPUS ADMIN ONLY"""
     try:
         current_user_id = get_jwt_identity()
         user = mongo_db.find_user_by_id(current_user_id)
         
-        # Only super admin can create courses
-        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+        # Check if user has permission to create courses
+        if not user or user.get('role') not in ['super_admin', 'superadmin', 'campus_admin']:
             return jsonify({
                 'success': False,
-                'message': 'Access denied. Only super admin can create courses.'
+                'message': 'Access denied. Only super admin and campus admin can create courses.'
             }), 403
+        
+        # Campus admin can only create courses in their own campus
+        if user.get('role') == 'campus_admin':
+            if str(user.get('campus_id')) != campus_id:
+                return jsonify({
+                    'success': False,
+                    'message': 'Access denied. You can only create courses in your own campus.'
+                }), 403
         
         data = request.get_json()
         course_name = data.get('course_name')
@@ -157,7 +183,7 @@ def create_course(campus_id):
         
         # Update user with course_id
         mongo_db.users.update_one({'_id': user_id}, {'$set': {'course_id': course_id}})
-
+        
         # Send welcome email
         try:
             html_content = render_template(
@@ -188,14 +214,8 @@ def create_course(campus_id):
             }
         }), 201
         
-    except DuplicateKeyError:
-        return jsonify({'success': False, 'message': 'A user with this email or username already exists.'}), 409
     except Exception as e:
-        print(f"Error creating course: {e}") 
-        return jsonify({
-            'success': False,
-            'message': f'Failed to create course: {str(e)}'
-        }), 500
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @course_management_bp.route('/<course_id>', methods=['PUT'])
 @jwt_required()

@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
-import { Users, FilePlus, Building2, BarChart, LayoutDashboard, BookCopy, GraduationCap } from 'lucide-react'
+import { Users, FilePlus, Building2, BarChart, LayoutDashboard, BookCopy, GraduationCap, Shield } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { motion } from 'framer-motion'
 
@@ -20,6 +20,7 @@ const SuperAdminSidebar = () => {
     { name: 'Course Management', path: '/superadmin/courses', icon: BookCopy },
     { name: 'Batch Management', path: '/superadmin/batch-management', icon: GraduationCap },
     { name: 'User Management', path: '/superadmin/users', icon: Users },
+    { name: 'Admin Permissions', path: '/superadmin/admin-permissions', icon: Shield },
     { name: 'Test Management', path: '/superadmin/tests', icon: FilePlus },
     { name: 'Question Bank Upload', path: '/superadmin/question-bank-upload', icon: FilePlus },
     { name: 'CRT Upload', path: '/superadmin/crt-upload', icon: FilePlus },

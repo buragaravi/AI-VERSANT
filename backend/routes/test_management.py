@@ -45,6 +45,8 @@ from collections import defaultdict
 from utils.email_service import send_email, render_template
 import requests
 import pytz
+from routes.access_control import require_permission
+from models import Test
 
 # OneCompiler API Configuration
 ONECOMPILER_API_KEY = 'f744734571mshb636ee6aecb15e3p16c0e7jsnd142c0e341e6'
@@ -188,7 +190,7 @@ def audio_generation_worker(app, test_id, questions, audio_config):
 
 @test_management_bp.route('/create-test', methods=['POST'])
 @jwt_required()
-@require_superadmin
+@require_permission(module='test_management', action='manage_tests')
 def create_test_with_instances():
     """Route to appropriate test creation endpoint based on module type"""
     try:

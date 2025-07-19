@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from mongo import mongo_db
 from bson import ObjectId
 from flask import current_app
@@ -7,42 +7,97 @@ from bson.errors import InvalidId
 from config.shared import bcrypt
 from utils.email_service import send_email, render_template
 from config.constants import MODULES, LEVELS, GRAMMAR_CATEGORIES
+from routes.access_control import require_permission
 
 user_management_bp = Blueprint('user_management', __name__)
 
 @user_management_bp.route('/', methods=['GET'])
 @jwt_required()
+@require_permission(module='user_management')
 def get_users():
-    """Get users"""
-    return jsonify({
-        'success': True,
-        'message': 'User management endpoint'
-    }), 200
+    """Get users - SUPER ADMIN ONLY"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can access user management
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+        
+        return jsonify({
+            'success': True,
+            'message': 'User management endpoint'
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @user_management_bp.route('/counts/campus', methods=['GET'])
 @jwt_required()
+@require_permission(module='user_management')
 def get_user_counts_by_campus():
+    """Get user counts by campus - SUPER ADMIN ONLY"""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can access user management
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+        
         counts = mongo_db.get_user_counts_by_campus()
         return jsonify({'success': True, 'data': counts}), 200
+        
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @user_management_bp.route('/counts/course', methods=['GET'])
 @jwt_required()
+@require_permission(module='user_management')
 def get_user_counts_by_course():
+    """Get user counts by course - SUPER ADMIN ONLY"""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can access user management
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+        
         counts = mongo_db.get_user_counts_by_course()
         return jsonify({'success': True, 'data': counts}), 200
+        
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @user_management_bp.route('/list/campus/<campus_id>', methods=['GET'])
 @jwt_required()
+@require_permission(module='user_management')
 def list_users_by_campus(campus_id):
+    """List users by campus - SUPER ADMIN ONLY"""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can access user management
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+        
         if not campus_id or campus_id == 'undefined' or campus_id == 'null':
             return jsonify({'success': False, 'message': 'Invalid or missing campus_id'}), 400
+        
         users = list(mongo_db.users.find({'campus_id': ObjectId(campus_id)}))
         user_list = [
             {
@@ -54,15 +109,29 @@ def list_users_by_campus(campus_id):
             for user in users
         ]
         return jsonify({'success': True, 'data': user_list}), 200
+        
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @user_management_bp.route('/list/course/<course_id>', methods=['GET'])
 @jwt_required()
+@require_permission(module='user_management')
 def list_users_by_course(course_id):
+    """List users by course - SUPER ADMIN ONLY"""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can access user management
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+        
         if not course_id or course_id == 'undefined' or course_id == 'null':
             return jsonify({'success': False, 'message': 'Invalid or missing course_id'}), 400
+        
         users = list(mongo_db.users.find({'course_id': ObjectId(course_id)}))
         user_list = [
             {
@@ -74,14 +143,26 @@ def list_users_by_course(course_id):
             for user in users
         ]
         return jsonify({'success': True, 'data': user_list}), 200
+        
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @user_management_bp.route('/admins', methods=['GET'])
 @jwt_required()
+@require_permission(module='user_management')
 def get_all_admins():
-    """Get a list of all admin and manager users."""
+    """Get a list of all admin and manager users - SUPER ADMIN ONLY"""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can access user management
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+        
         # Fetch users who are not students
         pipeline = [
             {
@@ -104,14 +185,26 @@ def get_all_admins():
         for admin in admins:
             admin['_id'] = str(admin['_id'])
         return jsonify({'success': True, 'data': admins})
+        
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @user_management_bp.route('/students', methods=['GET'])
 @jwt_required()
+@require_permission(module='user_management')
 def get_all_students():
     """Get a list of all students with their details and module/level progress."""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can access user management
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+
         pipeline = [
             {
                 '$match': {'role': 'student'}
@@ -217,9 +310,20 @@ def get_all_students():
 
 @user_management_bp.route('/<user_id>', methods=['GET'])
 @jwt_required()
+@require_permission(module='user_management')
 def get_user(user_id):
     """Get a single user's details by their ID."""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can access user management
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+
         if not user_id or user_id in ['undefined', 'null', 'None']:
             return jsonify({'success': False, 'message': 'Invalid or missing user_id'}), 400
         try:
@@ -245,9 +349,20 @@ def get_user(user_id):
 
 @user_management_bp.route('/<user_id>', methods=['PUT'])
 @jwt_required()
+@require_permission(module='user_management')
 def update_user(user_id):
     """Update a user's details."""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can access user management
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+
         data = request.get_json()
         if not data:
             return jsonify({'success': False, 'message': 'No data provided'}), 400
@@ -294,9 +409,20 @@ def update_user(user_id):
 
 @user_management_bp.route('/<user_id>', methods=['DELETE'])
 @jwt_required()
+@require_permission(module='user_management')
 def delete_user(user_id):
     """Delete a user and handle course admin or student dissociation."""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can access user management
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+
         user_object_id = ObjectId(user_id)
         user = mongo_db.users.find_one({'_id': user_object_id})
 
@@ -325,9 +451,23 @@ def delete_user(user_id):
 
 @user_management_bp.route('/<user_id>/send-credentials', methods=['POST'])
 @jwt_required()
+@require_permission(module='user_management')
 def send_credentials_again(user_id):
     """Send credentials again to a student"""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can access user management
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+
+        if not user_id or user_id in ['undefined', 'null', 'None']:
+            return jsonify({'success': False, 'message': 'Invalid or missing user_id'}), 400
+        
         user = mongo_db.users.find_one({'_id': ObjectId(user_id)})
         if not user:
             return jsonify({'success': False, 'message': 'User not found'}), 404
@@ -371,9 +511,23 @@ def send_credentials_again(user_id):
 
 @user_management_bp.route('/<user_id>/credentials', methods=['GET'])
 @jwt_required()
+@require_permission(module='user_management')
 def download_credentials(user_id):
     """Download student credentials as CSV"""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can access user management
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+
+        if not user_id or user_id in ['undefined', 'null', 'None']:
+            return jsonify({'success': False, 'message': 'Invalid or missing user_id'}), 400
+        
         user = mongo_db.users.find_one({'_id': ObjectId(user_id)})
         if not user:
             return jsonify({'success': False, 'message': 'User not found'}), 404

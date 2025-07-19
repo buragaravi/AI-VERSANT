@@ -12,41 +12,62 @@ import io
 from utils.email_service import send_email, render_template
 from config.shared import bcrypt
 from socketio_instance import socketio
+from routes.access_control import require_permission
 
 batch_management_bp = Blueprint('batch_management', __name__)
 
 @batch_management_bp.route('/', methods=['GET'])
 @jwt_required()
-def list_batches():
-    batches = list(mongo_db.batches.find())
-    batch_list = []
-    for batch in batches:
-        campus_objs = list(mongo_db.campuses.find({'_id': {'$in': batch.get('campus_ids', [])}}))
-        course_objs = list(mongo_db.courses.find({'_id': {'$in': batch.get('course_ids', [])}}))
-        # Get student count for this batch
-        student_count = mongo_db.students.count_documents({'batch_id': batch['_id']})
-        batch_list.append({
-            'id': str(batch['_id']),
-            'name': batch['name'],
-            'campuses': [{'id': str(c['_id']), 'name': c['name']} for c in campus_objs],
-            'courses': [{'id': str(c['_id']), 'name': c['name']} for c in course_objs],
-            'student_count': student_count
-        })
-    return jsonify({'success': True, 'data': batch_list}), 200
-
-@batch_management_bp.route('/', methods=['POST'])
-@jwt_required()
-def create_batch_from_selection():
-    """Create a new batch from selected campuses and courses - SUPER ADMIN ONLY"""
+@require_permission(module='batch_management')
+def get_batches():
+    """Get all batches"""
     try:
         current_user_id = get_jwt_identity()
         user = mongo_db.find_user_by_id(current_user_id)
         
-        # Only super admin can create batches
-        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+        # Super admin can see all batches
+        if user.get('role') in ['super_admin', 'superadmin']:
+            batches = list(mongo_db.batches.find())
+        else:
+            # Campus and course admins can only see batches in their campus
+            campus_id = user.get('campus_id')
+            if not campus_id:
+                return jsonify({'success': False, 'message': 'No campus assigned'}), 400
+            batches = list(mongo_db.batches.find({'campus_ids': ObjectId(campus_id)}))
+        
+        batch_list = []
+        for batch in batches:
+            # Get course details
+            course_objs = list(mongo_db.courses.find({'_id': {'$in': batch.get('course_ids', [])}}))
+            student_count = mongo_db.students.count_documents({'batch_id': batch['_id']})
+            
+            batch_list.append({
+                'id': str(batch['_id']),
+                'name': batch.get('name'),
+                'courses': [{'id': str(c['_id']), 'name': c['name']} for c in course_objs],
+                'student_count': student_count,
+                'created_at': batch.get('created_at')
+            })
+        
+        return jsonify({'success': True, 'data': batch_list}), 200
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@batch_management_bp.route('/', methods=['POST'])
+@jwt_required()
+@require_permission(module='batch_management', action='create_batch')
+def create_batch_from_selection():
+    """Create a new batch from selected campuses and courses"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Check if user has permission to create batches
+        if not user or user.get('role') not in ['super_admin', 'superadmin', 'campus_admin', 'course_admin']:
             return jsonify({
                 'success': False,
-                'message': 'Access denied. Only super admin can create batches.'
+                'message': 'Access denied. You do not have permission to create batches.'
             }), 403
         
         data = request.get_json()
@@ -59,6 +80,15 @@ def create_batch_from_selection():
 
         if mongo_db.batches.find_one({'name': name}):
             return jsonify({'success': False, 'message': 'Batch name already exists'}), 409
+
+        # Campus and course admins can only create batches in their own campus
+        if user.get('role') in ['campus_admin', 'course_admin']:
+            user_campus_id = user.get('campus_id')
+            if not user_campus_id or str(user_campus_id) not in [str(cid) for cid in campus_ids]:
+                return jsonify({
+                    'success': False,
+                    'message': 'Access denied. You can only create batches in your own campus.'
+                }), 403
 
         # Create the batch
         batch_id = mongo_db.batches.insert_one({
@@ -79,16 +109,16 @@ def create_batch_from_selection():
             })
 
         return jsonify({
-            'success': True, 
+            'success': True,
             'message': 'Batch created successfully',
             'data': {
-                'id': str(batch_id),
+                'batch_id': str(batch_id),
                 'instances': created_instances
             }
         }), 201
+        
     except Exception as e:
-        current_app.logger.error(f"Error creating batch: {e}")
-        return jsonify({'success': False, 'message': 'An error occurred while creating the batch.'}), 500
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @batch_management_bp.route('/course/<course_id>/batches', methods=['GET'])
 @jwt_required()
@@ -603,9 +633,9 @@ def upload_students_to_batch():
                 student_doc = {
                     'user_id': user_id,
                     'name': student_name,
-                    'roll_number': roll_number,
-                    'email': email,
-                    'mobile_number': mobile_number,
+                    'roll_number': student['roll_number'],
+                    'email': student['email'],
+                    'mobile_number': student.get('mobile_number', ''),
                     'campus_id': campus_id,
                     'course_id': ObjectId(course_id),
                     'batch_id': ObjectId(batch_id),

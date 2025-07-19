@@ -18,7 +18,8 @@ import {
   Plus,
   FilePlus,
   Building2,
-  BarChart
+  BarChart,
+  BrainCircuit
 } from 'lucide-react'
 
 const Sidebar = () => {
