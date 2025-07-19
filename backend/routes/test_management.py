@@ -624,9 +624,9 @@ def upload_module_questions():
                 doc['question_type'] = question_type
                 
                 if question_type == 'compiler_integrated':
-                doc['testCases'] = q.get('testCases', '')
-                doc['expectedOutput'] = q.get('expectedOutput', '')
-                doc['language'] = q.get('language', 'python')
+                    doc['testCases'] = q.get('testCases', '')
+                    doc['expectedOutput'] = q.get('expectedOutput', '')
+                    doc['language'] = q.get('language', 'python')
                     doc['testCaseId'] = q.get('testCaseId', '')
                 elif question_type == 'mcq':
                     # MCQ format for technical questions
@@ -1655,6 +1655,140 @@ def delete_crt_topic(topic_id):
         return jsonify({
             'success': False,
             'message': f'Failed to delete topic: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/crt-topics/<topic_id>/questions', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def add_questions_to_topic(topic_id):
+    """Add questions to a specific CRT topic"""
+    try:
+        data = request.get_json()
+        questions = data.get('questions', [])
+        
+        if not questions:
+            return jsonify({
+                'success': False,
+                'message': 'Questions are required'
+            }), 400
+        
+        # Check if topic exists
+        topic = mongo_db.crt_topics.find_one({'_id': ObjectId(topic_id)})
+        if not topic:
+            return jsonify({
+                'success': False,
+                'message': 'Topic not found'
+            }), 404
+        
+        # Process and insert questions
+        processed_questions = []
+        for question in questions:
+            # Add topic_id to each question
+            question['topic_id'] = ObjectId(topic_id)
+            question['created_at'] = datetime.utcnow()
+            question['used_count'] = 0
+            
+            # Ensure module_id matches the topic's module
+            if 'module_id' not in question or question['module_id'] != topic['module_id']:
+                question['module_id'] = topic['module_id']
+            
+            # Handle question type for technical questions
+            if topic['module_id'] == 'CRT_TECHNICAL':
+                question_type = question.get('questionType', 'compiler_integrated')
+                question['question_type'] = question_type
+                
+                if question_type == 'compiler_integrated':
+                    # Ensure technical fields are present
+                    if 'testCases' not in question:
+                        question['testCases'] = ''
+                    if 'expectedOutput' not in question:
+                        question['expectedOutput'] = ''
+                    if 'language' not in question:
+                        question['language'] = 'python'
+                elif question_type == 'mcq':
+                    # Ensure MCQ fields are present
+                    if 'optionA' not in question:
+                        question['optionA'] = ''
+                    if 'optionB' not in question:
+                        question['optionB'] = ''
+                    if 'optionC' not in question:
+                        question['optionC'] = ''
+                    if 'optionD' not in question:
+                        question['optionD'] = ''
+                    if 'answer' not in question:
+                        question['answer'] = ''
+            
+            processed_questions.append(question)
+        
+        # Insert questions into question bank
+        if processed_questions:
+            result = mongo_db.question_bank.insert_many(processed_questions)
+            
+            return jsonify({
+                'success': True,
+                'message': f'Successfully added {len(result.inserted_ids)} questions to topic',
+                'data': {
+                    'inserted_count': len(result.inserted_ids),
+                    'topic_id': topic_id,
+                    'topic_name': topic['topic_name']
+                }
+            }), 201
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'No valid questions to add'
+            }), 400
+        
+    except Exception as e:
+        current_app.logger.error(f"Error adding questions to topic: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to add questions to topic: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/crt-topics/<topic_id>/questions', methods=['GET'])
+@jwt_required()
+@require_superadmin
+def get_topic_questions(topic_id):
+    """Get questions from a specific CRT topic"""
+    try:
+        # Check if topic exists
+        topic = mongo_db.crt_topics.find_one({'_id': ObjectId(topic_id)})
+        if not topic:
+            return jsonify({
+                'success': False,
+                'message': 'Topic not found'
+            }), 404
+        
+        # Get questions for this topic
+        questions = list(mongo_db.question_bank.find({
+            'topic_id': ObjectId(topic_id)
+        }).sort('created_at', -1))
+        
+        # Convert ObjectIds to strings
+        for question in questions:
+            question['_id'] = str(question['_id'])
+            if question.get('topic_id'):
+                question['topic_id'] = str(question['topic_id'])
+            if question.get('created_at'):
+                question['created_at'] = question['created_at'].isoformat()
+        
+        return jsonify({
+            'success': True,
+            'data': questions,
+            'topic': {
+                'id': str(topic['_id']),
+                'name': topic['topic_name'],
+                'description': topic.get('description', ''),
+                'module_id': topic['module_id']
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching topic questions: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to fetch topic questions: {str(e)}'
         }), 500
 
 @test_management_bp.route('/crt-topics/<topic_id>/questions', methods=['POST'])
