@@ -346,10 +346,10 @@ def reset_admin_permissions(admin_id):
             {'$set': {'permissions': default_permissions, 'permissions_updated_at': datetime.now(pytz.utc)}}
         )
         
-    return jsonify({
-        'success': True,
+        return jsonify({
+            'success': True,
             'message': 'Permissions reset to default successfully'
-    }), 200 
+        }), 200
         
     except Exception as e:
         return jsonify({
