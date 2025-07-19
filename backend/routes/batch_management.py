@@ -633,9 +633,9 @@ def upload_students_to_batch():
                 student_doc = {
                     'user_id': user_id,
                     'name': student_name,
-                    'roll_number': student['roll_number'],
-                    'email': student['email'],
-                    'mobile_number': student.get('mobile_number', ''),
+                    'roll_number': roll_number,
+                    'email': email,
+                    'mobile_number': mobile_number,
                     'campus_id': campus_id,
                     'course_id': ObjectId(course_id),
                     'batch_id': ObjectId(batch_id),

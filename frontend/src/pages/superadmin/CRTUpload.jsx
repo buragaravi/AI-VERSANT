@@ -496,10 +496,10 @@ const CRTUpload = () => {
                   questionType: 'compiler_integrated',
                   // For compatibility with existing system
               optionA: 'A',
-              optionB: 'B', 
-              optionC: 'C',
+              optionB: 'B',
+              optionC: 'C', 
               optionD: 'D',
-                  answer: 'A'
+              answer: 'A'
                 });
               }
             });
@@ -1681,6 +1681,50 @@ const AddQuestionForm = ({ onSave, onCancel, selectedModule }) => {
 
 // Create Topic Modal Component
 const CreateTopicModal = ({ isOpen, onClose, onCreate, topicName, setTopicName, selectedModule }) => {
+  const [isChecking, setIsChecking] = useState(false);
+  const [isDuplicate, setIsDuplicate] = useState(false);
+  const [existingTopic, setExistingTopic] = useState(null);
+
+  // Check for duplicate topic name in real-time
+  useEffect(() => {
+    const checkDuplicateTopic = async () => {
+      if (!topicName.trim() || !selectedModule) {
+        setIsDuplicate(false);
+        setExistingTopic(null);
+        return;
+      }
+
+      setIsChecking(true);
+      try {
+        const response = await api.get('/test-management/crt-topics');
+        if (response.data.success) {
+          const duplicate = response.data.data.find(topic => 
+            topic.topic_name.toLowerCase() === topicName.trim().toLowerCase() &&
+            topic.module_id === `CRT_${selectedModule}`
+          );
+          
+          if (duplicate) {
+            setIsDuplicate(true);
+            setExistingTopic(duplicate);
+          } else {
+            setIsDuplicate(false);
+            setExistingTopic(null);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking duplicate topic:', error);
+        setIsDuplicate(false);
+        setExistingTopic(null);
+      } finally {
+        setIsChecking(false);
+      }
+    };
+
+    // Debounce the check to avoid too many API calls
+    const timeoutId = setTimeout(checkDuplicateTopic, 500);
+    return () => clearTimeout(timeoutId);
+  }, [topicName, selectedModule]);
+
   if (!isOpen) return null;
 
   return (
@@ -1692,13 +1736,39 @@ const CreateTopicModal = ({ isOpen, onClose, onCreate, topicName, setTopicName, 
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Topic Name
             </label>
-            <input
-              type="text"
-              value={topicName}
-              onChange={(e) => setTopicName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter topic name"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={topicName}
+                onChange={(e) => setTopicName(e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  isDuplicate ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'
+                }`}
+                placeholder="Enter topic name"
+              />
+              {isChecking && (
+                <div className="absolute right-3 top-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                </div>
+              )}
+            </div>
+            {isDuplicate && existingTopic && (
+              <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-sm text-red-600">
+                  <strong>Topic already exists!</strong> "{existingTopic.topic_name}" is already created for this module.
+                </p>
+                <p className="text-xs text-red-500 mt-1">
+                  Created on: {new Date(existingTopic.created_at).toLocaleDateString()}
+                </p>
+              </div>
+            )}
+            {!isDuplicate && topicName.trim() && !isChecking && (
+              <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md">
+                <p className="text-sm text-green-600">
+                  ✓ Topic name is available
+                </p>
+              </div>
+            )}
           </div>
           <div className="flex justify-end space-x-3">
             <button
@@ -1709,9 +1779,14 @@ const CreateTopicModal = ({ isOpen, onClose, onCreate, topicName, setTopicName, 
             </button>
             <button
               onClick={onCreate}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              disabled={isDuplicate || isChecking || !topicName.trim()}
+              className={`px-4 py-2 text-sm font-medium border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                isDuplicate || isChecking || !topicName.trim()
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'
+              }`}
             >
-              Create Topic
+              {isChecking ? 'Checking...' : 'Create Topic'}
             </button>
           </div>
         </div>
@@ -1722,6 +1797,58 @@ const CreateTopicModal = ({ isOpen, onClose, onCreate, topicName, setTopicName, 
 
 // Edit Topic Modal Component
 const EditTopicModal = ({ isOpen, onClose, onSave, topic, topicName, setTopicName }) => {
+  const [isChecking, setIsChecking] = useState(false);
+  const [isDuplicate, setIsDuplicate] = useState(false);
+  const [existingTopic, setExistingTopic] = useState(null);
+
+  // Check for duplicate topic name in real-time
+  useEffect(() => {
+    const checkDuplicateTopic = async () => {
+      if (!topicName.trim() || !topic) {
+        setIsDuplicate(false);
+        setExistingTopic(null);
+        return;
+      }
+
+      // Don't check if the name hasn't changed
+      if (topicName.trim() === topic.topic_name) {
+        setIsDuplicate(false);
+        setExistingTopic(null);
+        return;
+      }
+
+      setIsChecking(true);
+      try {
+        const response = await api.get('/test-management/crt-topics');
+        if (response.data.success) {
+          const duplicate = response.data.data.find(t => 
+            t.topic_name.toLowerCase() === topicName.trim().toLowerCase() &&
+            t.module_id === topic.module_id &&
+            t._id !== topic._id
+          );
+          
+          if (duplicate) {
+            setIsDuplicate(true);
+            setExistingTopic(duplicate);
+          } else {
+            setIsDuplicate(false);
+            setExistingTopic(null);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking duplicate topic:', error);
+        setIsDuplicate(false);
+        setExistingTopic(null);
+      } finally {
+        setIsChecking(false);
+      }
+    };
+
+    // Debounce the check to avoid too many API calls
+    const timeoutId = setTimeout(checkDuplicateTopic, 500);
+    return () => clearTimeout(timeoutId);
+  }, [topicName, topic]);
+
   if (!isOpen || !topic) return null;
 
   return (
@@ -1733,13 +1860,39 @@ const EditTopicModal = ({ isOpen, onClose, onSave, topic, topicName, setTopicNam
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Topic Name
             </label>
-            <input
-              type="text"
-              value={topicName}
-              onChange={(e) => setTopicName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter topic name"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={topicName}
+                onChange={(e) => setTopicName(e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  isDuplicate ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'
+                }`}
+                placeholder="Enter topic name"
+              />
+              {isChecking && (
+                <div className="absolute right-3 top-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                </div>
+              )}
+            </div>
+            {isDuplicate && existingTopic && (
+              <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-sm text-red-600">
+                  <strong>Topic already exists!</strong> "{existingTopic.topic_name}" is already created for this module.
+                </p>
+                <p className="text-xs text-red-500 mt-1">
+                  Created on: {new Date(existingTopic.created_at).toLocaleDateString()}
+                </p>
+              </div>
+            )}
+            {!isDuplicate && topicName.trim() && !isChecking && topicName.trim() !== topic.topic_name && (
+              <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md">
+                <p className="text-sm text-green-600">
+                  ✓ Topic name is available
+                </p>
+              </div>
+            )}
           </div>
           <div className="flex justify-end space-x-3">
             <button
@@ -1750,9 +1903,14 @@ const EditTopicModal = ({ isOpen, onClose, onSave, topic, topicName, setTopicNam
             </button>
             <button
               onClick={() => onSave(topic._id, topicName)}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              disabled={isDuplicate || isChecking || !topicName.trim() || topicName.trim() === topic.topic_name}
+              className={`px-4 py-2 text-sm font-medium border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                isDuplicate || isChecking || !topicName.trim() || topicName.trim() === topic.topic_name
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'
+              }`}
             >
-              Save Changes
+              {isChecking ? 'Checking...' : 'Save Changes'}
             </button>
           </div>
         </div>
