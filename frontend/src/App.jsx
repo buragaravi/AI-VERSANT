@@ -102,7 +102,7 @@ function App() {
 
                 {/* Admin Routes */}
                   {/* Super Admin Routes */}
-                <Route path="/superadmin" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin']}><SuperAdminSidebar /></ProtectedRoute>}>
+                <Route path="/superadmin" element={<ProtectedRoute allowedRoles={['superadmin', 'super_admin', 'campus_admin', 'course_admin']}><SuperAdminSidebar /></ProtectedRoute>}>
                   <Route index element={<SuperAdminDashboard />} />
                     <Route path="dashboard" element={<SuperAdminDashboard />} />
                     <Route path="campuses" element={<CampusManagement />} />
