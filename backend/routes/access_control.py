@@ -20,6 +20,10 @@ ADMIN_MODULES = {
     'test_management': 'Test Management',
     'question_bank_upload': 'Question Bank Upload',
     'crt_upload': 'CRT Upload',
+    'audio_upload': 'Audio Upload',
+    'sentence_upload': 'Sentence Upload',
+    'reading_upload': 'Reading Upload',
+    'writing_upload': 'Writing Upload',
     'results_management': 'Results Management',
     'analytics': 'Analytics',
     'reports': 'Reports'
@@ -39,7 +43,7 @@ DEFAULT_PERMISSIONS = {
         'can_view_all_data': True
     },
     'campus_admin': {
-        'modules': ['dashboard', 'course_management', 'batch_management', 'user_management', 'student_management', 'test_management', 'question_bank_upload', 'crt_upload', 'results_management', 'analytics', 'reports'],
+        'modules': ['dashboard', 'course_management', 'batch_management', 'user_management', 'student_management', 'test_management', 'question_bank_upload', 'crt_upload', 'audio_upload', 'sentence_upload', 'reading_upload', 'writing_upload', 'results_management', 'analytics', 'reports'],
         'can_create_campus': False,
         'can_create_course': True,
         'can_create_batch': True,
@@ -50,7 +54,7 @@ DEFAULT_PERMISSIONS = {
         'can_view_all_data': False
     },
     'course_admin': {
-        'modules': ['dashboard', 'batch_management', 'user_management', 'student_management', 'test_management', 'question_bank_upload', 'crt_upload', 'results_management', 'analytics', 'reports'],
+        'modules': ['dashboard', 'batch_management', 'user_management', 'student_management', 'test_management', 'question_bank_upload', 'crt_upload', 'audio_upload', 'sentence_upload', 'reading_upload', 'writing_upload', 'results_management', 'analytics', 'reports'],
         'can_create_campus': False,
         'can_create_course': False,
         'can_create_batch': True,
