@@ -1,5 +1,5 @@
 import os
-from flask import Flask
+from flask import Flask, jsonify
 from socketio_instance import socketio
 from config.shared import bcrypt
 from config.constants import JWT_ACCESS_TOKEN_EXPIRES, JWT_REFRESH_TOKEN_EXPIRES
@@ -27,6 +27,41 @@ socketio.init_app(app)
 
 # CORS configuration
 CORS(app, origins=os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:5173,https://pydah-ai-versant.vercel.app').split(','), supports_credentials=True, allow_headers=["Content-Type", "Authorization"])
+
+# Root route for API status
+@app.route('/')
+def api_status():
+    """API status endpoint"""
+    return jsonify({
+        'success': True,
+        'message': 'AI Versant Backend API is running',
+        'version': '1.0.0',
+        'status': 'active',
+        'endpoints': {
+            'auth': '/auth',
+            'superadmin': '/superadmin',
+            'campus_admin': '/campus-admin',
+            'course_admin': '/course-admin',
+            'student': '/student',
+            'test_management': '/test-management',
+            'user_management': '/user-management',
+            'analytics': '/analytics',
+            'campus_management': '/campus-management',
+            'course_management': '/course-management',
+            'batch_management': '/batch-management',
+            'access_control': '/access-control'
+        }
+    }), 200
+
+# Health check endpoint
+@app.route('/health')
+def health_check():
+    """Health check endpoint for monitoring"""
+    return jsonify({
+        'success': True,
+        'status': 'healthy',
+        'timestamp': '2024-01-01T00:00:00Z'
+    }), 200
 
 # Register blueprints
 from routes.auth import auth_bp
