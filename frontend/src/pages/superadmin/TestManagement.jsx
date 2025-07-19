@@ -1554,7 +1554,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
   const UploadComponent = MODULE_CONFIG[module]?.uploadComponent || (() => <div>Unknown module</div>);
   const [questions, setQuestions] = useState(testData.questions || []);
   const [error, setError] = useState('');
-  const [questionSource, setQuestionSource] = useState('manual'); // 'manual' or 'bank'
+  const [questionSource, setQuestionSource] = useState('manual'); // 'manual', 'bank', or 'random'
   const [bankQuestions, setBankQuestions] = useState([]);
   const [selectedBankQuestions, setSelectedBankQuestions] = useState([]);
   const [loadingBankQuestions, setLoadingBankQuestions] = useState(false);
@@ -1562,6 +1562,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
   const [questionCount, setQuestionCount] = useState(10);
   const [showQuestionPreview, setShowQuestionPreview] = useState(false);
   const [previewQuestions, setPreviewQuestions] = useState([]);
+  const [useRandomQuestions, setUseRandomQuestions] = useState(false);
   const { error: showError } = useNotification();
 
   // Fetch questions from bank when source changes
@@ -1796,7 +1797,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
       {/* Question Source Selection */}
       <div className="bg-white rounded-lg shadow-md p-6">
         <h3 className="text-lg font-semibold mb-4">Choose Question Source</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <button
             onClick={() => handleQuestionSourceChange('manual')}
             className={`p-4 border-2 rounded-lg text-left transition-colors ${
@@ -1830,6 +1831,25 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
               </div>
             </div>
           </button>
+
+          {testData.testType?.toLowerCase() === 'online' && (
+            <button
+              onClick={() => handleQuestionSourceChange('random')}
+              className={`p-4 border-2 rounded-lg text-left transition-colors ${
+                questionSource === 'random'
+                  ? 'border-green-500 bg-green-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <Shuffle className="h-6 w-6 text-green-500" />
+                <div>
+                  <h4 className="font-semibold">Random Questions</h4>
+                  <p className="text-sm text-gray-600">Each student gets different random questions</p>
+                </div>
+              </div>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1928,6 +1948,70 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Random Question Configuration */}
+      {questionSource === 'random' && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center space-x-2 mb-4">
+            <Shuffle className="h-5 w-5 text-green-600" />
+            <h3 className="text-lg font-semibold">Random Question Configuration</h3>
+          </div>
+          
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center space-x-2 mb-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <span className="text-green-800 font-medium">Anti-Cheating Features</span>
+            </div>
+            <ul className="text-green-700 text-sm space-y-1">
+              <li>• Each student receives different random questions from the question bank</li>
+              <li>• MCQ options are shuffled for each student</li>
+              <li>• Questions are distributed evenly across all students</li>
+              <li>• No two students will have the same question set</li>
+            </ul>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Questions per Student
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="50"
+                value={questionCount}
+                onChange={(e) => setQuestionCount(parseInt(e.target.value) || 10)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="Number of questions per student"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Each student will receive this many random questions from the question bank
+              </p>
+            </div>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center space-x-2 mb-2">
+                <Info className="h-4 w-4 text-blue-600" />
+                <span className="text-blue-800 font-medium">Question Bank Status</span>
+              </div>
+              <div className="text-blue-700 text-sm space-y-1">
+                <p>Available questions in bank: <span className="font-semibold">{bankQuestions.length}</span></p>
+                <p>Questions needed: <span className="font-semibold">{questionCount} × {studentList.length} = {questionCount * studentList.length}</span></p>
+                {bankQuestions.length < questionCount * studentList.length && (
+                  <p className="text-red-600 font-semibold">
+                    ⚠️ Not enough questions available. Please add more questions to the bank or reduce the count.
+                  </p>
+                )}
+                {bankQuestions.length >= questionCount * studentList.length && (
+                  <p className="text-green-600 font-semibold">
+                    ✅ Sufficient questions available for all students
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

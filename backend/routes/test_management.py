@@ -759,6 +759,292 @@ def fetch_questions_for_test():
     
     return jsonify({'success': True, 'questions': questions}), 200
 
+# ==================== RANDOM QUESTION SELECTION FOR ONLINE TESTS ====================
+
+@test_management_bp.route('/question-bank/random-selection', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def get_random_questions_for_online_test():
+    """Get random questions from question bank for online test creation"""
+    try:
+        data = request.get_json()
+        module_id = data.get('module_id')
+        level_id = data.get('level_id')
+        subcategory = data.get('subcategory')  # For grammar
+        question_count = int(data.get('question_count', 20))
+        student_count = int(data.get('student_count', 1))  # Number of students to generate questions for
+        
+        if not module_id or not level_id:
+            return jsonify({'success': False, 'message': 'module_id and level_id are required'}), 400
+        
+        # Build query based on module type
+        query = {'module_id': module_id}
+        
+        if module_id == 'GRAMMAR':
+            query['level_id'] = level_id
+        elif module_id == 'CRT':
+            query['level_id'] = level_id
+        else:
+            query['level_id'] = level_id
+        
+        current_app.logger.info(f"Fetching random questions with query: {query}")
+        
+        # Get all available questions for this module/level
+        all_questions = list(mongo_db.question_bank.find(query))
+        
+        if not all_questions:
+            return jsonify({'success': False, 'message': 'No questions found for the specified criteria'}), 404
+        
+        # Calculate total questions needed (question_count per student)
+        total_questions_needed = question_count * student_count
+        
+        if len(all_questions) < total_questions_needed:
+            return jsonify({
+                'success': False, 
+                'message': f'Not enough questions available. Need {total_questions_needed}, but only {len(all_questions)} found.'
+            }), 400
+        
+        # Shuffle all questions and select the required number
+        import random
+        random.shuffle(all_questions)
+        selected_questions = all_questions[:total_questions_needed]
+        
+        # Group questions for each student
+        student_question_sets = []
+        for i in range(student_count):
+            start_idx = i * question_count
+            end_idx = start_idx + question_count
+            student_questions = selected_questions[start_idx:end_idx]
+            
+            # Process questions for this student (shuffle options for MCQ)
+            processed_questions = []
+            for j, question in enumerate(student_questions):
+                processed_question = {
+                    'question_id': f'q_{j+1}',
+                    'question': question.get('question', ''),
+                    'question_type': question.get('question_type', 'mcq'),
+                    'module_id': question.get('module_id'),
+                    'level_id': question.get('level_id'),
+                    'created_at': question.get('created_at'),
+                    '_id': str(question['_id'])
+                }
+                
+                # Handle MCQ questions with option shuffling
+                if question.get('question_type') == 'mcq' or module_id in ['GRAMMAR', 'VOCABULARY', 'READING']:
+                    options = {
+                        'A': question.get('optionA', ''),
+                        'B': question.get('optionB', ''),
+                        'C': question.get('optionC', ''),
+                        'D': question.get('optionD', '')
+                    }
+                    
+                    # Remove empty options
+                    options = {k: v for k, v in options.items() if v.strip()}
+                    
+                    # Shuffle options
+                    option_items = list(options.items())
+                    random.shuffle(option_items)
+                    
+                    # Create new options dict with shuffled order
+                    shuffled_options = {}
+                    answer_mapping = {}
+                    
+                    for idx, (old_key, value) in enumerate(option_items):
+                        new_key = chr(ord('A') + idx)
+                        shuffled_options[new_key] = value
+                        answer_mapping[old_key] = new_key
+                    
+                    processed_question['options'] = shuffled_options
+                    processed_question['correct_answer'] = answer_mapping.get(question.get('answer', 'A'), 'A')
+                    processed_question['original_answer'] = question.get('answer', 'A')
+                    
+                # Handle audio questions (Listening/Speaking)
+                elif module_id in ['LISTENING', 'SPEAKING']:
+                    processed_question.update({
+                        'sentence': question.get('sentence', ''),
+                        'audio_url': question.get('audio_url'),
+                        'audio_config': question.get('audio_config'),
+                        'transcript_validation': question.get('transcript_validation'),
+                        'has_audio': question.get('has_audio', False)
+                    })
+                
+                # Handle writing questions
+                elif module_id == 'WRITING':
+                    processed_question.update({
+                        'paragraph': question.get('paragraph', ''),
+                        'instructions': question.get('instructions', ''),
+                        'min_words': question.get('min_words', 50),
+                        'max_words': question.get('max_words', 500),
+                        'min_characters': question.get('min_characters', 200),
+                        'max_characters': question.get('max_characters', 2000)
+                    })
+                
+                processed_questions.append(processed_question)
+            
+            student_question_sets.append({
+                'student_index': i,
+                'questions': processed_questions
+            })
+        
+        # Update usage statistics for selected questions
+        question_ids = [q['_id'] for q in selected_questions]
+        mongo_db.question_bank.update_many(
+            {'_id': {'$in': question_ids}},
+            {
+                '$inc': {'used_count': 1},
+                '$set': {'last_used': datetime.utcnow()}
+            }
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': f'Generated {len(student_question_sets)} question sets for {student_count} students',
+            'data': {
+                'student_question_sets': student_question_sets,
+                'total_questions_used': len(selected_questions),
+                'questions_per_student': question_count
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in random question selection: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to generate random questions: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/create-online-test-with-random-questions', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def create_online_test_with_random_questions():
+    """Create an online test with random questions assigned to each student"""
+    try:
+        data = request.get_json()
+        test_name = data.get('test_name')
+        test_type = data.get('test_type', 'online')
+        module_id = data.get('module_id')
+        level_id = data.get('level_id')
+        subcategory = data.get('subcategory')
+        campus_id = data.get('campus_id')
+        course_ids = data.get('course_ids', [])
+        batch_ids = data.get('batch_ids', [])
+        assigned_student_ids = data.get('assigned_student_ids', [])
+        question_count = int(data.get('question_count', 20))
+        startDateTime = data.get('startDateTime')
+        endDateTime = data.get('endDateTime')
+        duration = data.get('duration')
+        
+        # Validate required fields
+        if not all([test_name, module_id, level_id, campus_id, course_ids, batch_ids, assigned_student_ids]):
+            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+        
+        if test_type.lower() != 'online':
+            return jsonify({'success': False, 'message': 'This endpoint is for online tests only'}), 400
+        
+        if not all([startDateTime, endDateTime, duration]):
+            return jsonify({'success': False, 'message': 'Start date, end date, and duration are required for online tests'}), 400
+        
+        # Get student count
+        student_count = len(assigned_student_ids)
+        if student_count == 0:
+            return jsonify({'success': False, 'message': 'No students assigned to test'}), 400
+        
+        # Generate random questions for all students
+        random_questions_payload = {
+            'module_id': module_id,
+            'level_id': level_id,
+            'subcategory': subcategory,
+            'question_count': question_count,
+            'student_count': student_count
+        }
+        
+        # Call the random question selection endpoint
+        from flask import current_app
+        with current_app.test_client() as client:
+            response = client.post('/test-management/question-bank/random-selection', 
+                                 json=random_questions_payload)
+            
+            if response.status_code != 200:
+                return jsonify({'success': False, 'message': 'Failed to generate random questions'}), 500
+            
+            random_questions_data = response.get_json()
+            student_question_sets = random_questions_data['data']['student_question_sets']
+        
+        # Generate unique test ID
+        test_id = generate_unique_test_id()
+        
+        # Create base test document
+        test_doc = {
+            'test_id': test_id,
+            'name': test_name,
+            'test_type': test_type.lower(),
+            'module_id': module_id,
+            'level_id': level_id,
+            'subcategory': subcategory,
+            'campus_ids': [ObjectId(campus_id)],
+            'course_ids': [ObjectId(cid) for cid in course_ids],
+            'batch_ids': [ObjectId(bid) for bid in batch_ids],
+            'assigned_student_ids': [ObjectId(sid) for sid in assigned_student_ids],
+            'created_by': ObjectId(get_jwt_identity()),
+            'created_at': datetime.utcnow(),
+            'status': 'active',
+            'is_active': True,
+            'startDateTime': datetime.fromisoformat(startDateTime.replace('Z', '+00:00')),
+            'endDateTime': datetime.fromisoformat(endDateTime.replace('Z', '+00:00')),
+            'duration': int(duration),
+            'question_count': question_count,
+            'student_count': student_count,
+            'has_random_questions': True  # Flag to indicate this test uses random questions
+        }
+        
+        # Insert the base test
+        test_result = mongo_db.tests.insert_one(test_doc)
+        test_object_id = test_result.inserted_id
+        
+        # Create student-specific test assignments
+        student_assignments = []
+        for i, student_id in enumerate(assigned_student_ids):
+            if i < len(student_question_sets):
+                question_set = student_question_sets[i]
+                
+                assignment_doc = {
+                    'test_id': test_object_id,
+                    'student_id': ObjectId(student_id),
+                    'questions': question_set['questions'],
+                    'assigned_at': datetime.utcnow(),
+                    'status': 'assigned',
+                    'attempted': False,
+                    'started_at': None,
+                    'completed_at': None,
+                    'score': 0,
+                    'total_marks': question_count
+                }
+                
+                student_assignments.append(assignment_doc)
+        
+        # Insert all student assignments
+        if student_assignments:
+            mongo_db.student_test_assignments.insert_many(student_assignments)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Online test created successfully with random questions for {student_count} students',
+            'data': {
+                'test_id': str(test_object_id),
+                'test_name': test_name,
+                'student_count': student_count,
+                'question_count': question_count,
+                'assignments_created': len(student_assignments)
+            }
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error creating online test with random questions: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to create online test: {str(e)}'
+        }), 500
+
 # ==================== STUDENT TEST SUBMISSION ENDPOINTS ====================
 
 @test_management_bp.route('/submit-practice-test', methods=['POST'])

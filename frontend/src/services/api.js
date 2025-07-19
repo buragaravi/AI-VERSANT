@@ -241,6 +241,31 @@ export const getRandomQuestionsFromBank = async (moduleId, levelId, count) => {
   });
 };
 
+export const getRandomQuestionsForOnlineTest = async (moduleId, levelId, subcategory, questionCount, studentCount) => {
+  return api.post('/test-management/question-bank/random-selection', {
+    module_id: moduleId,
+    level_id: levelId,
+    subcategory,
+    question_count: questionCount,
+    student_count: studentCount
+  });
+};
+
+export const createOnlineTestWithRandomQuestions = async (testData) => {
+  return api.post('/test-management/create-online-test-with-random-questions', testData);
+};
+
+export const getStudentRandomTestAssignment = async (testId) => {
+  return api.get(`/student/test/${testId}/random-assignment`);
+};
+
+export const submitRandomTest = async (testId, assignmentId, answers) => {
+  return api.post(`/student/test/${testId}/submit-random`, {
+    assignment_id: assignmentId,
+    answers
+  });
+};
+
 export const createTestFromBank = async (testData) => {
   return api.post('/test-management/create-test-from-bank', testData);
 };

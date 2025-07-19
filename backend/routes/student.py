@@ -437,6 +437,187 @@ def get_grammar_progress():
         logging.error(f"FATAL error in /grammar-progress for user {get_jwt_identity()}: {e}", exc_info=True)
         return jsonify({'success': False, 'message': 'An unexpected internal error occurred.'}), 500
 
+@student_bp.route('/test/<test_id>/random-assignment', methods=['GET'])
+@jwt_required()
+def get_student_random_test_assignment(test_id):
+    """Get student's specific test assignment with randomized questions"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.users.find_one({'_id': ObjectId(current_user_id)})
+        
+        if not user or user.get('role') != 'student':
+            return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        # Get student's batch-course instance
+        student = mongo_db.students.find_one({'user_id': ObjectId(current_user_id)})
+        if not student or not student.get('batch_course_instance_id'):
+            return jsonify({'success': False, 'message': 'Student not assigned to any batch-course instance'}), 404
+        
+        instance_id = student['batch_course_instance_id']
+        
+        # Get test and verify it's assigned to this instance
+        test = mongo_db.tests.find_one({
+            '_id': ObjectId(test_id),
+            'batch_course_instance_ids': instance_id,
+            'is_active': True,
+            'has_random_questions': True  # Only for tests with random questions
+        })
+        
+        if not test:
+            return jsonify({'success': False, 'message': 'Test not found or not available'}), 404
+        
+        # Check if student is assigned to this test
+        if ObjectId(current_user_id) not in test.get('assigned_student_ids', []):
+            return jsonify({'success': False, 'message': 'You are not assigned to this test'}), 403
+        
+        # Get student's specific test assignment
+        assignment = mongo_db.student_test_assignments.find_one({
+            'test_id': ObjectId(test_id),
+            'student_id': ObjectId(current_user_id)
+        })
+        
+        if not assignment:
+            return jsonify({'success': False, 'message': 'Test assignment not found'}), 404
+        
+        # Check if test is already attempted
+        if assignment.get('attempted', False):
+            return jsonify({'success': False, 'message': 'Test already attempted'}), 409
+        
+        # Check if test is within time window
+        now = datetime.now(pytz.utc)
+        start_time = test.get('startDateTime')
+        end_time = test.get('endDateTime')
+        
+        if start_time and now < start_time:
+            return jsonify({'success': False, 'message': 'Test has not started yet'}), 400
+        
+        if end_time and now > end_time:
+            return jsonify({'success': False, 'message': 'Test has ended'}), 400
+        
+        # Prepare test data for student (without correct answers)
+        test_data = {
+            'id': str(test['_id']),
+            'name': test['name'],
+            'module_id': test['module_id'],
+            'level_id': test['level_id'],
+            'duration': test['duration'],
+            'startDateTime': test['startDateTime'],
+            'endDateTime': test['endDateTime'],
+            'questions': assignment['questions'],
+            'total_questions': len(assignment['questions']),
+            'assignment_id': str(assignment['_id'])
+        }
+        
+        # Remove correct answers from questions for security
+        for question in test_data['questions']:
+            if 'correct_answer' in question:
+                del question['correct_answer']
+            if 'original_answer' in question:
+                del question['original_answer']
+        
+        return jsonify({
+            'success': True,
+            'message': 'Test assignment retrieved successfully',
+            'data': test_data
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting student test assignment: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@student_bp.route('/test/<test_id>/submit-random', methods=['POST'])
+@jwt_required()
+def submit_random_test(test_id):
+    """Submit test with randomized questions and calculate score"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.users.find_one({'_id': ObjectId(current_user_id)})
+        
+        if not user or user.get('role') != 'student':
+            return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        data = request.get_json()
+        assignment_id = data.get('assignment_id')
+        answers = data.get('answers', [])
+        
+        if not assignment_id:
+            return jsonify({'success': False, 'message': 'Assignment ID is required'}), 400
+        
+        # Get student's test assignment
+        assignment = mongo_db.student_test_assignments.find_one({
+            '_id': ObjectId(assignment_id),
+            'test_id': ObjectId(test_id),
+            'student_id': ObjectId(current_user_id)
+        })
+        
+        if not assignment:
+            return jsonify({'success': False, 'message': 'Test assignment not found'}), 404
+        
+        if assignment.get('attempted', False):
+            return jsonify({'success': False, 'message': 'Test already submitted'}), 409
+        
+        # Get test details
+        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
+        if not test:
+            return jsonify({'success': False, 'message': 'Test not found'}), 404
+        
+        # Calculate score
+        score = 0
+        total_questions = len(assignment['questions'])
+        correct_answers = 0
+        detailed_results = []
+        
+        for i, question in enumerate(assignment['questions']):
+            student_answer = answers.get(f'question_{i}', '')
+            correct_answer = question.get('correct_answer', '')
+            
+            is_correct = student_answer == correct_answer
+            if is_correct:
+                correct_answers += 1
+                score += 1
+            
+            detailed_results.append({
+                'question_index': i,
+                'question': question.get('question', ''),
+                'student_answer': student_answer,
+                'correct_answer': correct_answer,
+                'is_correct': is_correct
+            })
+        
+        # Calculate percentage
+        percentage = (score / total_questions) * 100 if total_questions > 0 else 0
+        
+        # Update assignment with results
+        mongo_db.student_test_assignments.update_one(
+            {'_id': ObjectId(assignment_id)},
+            {
+                '$set': {
+                    'attempted': True,
+                    'completed_at': datetime.now(pytz.utc),
+                    'score': score,
+                    'percentage': percentage,
+                    'answers': answers,
+                    'detailed_results': detailed_results
+                }
+            }
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Test submitted successfully',
+            'data': {
+                'score': score,
+                'total_questions': total_questions,
+                'percentage': percentage,
+                'correct_answers': correct_answers,
+                'detailed_results': detailed_results
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error submitting random test: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @student_bp.route('/online-exams', methods=['GET'])
 @jwt_required()
 def get_online_exams():

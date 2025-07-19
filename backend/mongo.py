@@ -20,6 +20,7 @@ class MongoDB:
         self.courses = self.db.courses
         self.batch_course_instances = BatchCourseInstance(self.db)
         self.question_bank = self.db.question_bank
+        self.student_test_assignments = self.db.student_test_assignments
         
         # Create indexes for better performance
         self._create_indexes()
