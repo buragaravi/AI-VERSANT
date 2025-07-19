@@ -23,10 +23,6 @@ import QuestionBankUpload from './pages/superadmin/QuestionBankUpload'
 import CRTUpload from './pages/superadmin/CRTUpload'
 import BatchCourseInstances from './pages/superadmin/BatchCourseInstances'
 import BatchManagement from './pages/superadmin/BatchManagement'
-import AudioUpload from './pages/superadmin/AudioUpload'
-import SentenceUpload from './pages/superadmin/SentenceUpload'
-import ReadingUpload from './pages/superadmin/ReadingUpload'
-import WritingUpload from './pages/superadmin/WritingUpload'
 
 // Campus Admin Pages
 import CampusAdminDashboard from './pages/campus-admin/CampusAdminDashboard'
@@ -120,10 +116,6 @@ function App() {
                     <Route path="tests/create" element={<TestManagement />} />
                     <Route path="question-bank-upload" element={<QuestionBankUpload />} />
                     <Route path="crt-upload" element={<CRTUpload />} />
-                    <Route path="audio-upload" element={<AudioUpload />} />
-                    <Route path="sentence-upload" element={<SentenceUpload />} />
-                    <Route path="reading-upload" element={<ReadingUpload />} />
-                    <Route path="writing-upload" element={<WritingUpload />} />
                     <Route path="batch-course-instances" element={<BatchCourseInstances />} />
                     <Route path="batch-management" element={<BatchManagement />} />
                   </Route>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
-import { Users, FilePlus, Building2, BarChart, LayoutDashboard, BookCopy, GraduationCap, Shield } from 'lucide-react'
+import { Users, FilePlus, Building2, BarChart, LayoutDashboard, BookCopy, GraduationCap, Shield, Menu, X } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
@@ -12,6 +12,7 @@ const SuperAdminSidebar = () => {
   const navigate = useNavigate()
   const [userPermissions, setUserPermissions] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   console.log('SuperAdminSidebar rendered - user:', user, 'loading:', loading, 'userPermissions:', userPermissions)
 
@@ -30,7 +31,7 @@ const SuperAdminSidebar = () => {
       // For super admin, set permissions immediately without API call
       if (user.role === 'super_admin' || user.role === 'superadmin') {
         const superAdminPermissions = {
-          modules: ['dashboard', 'campus_management', 'course_management', 'batch_management', 'user_management', 'admin_permissions', 'test_management', 'question_bank_upload', 'crt_upload', 'audio_upload', 'sentence_upload', 'reading_upload', 'writing_upload', 'student_management', 'results_management'],
+          modules: ['dashboard', 'campus_management', 'course_management', 'batch_management', 'user_management', 'admin_permissions', 'test_management', 'question_bank_upload', 'crt_upload', 'student_management', 'results_management'],
           can_upload_tests: true,
           can_upload_questions: true
         }
@@ -49,17 +50,17 @@ const SuperAdminSidebar = () => {
       // Use default permissions based on role
       const defaultPermissions = {
         super_admin: {
-          modules: ['dashboard', 'campus_management', 'course_management', 'batch_management', 'user_management', 'admin_permissions', 'test_management', 'question_bank_upload', 'crt_upload', 'audio_upload', 'sentence_upload', 'reading_upload', 'writing_upload', 'student_management', 'results_management'],
+          modules: ['dashboard', 'campus_management', 'course_management', 'batch_management', 'user_management', 'admin_permissions', 'test_management', 'question_bank_upload', 'crt_upload', 'student_management', 'results_management'],
           can_upload_tests: true,
           can_upload_questions: true
         },
         campus_admin: {
-          modules: ['dashboard', 'course_management', 'batch_management', 'user_management', 'test_management', 'question_bank_upload', 'crt_upload', 'audio_upload', 'sentence_upload', 'reading_upload', 'writing_upload', 'student_management', 'results_management'],
+          modules: ['dashboard', 'course_management', 'batch_management', 'user_management', 'test_management', 'question_bank_upload', 'crt_upload', 'student_management', 'results_management'],
           can_upload_tests: false,
           can_upload_questions: false
         },
         course_admin: {
-          modules: ['dashboard', 'batch_management', 'user_management', 'test_management', 'question_bank_upload', 'crt_upload', 'audio_upload', 'sentence_upload', 'reading_upload', 'writing_upload', 'student_management', 'results_management'],
+          modules: ['dashboard', 'batch_management', 'user_management', 'test_management', 'question_bank_upload', 'crt_upload', 'student_management', 'results_management'],
           can_upload_tests: false,
           can_upload_questions: false
         }
@@ -92,10 +93,6 @@ const SuperAdminSidebar = () => {
         { name: 'Test Management', path: '/superadmin/tests', icon: FilePlus, module: 'test_management' },
         { name: 'Question Bank Upload', path: '/superadmin/question-bank-upload', icon: FilePlus, module: 'question_bank_upload', isUpload: true },
         { name: 'CRT Upload', path: '/superadmin/crt-upload', icon: FilePlus, module: 'crt_upload', isUpload: true },
-        { name: 'Audio Upload', path: '/superadmin/audio-upload', icon: FilePlus, module: 'audio_upload', isUpload: true },
-        { name: 'Sentence Upload', path: '/superadmin/sentence-upload', icon: FilePlus, module: 'sentence_upload', isUpload: true },
-        { name: 'Reading Upload', path: '/superadmin/reading-upload', icon: FilePlus, module: 'reading_upload', isUpload: true },
-        { name: 'Writing Upload', path: '/superadmin/writing-upload', icon: FilePlus, module: 'writing_upload', isUpload: true },
         { name: 'Student Management', path: '/superadmin/students', icon: GraduationCap, module: 'student_management' },
         { name: 'Results Management', path: '/superadmin/results', icon: BarChart, module: 'results_management' },
       ]
@@ -116,10 +113,6 @@ const SuperAdminSidebar = () => {
       { name: 'Test Management', path: '/superadmin/tests', icon: FilePlus, module: 'test_management' },
       { name: 'Question Bank Upload', path: '/superadmin/question-bank-upload', icon: FilePlus, module: 'question_bank_upload', isUpload: true },
       { name: 'CRT Upload', path: '/superadmin/crt-upload', icon: FilePlus, module: 'crt_upload', isUpload: true },
-      { name: 'Audio Upload', path: '/superadmin/audio-upload', icon: FilePlus, module: 'audio_upload', isUpload: true },
-      { name: 'Sentence Upload', path: '/superadmin/sentence-upload', icon: FilePlus, module: 'sentence_upload', isUpload: true },
-      { name: 'Reading Upload', path: '/superadmin/reading-upload', icon: FilePlus, module: 'reading_upload', isUpload: true },
-      { name: 'Writing Upload', path: '/superadmin/writing-upload', icon: FilePlus, module: 'writing_upload', isUpload: true },
       { name: 'Student Management', path: '/superadmin/students', icon: GraduationCap, module: 'student_management' },
       { name: 'Results Management', path: '/superadmin/results', icon: BarChart, module: 'results_management' },
     ]
@@ -151,11 +144,35 @@ const SuperAdminSidebar = () => {
 
   return (
     <div className="flex">
+      {/* Mobile Menu Toggle */}
+      <div className="lg:hidden fixed top-4 left-4 z-50">
+        <button
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="p-2 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 transition-colors"
+        >
+          {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+        </button>
+      </div>
+
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
       <motion.div
         initial={{ x: -100, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
+        animate={{ 
+          x: isMobileMenuOpen ? 0 : (window.innerWidth < 1024 ? -100 : 0), 
+          opacity: 1 
+        }}
         transition={{ type: 'spring', stiffness: 80, damping: 18 }}
-        className="fixed top-0 left-0 h-screen w-64 bg-gradient-to-b from-white to-gray-50 shadow-2xl z-30 flex flex-col border-r border-gray-200"
+        className={`fixed top-0 left-0 h-screen w-64 bg-gradient-to-b from-white to-gray-50 shadow-2xl z-30 flex flex-col border-r border-gray-200 lg:relative lg:translate-x-0 ${
+          isMobileMenuOpen ? 'translate-x-0' : 'lg:translate-x-0 -translate-x-full'
+        }`}
       >
         {/* Logo/Brand */}
         <motion.div 
@@ -181,7 +198,7 @@ const SuperAdminSidebar = () => {
           )}
         </motion.div>
 
-        <nav className="flex-1 flex flex-col justify-between">
+        <nav className="flex-1 flex flex-col justify-between overflow-y-auto">
           <div className="flex flex-col space-y-1 px-4 mt-6">
             {navLinks.length > 0 ? (
               navLinks.map((link, idx) => {
@@ -198,10 +215,15 @@ const SuperAdminSidebar = () => {
                   >
                     <Link
                       to={isRestricted ? '#' : link.path}
-                      onClick={isRestricted ? (e) => {
-                        e.preventDefault()
-                        toast.error('Upload features are restricted for your role. Please contact a Super Admin for assistance.')
-                      } : undefined}
+                      onClick={(e) => {
+                        if (isRestricted) {
+                          e.preventDefault()
+                          toast.error('Upload features are restricted for your role. Please contact a Super Admin for assistance.')
+                        } else {
+                          // Close mobile menu on navigation
+                          setIsMobileMenuOpen(false)
+                        }
+                      }}
                       className={`group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-300 relative overflow-hidden
                         ${isActive(link.path) && !isRestricted
                           ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105'
@@ -260,6 +282,7 @@ const SuperAdminSidebar = () => {
                 <div className="text-sm text-gray-500 mb-4">Loading navigation...</div>
                 <Link
                   to="/superadmin/dashboard"
+                  onClick={() => setIsMobileMenuOpen(false)}
                   className="group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-300 text-gray-700 hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 hover:text-gray-900 hover:shadow-md"
                 >
                   <LayoutDashboard className="mr-3 h-5 w-5 text-gray-500 group-hover:text-blue-600" />
@@ -267,6 +290,7 @@ const SuperAdminSidebar = () => {
                 </Link>
                 <Link
                   to="/superadmin/question-bank-upload"
+                  onClick={() => setIsMobileMenuOpen(false)}
                   className="group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-300 text-gray-700 hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 hover:text-gray-900 hover:shadow-md"
                 >
                   <FilePlus className="mr-3 h-5 w-5 text-gray-500 group-hover:text-blue-600" />
@@ -274,6 +298,7 @@ const SuperAdminSidebar = () => {
                 </Link>
                 <Link
                   to="/superadmin/crt-upload"
+                  onClick={() => setIsMobileMenuOpen(false)}
                   className="group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-300 text-gray-700 hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 hover:text-gray-900 hover:shadow-md"
                 >
                   <FilePlus className="mr-3 h-5 w-5 text-gray-500 group-hover:text-blue-600" />
@@ -292,7 +317,10 @@ const SuperAdminSidebar = () => {
           className="px-4 pb-6 mt-auto"
         >
           <button
-            onClick={handleLogout}
+            onClick={() => {
+              handleLogout()
+              setIsMobileMenuOpen(false)
+            }}
             className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white font-semibold px-4 py-3 rounded-xl hover:from-gray-700 hover:to-gray-800 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
           >
             <motion.div
@@ -307,7 +335,9 @@ const SuperAdminSidebar = () => {
           </button>
         </motion.div>
       </motion.div>
-      <div className="ml-64 flex-1 bg-gray-50 w-full">
+      
+      {/* Main Content */}
+      <div className="flex-1 bg-gray-50 w-full lg:ml-64">
         <Outlet />
       </div>
     </div>
