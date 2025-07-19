@@ -299,7 +299,8 @@ const CRTUpload = () => {
         const payload = {
           module_id: `CRT_${selectedModule}`,
           level_id: `CRT_${selectedModule}`, // For CRT modules, use module_id as level_id
-          questions: questions
+          questions: questions,
+          topic_id: selectedTopic || null // Include topic_id if selected
         };
 
         const response = await api.post('/test-management/module-question-bank/upload', payload);

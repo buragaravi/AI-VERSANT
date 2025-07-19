@@ -581,8 +581,17 @@ def upload_module_questions():
         module_id = data.get('module_id')
         level_id = data.get('level_id')
         questions = data.get('questions')
-        if not module_id or not level_id or not questions:
-            return jsonify({'success': False, 'message': 'module_id, level_id, and questions are required.'}), 400
+        topic_id = data.get('topic_id')  # Optional topic_id for CRT modules
+        
+        if not module_id or not questions:
+            return jsonify({'success': False, 'message': 'module_id and questions are required.'}), 400
+        
+        # For non-CRT modules, level_id is required
+        if not module_id.startswith('CRT_') and not level_id:
+            return jsonify({'success': False, 'message': 'level_id is required for non-CRT modules.'}), 400
+        
+        # Generate upload session ID
+        upload_session_id = str(uuid.uuid4())
         
         # Store each question in a question_bank collection
         inserted = []
@@ -600,11 +609,16 @@ def upload_module_questions():
                 'used_in_tests': [], # Track test_ids where used
                 'used_count': 0,
                 'last_used': None,
-                'created_at': datetime.utcnow()
+                'created_at': datetime.utcnow(),
+                'upload_session_id': upload_session_id
             }
             
+            # Add topic_id if provided (for CRT modules)
+            if topic_id:
+                doc['topic_id'] = ObjectId(topic_id)
+            
             # Handle different question types based on module
-            if module_id == 'TECHNICAL' or level_id == 'TECHNICAL':
+            if module_id == 'CRT_TECHNICAL' or level_id == 'CRT_TECHNICAL':
                 doc['testCases'] = q.get('testCases', '')
                 doc['expectedOutput'] = q.get('expectedOutput', '')
                 doc['language'] = q.get('language', 'python')
@@ -1372,4 +1386,584 @@ def transcribe_audio():
         return jsonify({
             'success': False,
             'message': f'Failed to transcribe audio: {str(e)}'
+        }), 500
+
+# ==================== CRT TOPICS ENDPOINTS ====================
+
+@test_management_bp.route('/crt-topics', methods=['GET'])
+@jwt_required()
+@require_superadmin
+def get_crt_topics():
+    """Get all CRT topics with completion statistics"""
+    try:
+        topics = list(mongo_db.crt_topics.find({}).sort('created_at', -1))
+        
+        for topic in topics:
+            topic_id = topic['_id']
+            
+            # Count total questions for this topic
+            total_questions = mongo_db.question_bank.count_documents({
+                'topic_id': topic_id,
+                'module_id': {'$in': ['CRT_APTITUDE', 'CRT_REASONING', 'CRT_TECHNICAL']}
+            })
+            
+            # Count questions used in tests
+            used_questions = mongo_db.question_bank.count_documents({
+                'topic_id': topic_id,
+                'module_id': {'$in': ['CRT_APTITUDE', 'CRT_REASONING', 'CRT_TECHNICAL']},
+                'used_count': {'$gt': 0}
+            })
+            
+            # Calculate completion percentage
+            completion_percentage = (used_questions / total_questions * 100) if total_questions > 0 else 0
+            
+            topic['_id'] = str(topic['_id'])
+            topic['total_questions'] = total_questions
+            topic['used_questions'] = used_questions
+            topic['completion_percentage'] = round(completion_percentage, 1)
+            topic['created_at'] = topic['created_at'].isoformat() if topic['created_at'] else None
+        
+        return jsonify({
+            'success': True,
+            'data': topics
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching CRT topics: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to fetch CRT topics: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/crt-topics', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def create_crt_topic():
+    """Create a new CRT topic"""
+    try:
+        data = request.get_json()
+        topic_name = data.get('topic_name')
+        module_id = data.get('module_id')
+        
+        if not topic_name or not topic_name.strip():
+            return jsonify({
+                'success': False,
+                'message': 'Topic name is required'
+            }), 400
+        
+        if not module_id:
+            return jsonify({
+                'success': False,
+                'message': 'Module ID is required'
+            }), 400
+        
+        # Validate module_id is a valid CRT module
+        valid_crt_modules = ['CRT_APTITUDE', 'CRT_REASONING', 'CRT_TECHNICAL']
+        if module_id not in valid_crt_modules:
+            return jsonify({
+                'success': False,
+                'message': f'Invalid module ID. Must be one of: {", ".join(valid_crt_modules)}'
+            }), 400
+        
+        # Check if topic name already exists for this module
+        existing_topic = mongo_db.crt_topics.find_one({
+            'topic_name': topic_name.strip(),
+            'module_id': module_id
+        })
+        
+        if existing_topic:
+            return jsonify({
+                'success': False,
+                'message': f'Topic "{topic_name}" already exists for this module'
+            }), 400
+        
+        # Create new topic
+        topic_doc = {
+            'topic_name': topic_name.strip(),
+            'module_id': module_id,
+            'created_at': datetime.utcnow(),
+            'created_by': get_jwt_identity()
+        }
+        
+        result = mongo_db.crt_topics.insert_one(topic_doc)
+        
+        # Return the created topic with ID as string
+        topic_doc['_id'] = str(result.inserted_id)
+        topic_doc['created_at'] = topic_doc['created_at'].isoformat()
+        topic_doc['total_questions'] = 0
+        topic_doc['used_questions'] = 0
+        topic_doc['completion_percentage'] = 0.0
+        
+        return jsonify({
+            'success': True,
+            'message': 'Topic created successfully',
+            'data': topic_doc
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error creating CRT topic: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to create topic: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/crt-topics/<topic_id>', methods=['GET'])
+@jwt_required()
+@require_superadmin
+def get_crt_topic(topic_id):
+    """Get a specific CRT topic by ID"""
+    try:
+        topic = mongo_db.crt_topics.find_one({'_id': ObjectId(topic_id)})
+        
+        if not topic:
+            return jsonify({
+                'success': False,
+                'message': 'Topic not found'
+            }), 404
+        
+        # Convert ObjectId to string
+        topic['_id'] = str(topic['_id'])
+        topic['created_at'] = topic['created_at'].isoformat() if topic['created_at'] else None
+        
+        return jsonify({
+            'success': True,
+            'data': topic
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching CRT topic: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to fetch topic: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/crt-topics/<topic_id>', methods=['PUT'])
+@jwt_required()
+@require_superadmin
+def update_crt_topic(topic_id):
+    """Update a CRT topic"""
+    try:
+        data = request.get_json()
+        topic_name = data.get('topic_name')
+        
+        if not topic_name or not topic_name.strip():
+            return jsonify({
+                'success': False,
+                'message': 'Topic name is required'
+            }), 400
+        
+        # Check if topic exists
+        existing_topic = mongo_db.crt_topics.find_one({'_id': ObjectId(topic_id)})
+        if not existing_topic:
+            return jsonify({
+                'success': False,
+                'message': 'Topic not found'
+            }), 404
+        
+        # Check if new name already exists for the same module
+        duplicate_topic = mongo_db.crt_topics.find_one({
+            'topic_name': topic_name.strip(),
+            'module_id': existing_topic['module_id'],
+            '_id': {'$ne': ObjectId(topic_id)}
+        })
+        
+        if duplicate_topic:
+            return jsonify({
+                'success': False,
+                'message': f'Topic "{topic_name}" already exists for this module'
+            }), 400
+        
+        # Update the topic
+        result = mongo_db.crt_topics.update_one(
+            {'_id': ObjectId(topic_id)},
+            {
+                '$set': {
+                    'topic_name': topic_name.strip(),
+                    'updated_at': datetime.utcnow()
+                }
+            }
+        )
+        
+        if result.modified_count == 0:
+            return jsonify({
+                'success': False,
+                'message': 'No changes made to topic'
+            }), 400
+        
+        return jsonify({
+            'success': True,
+            'message': 'Topic updated successfully'
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error updating CRT topic: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to update topic: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/crt-topics/<topic_id>', methods=['DELETE'])
+@jwt_required()
+@require_superadmin
+def delete_crt_topic(topic_id):
+    """Delete a CRT topic"""
+    try:
+        # Check if topic exists
+        existing_topic = mongo_db.crt_topics.find_one({'_id': ObjectId(topic_id)})
+        if not existing_topic:
+            return jsonify({
+                'success': False,
+                'message': 'Topic not found'
+            }), 404
+        
+        # Check if topic has questions
+        question_count = mongo_db.question_bank.count_documents({
+            'topic_id': ObjectId(topic_id)
+        })
+        
+        if question_count > 0:
+            return jsonify({
+                'success': False,
+                'message': f'Cannot delete topic. It has {question_count} questions associated with it. Please remove or reassign the questions first.'
+            }), 400
+        
+        # Delete the topic
+        result = mongo_db.crt_topics.delete_one({'_id': ObjectId(topic_id)})
+        
+        if result.deleted_count == 0:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to delete topic'
+            }), 500
+        
+        return jsonify({
+            'success': True,
+            'message': 'Topic deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error deleting CRT topic: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to delete topic: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/crt-topics/<topic_id>/questions', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def add_questions_to_topic(topic_id):
+    """Add questions to a specific CRT topic"""
+    try:
+        data = request.get_json()
+        questions = data.get('questions', [])
+        
+        if not questions:
+            return jsonify({
+                'success': False,
+                'message': 'Questions are required'
+            }), 400
+        
+        # Check if topic exists
+        topic = mongo_db.crt_topics.find_one({'_id': ObjectId(topic_id)})
+        if not topic:
+            return jsonify({
+                'success': False,
+                'message': 'Topic not found'
+            }), 404
+        
+        # Process and insert questions
+        processed_questions = []
+        for question in questions:
+            # Add topic_id to each question
+            question['topic_id'] = ObjectId(topic_id)
+            question['created_at'] = datetime.utcnow()
+            question['used_count'] = 0
+            
+            # Ensure module_id matches the topic's module
+            if 'module_id' not in question or question['module_id'] != topic['module_id']:
+                question['module_id'] = topic['module_id']
+            
+            processed_questions.append(question)
+        
+        # Insert questions into question bank
+        if processed_questions:
+            result = mongo_db.question_bank.insert_many(processed_questions)
+            
+            return jsonify({
+                'success': True,
+                'message': f'Successfully added {len(result.inserted_ids)} questions to topic',
+                'data': {
+                    'inserted_count': len(result.inserted_ids),
+                    'topic_id': topic_id,
+                    'topic_name': topic['topic_name']
+                }
+            }), 201
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'No valid questions to add'
+            }), 400
+        
+    except Exception as e:
+        current_app.logger.error(f"Error adding questions to topic: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to add questions to topic: {str(e)}'
+        }), 500
+
+# ==================== UPLOADED FILES ENDPOINTS ====================
+
+@test_management_bp.route('/uploaded-files', methods=['GET'])
+@jwt_required()
+@require_superadmin
+def get_uploaded_files():
+    """Get all uploaded files with metadata"""
+    try:
+        # Get files from question_bank collection grouped by upload session
+        pipeline = [
+            {
+                '$group': {
+                    '_id': '$upload_session_id',
+                    'module_id': {'$first': '$module_id'},
+                    'level_id': {'$first': '$level_id'},
+                    'topic_id': {'$first': '$topic_id'},
+                    'question_count': {'$sum': 1},
+                    'uploaded_at': {'$first': '$created_at'},
+                    'file_name': {'$first': '$file_name'}
+                }
+            },
+            {
+                '$sort': {'uploaded_at': -1}
+            }
+        ]
+        
+        files = list(mongo_db.question_bank.aggregate(pipeline))
+        
+        # Convert ObjectIds to strings and format dates
+        for file in files:
+            file['_id'] = str(file['_id'])
+            if file.get('topic_id'):
+                file['topic_id'] = str(file['topic_id'])
+            if file.get('uploaded_at'):
+                file['uploaded_at'] = file['uploaded_at'].isoformat()
+        
+        return jsonify({
+            'success': True,
+            'data': files
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching uploaded files: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to fetch uploaded files: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/uploaded-files/<file_id>/questions', methods=['GET'])
+@jwt_required()
+@require_superadmin
+def get_file_questions(file_id):
+    """Get questions from a specific uploaded file"""
+    try:
+        # Find questions by upload session ID
+        questions = list(mongo_db.question_bank.find({
+            'upload_session_id': file_id
+        }).sort('created_at', -1))
+        
+        # Convert ObjectIds to strings
+        for question in questions:
+            question['_id'] = str(question['_id'])
+            if question.get('topic_id'):
+                question['topic_id'] = str(question['topic_id'])
+            if question.get('created_at'):
+                question['created_at'] = question['created_at'].isoformat()
+        
+        return jsonify({
+            'success': True,
+            'data': questions
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching file questions: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to fetch file questions: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/uploaded-files/<file_id>/questions', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def add_question_to_file(file_id):
+    """Add a single question to an uploaded file"""
+    try:
+        data = request.get_json()
+        
+        # Get the file metadata to ensure consistency
+        file_metadata = mongo_db.question_bank.find_one({'upload_session_id': file_id})
+        if not file_metadata:
+            return jsonify({
+                'success': False,
+                'message': 'File not found'
+            }), 404
+        
+        # Add the question with the same metadata
+        question_data = {
+            **data,
+            'upload_session_id': file_id,
+            'module_id': file_metadata.get('module_id'),
+            'level_id': file_metadata.get('level_id'),
+            'topic_id': file_metadata.get('topic_id'),
+            'created_at': datetime.utcnow(),
+            'used_count': 0
+        }
+        
+        result = mongo_db.question_bank.insert_one(question_data)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Question added successfully',
+            'data': {
+                'question_id': str(result.inserted_id)
+            }
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error adding question to file: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to add question: {str(e)}'
+        }), 500
+
+# ==================== QUESTIONS MANAGEMENT ENDPOINTS ====================
+
+@test_management_bp.route('/questions/add', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def add_question():
+    """Add a single question to the question bank"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['question', 'module_id']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({
+                    'success': False,
+                    'message': f'{field} is required'
+                }), 400
+        
+        # Add metadata
+        question_data = {
+            **data,
+            'created_at': datetime.utcnow(),
+            'used_count': 0
+        }
+        
+        # Generate upload session ID if not provided
+        if 'upload_session_id' not in question_data:
+            question_data['upload_session_id'] = str(uuid.uuid4())
+        
+        result = mongo_db.question_bank.insert_one(question_data)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Question added successfully',
+            'data': {
+                'question_id': str(result.inserted_id)
+            }
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error adding question: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to add question: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/questions/<question_id>', methods=['PUT'])
+@jwt_required()
+@require_superadmin
+def update_question(question_id):
+    """Update a question in the question bank"""
+    try:
+        data = request.get_json()
+        
+        # Check if question exists
+        existing_question = mongo_db.question_bank.find_one({'_id': ObjectId(question_id)})
+        if not existing_question:
+            return jsonify({
+                'success': False,
+                'message': 'Question not found'
+            }), 404
+        
+        # Update the question
+        update_data = {
+            **data,
+            'updated_at': datetime.utcnow()
+        }
+        
+        result = mongo_db.question_bank.update_one(
+            {'_id': ObjectId(question_id)},
+            {'$set': update_data}
+        )
+        
+        if result.modified_count == 0:
+            return jsonify({
+                'success': False,
+                'message': 'No changes made to question'
+            }), 400
+        
+        return jsonify({
+            'success': True,
+            'message': 'Question updated successfully'
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error updating question: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to update question: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/questions/<question_id>', methods=['DELETE'])
+@jwt_required()
+@require_superadmin
+def delete_question(question_id):
+    """Delete a question from the question bank"""
+    try:
+        # Check if question exists
+        existing_question = mongo_db.question_bank.find_one({'_id': ObjectId(question_id)})
+        if not existing_question:
+            return jsonify({
+                'success': False,
+                'message': 'Question not found'
+            }), 404
+        
+        # Check if question is used in any tests
+        if existing_question.get('used_count', 0) > 0:
+            return jsonify({
+                'success': False,
+                'message': f'Cannot delete question. It has been used {existing_question["used_count"]} times in tests.'
+            }), 400
+        
+        # Delete the question
+        result = mongo_db.question_bank.delete_one({'_id': ObjectId(question_id)})
+        
+        if result.deleted_count == 0:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to delete question'
+            }), 500
+        
+        return jsonify({
+            'success': True,
+            'message': 'Question deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error deleting question: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to delete question: {str(e)}'
         }), 500
