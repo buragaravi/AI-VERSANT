@@ -8,6 +8,8 @@ import json
 from mongo import mongo_db
 from config.constants import ROLES, MODULES, LEVELS, TEST_TYPES, WRITING_CONFIG
 from datetime import datetime
+from routes.test_management import require_superadmin
+from models import Test
 
 superadmin_bp = Blueprint('superadmin', __name__)
 
@@ -985,6 +987,7 @@ def get_or_create_batch_course_instance():
 
 @superadmin_bp.route('/writing-upload', methods=['POST'])
 @jwt_required()
+@require_superadmin
 def writing_upload():
     """Upload writing paragraphs with validation"""
     try:
@@ -1357,136 +1360,7 @@ def sentence_upload():
             'message': f'Upload failed: {str(e)}'
         }), 500
 
-@superadmin_bp.route('/writing-upload', methods=['POST'])
-@jwt_required()
-@require_superadmin
-def writing_upload():
-    """Upload writing paragraphs for different levels"""
-    try:
-        if 'file' not in request.files:
-            return jsonify({
-                'success': False,
-                'message': 'No file uploaded'
-            }), 400
-        
-        file = request.files['file']
-        selected_level = request.form.get('selected_level', 'Beginner')
-        
-        if file.filename == '':
-            return jsonify({
-                'success': False,
-                'message': 'No file selected'
-            }), 400
-        
-        if not file.filename.endswith('.csv'):
-            return jsonify({
-                'success': False,
-                'message': 'Please upload a CSV file'
-            }), 400
-        
-        # Read CSV file
-        import csv
-        import io
-        
-        content = file.read().decode('utf-8')
-        csv_reader = csv.reader(io.StringIO(content))
-        
-        paragraphs = []
-        inserted_count = 0
-        
-        for row in csv_reader:
-            if len(row) >= 3:
-                level = row[0].strip() if row[0] else selected_level
-                topic = row[1].strip() if len(row) > 1 else ''
-                paragraph = row[2].strip() if len(row) > 2 else ''
-                instructions = row[3].strip() if len(row) > 3 else ''
-                
-                if paragraph:
-                    # Validate paragraph based on level
-                    level_config = {
-                        'Beginner': {'min_words': 50, 'max_words': 100, 'min_chars': 150, 'max_chars': 300},
-                        'Intermediate': {'min_words': 80, 'max_words': 150, 'min_chars': 250, 'max_chars': 450},
-                        'Advanced': {'min_words': 120, 'max_words': 200, 'min_chars': 400, 'max_chars': 600}
-                    }
-                    
-                    config = level_config.get(level, level_config['Beginner'])
-                    word_count = len(paragraph.split())
-                    char_count = len(paragraph)
-                    
-                    # Basic validation
-                    if (config['min_words'] <= word_count <= config['max_words'] and 
-                        config['min_chars'] <= char_count <= config['max_chars']):
-                        
-                        paragraph_data = {
-                            'module_id': 'WRITING',
-                            'level': level,
-                            'topic': topic,
-                            'paragraph': paragraph,
-                            'instructions': instructions,
-                            'word_count': word_count,
-                            'char_count': char_count,
-                            'question_type': 'writing',
-                            'backspace_allowed': level == 'Beginner',
-                            'time_limit': {
-                                'Beginner': 10,
-                                'Intermediate': 8,
-                                'Advanced': 6
-                            }.get(level, 10),
-                            'created_at': datetime.utcnow(),
-                            'created_by': get_jwt_identity()
-                        }
-                        
-                        mongo_db.question_bank.insert_one(paragraph_data)
-                        inserted_count += 1
-        
-        return jsonify({
-            'success': True,
-            'message': f'Successfully uploaded {inserted_count} writing paragraphs',
-            'data': {
-                'inserted_count': inserted_count,
-                'level': selected_level
-            }
-        }), 201
-        
-    except Exception as e:
-        current_app.logger.error(f"Error in writing upload: {e}")
-        return jsonify({
-            'success': False,
-            'message': f'Writing upload failed: {str(e)}'
-        }), 500
-        
-        if errors:
-            return jsonify({
-                'success': bool(inserted_count),
-                'message': f'Upload completed with {len(errors)} errors',
-                'data': {
-                    'inserted_count': inserted_count,
-                    'total_count': len(valid_sentences),
-                    'audio_url': audio_url if module_id == 'LISTENING' else None
-                },
-                'errors': errors[:10]
-            }), 207 if inserted_count > 0 else 500
-        
-        return jsonify({
-            'success': True,
-            'message': f'Successfully uploaded {inserted_count} sentences for {module_id} - {level}',
-            'data': {
-                'inserted_count': inserted_count,
-                'total_count': len(valid_sentences),
-                'module_id': module_id,
-                'level': level,
-                'audio_url': audio_url if module_id == 'LISTENING' else None,
-                'audio_config': parsed_audio_config if module_id == 'LISTENING' else None,
-                'transcript_validation': parsed_transcript_validation if module_id == 'LISTENING' else None
-            }
-        }), 201
-        
-    except Exception as e:
-        current_app.logger.error(f"Error in sentence upload: {str(e)}")
-        return jsonify({
-            'success': False,
-            'message': f'Upload failed: {str(e)}'
-        }), 500
+
 
 @superadmin_bp.route('/migrate-batch-course-instances', methods=['POST'])
 @jwt_required()

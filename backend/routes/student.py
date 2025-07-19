@@ -159,6 +159,11 @@ def get_student_tests():
         if not user or user.get('role') != 'student':
             return jsonify({'success': False, 'message': 'Access denied'}), 403
 
+        # Get query parameters for filtering
+        module = request.args.get('module')
+        category = request.args.get('category')
+        subcategory = request.args.get('subcategory')
+
         # Get student's batch-course instance
         student = mongo_db.students.find_one({'user_id': ObjectId(current_user_id)})
         if not student or not student.get('batch_course_instance_id'):
@@ -166,11 +171,26 @@ def get_student_tests():
         
         instance_id = student['batch_course_instance_id']
         
-        # Get tests assigned to this instance
-        tests = list(mongo_db.tests.find({
+        # Build query filter
+        query_filter = {
             'batch_course_instance_ids': instance_id,
             'is_active': True
-        }))
+        }
+        
+        # Add module filter if provided
+        if module:
+            query_filter['module_id'] = module
+            
+        # Add category filter if provided
+        if category:
+            query_filter['test_category'] = category
+            
+        # Add subcategory filter if provided
+        if subcategory:
+            query_filter['subcategory'] = subcategory
+        
+        # Get tests assigned to this instance
+        tests = list(mongo_db.tests.find(query_filter))
         
         test_list = []
         for test in tests:
@@ -181,8 +201,19 @@ def get_student_tests():
                 'batch_course_instance_id': instance_id
             })
             
+            # Get highest score for this test
+            highest_score = 0
+            if existing_attempt:
+                # Get all attempts for this test by this student
+                all_attempts = list(mongo_db.test_results.find({
+                    'test_id': test['_id'],
+                    'student_id': ObjectId(current_user_id)
+                }))
+                if all_attempts:
+                    highest_score = max(attempt.get('average_score', 0) for attempt in all_attempts)
+            
             test_list.append({
-                'id': str(test['_id']),
+                '_id': str(test['_id']),
                 'name': test['name'],
                 'type': test['type'],
                 'duration': test['duration'],
@@ -191,7 +222,8 @@ def get_student_tests():
                 'start_date': test.get('start_date', '').isoformat() if test.get('start_date') else None,
                 'end_date': test.get('end_date', '').isoformat() if test.get('end_date') else None,
                 'has_attempted': existing_attempt is not None,
-                'attempt_id': str(existing_attempt['_id']) if existing_attempt else None
+                'attempt_id': str(existing_attempt['_id']) if existing_attempt else None,
+                'highest_score': highest_score
             })
         
         return jsonify({'success': True, 'data': test_list}), 200
@@ -957,15 +989,15 @@ def get_unlocked_modules():
         from config.constants import MODULES, LEVELS
         current_user_id = get_jwt_identity()
         student = mongo_db.students.find_one({'user_id': ObjectId(current_user_id)})
-        # Define the desired order
+        # Define the desired order - exclude CRT modules
         module_order = ['GRAMMAR', 'VOCABULARY', 'LISTENING', 'SPEAKING', 'READING', 'WRITING']
-        # Build a list of (module_id, module_name) in the desired order, then append any others
+        # Build a list of (module_id, module_name) in the desired order, excluding CRT modules
         ordered_modules = []
         for mid in module_order:
-            if mid in MODULES:
+            if mid in MODULES and not mid.startswith('CRT_'):
                 ordered_modules.append((mid, MODULES[mid]))
         for mid, mname in MODULES.items():
-            if mid not in module_order:
+            if mid not in module_order and not mid.startswith('CRT_'):
                 ordered_modules.append((mid, mname))
         modules_status = []
         if not student or not student.get('authorized_levels'):

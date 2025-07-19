@@ -66,6 +66,7 @@ const Sidebar = () => {
         return [
           ...baseItems,
           { name: 'Practice Modules', href: '/student/practice', icon: FileText },
+          { name: 'CRT Modules', href: '/student/crt', icon: BrainCircuit },
           { name: 'Online Exams', href: '/student/exams', icon: Calendar },
           { name: 'Test History', href: '/student/history', icon: Activity },
           { name: 'Progress', href: '/student/progress', icon: Award }
@@ -132,7 +133,7 @@ const Sidebar = () => {
       {/* Sidebar */}
       <div
         className={
-          `fixed top-0 left-0 h-screen w-4/5 max-w-xs bg-background shadow-xl z-40 flex flex-col rounded-tr-3xl rounded-br-3xl border-r border-border text-text transition-colors duration-300
+          `fixed top-16 sm:top-20 left-0 h-[calc(100vh-4rem)] sm:h-[calc(100vh-5rem)] w-4/5 max-w-xs bg-background shadow-xl z-40 flex flex-col rounded-tr-3xl rounded-br-3xl border-r border-border text-text transition-colors duration-300
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           lg:w-64 lg:translate-x-0`
         }

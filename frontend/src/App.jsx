@@ -38,6 +38,7 @@ import StudentProgress from './pages/course-admin/StudentProgress'
 // Student Pages
 import StudentDashboard from './pages/student/StudentDashboard'
 import PracticeModules from './pages/student/PracticeModules'
+import CRTModules from './pages/student/CRTModules'
 import OnlineExams from './pages/student/OnlineExams'
 import TestHistory from './pages/student/TestHistory'
 import ProgressTracker from './pages/student/ProgressTracker'
@@ -137,6 +138,7 @@ function App() {
                 <Route path="/student" element={<ProtectedRoute allowedRoles={['student']}><StudentSidebar /></ProtectedRoute>}>
                   <Route index element={<StudentDashboard />} />
                   <Route path="practice" element={<PracticeModules />} />
+                  <Route path="crt" element={<CRTModules />} />
                   <Route path="exams" element={<OnlineExams />} />
                   <Route path="history" element={<TestHistory />} />
                   <Route path="progress" element={<ProgressTracker />} />

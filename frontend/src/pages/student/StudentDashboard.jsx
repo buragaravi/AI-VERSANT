@@ -24,8 +24,7 @@ const StudentDashboard = () => {
 
   const coreModules = [
     { id: 'GRAMMAR', name: 'Grammar', icon: '🧠', color: 'bg-indigo-500' },
-    { id: 'VOCABULARY', name: 'Vocabulary', icon: '📚', color: 'bg-green-500' },
-    { id: 'CRT', name: 'CRT', icon: '🧮', color: 'bg-orange-500' }
+    { id: 'VOCABULARY', name: 'Vocabulary', icon: '📚', color: 'bg-green-500' }
   ];
 
   useEffect(() => {
@@ -78,9 +77,8 @@ const StudentDashboard = () => {
       <Header />
       <Sidebar />
       
-      <div className="lg:pl-64">
-        <main className="py-6">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="lg:ml-64 p-4 sm:p-8 pt-20 sm:pt-24">
+        <div className="max-w-7xl mx-auto">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -299,51 +297,11 @@ const StudentDashboard = () => {
                   )}
                 </motion.div>
 
-                {/* CRT Progress */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.5 }}
-                  className="bg-white rounded-lg shadow-md p-6"
-                >
-                  <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-                    <span className="text-2xl mr-2">🧮</span>
-                    CRT Progress
-                  </h2>
-                  <div className="grid grid-cols-1 gap-4">
-                    {[
-                      { name: 'Aptitude', icon: '🧮', color: 'bg-blue-500' },
-                      { name: 'Reasoning', icon: '🧩', color: 'bg-green-500' },
-                      { name: 'Technical', icon: '⚙️', color: 'bg-purple-500' }
-                    ].map((category, index) => (
-                      <div key={index} className="border rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center">
-                            <span className="text-lg mr-2">{category.icon}</span>
-                            <h3 className="text-sm font-medium text-gray-900">{category.name}</h3>
-                          </div>
-                          <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800">
-                            Not Started
-                          </span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                          <div
-                            className={`${category.color} h-2 rounded-full transition-all duration-300`}
-                            style={{ width: '0%' }}
-                          />
-                        </div>
-                        <div className="flex justify-between text-xs text-gray-600">
-                          <span>Best: 0.0%</span>
-                          <span>0 attempts</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
+
               </div>
             </div>
           </div>
-        </main>
+        </div>
       </div>
     </div>
   )

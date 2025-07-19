@@ -219,42 +219,43 @@ const PracticeModules = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50">
+      <Header />
       <Sidebar />
-      <div className="flex-1 lg:pl-64">
-        <Header />
-        <main className="px-6 lg:px-10 py-12">
+      <div className="lg:ml-64 p-4 sm:p-8 pt-20 sm:pt-24">
+        <div className="max-w-7xl mx-auto">
           {renderContent()}
-        </main>
-      </div>
-      <PopupModal 
-        isVisible={isPopupVisible} 
-        onClose={() => setIsPopupVisible(false)} 
-      />
-      {/* Motivational Unlock Popup */}
-      {showUnlockPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <motion.div 
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-            className="bg-white rounded-2xl shadow-2xl p-10 max-w-md w-full text-center border-4 border-yellow-400"
-          >
-            <div className="mx-auto bg-yellow-100 h-24 w-24 flex items-center justify-center rounded-full mb-4">
-              <CheckCircle className="h-16 w-16 text-yellow-500" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-800 mt-2 mb-2">Keep Going!</h2>
-            <p className="text-lg text-gray-700 mb-4">{unlockPopupMessage}</p>
-            <button 
-              onClick={() => setShowUnlockPopup(false)}
-              className="mt-4 w-full bg-yellow-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-yellow-600 transition-colors text-lg shadow"
-            >
-              Got it! I'll try again
-            </button>
-          </motion.div>
         </div>
-      )}
-      {showNextLevelPopup && nextLevelInfo && (
+      </div>
+
+              <PopupModal 
+          isVisible={isPopupVisible} 
+          onClose={() => setIsPopupVisible(false)} 
+        />
+        {/* Motivational Unlock Popup */}
+        {showUnlockPopup && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl p-10 max-w-md w-full text-center border-4 border-yellow-400"
+            >
+              <div className="mx-auto bg-yellow-100 h-24 w-24 flex items-center justify-center rounded-full mb-4">
+                <CheckCircle className="h-16 w-16 text-yellow-500" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-800 mt-2 mb-2">Keep Going!</h2>
+              <p className="text-lg text-gray-700 mb-4">{unlockPopupMessage}</p>
+              <button 
+                onClick={() => setShowUnlockPopup(false)}
+                className="mt-4 w-full bg-yellow-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-yellow-600 transition-colors text-lg shadow"
+              >
+                Got it! I'll try again
+              </button>
+            </motion.div>
+          </div>
+        )}
+        {showNextLevelPopup && nextLevelInfo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
           <motion.div 
             initial={{ scale: 0.9, opacity: 0 }}
@@ -334,13 +335,15 @@ const MainView = ({ modules, onSelectModule }) => {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <h1 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-8">Practice Modules</h1>
-      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
+      <p className="text-gray-600 mb-8 text-lg">Practice language skills to improve your English proficiency.</p>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {modules.map(module => (
           <motion.div
             key={module.id}
             whileHover={!module.locked ? { scale: 1.05 } : {}}
             className={clsx(
-              "bg-white p-6 sm:p-8 rounded-2xl shadow-lg flex flex-col items-center text-center relative",
+              "bg-white p-8 rounded-2xl shadow-lg flex flex-col items-center text-center relative transition-all duration-300 hover:shadow-xl",
               {
                 "cursor-pointer": !module.locked,
                 "opacity-60 bg-gray-100 cursor-not-allowed": module.locked,
@@ -349,17 +352,16 @@ const MainView = ({ modules, onSelectModule }) => {
             onClick={() => onSelectModule(module)}
           >
             {module.locked && (
-              <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-gray-300 p-2 rounded-full">
+              <div className="absolute top-4 right-4 bg-gray-300 p-2 rounded-full">
                 <Lock className="h-5 w-5 text-gray-600" />
               </div>
             )}
-            <module.icon className={clsx("h-16 w-16 sm:h-20 sm:w-20 mb-4", {
+            <module.icon className={clsx("h-20 w-20 mb-6", {
               "text-indigo-500": !module.locked,
               "text-gray-400": module.locked
             })} />
-            <h2 className="text-xl sm:text-2xl font-semibold text-gray-800">{module.name}</h2>
-            <p className="text-gray-500 mt-2 text-sm sm:text-base">Improve your {module.name.toLowerCase()} skills.</p>
-            {/* Removed: Show Levels link */}
+            <h2 className="text-2xl font-semibold text-gray-800 mb-3">{module.name}</h2>
+            <p className="text-gray-500 text-base">Improve your {module.name.toLowerCase()} skills.</p>
           </motion.div>
         ))}
       </div>
