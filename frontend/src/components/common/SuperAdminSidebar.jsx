@@ -21,6 +21,53 @@ const SuperAdminSidebar = () => {
     fetchUserPermissions()
   }, [user])
 
+  // Handle window resize to close mobile menu on desktop
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024 && isMobileMenuOpen) {
+        setIsMobileMenuOpen(false)
+      }
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [isMobileMenuOpen])
+
+  // Handle swipe gestures for mobile
+  useEffect(() => {
+    let startX = 0
+    let currentX = 0
+
+    const handleTouchStart = (e) => {
+      startX = e.touches[0].clientX
+    }
+
+    const handleTouchMove = (e) => {
+      currentX = e.touches[0].clientX
+    }
+
+    const handleTouchEnd = () => {
+      const diffX = startX - currentX
+      
+      // If swiped left more than 50px and menu is open, close it
+      if (diffX > 50 && isMobileMenuOpen) {
+        setIsMobileMenuOpen(false)
+      }
+    }
+
+    if (isMobileMenuOpen) {
+      document.addEventListener('touchstart', handleTouchStart)
+      document.addEventListener('touchmove', handleTouchMove)
+      document.addEventListener('touchend', handleTouchEnd)
+    }
+
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart)
+      document.removeEventListener('touchmove', handleTouchMove)
+      document.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [isMobileMenuOpen])
+
   const fetchUserPermissions = async () => {
     if (!user) {
       setLoading(false)
@@ -148,9 +195,10 @@ const SuperAdminSidebar = () => {
       <div className="lg:hidden fixed top-4 left-4 z-50">
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-2 bg-blue-600 text-white rounded-lg shadow-lg hover:bg-blue-700 transition-colors"
+          className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
         >
-          {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
 
@@ -164,13 +212,12 @@ const SuperAdminSidebar = () => {
 
       {/* Sidebar */}
       <motion.div
-        initial={{ x: -100, opacity: 0 }}
+        initial={false}
         animate={{ 
-          x: isMobileMenuOpen ? 0 : (window.innerWidth < 1024 ? -100 : 0), 
-          opacity: 1 
+          x: isMobileMenuOpen ? 0 : '-100%'
         }}
-        transition={{ type: 'spring', stiffness: 80, damping: 18 }}
-        className={`fixed top-0 left-0 h-screen w-64 bg-gradient-to-b from-white to-gray-50 shadow-2xl z-30 flex flex-col border-r border-gray-200 lg:relative lg:translate-x-0 ${
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className={`fixed top-0 left-0 h-screen w-64 bg-gradient-to-b from-white to-gray-50 shadow-2xl z-30 flex flex-col border-r border-gray-200 lg:relative lg:translate-x-0 lg:z-auto ${
           isMobileMenuOpen ? 'translate-x-0' : 'lg:translate-x-0 -translate-x-full'
         }`}
       >
