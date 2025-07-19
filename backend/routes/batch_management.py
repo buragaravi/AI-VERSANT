@@ -734,9 +734,18 @@ def upload_students_to_batch():
 def get_batch_students(batch_id):
     """Get all students and detailed info for a specific batch."""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
         batch = mongo_db.batches.find_one({'_id': ObjectId(batch_id)})
         if not batch:
             return jsonify({'success': False, 'message': 'Batch not found'}), 404
+
+        # Check if user has access to this batch
+        if user.get('role') in ['campus_admin', 'course_admin']:
+            user_campus_id = user.get('campus_id')
+            if not user_campus_id or user_campus_id not in batch.get('campus_ids', []):
+                return jsonify({'success': False, 'message': 'Access denied. You do not have permission to view this batch.'}), 403
 
         # Fetch campus and course names for the batch header
         campus_ids = batch.get('campus_ids', [])

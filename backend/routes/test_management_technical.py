@@ -32,9 +32,10 @@ def create_technical_test():
         if not all([test_name, test_type, module_id, campus_id, course_ids, batch_ids]):
             return jsonify({'success': False, 'message': 'Missing required fields'}), 400
 
-        # Validate technical module
-        if module_id != 'CRT_TECHNICAL' and level_id != 'TECHNICAL':
-            return jsonify({'success': False, 'message': f'Invalid module for technical test: {module_id}'}), 400
+        # Validate CRT modules
+        crt_modules = ['CRT_APTITUDE', 'CRT_REASONING', 'CRT_TECHNICAL']
+        if module_id not in crt_modules and level_id != 'TECHNICAL':
+            return jsonify({'success': False, 'message': f'Invalid module for CRT test: {module_id}'}), 400
 
         # Generate unique test ID
         test_id = generate_unique_test_id()

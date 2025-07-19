@@ -210,8 +210,8 @@ def create_test_with_instances():
             # Redirect to writing test creation
             from routes.test_management_writing import create_writing_test
             return create_writing_test()
-        elif module_id == 'CRT_TECHNICAL' or data.get('level_id') == 'TECHNICAL':
-            # Redirect to technical test creation
+        elif module_id in ['CRT_APTITUDE', 'CRT_REASONING', 'CRT_TECHNICAL'] or data.get('level_id') == 'TECHNICAL':
+            # Redirect to technical test creation for all CRT modules
             from routes.test_management_technical import create_technical_test
             return create_technical_test()
         else:
@@ -248,8 +248,8 @@ def get_single_test(test_id):
             # Redirect to writing test retrieval
             from routes.test_management_writing import get_writing_test
             return get_writing_test(test_id)
-        elif module_id == 'CRT_TECHNICAL' or test.get('level_id') == 'TECHNICAL':
-            # Redirect to technical test retrieval
+        elif module_id in ['CRT_APTITUDE', 'CRT_REASONING', 'CRT_TECHNICAL'] or test.get('level_id') == 'TECHNICAL':
+            # Redirect to technical test retrieval for all CRT modules
             from routes.test_management_technical import get_technical_test
             return get_technical_test(test_id)
         else:

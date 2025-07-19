@@ -1,32 +1,101 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
 import { Users, FilePlus, Building2, BarChart, LayoutDashboard, BookCopy, GraduationCap, Shield } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { motion } from 'framer-motion'
+import api from '../../services/api'
 
 const SuperAdminSidebar = () => {
   const location = useLocation()
-  const { logout } = useAuth()
+  const { logout, user } = useAuth()
   const navigate = useNavigate()
+  const [userPermissions, setUserPermissions] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchUserPermissions()
+  }, [user])
+
+  const fetchUserPermissions = async () => {
+    if (!user) {
+      setLoading(false)
+      return
+    }
+
+    try {
+      // Get user's full permissions from the backend
+      const userResponse = await api.get(`/user-management/${user.id || user._id}`)
+      const permissions = userResponse.data.data?.permissions || {}
+      
+      setUserPermissions(permissions)
+    } catch (err) {
+      console.error('Failed to fetch permissions:', err)
+      // Use default permissions based on role
+      const defaultPermissions = {
+        super_admin: {
+          modules: ['dashboard', 'campus_management', 'course_management', 'batch_management', 'user_management', 'admin_permissions', 'test_management', 'question_bank_upload', 'crt_upload', 'student_management', 'results_management'],
+          can_upload_tests: true,
+          can_upload_questions: true
+        },
+        campus_admin: {
+          modules: ['dashboard', 'course_management', 'batch_management', 'user_management', 'test_management', 'question_bank_upload', 'crt_upload', 'student_management', 'results_management'],
+          can_upload_tests: false,
+          can_upload_questions: false
+        },
+        course_admin: {
+          modules: ['dashboard', 'batch_management', 'user_management', 'test_management', 'question_bank_upload', 'crt_upload', 'student_management', 'results_management'],
+          can_upload_tests: false,
+          can_upload_questions: false
+        }
+      }
+      setUserPermissions(defaultPermissions[user.role] || defaultPermissions.super_admin)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleLogout = () => {
     logout()
     navigate('/login')
   }
 
-  const navLinks = [
-    { name: 'Dashboard', path: '/superadmin/dashboard', icon: LayoutDashboard },
-    { name: 'Campus Management', path: '/superadmin/campuses', icon: Building2 },
-    { name: 'Course Management', path: '/superadmin/courses', icon: BookCopy },
-    { name: 'Batch Management', path: '/superadmin/batch-management', icon: GraduationCap },
-    { name: 'User Management', path: '/superadmin/users', icon: Users },
-    { name: 'Admin Permissions', path: '/superadmin/admin-permissions', icon: Shield },
-    { name: 'Test Management', path: '/superadmin/tests', icon: FilePlus },
-    { name: 'Question Bank Upload', path: '/superadmin/question-bank-upload', icon: FilePlus },
-    { name: 'CRT Upload', path: '/superadmin/crt-upload', icon: FilePlus },
-    { name: 'Student Management', path: '/superadmin/students', icon: GraduationCap },
-    { name: 'Results Management', path: '/superadmin/results', icon: BarChart },
-  ]
+  // Define navigation based on user role and permissions
+  const getNavigation = () => {
+    if (loading || !userPermissions) {
+      return []
+    }
+
+    const allNavLinks = [
+      { name: 'Dashboard', path: '/superadmin/dashboard', icon: LayoutDashboard, module: 'dashboard' },
+      { name: 'Campus Management', path: '/superadmin/campuses', icon: Building2, module: 'campus_management' },
+      { name: 'Course Management', path: '/superadmin/courses', icon: BookCopy, module: 'course_management' },
+      { name: 'Batch Management', path: '/superadmin/batch-management', icon: GraduationCap, module: 'batch_management' },
+      { name: 'User Management', path: '/superadmin/users', icon: Users, module: 'user_management' },
+      { name: 'Admin Permissions', path: '/superadmin/admin-permissions', icon: Shield, module: 'admin_permissions' },
+      { name: 'Test Management', path: '/superadmin/tests', icon: FilePlus, module: 'test_management' },
+      { name: 'Question Bank Upload', path: '/superadmin/question-bank-upload', icon: FilePlus, module: 'question_bank_upload' },
+      { name: 'CRT Upload', path: '/superadmin/crt-upload', icon: FilePlus, module: 'crt_upload' },
+      { name: 'Student Management', path: '/superadmin/students', icon: GraduationCap, module: 'student_management' },
+      { name: 'Results Management', path: '/superadmin/results', icon: BarChart, module: 'results_management' },
+    ]
+
+    // Filter navigation based on user permissions
+    return allNavLinks.filter(link => {
+      // Check if user has access to this module
+      if (!userPermissions.modules?.includes(link.module)) {
+        return false
+      }
+
+      // Special handling for upload features
+      if (link.module === 'question_bank_upload' || link.module === 'crt_upload') {
+        return userPermissions.can_upload_questions
+      }
+
+      return true
+    })
+  }
+
+  const navLinks = getNavigation()
 
   const isActive = (path) => location.pathname.startsWith(path)
 
@@ -48,7 +117,11 @@ const SuperAdminSidebar = () => {
           <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
             Study Edge
           </h1>
-          <p className="text-sm text-gray-600 font-medium">Super Admin Portal</p>
+          <p className="text-sm text-gray-600 font-medium">
+            {user?.role === 'campus_admin' ? 'Campus Admin Portal' : 
+             user?.role === 'course_admin' ? 'Course Admin Portal' : 
+             'Super Admin Portal'}
+          </p>
         </motion.div>
 
         <nav className="flex-1 flex flex-col justify-between">
