@@ -619,10 +619,19 @@ def upload_module_questions():
             
             # Handle different question types based on module
             if module_id == 'CRT_TECHNICAL' or level_id == 'CRT_TECHNICAL':
-                doc['testCases'] = q.get('testCases', '')
-                doc['expectedOutput'] = q.get('expectedOutput', '')
-                doc['language'] = q.get('language', 'python')
-                doc['question_type'] = 'technical'
+                # Check question type
+                question_type = q.get('questionType', 'compiler_integrated')
+                doc['question_type'] = question_type
+                
+                if question_type == 'compiler_integrated':
+                    doc['testCases'] = q.get('testCases', '')
+                    doc['expectedOutput'] = q.get('expectedOutput', '')
+                    doc['language'] = q.get('language', 'python')
+                    doc['testCaseId'] = q.get('testCaseId', '')
+                elif question_type == 'mcq':
+                    # MCQ format for technical questions
+                    doc['question_type'] = 'mcq'
+                    # The MCQ fields are already set above
             elif module_id in ['LISTENING', 'SPEAKING']:
                 # For listening and speaking, handle sentence-type questions
                 doc['question_type'] = 'sentence'
@@ -1682,6 +1691,32 @@ def add_questions_to_topic(topic_id):
             # Ensure module_id matches the topic's module
             if 'module_id' not in question or question['module_id'] != topic['module_id']:
                 question['module_id'] = topic['module_id']
+            
+            # Handle question type for technical questions
+            if topic['module_id'] == 'CRT_TECHNICAL':
+                question_type = question.get('questionType', 'compiler_integrated')
+                question['question_type'] = question_type
+                
+                if question_type == 'compiler_integrated':
+                    # Ensure technical fields are present
+                    if 'testCases' not in question:
+                        question['testCases'] = ''
+                    if 'expectedOutput' not in question:
+                        question['expectedOutput'] = ''
+                    if 'language' not in question:
+                        question['language'] = 'python'
+                elif question_type == 'mcq':
+                    # Ensure MCQ fields are present
+                    if 'optionA' not in question:
+                        question['optionA'] = ''
+                    if 'optionB' not in question:
+                        question['optionB'] = ''
+                    if 'optionC' not in question:
+                        question['optionC'] = ''
+                    if 'optionD' not in question:
+                        question['optionD'] = ''
+                    if 'answer' not in question:
+                        question['answer'] = ''
             
             processed_questions.append(question)
         

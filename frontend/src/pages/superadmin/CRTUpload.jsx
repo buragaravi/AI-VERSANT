@@ -205,15 +205,43 @@ const CRTUpload = () => {
     if (selectedModule === 'TECHNICAL') {
       templateData = [
         {
-          Question: 'Question 1: Perfect Number\nProblem:\nWrite a program to check whether a given positive integer is a perfect number. A perfect number is a positive integer equal to the sum of its proper divisors except itself.\n\nSample Test Cases:\n\nInput\tOutput\n6\t6 is a perfect number\n15\t15 is not a perfect number\n28\t28 is a perfect number',
-          TestCases: '6\n15\n28',
-          ExpectedOutput: '6 is a perfect number\n15 is not a perfect number\n28 is a perfect number',
+          QuestionTitle: 'Perfect Number',
+          ProblemStatement: 'Write a program to check whether a given positive integer is a perfect number. A perfect number is a positive integer equal to the sum of its proper divisors except itself.',
+          TestCaseID: 'TC1',
+          Input: '6',
+          ExpectedOutput: '6 is a perfect number',
           Language: 'python'
         },
         {
-          Question: 'Question 2: Non-Repeating Elements in Array\nProblem:\nWrite a program to print all elements that do not repeat in a given array of integers.\n\nSample Test Cases:\n\nInput\tOutput\n4 5 4 3 6 3 7\t5 6 7\n1 2 1 2 3 4 5\t3 4 5\n10 10 20 30 20\t30',
-          TestCases: '4 5 4 3 6 3 7\n1 2 1 2 3 4 5\n10 10 20 30 20',
-          ExpectedOutput: '5 6 7\n3 4 5\n30',
+          QuestionTitle: 'Perfect Number',
+          ProblemStatement: 'Write a program to check whether a given positive integer is a perfect number. A perfect number is a positive integer equal to the sum of its proper divisors except itself.',
+          TestCaseID: 'TC2',
+          Input: '15',
+          ExpectedOutput: '15 is not a perfect number',
+          Language: 'python'
+        },
+        {
+          QuestionTitle: 'Non-Repeating Elements Array',
+          ProblemStatement: 'Write a program to find and print all elements that do not repeat in a given array of integers.',
+          TestCaseID: 'TC1',
+          Input: '4 5 4 3 6 3 7',
+          ExpectedOutput: '5 6 7',
+          Language: 'python'
+        },
+        {
+          QuestionTitle: 'Non-Repeating Elements Array',
+          ProblemStatement: 'Write a program to find and print all elements that do not repeat in a given array of integers.',
+          TestCaseID: 'TC2',
+          Input: '1 2 1 2 3 4 5',
+          ExpectedOutput: '3 4 5',
+          Language: 'python'
+        },
+        {
+          QuestionTitle: 'Non-Repeating Elements Array',
+          ProblemStatement: 'Write a program to find and print all elements that do not repeat in a given array of integers.',
+          TestCaseID: 'TC3',
+          Input: '10 10 20 30 20',
+          ExpectedOutput: '30',
           Language: 'python'
         }
       ];
@@ -336,40 +364,127 @@ const CRTUpload = () => {
               trimValues: true 
             });
             
-            parsedQuestions = result.data.map(row => ({
-              question: row.Question || row.question || '',
-              testCases: row.TestCases || row.testCases || '',
-              expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
-              language: row.Language || row.language || 'python',
-              // For technical questions, we need to create MCQ format for compatibility
-              optionA: 'A',
-              optionB: 'B', 
-              optionC: 'C',
-              optionD: 'D',
-              answer: 'A' // Default answer for technical questions
-            }));
+            result.data.forEach(row => {
+              // Check if this is compiler-integrated format or MCQ format
+              const hasCompilerFormat = row.QuestionTitle && row.ProblemStatement && row.TestCaseID && row.Input && row.ExpectedOutput;
+              const hasMCQFormat = row.Question && (row.A || row.optionA) && (row.B || row.optionB) && (row.C || row.optionC) && (row.D || row.optionD) && row.Answer;
+              
+              if (hasCompilerFormat) {
+                // Compiler-integrated format
+                parsedQuestions.push({
+                  question: `${row.QuestionTitle}: ${row.ProblemStatement}`,
+                  testCases: row.Input,
+                  expectedOutput: row.ExpectedOutput,
+                  language: row.Language || 'python',
+                  questionType: 'compiler_integrated',
+                  testCaseId: row.TestCaseID,
+                  // For compatibility with existing system
+                  optionA: 'A',
+                  optionB: 'B', 
+                  optionC: 'C',
+                  optionD: 'D',
+                  answer: 'A'
+                });
+              } else if (hasMCQFormat) {
+                // MCQ format for technical questions
+                parsedQuestions.push({
+                  question: row.Question || row.question || '',
+                  optionA: row.A || row.optionA || '',
+                  optionB: row.B || row.optionB || '',
+                  optionC: row.C || row.optionC || '',
+                  optionD: row.D || row.optionD || '',
+                  answer: row.Answer || row.answer || '',
+                  questionType: 'mcq',
+                  instructions: row.instructions || row.Instructions || ''
+                });
+              } else {
+                // Legacy format - try to parse as old technical format
+                parsedQuestions.push({
+                  question: row.Question || row.question || '',
+                  testCases: row.TestCases || row.testCases || '',
+                  expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
+                  language: row.Language || row.language || 'python',
+                  questionType: 'compiler_integrated',
+                  // For compatibility with existing system
+                  optionA: 'A',
+                  optionB: 'B', 
+                  optionC: 'C',
+                  optionD: 'D',
+                  answer: 'A'
+                });
+              }
+            });
           } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
             const workbook = XLSX.read(e.target.result, { type: 'array' });
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             const jsonData = XLSX.utils.sheet_to_json(worksheet);
             
-            parsedQuestions = jsonData.map(row => ({
-              question: row.Question || row.question || '',
-              testCases: row.TestCases || row.testCases || '',
-              expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
-              language: row.Language || row.language || 'python',
-              optionA: 'A',
-              optionB: 'B',
-              optionC: 'C', 
-              optionD: 'D',
-              answer: 'A'
-            }));
+            jsonData.forEach(row => {
+              // Check if this is compiler-integrated format or MCQ format
+              const hasCompilerFormat = row.QuestionTitle && row.ProblemStatement && row.TestCaseID && row.Input && row.ExpectedOutput;
+              const hasMCQFormat = row.Question && (row.A || row.optionA) && (row.B || row.optionB) && (row.C || row.optionC) && (row.D || row.optionD) && row.Answer;
+              
+              if (hasCompilerFormat) {
+                // Compiler-integrated format
+                parsedQuestions.push({
+                  question: `${row.QuestionTitle}: ${row.ProblemStatement}`,
+                  testCases: row.Input,
+                  expectedOutput: row.ExpectedOutput,
+                  language: row.Language || 'python',
+                  questionType: 'compiler_integrated',
+                  testCaseId: row.TestCaseID,
+                  // For compatibility with existing system
+                  optionA: 'A',
+                  optionB: 'B',
+                  optionC: 'C', 
+                  optionD: 'D',
+                  answer: 'A'
+                });
+              } else if (hasMCQFormat) {
+                // MCQ format for technical questions
+                parsedQuestions.push({
+                  question: row.Question || row.question || '',
+                  optionA: row.A || row.optionA || '',
+                  optionB: row.B || row.optionB || '',
+                  optionC: row.C || row.optionC || '',
+                  optionD: row.D || row.optionD || '',
+                  answer: row.Answer || row.answer || '',
+                  questionType: 'mcq',
+                  instructions: row.instructions || row.Instructions || ''
+                });
+              } else {
+                // Legacy format - try to parse as old technical format
+                parsedQuestions.push({
+                  question: row.Question || row.question || '',
+                  testCases: row.TestCases || row.testCases || '',
+                  expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
+                  language: row.Language || row.language || 'python',
+                  questionType: 'compiler_integrated',
+                  // For compatibility with existing system
+                  optionA: 'A',
+                  optionB: 'B',
+                  optionC: 'C', 
+                  optionD: 'D',
+                  answer: 'A'
+                });
+              }
+            });
           }
 
-          const validQuestions = parsedQuestions.filter(q => 
-            q.question && q.testCases && q.expectedOutput && q.language
-          );
+          const validQuestions = parsedQuestions.filter(q => {
+            if (!q || !q.question) return false;
+            
+            // Check based on question type
+            if (q.questionType === 'compiler_integrated') {
+              return q.testCases && q.expectedOutput && q.language;
+            } else if (q.questionType === 'mcq') {
+              return q.optionA && q.optionB && q.optionC && q.optionD && q.answer;
+            } else {
+              // Legacy format - check for technical fields
+              return q.testCases && q.expectedOutput && q.language;
+            }
+          });
 
           resolve(validQuestions);
         } catch (error) {
@@ -640,6 +755,12 @@ const CRTUpload = () => {
             </button>
             <p className="text-sm text-gray-600">
               Download the CSV template to see the required format for uploading questions.
+              {selectedModule === 'TECHNICAL' && (
+                <span className="block mt-1">
+                  <strong>Compiler-integrated format:</strong> QuestionTitle, ProblemStatement, TestCaseID, Input, ExpectedOutput, Language<br/>
+                  <strong>MCQ format:</strong> Question, A, B, C, D, Answer
+                </span>
+              )}
             </p>
           </div>
 

@@ -109,19 +109,54 @@ export default function TestQuestionUpload({ questions, setQuestions, moduleName
           }
           
           if (isTechnicalModule) {
-            // Handle technical question format
-            parsedQuestions = result.data.map(row => ({
-              question: row.Question || row.question || '',
-              testCases: row.TestCases || row.testCases || '',
-              expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
-              language: row.Language || row.language || 'python',
-              // For technical questions, we need to create MCQ format for compatibility
-              optionA: 'A',
-              optionB: 'B', 
-              optionC: 'C',
-              optionD: 'D',
-              answer: 'A' // Default answer for technical questions
-            }));
+            // Check if this is compiler-integrated format or MCQ format
+            const hasCompilerFormat = row.QuestionTitle && row.ProblemStatement && row.TestCaseID && row.Input && row.ExpectedOutput;
+            const hasMCQFormat = row.Question && (row.A || row.optionA) && (row.B || row.optionB) && (row.C || row.optionC) && (row.D || row.optionD) && row.Answer;
+            
+            if (hasCompilerFormat) {
+              // Compiler-integrated format
+              parsedQuestions.push({
+                question: `${row.QuestionTitle}: ${row.ProblemStatement}`,
+                testCases: row.Input,
+                expectedOutput: row.ExpectedOutput,
+                language: row.Language || 'python',
+                questionType: 'compiler_integrated',
+                testCaseId: row.TestCaseID,
+                // For compatibility with existing system
+                optionA: 'A',
+                optionB: 'B', 
+                optionC: 'C',
+                optionD: 'D',
+                answer: 'A'
+              });
+            } else if (hasMCQFormat) {
+              // MCQ format for technical questions
+              parsedQuestions.push({
+                question: row.Question || row.question || '',
+                optionA: row.A || row.optionA || '',
+                optionB: row.B || row.optionB || '',
+                optionC: row.C || row.optionC || '',
+                optionD: row.D || row.optionD || '',
+                answer: row.Answer || row.answer || '',
+                questionType: 'mcq',
+                instructions: row.instructions || row.Instructions || ''
+              });
+            } else {
+              // Legacy format - try to parse as old technical format
+              parsedQuestions.push({
+                question: row.Question || row.question || '',
+                testCases: row.TestCases || row.testCases || '',
+                expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
+                language: row.Language || row.language || 'python',
+                questionType: 'compiler_integrated',
+                // For compatibility with existing system
+                optionA: 'A',
+                optionB: 'B', 
+                optionC: 'C',
+                optionD: 'D',
+                answer: 'A'
+              });
+            }
           } else if (isSentenceModule) {
             // Handle sentence format for listening and speaking
             parsedQuestions = result.data.map(row => ({
@@ -160,18 +195,54 @@ export default function TestQuestionUpload({ questions, setQuestions, moduleName
           const jsonData = XLSX.utils.sheet_to_json(worksheet);
           
           if (isTechnicalModule) {
-            // Handle technical question format
-            parsedQuestions = jsonData.map(row => ({
-              question: row.Question || row.question || '',
-              testCases: row.TestCases || row.testCases || '',
-              expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
-              language: row.Language || row.language || 'python',
-              optionA: 'A',
-              optionB: 'B',
-              optionC: 'C', 
-              optionD: 'D',
-              answer: 'A'
-            }));
+            // Check if this is compiler-integrated format or MCQ format
+            const hasCompilerFormat = row.QuestionTitle && row.ProblemStatement && row.TestCaseID && row.Input && row.ExpectedOutput;
+            const hasMCQFormat = row.Question && (row.A || row.optionA) && (row.B || row.optionB) && (row.C || row.optionC) && (row.D || row.optionD) && row.Answer;
+            
+            if (hasCompilerFormat) {
+              // Compiler-integrated format
+              parsedQuestions.push({
+                question: `${row.QuestionTitle}: ${row.ProblemStatement}`,
+                testCases: row.Input,
+                expectedOutput: row.ExpectedOutput,
+                language: row.Language || 'python',
+                questionType: 'compiler_integrated',
+                testCaseId: row.TestCaseID,
+                // For compatibility with existing system
+                optionA: 'A',
+                optionB: 'B',
+                optionC: 'C', 
+                optionD: 'D',
+                answer: 'A'
+              });
+            } else if (hasMCQFormat) {
+              // MCQ format for technical questions
+              parsedQuestions.push({
+                question: row.Question || row.question || '',
+                optionA: row.A || row.optionA || '',
+                optionB: row.B || row.optionB || '',
+                optionC: row.C || row.optionC || '',
+                optionD: row.D || row.optionD || '',
+                answer: row.Answer || row.answer || '',
+                questionType: 'mcq',
+                instructions: row.instructions || row.Instructions || ''
+              });
+            } else {
+              // Legacy format - try to parse as old technical format
+              parsedQuestions.push({
+                question: row.Question || row.question || '',
+                testCases: row.TestCases || row.testCases || '',
+                expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
+                language: row.Language || row.language || 'python',
+                questionType: 'compiler_integrated',
+                // For compatibility with existing system
+                optionA: 'A',
+                optionB: 'B',
+                optionC: 'C', 
+                optionD: 'D',
+                answer: 'A'
+              });
+            }
           } else if (isSentenceModule) {
             // Handle sentence format for listening and speaking
             parsedQuestions = jsonData.map(row => ({
@@ -213,9 +284,19 @@ export default function TestQuestionUpload({ questions, setQuestions, moduleName
         // Filter questions based on module type
         let finalQuestions;
         if (isTechnicalModule) {
-          finalQuestions = parsedQuestions.filter(q => 
-            q && q.question && q.testCases && q.expectedOutput && q.language
-          );
+          finalQuestions = parsedQuestions.filter(q => {
+            if (!q || !q.question) return false;
+            
+            // Check based on question type
+            if (q.questionType === 'compiler_integrated') {
+              return q.testCases && q.expectedOutput && q.language;
+            } else if (q.questionType === 'mcq') {
+              return q.optionA && q.optionB && q.optionC && q.optionD && q.answer;
+            } else {
+              // Legacy format - check for technical fields
+              return q.testCases && q.expectedOutput && q.language;
+            }
+          });
         } else {
           finalQuestions = parsedQuestions.filter(q => 
             q && q.question && q.optionA && q.optionB && q.optionC && q.optionD && q.answer
@@ -289,7 +370,7 @@ export default function TestQuestionUpload({ questions, setQuestions, moduleName
             </p>
             <p className="text-sm text-gray-500 mb-4">
               {levelId === 'CRT_TECHNICAL' || levelId === 'TECHNICAL' 
-                ? 'Supports CSV and Excel files with columns: Question (with problem statement and sample test cases), TestCases, ExpectedOutput, Language'
+                ? 'Supports CSV and Excel files. For compiler-integrated: QuestionTitle, ProblemStatement, TestCaseID, Input, ExpectedOutput. For MCQ: Question, A, B, C, D, Answer'
                 : 'Supports CSV, XLSX, XLS, and TXT files with columns: Question, A, B, C, D, Answer'
               }
             </p>
@@ -344,17 +425,33 @@ export default function TestQuestionUpload({ questions, setQuestions, moduleName
                       
                       {isTechnicalModule ? (
                         <div className="space-y-2 text-sm text-gray-600">
-                          <div className="p-2 bg-white rounded border">
-                            <strong>Test Cases:</strong>
-                            <pre className="mt-1 text-xs font-mono bg-gray-50 p-2 rounded">{q.testCases}</pre>
-                          </div>
-                          <div className="p-2 bg-white rounded border">
-                            <strong>Expected Output:</strong>
-                            <pre className="mt-1 text-xs font-mono bg-gray-50 p-2 rounded">{q.expectedOutput}</pre>
-                          </div>
-                          <div className="p-2 bg-white rounded border">
-                            <strong>Language:</strong> {q.language}
-                          </div>
+                          {q.questionType === 'compiler_integrated' ? (
+                            <>
+                              <div className="p-2 bg-white rounded border">
+                                <strong>Test Cases:</strong>
+                                <pre className="mt-1 text-xs font-mono bg-gray-50 p-2 rounded">{q.testCases}</pre>
+                              </div>
+                              <div className="p-2 bg-white rounded border">
+                                <strong>Expected Output:</strong>
+                                <pre className="mt-1 text-xs font-mono bg-gray-50 p-2 rounded">{q.expectedOutput}</pre>
+                              </div>
+                              <div className="p-2 bg-white rounded border">
+                                <strong>Language:</strong> {q.language}
+                              </div>
+                              {q.testCaseId && (
+                                <div className="p-2 bg-white rounded border">
+                                  <strong>Test Case ID:</strong> {q.testCaseId}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600">
+                              <div>A: {q.optionA}</div>
+                              <div>B: {q.optionB}</div>
+                              <div>C: {q.optionC}</div>
+                              <div>D: {q.optionD}</div>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600">
