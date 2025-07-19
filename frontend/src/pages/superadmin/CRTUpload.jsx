@@ -51,6 +51,11 @@ const CRTUpload = () => {
   const [showTopicModal, setShowTopicModal] = useState(false);
   const [newTopicName, setNewTopicName] = useState('');
   const [showCreateTopicModal, setShowCreateTopicModal] = useState(false);
+  const [editingTopic, setEditingTopic] = useState(null);
+  const [showEditTopicModal, setShowEditTopicModal] = useState(false);
+  const [selectedTopicForView, setSelectedTopicForView] = useState(null);
+  const [topicQuestions, setTopicQuestions] = useState([]);
+  const [viewMode, setViewMode] = useState('upload'); // 'upload', 'topics', 'topic-questions'
 
   useEffect(() => {
     fetchUploadedFiles();
@@ -99,6 +104,84 @@ const CRTUpload = () => {
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to create topic');
     }
+  };
+
+  const handleEditTopic = async (topicId, newName) => {
+    if (!newName.trim()) {
+      toast.error('Please enter a topic name');
+      return;
+    }
+
+    try {
+      const response = await api.put(`/test-management/crt-topics/${topicId}`, {
+        topic_name: newName.trim()
+      });
+
+      if (response.data.success) {
+        toast.success('Topic updated successfully!');
+        setShowEditTopicModal(false);
+        setEditingTopic(null);
+        fetchTopicsForModule();
+      } else {
+        toast.error(response.data.message || 'Failed to update topic');
+      }
+    } catch (error) {
+      console.error('Error updating topic:', error);
+      toast.error('Failed to update topic. Please try again.');
+    }
+  };
+
+  const handleDeleteTopic = async (topicId) => {
+    if (!window.confirm('Are you sure you want to delete this topic? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await api.delete(`/test-management/crt-topics/${topicId}`);
+
+      if (response.data.success) {
+        toast.success('Topic deleted successfully!');
+        fetchTopicsForModule();
+        if (selectedTopic === topicId) {
+          setSelectedTopic('');
+        }
+      } else {
+        toast.error(response.data.message || 'Failed to delete topic');
+      }
+    } catch (error) {
+      console.error('Error deleting topic:', error);
+      toast.error('Failed to delete topic. Please try again.');
+    }
+  };
+
+  const handleViewTopicQuestions = async (topic) => {
+    try {
+      setSelectedTopicForView(topic);
+      setViewMode('topic-questions');
+      
+      // Fetch questions for this topic
+      const response = await api.get(`/test-management/crt-topics/${topic._id}/questions`);
+      if (response.data.success) {
+        setTopicQuestions(response.data.data || []);
+      } else {
+        setTopicQuestions([]);
+      }
+    } catch (error) {
+      console.error('Error fetching topic questions:', error);
+      setTopicQuestions([]);
+    }
+  };
+
+  const handleBackToTopics = () => {
+    setViewMode('topics');
+    setSelectedTopicForView(null);
+    setTopicQuestions([]);
+  };
+
+  const handleBackToUpload = () => {
+    setViewMode('upload');
+    setSelectedTopicForView(null);
+    setTopicQuestions([]);
   };
 
   useEffect(() => {

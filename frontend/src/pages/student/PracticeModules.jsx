@@ -135,7 +135,8 @@ const PracticeModules = () => {
       }));
       setModules(modulesWithIcons);
     } catch (err) {
-      showError('Failed to load practice modules.');
+      console.error('Error fetching modules:', err);
+      showError('Failed to load practice modules. Please try refreshing the page.');
       setModules([]);
     } finally {
       setLoading(false);
@@ -200,7 +201,13 @@ const PracticeModules = () => {
   }, [scrollToLevelId]);
 
   const renderContent = () => {
-    if (loading) return <LoadingSpinner />;
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <LoadingSpinner />
+        </div>
+      );
+    }
 
     switch (view) {
       case 'grammar_categories':
@@ -222,7 +229,7 @@ const PracticeModules = () => {
     <div className="min-h-screen bg-gray-50">
       <Header />
       <Sidebar />
-      <div className="lg:ml-64 p-4 sm:p-8 pt-20 sm:pt-24">
+      <div className="lg:ml-64 p-4 sm:p-6 lg:p-8 pt-20 sm:pt-24 w-full">
         <div className="max-w-7xl mx-auto">
           {renderContent()}
         </div>

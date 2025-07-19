@@ -60,7 +60,7 @@ const StudentProfile = () => {
             <Header />
             <div className="flex-1 flex flex-col lg:flex-row">
                 <StudentSidebar />
-                <main className="flex-1 p-4 sm:p-8 lg:ml-64">
+                <main className="flex-1 p-4 sm:p-6 lg:p-8 lg:ml-64">
                     {/* Back to Dashboard button */}
                     <div className="mb-4">
                         <Link to="/student" className="inline-flex items-center px-4 py-2 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 font-medium transition">

@@ -99,7 +99,13 @@ const CRTModules = () => {
   }, [view, currentModule, showError, fetchModules]);
 
   const renderContent = () => {
-    if (loading) return <LoadingSpinner />;
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <LoadingSpinner />
+        </div>
+      );
+    }
 
     switch (view) {
       case 'module_list':
@@ -117,7 +123,7 @@ const CRTModules = () => {
     <div className="min-h-screen bg-gray-50">
       <Header />
       <Sidebar />
-      <div className="lg:ml-64 p-4 sm:p-8 pt-20 sm:pt-24">
+      <div className="lg:ml-64 p-4 sm:p-6 lg:p-8 pt-20 sm:pt-24 w-full">
         <div className="max-w-7xl mx-auto">
           {renderContent()}
         </div>
