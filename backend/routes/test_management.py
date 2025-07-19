@@ -712,7 +712,7 @@ def submit_practice_test():
                     'question_type': 'mcq'
                 })
             else:
-                # Handle audio question
+                # Handle audio question (Listening or Speaking)
                 audio_key = f'question_{i}'
                 if audio_key not in files:
                     return jsonify({
@@ -734,25 +734,46 @@ def submit_practice_test():
                 student_text = transcribe_audio(temp_audio_path)
                 os.remove(temp_audio_path)
                 
+                # Get the original text to compare against
+                original_text = question.get('question') or question.get('sentence', '')
+                
                 # Calculate similarity score
-                similarity_score = calculate_similarity_score(question['question'], student_text)
-                total_score += similarity_score
+                similarity_score = calculate_similarity_score(original_text, student_text)
+                
+                # Determine if answer is correct based on module type
+                is_correct = False
+                score = 0
+                
+                if test.get('module_id') == 'SPEAKING':
+                    # For speaking modules, use transcript validation
+                    tolerance = 0.8  # Default tolerance
+                    is_correct = similarity_score >= tolerance
+                    score = similarity_score * 100  # Convert to percentage
+                    total_score += score
+                    if is_correct:
+                        correct_answers += 1
+                else:
+                    # For listening modules, just add similarity score
+                    total_score += similarity_score
                 
                 # Find mismatched words
-                original_words = set(question['question'].lower().split())
+                original_words = set(original_text.lower().split())
                 student_words = set(student_text.lower().split())
                 missing_words = original_words - student_words
                 extra_words = student_words - original_words
                 
                 results.append({
                     'question_index': i,
-                    'original_text': question['question'],
+                    'original_text': original_text,
                     'student_text': student_text,
                     'similarity_score': similarity_score,
+                    'is_correct': is_correct,
+                    'score': score,
                     'missing_words': list(missing_words),
                     'extra_words': list(extra_words),
                     'student_audio_url': student_audio_key,
-                    'question_type': 'audio'
+                    'question_type': 'audio',
+                    'module_type': test.get('module_id', 'LISTENING')
                 })
         
         # Calculate average score
@@ -2294,7 +2315,7 @@ def get_file_extension(language):
 @test_management_bp.route('/validate-transcript', methods=['POST'])
 @jwt_required()
 def validate_transcript():
-    """Validate student transcript against original sentence for listening tests"""
+    """Validate student transcript against original sentence for listening and speaking tests"""
     try:
         data = request.get_json()
         original_sentence = data.get('original_sentence')
@@ -2355,6 +2376,74 @@ def validate_transcript():
         return jsonify({
             'success': False,
             'message': f'Transcript validation failed: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/transcribe-audio', methods=['POST'])
+@jwt_required()
+def transcribe_audio():
+    """Transcribe audio file for speaking module validation"""
+    try:
+        if 'audio' not in request.files:
+            return jsonify({
+                'success': False,
+                'message': 'No audio file uploaded'
+            }), 400
+        
+        audio_file = request.files['audio']
+        
+        if audio_file.filename == '':
+            return jsonify({
+                'success': False,
+                'message': 'No audio file selected'
+            }), 400
+        
+        # Validate audio file type
+        allowed_audio_types = ['audio/wav', 'audio/mp3', 'audio/m4a', 'audio/ogg', 'audio/mpeg']
+        if audio_file.content_type not in allowed_audio_types:
+            return jsonify({
+                'success': False,
+                'message': 'Invalid audio file type. Please upload WAV, MP3, M4A, or OGG'
+            }), 400
+        
+        # Save audio file temporarily
+        import tempfile
+        import os
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+            audio_file.save(temp_file.name)
+            temp_file_path = temp_file.name
+        
+        try:
+            # Transcribe audio using speech recognition
+            if not SPEECH_RECOGNITION_AVAILABLE:
+                return jsonify({
+                    'success': False,
+                    'message': 'Speech recognition is not available. Please install speech_recognition package.'
+                }), 500
+            
+            transcript = transcribe_audio(temp_file_path)
+            
+            if transcript:
+                return jsonify({
+                    'success': True,
+                    'transcript': transcript
+                }), 200
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': 'Could not transcribe audio. Please try recording again.'
+                }), 400
+                
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in audio transcription: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Audio transcription failed: {str(e)}'
         }), 500
 
 @test_management_bp.route('/submit-technical-test', methods=['POST'])

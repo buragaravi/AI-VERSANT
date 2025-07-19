@@ -1311,6 +1311,13 @@ def sentence_upload():
                         'has_audio': True
                     })
                 
+                # Add transcript validation for Speaking module
+                if module_id == 'SPEAKING':
+                    sentence_data.update({
+                        'transcript_validation': parsed_transcript_validation,
+                        'question_type': 'speaking'
+                    })
+                
                 mongo_db.question_bank.insert_one(sentence_data)
                 inserted_count += 1
                 

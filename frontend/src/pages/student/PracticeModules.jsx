@@ -614,10 +614,66 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                 setAudioURLs(prev => ({ ...prev, [questionId]: URL.createObjectURL(blob) }));
                 setIsRecording(false);
                 setRecordingQuestionId(null);
+                
+                // For speaking modules, transcribe the audio for validation
+                if (currentQuestion && currentQuestion.module_id === 'SPEAKING') {
+                    transcribeAudio(blob, questionId);
+                }
             };
             mediaRecorder.start();
         } else {
             showError('Audio recording is not supported in this browser.');
+        }
+    };
+
+    // Transcribe audio for speaking validation
+    const transcribeAudio = async (audioBlob, questionId) => {
+        try {
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'recording.wav');
+            
+            const response = await api.post('/test-management/transcribe-audio', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            
+            if (response.data.success) {
+                const transcript = response.data.transcript;
+                setAnswers(prev => ({ ...prev, [questionId]: transcript }));
+                
+                // Validate transcript against original sentence
+                if (currentQuestion && currentQuestion.sentence) {
+                    validateTranscript(currentQuestion.sentence, transcript, questionId);
+                }
+            }
+        } catch (error) {
+            console.error('Transcription failed:', error);
+            showError('Failed to transcribe audio. Please try recording again.');
+        }
+    };
+
+    // Validate transcript for speaking modules
+    const validateTranscript = async (originalSentence, studentTranscript, questionId) => {
+        try {
+            const response = await api.post('/test-management/validate-transcript', {
+                original_sentence: originalSentence,
+                student_transcript: studentTranscript,
+                validation_config: {
+                    tolerance: 0.8,
+                    checkMismatchedWords: true,
+                    allowPartialMatches: true
+                }
+            });
+            
+            if (response.data.success) {
+                const validation = response.data.data;
+                // Store validation results for later use
+                setAnswers(prev => ({ 
+                    ...prev, 
+                    [`${questionId}_validation`]: validation 
+                }));
+            }
+        } catch (error) {
+            console.error('Transcript validation failed:', error);
         }
     };
     const stopRecording = () => {
@@ -713,14 +769,68 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
 
             {/* Speaking Module: Record answer if no audio_url */}
             {currentQuestion.question_type === 'audio' && !currentQuestion.audio_url && (
-                <div className="flex flex-col items-center mb-4">
+                <div className="flex flex-col items-center mb-4 space-y-4">
                     {audioURLs[currentQuestion.question_id] ? (
                         <audio controls src={audioURLs[currentQuestion.question_id]} className="mb-2" />
                     ) : null}
+                    
+                    {/* Show transcript for speaking modules */}
+                    {currentQuestion.module_id === 'SPEAKING' && answers[currentQuestion.question_id] && (
+                        <div className="w-full max-w-md">
+                            <h4 className="text-sm font-semibold text-gray-700 mb-2">Your Transcript:</h4>
+                            <div className="bg-gray-50 p-3 rounded-lg border">
+                                <p className="text-sm text-gray-800">{answers[currentQuestion.question_id]}</p>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Show validation results for speaking modules */}
+                    {currentQuestion.module_id === 'SPEAKING' && answers[`${currentQuestion.question_id}_validation`] && (
+                        <div className="w-full max-w-md">
+                            <h4 className="text-sm font-semibold text-gray-700 mb-2">Validation Results:</h4>
+                            <div className="bg-blue-50 p-3 rounded-lg border">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium">Similarity Score:</span>
+                                    <span className={`text-sm font-bold ${
+                                        answers[`${currentQuestion.question_id}_validation`].is_valid ? 'text-green-600' : 'text-red-600'
+                                    }`}>
+                                        {Math.round(answers[`${currentQuestion.question_id}_validation`].similarity_score * 100)}%
+                                    </span>
+                                </div>
+                                
+                                {answers[`${currentQuestion.question_id}_validation`].mismatched_words && (
+                                    <div className="mt-2">
+                                        <p className="text-xs text-gray-600 mb-1">Mismatched Words:</p>
+                                        {answers[`${currentQuestion.question_id}_validation`].mismatched_words.missing.length > 0 && (
+                                            <div className="mb-1">
+                                                <span className="text-xs text-red-600">Missing: </span>
+                                                <span className="text-xs text-gray-700">
+                                                    {answers[`${currentQuestion.question_id}_validation`].mismatched_words.missing.join(', ')}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {answers[`${currentQuestion.question_id}_validation`].mismatched_words.extra.length > 0 && (
+                                            <div>
+                                                <span className="text-xs text-orange-600">Extra: </span>
+                                                <span className="text-xs text-gray-700">
+                                                    {answers[`${currentQuestion.question_id}_validation`].mismatched_words.extra.join(', ')}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    
                     {isRecording && recordingQuestionId === currentQuestion.question_id ? (
-                        <button onClick={stopRecording} className="px-4 py-2 bg-red-600 text-white rounded">Stop Recording</button>
+                        <button onClick={stopRecording} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                            Stop Recording
+                        </button>
                     ) : (
-                        <button onClick={() => startRecording(currentQuestion.question_id)} className="px-4 py-2 bg-blue-600 text-white rounded">Record Answer</button>
+                        <button onClick={() => startRecording(currentQuestion.question_id)} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                            Record Answer
+                        </button>
                     )}
                 </div>
             )}

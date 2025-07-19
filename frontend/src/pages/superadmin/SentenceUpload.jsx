@@ -40,9 +40,10 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
     SPEAKING: {
       icon: FaMicrophone,
       title: 'Speaking Practice',
-      description: 'Upload speaking practice sentences with prompts',
+      description: 'Upload speaking practice sentences with transcript validation',
       color: 'pink',
-      supportsAudio: false
+      supportsAudio: false,
+      supportsTranscriptValidation: true
     }
   };
 
@@ -178,6 +179,11 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
         formData.append('audio_config', JSON.stringify(audioConfig));
         formData.append('transcript_validation', JSON.stringify(transcriptValidation));
       }
+      
+      // Add transcript validation for Speaking module
+      if (moduleType === 'SPEAKING') {
+        formData.append('transcript_validation', JSON.stringify(transcriptValidation));
+      }
 
       const response = await fetch('/api/superadmin/sentence-upload', {
         method: 'POST',
@@ -260,6 +266,14 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
                 <li>• Audio file required (MP3, WAV, M4A, OGG)</li>
                 <li>• Transcript validation with configurable tolerance</li>
                 <li>• Mismatched words detection enabled</li>
+              </>
+            )}
+            {moduleType === 'SPEAKING' && (
+              <>
+                <li>• Students record their speech</li>
+                <li>• Automatic transcript validation</li>
+                <li>• Mismatched words detection enabled</li>
+                <li>• Real-time feedback on pronunciation</li>
               </>
             )}
           </ul>
@@ -403,6 +417,75 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transcript Validation Settings for Speaking Module */}
+      {moduleType === 'SPEAKING' && (
+        <div className="mb-6 space-y-4">
+          <h3 className="text-lg font-semibold text-gray-700">Transcript Validation Settings</h3>
+          <div className="space-y-3">
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="enableValidation"
+                checked={transcriptValidation.enabled}
+                onChange={(e) => setTranscriptValidation(prev => ({ ...prev, enabled: e.target.checked }))}
+                className="mr-2"
+              />
+              <label htmlFor="enableValidation" className="text-sm text-gray-700">
+                Enable transcript validation
+              </label>
+            </div>
+            
+            {transcriptValidation.enabled && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Similarity Tolerance
+                  </label>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="1.0"
+                    step="0.1"
+                    value={transcriptValidation.tolerance}
+                    onChange={(e) => setTranscriptValidation(prev => ({ ...prev, tolerance: parseFloat(e.target.value) }))}
+                    className="w-full"
+                  />
+                  <span className="text-xs text-gray-500">{Math.round(transcriptValidation.tolerance * 100)}%</span>
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="checkMismatched"
+                      checked={transcriptValidation.checkMismatchedWords}
+                      onChange={(e) => setTranscriptValidation(prev => ({ ...prev, checkMismatchedWords: e.target.checked }))}
+                      className="mr-2"
+                    />
+                    <label htmlFor="checkMismatched" className="text-sm text-gray-700">
+                      Check mismatched words
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="allowPartial"
+                      checked={transcriptValidation.allowPartialMatches}
+                      onChange={(e) => setTranscriptValidation(prev => ({ ...prev, allowPartialMatches: e.target.checked }))}
+                      className="mr-2"
+                    />
+                    <label htmlFor="allowPartial" className="text-sm text-gray-700">
+                      Allow partial matches
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
