@@ -6,6 +6,12 @@ ROLES = {
     'STUDENT': 'student'
 }
 
+# Test Categories
+TEST_CATEGORIES = {
+    'CRT': 'Campus Recruitment Test',
+    'VERSANT': 'Versant Language Assessment'
+}
+
 # Test Modules
 MODULES = {
     'LISTENING': 'Listening',
@@ -14,7 +20,15 @@ MODULES = {
     'WRITING': 'Writing',
     'GRAMMAR': 'Grammar',
     'VOCABULARY': 'Vocabulary',
-    'CRT': 'CRT'
+    'CRT_APTITUDE': 'Aptitude',
+    'CRT_REASONING': 'Reasoning',
+    'CRT_TECHNICAL': 'Technical'
+}
+
+# Module Categories
+MODULE_CATEGORIES = {
+    'CRT': ['CRT_APTITUDE', 'CRT_REASONING', 'CRT_TECHNICAL'],
+    'VERSANT': ['GRAMMAR', 'VOCABULARY', 'READING', 'LISTENING', 'SPEAKING', 'WRITING']
 }
 
 # Grammar Subcategories
@@ -71,7 +85,7 @@ LEVELS.update({
 
 # CRT (categories as levels)
 LEVELS.update({
-    f'CRT_{cat_id}': {'name': cat_name, 'module_id': 'CRT'}
+    f'CRT_{cat_id}': {'name': cat_name, 'module_id': f'CRT_{cat_id}'}
     for cat_id, cat_name in CRT_CATEGORIES.items()
 })
 

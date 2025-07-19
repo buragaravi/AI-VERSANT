@@ -44,10 +44,62 @@ const CRTUpload = () => {
   const [showAddQuestion, setShowAddQuestion] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredQuestions, setFilteredQuestions] = useState([]);
+  
+  // Topic management states
+  const [topics, setTopics] = useState([]);
+  const [selectedTopic, setSelectedTopic] = useState('');
+  const [showTopicModal, setShowTopicModal] = useState(false);
+  const [newTopicName, setNewTopicName] = useState('');
+  const [showCreateTopicModal, setShowCreateTopicModal] = useState(false);
 
   useEffect(() => {
     fetchUploadedFiles();
   }, []);
+
+  // Fetch topics for the selected module
+  useEffect(() => {
+    if (selectedModule) {
+      fetchTopicsForModule();
+    }
+  }, [selectedModule]);
+
+  const fetchTopicsForModule = async () => {
+    try {
+      const response = await api.get('/test-management/crt-topics');
+      if (response.data.success) {
+        // Filter topics for the selected module
+        const moduleTopics = response.data.data.filter(topic => 
+          topic.module_id === `CRT_${selectedModule}`
+        );
+        setTopics(moduleTopics);
+      }
+    } catch (error) {
+      console.error('Error fetching topics:', error);
+    }
+  };
+
+  const handleCreateTopic = async () => {
+    if (!selectedModule || !newTopicName.trim()) {
+      toast.error('Please select a module and enter a topic name');
+      return;
+    }
+
+    try {
+      const response = await api.post('/test-management/crt-topics', {
+        topic_name: newTopicName.trim(),
+        module_id: `CRT_${selectedModule}`
+      });
+
+      if (response.data.success) {
+        toast.success('Topic created successfully');
+        setShowCreateTopicModal(false);
+        setNewTopicName('');
+        fetchTopicsForModule();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to create topic');
+    }
+  };
 
   useEffect(() => {
     if (searchTerm.trim() === '') {
@@ -93,9 +145,13 @@ const CRTUpload = () => {
     }
   };
 
-  const fetchExistingQuestionsForModule = async (moduleId) => {
+  const fetchExistingQuestionsForModule = async (moduleId, topicId = null) => {
     try {
-      const response = await api.get(`/test-management/existing-questions?module_id=${moduleId}`);
+      let url = `/test-management/existing-questions?module_id=${moduleId}`;
+      if (topicId) {
+        url += `&topic_id=${topicId}`;
+      }
+      const response = await api.get(url);
       if (response.data.success) {
         setQuestions(response.data.data);
         setFilteredQuestions(response.data.data);
@@ -110,6 +166,15 @@ const CRTUpload = () => {
     setCurrentStep('upload');
     fetchExistingQuestionsForModule(module.id);
   };
+
+  // Update questions when topic selection changes
+  useEffect(() => {
+    if (selectedModule && selectedTopic) {
+      fetchExistingQuestionsForModule(selectedModule, selectedTopic);
+    } else if (selectedModule) {
+      fetchExistingQuestionsForModule(selectedModule);
+    }
+  }, [selectedTopic, selectedModule]);
 
   const handleViewQuestions = (file) => {
     setSelectedFile(file);
@@ -191,6 +256,16 @@ const CRTUpload = () => {
       return;
     }
 
+    // Check if topic is selected (optional but recommended)
+    if (!selectedTopic) {
+      const shouldContinue = window.confirm(
+        'No topic selected. Questions will be uploaded without a specific topic. Do you want to continue?'
+      );
+      if (!shouldContinue) {
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       let questions = [];
@@ -207,20 +282,34 @@ const CRTUpload = () => {
         return;
       }
 
-      // Send questions to backend
-      const payload = {
-        module_id: selectedModule,
-        level_id: selectedModule, // For CRT modules, use module_id as level_id
-        questions: questions
-      };
+      // If topic is selected, upload to topic-specific endpoint
+      if (selectedTopic) {
+        const response = await api.post(`/test-management/crt-topics/${selectedTopic}/questions`, {
+          questions: questions
+        });
 
-      const response = await api.post('/test-management/module-question-bank/upload', payload);
-
-      if (response.data.success) {
-        toast.success('Questions uploaded successfully!');
-        handleUploadSuccess();
+        if (response.data.success) {
+          toast.success(`Questions uploaded successfully to topic!`);
+          handleUploadSuccess();
+        } else {
+          toast.error(response.data.message || 'Upload failed');
+        }
       } else {
-        toast.error(response.data.message || 'Upload failed');
+        // Send questions to general CRT endpoint
+        const payload = {
+          module_id: `CRT_${selectedModule}`,
+          level_id: `CRT_${selectedModule}`, // For CRT modules, use module_id as level_id
+          questions: questions
+        };
+
+        const response = await api.post('/test-management/module-question-bank/upload', payload);
+
+        if (response.data.success) {
+          toast.success('Questions uploaded successfully!');
+          handleUploadSuccess();
+        } else {
+          toast.error(response.data.message || 'Upload failed');
+        }
       }
     } catch (error) {
       console.error('Upload error:', error);
@@ -504,6 +593,43 @@ const CRTUpload = () => {
         <div className="bg-white rounded-lg shadow-md p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Upload Questions</h2>
           
+          {/* Topic Selection */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Topic (Optional but Recommended)
+            </label>
+            <div className="flex space-x-2 mb-2">
+              <select
+                value={selectedTopic}
+                onChange={(e) => setSelectedTopic(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select a topic...</option>
+                {topics.map(topic => (
+                  <option key={topic._id} value={topic._id}>
+                    {topic.topic_name} ({topic.completion_percentage}% completed)
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => setShowCreateTopicModal(true)}
+                className="px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-sm"
+              >
+                New Topic
+              </button>
+            </div>
+            {topics.length === 0 && (
+              <p className="text-sm text-gray-500">
+                No topics available. Create a new topic to organize your questions better.
+              </p>
+            )}
+            {selectedTopic && (
+              <p className="text-sm text-green-600">
+                Selected: {topics.find(t => t._id === selectedTopic)?.topic_name}
+              </p>
+            )}
+          </div>
+          
           <div className="mb-6">
             <button
               onClick={downloadTemplate}
@@ -737,6 +863,17 @@ const CRTUpload = () => {
       </div>
       {renderEditQuestionModal()}
       {renderAddQuestionModal()}
+      <CreateTopicModal
+        isOpen={showCreateTopicModal}
+        onClose={() => {
+          setShowCreateTopicModal(false);
+          setNewTopicName('');
+        }}
+        onCreate={handleCreateTopic}
+        topicName={newTopicName}
+        setTopicName={setNewTopicName}
+        selectedModule={selectedModule}
+      />
     </div>
   );
 };
@@ -1048,6 +1185,47 @@ const AddQuestionForm = ({ onSave, onCancel, selectedModule }) => {
         </button>
       </div>
     </form>
+  );
+};
+
+// Create Topic Modal Component
+const CreateTopicModal = ({ isOpen, onClose, onCreate, topicName, setTopicName, selectedModule }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Create New Topic</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Topic Name
+            </label>
+            <input
+              type="text"
+              value={topicName}
+              onChange={(e) => setTopicName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter topic name"
+            />
+          </div>
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onCreate}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Create Topic
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 

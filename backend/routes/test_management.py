@@ -33,7 +33,7 @@ except ImportError:
 from difflib import SequenceMatcher
 import json
 from mongo import mongo_db
-from config.constants import ROLES, MODULES, LEVELS, TEST_TYPES, GRAMMAR_CATEGORIES, CRT_CATEGORIES, QUESTION_TYPES
+from config.constants import ROLES, MODULES, LEVELS, TEST_TYPES, GRAMMAR_CATEGORIES, CRT_CATEGORIES, QUESTION_TYPES, TEST_CATEGORIES, MODULE_CATEGORIES
 from config.aws_config import s3_client, S3_BUCKET_NAME
 from utils.audio_generator import generate_audio_from_text, calculate_similarity_score, transcribe_audio
 import functools
@@ -570,6 +570,42 @@ def get_test_data():
                 'CRT_TECHNICAL': 'Technical'
             }
         
+        # Get CRT topics with progress
+        crt_topics = []
+        try:
+            topics = list(mongo_db.crt_topics.find({}).sort('created_at', -1))
+            for topic in topics:
+                topic_id = topic['_id']
+                
+                # Count total questions for this topic
+                total_questions = mongo_db.question_bank.count_documents({
+                    'topic_id': topic_id,
+                    'module_id': {'$in': ['CRT_APTITUDE', 'CRT_REASONING', 'CRT_TECHNICAL']}
+                })
+                
+                # Count questions used in tests
+                used_questions = mongo_db.question_bank.count_documents({
+                    'topic_id': topic_id,
+                    'module_id': {'$in': ['CRT_APTITUDE', 'CRT_REASONING', 'CRT_TECHNICAL']},
+                    'used_count': {'$gt': 0}
+                })
+                
+                # Calculate completion percentage
+                completion_percentage = (used_questions / total_questions * 100) if total_questions > 0 else 0
+                
+                crt_topics.append({
+                    'id': str(topic['_id']),
+                    'topic_name': topic['topic_name'],
+                    'module_id': topic['module_id'],
+                    'total_questions': total_questions,
+                    'used_questions': used_questions,
+                    'completion_percentage': round(completion_percentage, 1),
+                    'created_at': topic['created_at'].isoformat() if topic['created_at'] else None
+                })
+        except Exception as e:
+            current_app.logger.warning(f"Could not fetch CRT topics: {e}")
+            crt_topics = []
+
         return jsonify({
             'success': True,
             'data': {
@@ -579,7 +615,10 @@ def get_test_data():
                 'levels': [{'id': lid, 'name': level_data['name']} for lid, level_data in LEVELS.items()],
                 'modules': [{'id': mid, 'name': name} for mid, name in MODULES.items()],
                 'grammar_categories': [{'id': cid, 'name': name} for cid, name in grammar_categories.items()],
-                'crt_categories': [{'id': cid, 'name': name} for cid, name in crt_categories.items()]
+                'crt_categories': [{'id': cid, 'name': name} for cid, name in crt_categories.items()],
+                'test_categories': [{'id': cid, 'name': name} for cid, name in TEST_CATEGORIES.items()],
+                'module_categories': MODULE_CATEGORIES,
+                'crt_topics': crt_topics
             }
         }), 200
         
@@ -1340,6 +1379,159 @@ def upload_module_questions():
         current_app.logger.error(f"Error uploading module questions: {e}")
         return jsonify({'success': False, 'message': f'Upload failed: {e}'}), 500
 
+# --- CRT TOPIC MANAGEMENT ENDPOINTS ---
+
+@test_management_bp.route('/crt-topics', methods=['GET'])
+@jwt_required()
+@require_superadmin
+def get_crt_topics():
+    """Get all CRT topics with their progress information"""
+    try:
+        # Get all CRT topics
+        topics = list(mongo_db.crt_topics.find({}).sort('created_at', -1))
+        
+        # Calculate progress for each topic
+        for topic in topics:
+            topic_id = topic['_id']
+            
+            # Count total questions for this topic
+            total_questions = mongo_db.question_bank.count_documents({
+                'topic_id': topic_id,
+                'module_id': {'$in': ['CRT_APTITUDE', 'CRT_REASONING', 'CRT_TECHNICAL']}
+            })
+            
+            # Count questions used in tests
+            used_questions = mongo_db.question_bank.count_documents({
+                'topic_id': topic_id,
+                'module_id': {'$in': ['CRT_APTITUDE', 'CRT_REASONING', 'CRT_TECHNICAL']},
+                'used_count': {'$gt': 0}
+            })
+            
+            # Calculate completion percentage
+            completion_percentage = (used_questions / total_questions * 100) if total_questions > 0 else 0
+            
+            topic['_id'] = str(topic['_id'])
+            topic['total_questions'] = total_questions
+            topic['used_questions'] = used_questions
+            topic['completion_percentage'] = round(completion_percentage, 1)
+            topic['created_at'] = topic['created_at'].isoformat() if topic['created_at'] else None
+        
+        return jsonify({'success': True, 'data': topics}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching CRT topics: {e}")
+        return jsonify({'success': False, 'message': f'Failed to fetch CRT topics: {e}'}), 500
+
+@test_management_bp.route('/crt-topics', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def create_crt_topic():
+    """Create a new CRT topic"""
+    try:
+        data = request.get_json()
+        topic_name = data.get('topic_name')
+        module_id = data.get('module_id')  # CRT_APTITUDE, CRT_REASONING, CRT_TECHNICAL
+        
+        if not topic_name or not module_id:
+            return jsonify({'success': False, 'message': 'topic_name and module_id are required'}), 400
+        
+        # Check if topic already exists
+        existing_topic = mongo_db.crt_topics.find_one({
+            'topic_name': topic_name,
+            'module_id': module_id
+        })
+        
+        if existing_topic:
+            return jsonify({'success': False, 'message': 'Topic with this name already exists for this module'}), 400
+        
+        # Create new topic
+        topic_doc = {
+            'topic_name': topic_name,
+            'module_id': module_id,
+            'created_at': datetime.utcnow(),
+            'created_by': get_jwt_identity()
+        }
+        
+        result = mongo_db.crt_topics.insert_one(topic_doc)
+        topic_doc['_id'] = str(result.inserted_id)
+        
+        return jsonify({'success': True, 'data': topic_doc, 'message': 'Topic created successfully'}), 201
+    except Exception as e:
+        current_app.logger.error(f"Error creating CRT topic: {e}")
+        return jsonify({'success': False, 'message': f'Failed to create topic: {e}'}), 500
+
+@test_management_bp.route('/crt-topics/<topic_id>/questions', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def upload_crt_topic_questions(topic_id):
+    """Upload questions for a specific CRT topic"""
+    try:
+        data = request.get_json()
+        questions = data.get('questions')
+        
+        if not questions:
+            return jsonify({'success': False, 'message': 'questions are required'}), 400
+        
+        # Verify topic exists
+        topic = mongo_db.crt_topics.find_one({'_id': ObjectId(topic_id)})
+        if not topic:
+            return jsonify({'success': False, 'message': 'Topic not found'}), 404
+        
+        # Store questions with topic_id
+        inserted = []
+        for q in questions:
+            doc = {
+                'topic_id': ObjectId(topic_id),
+                'module_id': topic['module_id'],
+                'level_id': topic['module_id'],  # For CRT, level_id is same as module_id
+                'question': q.get('question'),
+                'optionA': q.get('options', [])[0] if q.get('options') else q.get('optionA', ''),
+                'optionB': q.get('options', [])[1] if q.get('options') and len(q.get('options')) > 1 else q.get('optionB', ''),
+                'optionC': q.get('options', [])[2] if q.get('options') and len(q.get('options')) > 2 else q.get('optionC', ''),
+                'optionD': q.get('options', [])[3] if q.get('options') and len(q.get('options')) > 3 else q.get('optionD', ''),
+                'answer': q.get('answer', ''),
+                'instructions': q.get('instructions', ''),
+                'used_in_tests': [],
+                'used_count': 0,
+                'last_used': None,
+                'question_type': 'mcq',
+                'created_at': datetime.utcnow()
+            }
+            
+            mongo_db.question_bank.insert_one(doc)
+            inserted.append(doc['question'])
+        
+        return jsonify({'success': True, 'message': f'Uploaded {len(inserted)} questions to topic "{topic["topic_name"]}"'}), 201
+    except Exception as e:
+        current_app.logger.error(f"Error uploading CRT topic questions: {e}")
+        return jsonify({'success': False, 'message': f'Upload failed: {e}'}), 500
+
+@test_management_bp.route('/crt-topics/<topic_id>/questions', methods=['GET'])
+@jwt_required()
+@require_superadmin
+def get_crt_topic_questions(topic_id):
+    """Get questions for a specific CRT topic"""
+    try:
+        # Verify topic exists
+        topic = mongo_db.crt_topics.find_one({'_id': ObjectId(topic_id)})
+        if not topic:
+            return jsonify({'success': False, 'message': 'Topic not found'}), 404
+        
+        # Get questions for this topic
+        questions = list(mongo_db.question_bank.find({
+            'topic_id': ObjectId(topic_id)
+        }).sort('created_at', -1))
+        
+        # Convert ObjectIds to strings
+        for q in questions:
+            q['_id'] = str(q['_id'])
+            q['topic_id'] = str(q['topic_id'])
+            q['created_at'] = q['created_at'].isoformat() if q['created_at'] else None
+        
+        return jsonify({'success': True, 'data': questions}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching CRT topic questions: {e}")
+        return jsonify({'success': False, 'message': f'Failed to fetch topic questions: {e}'}), 500
+
 @test_management_bp.route('/uploaded-files', methods=['GET'])
 @jwt_required()
 @require_superadmin
@@ -1462,23 +1654,39 @@ def get_existing_questions():
     try:
         module_id = request.args.get('module_id')
         level_id = request.args.get('level_id')
+        topic_id = request.args.get('topic_id')  # New parameter for CRT topics
         
-        if not module_id or not level_id:
-            return jsonify({'success': False, 'message': 'module_id and level_id are required'}), 400
+        if not module_id:
+            return jsonify({'success': False, 'message': 'module_id is required'}), 400
         
-        query = {'module_id': module_id, 'level_id': level_id}
+        # Build query based on module type
+        if module_id.startswith('CRT_'):
+            # For CRT modules, we can filter by topic_id if provided
+            query = {'module_id': module_id}
+            if topic_id:
+                query['topic_id'] = ObjectId(topic_id)
+        else:
+            # For other modules, require level_id
+            if not level_id:
+                return jsonify({'success': False, 'message': 'level_id is required for non-CRT modules'}), 400
+            query = {'module_id': module_id, 'level_id': level_id}
+        
         questions = list(mongo_db.question_bank.find(query, {
             'question': 1,
             'optionA': 1,
             'optionB': 1,
             'optionC': 1,
             'optionD': 1,
-            'answer': 1
+            'answer': 1,
+            'topic_id': 1,
+            'used_count': 1
         }))
         
         # Convert ObjectIds to strings
         for q in questions:
             q['_id'] = str(q['_id'])
+            if 'topic_id' in q and q['topic_id']:
+                q['topic_id'] = str(q['topic_id'])
         
         return jsonify({'success': True, 'data': questions}), 200
     except Exception as e:
@@ -1545,7 +1753,14 @@ def create_test_from_bank():
         # Mark these questions as used in this test
         test_id = generate_unique_test_id()
         for q in questions:
-            mongo_db.question_bank.update_one({'_id': q['_id']}, {'$push': {'used_in_tests': test_id}})
+            mongo_db.question_bank.update_one(
+                {'_id': q['_id']}, 
+                {
+                    '$inc': {'used_count': 1},
+                    '$set': {'last_used': datetime.now(pytz.utc)},
+                    '$push': {'used_in_tests': test_id}
+                }
+            )
         # Create test as before, but with these questions
         test_doc = {
             'test_id': test_id,
@@ -2361,6 +2576,23 @@ def create_test_with_instances():
 
         # Insert test
         result = mongo_db.tests.insert_one(test_doc)
+        
+        # Update question usage count for questions from the bank
+        if questions:
+            for question in questions:
+                if question.get('_id'):  # Only update questions that have an _id (from question bank)
+                    try:
+                        # Increment the used_count for this question
+                        mongo_db.question_bank.update_one(
+                            {'_id': ObjectId(question['_id'])},
+                            {
+                                '$inc': {'used_count': 1},
+                                '$set': {'last_used': datetime.now(pytz.utc)},
+                                '$push': {'used_in_tests': test_id}
+                            }
+                        )
+                    except Exception as e:
+                        current_app.logger.warning(f"Failed to update usage count for question {question.get('_id')}: {e}")
         
         # For non-MCQ modules, start audio generation in background
         if not is_mcq_module(module_id) and questions:

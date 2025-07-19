@@ -8,7 +8,7 @@ import Header from '../../components/common/Header'
 import SuperAdminSidebar from '../../components/common/SuperAdminSidebar'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import api from '../../services/api'
-import { Upload, Plus, Trash2, ChevronLeft, ChevronRight, FileText, CheckCircle, Briefcase, Users, FileQuestion, Sparkles, Eye, Edit, MoreVertical, Play, Pause, AlertTriangle, ChevronDown } from 'lucide-react'
+import { Upload, Plus, Trash2, ChevronLeft, ChevronRight, FileText, CheckCircle, Briefcase, Users, FileQuestion, Sparkles, Eye, Edit, MoreVertical, Play, Pause, AlertTriangle, ChevronDown, Code, Mic } from 'lucide-react'
 import { MultiSelect } from 'react-multi-select-component'
 import clsx from 'clsx'
 import Papa from 'papaparse'
@@ -589,8 +589,8 @@ const TestPreviewView = ({ test, onBack }) => {
 const TestCreationWizard = ({ onTestCreated, setView }) => {
   const [step, setStep] = useState(1)
   const [testData, setTestData] = useState({
-    testName: '',
     testType: '', // Start empty, force selection
+    testCategory: '', // CRT or Versant
     module: null,
     level: null,
     subcategory: null,
@@ -602,7 +602,7 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
     speed: 1.0,
   })
 
-  const nextStep = () => setStep(prev => prev < 5 ? prev + 1 : prev)
+  const nextStep = () => setStep(prev => prev < 6 ? prev + 1 : prev)
   const prevStep = () => setStep(prev => prev > 1 ? prev - 1 : prev)
 
   const updateTestData = (data) => {
@@ -644,17 +644,19 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
   const renderStep = () => {
     switch (step) {
       case 1:
-        return <Step2TestType nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
+        return <Step1TestCategory nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
       case 2:
-        return <Step3TestName nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
-      case 3:
-        return <Step4AudienceSelection nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
-      case 4:
-        return <Step5QuestionUpload nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
-      case 5:
-        return <Step4ConfirmAndGenerate prevStep={prevStep} testData={testData} onTestCreated={onTestCreated} />;
-      default:
         return <Step2TestType nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
+      case 3:
+        return <Step3TestName nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
+      case 4:
+        return <Step4AudienceSelection nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
+      case 5:
+        return <Step5QuestionUpload nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
+      case 6:
+        return <Step6ConfirmAndGenerate prevStep={prevStep} testData={testData} onTestCreated={onTestCreated} />;
+      default:
+        return <Step1TestCategory nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
     }
   }
 
@@ -674,21 +676,124 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
           <div className="w-full bg-gray-200 rounded-full h-2.5">
             <motion.div 
               className="bg-blue-500 h-2.5 rounded-full" 
-              animate={{ width: `${((step - 1) / 4) * 100}%` }}
+              animate={{ width: `${((step - 1) / 5) * 100}%` }}
               transition={{ duration: 0.5 }}
             />
           </div>
           <p className="text-right text-sm text-gray-500 mt-2">
-            Step {step} of 5: {
-              step === 1 ? 'Select Test Type' :
-              step === 2 ? 'Select Module and Level' :
-              step === 3 ? 'Select Audience' :
-              step === 4 ? 'Upload Questions' :
-              step === 5 ? 'Final Confirmation' : ''
+            Step {step} of 6: {
+              step === 1 ? 'Select Test Category' :
+              step === 2 ? 'Select Test Type' :
+              step === 3 ? 'Select Module and Level' :
+              step === 4 ? 'Select Audience' :
+              step === 5 ? 'Upload Questions' :
+              step === 6 ? 'Final Confirmation' : ''
             }
           </p>
         </div>
         {renderStep()}
+      </div>
+    </motion.div>
+  )
+}
+
+const Step1TestCategory = ({ nextStep, prevStep, updateTestData, testData }) => {
+  const { error } = useNotification()
+
+  const handleCategorySelect = (category) => {
+    updateTestData({ testCategory: category })
+    nextStep()
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
+      <div className="space-y-8">
+        <div className="flex items-center space-x-3">
+          <div className="bg-blue-500 p-2 rounded-full text-white">
+            <Briefcase className="h-6 w-6"/>
+          </div>
+          <h2 className="text-2xl font-bold">Select Test Category</h2>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* CRT Option */}
+          <button
+            onClick={() => handleCategorySelect('CRT')}
+            className="p-8 border-2 border-gray-200 rounded-lg text-left transition-all duration-200 hover:border-blue-500 hover:shadow-lg hover:scale-105 bg-white"
+          >
+            <div className="flex items-center space-x-4 mb-4">
+              <div className="bg-orange-100 p-3 rounded-full">
+                <Code className="h-8 w-8 text-orange-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-800">CRT (Campus Recruitment Test)</h3>
+                <p className="text-sm text-gray-600">Technical and aptitude assessment</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span className="text-sm text-gray-700">Aptitude Testing</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span className="text-sm text-gray-700">Reasoning Assessment</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span className="text-sm text-gray-700">Technical Programming</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span className="text-sm text-gray-700">Code Execution & Validation</span>
+              </div>
+            </div>
+          </button>
+
+          {/* Versant Option */}
+          <button
+            onClick={() => handleCategorySelect('VERSANT')}
+            className="p-8 border-2 border-gray-200 rounded-lg text-left transition-all duration-200 hover:border-blue-500 hover:shadow-lg hover:scale-105 bg-white"
+          >
+            <div className="flex items-center space-x-4 mb-4">
+              <div className="bg-blue-100 p-3 rounded-full">
+                <Mic className="h-8 w-8 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-800">Versant</h3>
+                <p className="text-sm text-gray-600">Language proficiency assessment</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span className="text-sm text-gray-700">Grammar Testing</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span className="text-sm text-gray-700">Vocabulary Assessment</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span className="text-sm text-gray-700">Reading Comprehension</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span className="text-sm text-gray-700">Listening & Speaking</span>
+              </div>
+            </div>
+          </button>
+        </div>
+
+        <div className="flex justify-between items-center pt-8 border-t mt-8 border-gray-200">
+          <button 
+            type="button" 
+            onClick={() => setView('list')} 
+            className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors"
+          >
+            <ChevronLeft className="h-5 w-5 mr-1" /> Back to Test List
+          </button>
+        </div>
       </div>
     </motion.div>
   )
@@ -943,6 +1048,8 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
   const [loading, setLoading] = useState(false);
   const [levels, setLevels] = useState([]);
   const [grammarCategories, setGrammarCategories] = useState([]);
+  const [crtTopics, setCrtTopics] = useState([]);
+  const [selectedTopic, setSelectedTopic] = useState('');
   const { error: showError } = useNotification();
 
   // Fetch levels and grammar categories when component mounts
@@ -954,6 +1061,7 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
         if (response.data.success) {
           setLevels(response.data.data.levels || []);
           setGrammarCategories(response.data.data.grammar_categories || []);
+          setCrtTopics(response.data.data.crt_topics || []);
         }
       } catch (error) {
         console.error('Error fetching levels:', error);
@@ -965,17 +1073,35 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
     fetchData();
   }, []);
 
+  // Get modules based on selected category
+  const getModulesForCategory = () => {
+    if (testData.testCategory === 'CRT') {
+      return [
+        { id: 'CRT_APTITUDE', name: 'Aptitude' },
+        { id: 'CRT_REASONING', name: 'Reasoning' },
+        { id: 'CRT_TECHNICAL', name: 'Technical' }
+      ];
+    } else if (testData.testCategory === 'VERSANT') {
+      return [
+        { id: 'GRAMMAR', name: 'Grammar' },
+        { id: 'VOCABULARY', name: 'Vocabulary' },
+        { id: 'READING', name: 'Reading' },
+        { id: 'LISTENING', name: 'Listening' },
+        { id: 'SPEAKING', name: 'Speaking' },
+        { id: 'WRITING', name: 'Writing' }
+      ];
+    }
+    return [];
+  };
+
   // Filter levels based on selected module
   const getFilteredLevels = () => {
     if (!module) return [];
     if (module === 'GRAMMAR') {
       return grammarCategories;
-    } else if (module === 'CRT') {
-      return [
-        { id: 'Aptitude', name: 'Aptitude' },
-        { id: 'Reasoning', name: 'Reasoning' },
-        { id: 'Technical', name: 'Technical' }
-      ];
+    } else if (module.startsWith('CRT_')) {
+      // For CRT modules, no additional level selection needed
+      return [];
     } else {
       // Find all levels for this module from backend
       const moduleLevels = levels.filter(level =>
@@ -997,6 +1123,17 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
     setModule(e.target.value);
     setLevel(''); // Reset level when module changes
     setSubcategory(''); // Reset subcategory when module changes
+    setSelectedTopic(''); // Reset topic when module changes
+  };
+
+  const handleTopicChange = (e) => {
+    setSelectedTopic(e.target.value);
+  };
+
+  // Get topics for the selected CRT module
+  const getTopicsForModule = () => {
+    if (!module || !module.startsWith('CRT_')) return [];
+    return crtTopics.filter(topic => topic.module_id === module);
   };
 
   const handleLevelChange = (e) => {
@@ -1016,7 +1153,7 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
     if (module === 'GRAMMAR' && !subcategory) {
       setError('Please select a grammar category.');
       return;
-    } else if (module !== 'GRAMMAR' && !level) {
+    } else if (module !== 'GRAMMAR' && !module.startsWith('CRT_') && !level) {
       setError('Please select a level.');
       return;
     }
@@ -1029,8 +1166,9 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
     setError('');
     updateTestData({ 
       module, 
-      level: module === 'GRAMMAR' ? subcategory : level, 
+      level: module === 'GRAMMAR' ? subcategory : (module.startsWith('CRT_') ? module : level), 
       subcategory: module === 'GRAMMAR' ? subcategory : null,
+      topic_id: module.startsWith('CRT_') ? selectedTopic : null,
       testName 
     });
     nextStep();
@@ -1054,8 +1192,8 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Select Module</option>
-            {Object.entries(MODULE_CONFIG).map(([key, mod]) => (
-              <option key={key} value={key}>{mod.label}</option>
+            {getModulesForCategory().map(mod => (
+              <option key={mod.id} value={mod.id}>{mod.name}</option>
             ))}
           </select>
         </div>
@@ -1077,7 +1215,7 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
           </div>
         )}
 
-        {module && module !== 'GRAMMAR' && (
+        {module && module !== 'GRAMMAR' && !module.startsWith('CRT_') && (
           <div>
             <label className="block font-semibold mb-2">Level</label>
             <select 
@@ -1091,6 +1229,28 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
                 <option key={lvl.id} value={lvl.id}>{lvl.name}</option>
               ))}
             </select>
+          </div>
+        )}
+
+        {module && module.startsWith('CRT_') && (
+          <div>
+            <label className="block font-semibold mb-2">Topic (Optional)</label>
+            <select 
+              value={selectedTopic} 
+              onChange={handleTopicChange} 
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={loading}
+            >
+              <option value="">Select Topic (Optional)</option>
+              {getTopicsForModule().map(topic => (
+                <option key={topic.id} value={topic.id}>
+                  {topic.topic_name} ({topic.completion_percentage}% completed)
+                </option>
+              ))}
+            </select>
+            {getTopicsForModule().length === 0 && (
+              <p className="text-sm text-gray-500 mt-1">No topics available for this module. Questions will be selected from all available questions.</p>
+            )}
           </div>
         )}
 
@@ -1417,15 +1577,12 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
       // Determine the correct level_id based on module type
       let levelId = testData.level;
       let subcategory = testData.subcategory;
+      let topicId = testData.topic_id;
       
-      if (testData.module === 'CRT') {
-        // Map CRT levels to proper backend categories
-        const crtLevelMapping = {
-          'Aptitude': 'CRT_APTITUDE',
-          'Reasoning': 'CRT_REASONING', 
-          'Technical': 'CRT_TECHNICAL'
-        };
-        levelId = crtLevelMapping[testData.level] || testData.level;
+      if (testData.module.startsWith('CRT_')) {
+        // For CRT modules, use the module_id directly
+        levelId = testData.module;
+        subcategory = null;
       } else if (testData.module === 'GRAMMAR') {
         // For Grammar, use level as level_id (since level contains the grammar category)
         levelId = testData.level;
@@ -1440,13 +1597,20 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
         module_id: testData.module,
         level_id: levelId,
         subcategory: subcategory,
+        topic_id: topicId,
         count: count,
         original_level: testData.level,
         original_subcategory: testData.subcategory
       });
       
+      // Build the API URL with parameters
+      let url = `/test-management/existing-questions?module_id=${testData.module}&level_id=${levelId}`;
+      if (topicId) {
+        url += `&topic_id=${topicId}`;
+      }
+      
       // Use the same endpoint as Question Bank Upload page
-      let response = await api.get(`/test-management/existing-questions?module_id=${testData.module}&level_id=${levelId}`);
+      let response = await api.get(url);
       
       // If no questions found and it's Grammar, try with subcategory as level_id
       if (testData.module === 'GRAMMAR' && (!response.data.success || !response.data.data || response.data.data.length === 0)) {
@@ -1491,10 +1655,29 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
       }
       
       // Add repeat count information to each question
-      const questionsWithRepeatInfo = selectedQuestions.map(question => ({
-        ...question,
-        repeatCount: question.used_count || 0 // used_count from backend indicates how many times this question has been used in tests
-      }));
+      const questionsWithRepeatInfo = selectedQuestions.map(question => {
+        const historicalUsage = question.used_count || 0;
+        const currentUsage = historicalUsage + 1; // This will be the current usage count
+        
+        // Determine repetition status
+        let repetitionStatus = '';
+        if (currentUsage === 1) {
+          repetitionStatus = 'first_time'; // First time being used
+        } else if (currentUsage === 2) {
+          repetitionStatus = 'repeating_first_time'; // Second time total (first repeat)
+        } else if (currentUsage === 3) {
+          repetitionStatus = 'repeating_second_time'; // Third time total (second repeat)
+        } else {
+          repetitionStatus = `repeating_${currentUsage - 1}_time`; // Nth time total ((N-1)th repeat)
+        }
+        
+        return {
+          ...question,
+          repeatCount: historicalUsage, // Keep original for display
+          currentUsage: currentUsage, // Total times this question will be used
+          repetitionStatus: repetitionStatus // Status for display
+        };
+      });
       
       setPreviewQuestions(questionsWithRepeatInfo);
       setShowQuestionPreview(true);
@@ -1675,7 +1858,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
                   </span>
                 </div>
                 <p className="text-green-700 text-sm mt-1">
-                  Questions have been shuffled and no duplicates within this test. Click "Next" to proceed.
+                  Questions have been shuffled and no duplicates within this test. Repetition status shows how many times each question has been used across all tests. Click "Next" to proceed.
                 </p>
               </div>
               
@@ -1717,9 +1900,24 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
                         </div>
                         <div className="flex items-center space-x-1">
                           <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Selected</span>
-                          {question.used_count > 0 && (
-                            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                              Used {question.used_count}x
+                          {question.repetitionStatus === 'first_time' && (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                              First Time
+                            </span>
+                          )}
+                          {question.repetitionStatus === 'repeating_first_time' && (
+                            <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                              Repeating First Time
+                            </span>
+                          )}
+                          {question.repetitionStatus === 'repeating_second_time' && (
+                            <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                              Repeating Second Time
+                            </span>
+                          )}
+                          {question.repetitionStatus.startsWith('repeating_') && question.repetitionStatus !== 'repeating_first_time' && question.repetitionStatus !== 'repeating_second_time' && (
+                            <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                              {question.repetitionStatus.replace('repeating_', 'Repeating ').replace('_', ' ').replace('time', 'Time')}
                             </span>
                           )}
                         </div>
@@ -1805,7 +2003,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
               How many questions would you like to select from the question bank?
             </p>
             <p className="text-sm text-blue-600 bg-blue-50 p-2 rounded">
-              Note: Questions will be randomly selected without duplicates within this test. Questions used in previous tests will show their usage count.
+              Note: Questions will be randomly selected without duplicates within this test. Questions will show their repetition status (First Time, Repeating First Time, Repeating Second Time, etc.).
             </p>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1854,9 +2052,24 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
                   <span className="text-sm font-medium text-gray-500">Question {index + 1}</span>
                   <div className="flex items-center space-x-2">
                     <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Randomly Selected</span>
-                    {question.repeatCount > 0 && (
-                      <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                        Used {question.repeatCount} time{question.repeatCount > 1 ? 's' : ''} before
+                    {question.repetitionStatus === 'first_time' && (
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                        First Time
+                      </span>
+                    )}
+                    {question.repetitionStatus === 'repeating_first_time' && (
+                      <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                        Repeating First Time
+                      </span>
+                    )}
+                    {question.repetitionStatus === 'repeating_second_time' && (
+                      <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                        Repeating Second Time
+                      </span>
+                    )}
+                    {question.repetitionStatus.startsWith('repeating_') && question.repetitionStatus !== 'repeating_first_time' && question.repetitionStatus !== 'repeating_second_time' && (
+                      <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                        {question.repetitionStatus.replace('repeating_', 'Repeating ').replace('_', ' ').replace('time', 'Time')}
                       </span>
                     )}
                   </div>
@@ -1902,7 +2115,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
   );
 };
 
-const Step4ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
+const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
   const [studentCount, setStudentCount] = useState(null);
   const [studentList, setStudentList] = useState([]);
   useEffect(() => {
