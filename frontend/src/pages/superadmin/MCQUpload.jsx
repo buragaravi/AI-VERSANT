@@ -277,6 +277,7 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
     try {
       // Check if this is a technical module
       const isTechnicalModule = levelId === 'CRT_TECHNICAL' || levelId === 'TECHNICAL';
+      const isSentenceModule = moduleName === 'LISTENING' || moduleName === 'SPEAKING';
       
       let payload;
       if (isTechnicalModule) {
@@ -293,6 +294,21 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
             optionC: q.optionC,
             optionD: q.optionD,
             answer: q.answer,
+            instructions: q.instructions || ''
+          }))
+        };
+      } else if (isSentenceModule) {
+        // For listening and speaking modules, handle sentences
+        payload = {
+          module_id: moduleName,
+          level_id: levelId,
+          questions: newQuestions.map(q => ({
+            sentence: q.question, // Use question field as sentence
+            question: q.question, // Keep for compatibility
+            audio_url: q.audio_url,
+            audio_config: q.audio_config,
+            transcript_validation: q.transcript_validation,
+            has_audio: moduleName === 'LISTENING',
             instructions: q.instructions || ''
           }))
         };

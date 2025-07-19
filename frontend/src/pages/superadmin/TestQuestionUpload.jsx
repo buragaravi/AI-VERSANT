@@ -92,8 +92,9 @@ export default function TestQuestionUpload({ questions, setQuestions, moduleName
       try {
         let parsedQuestions = [];
         
-        // Check if this is a technical module
+        // Check if this is a technical module or sentence module
         const isTechnicalModule = levelId === 'CRT_TECHNICAL' || levelId === 'TECHNICAL';
+        const isSentenceModule = moduleName === 'LISTENING' || moduleName === 'SPEAKING';
         
         if (fileExtension === 'csv' || file.type === 'text/csv') {
           const result = Papa.parse(e.target.result, { 
@@ -120,6 +121,17 @@ export default function TestQuestionUpload({ questions, setQuestions, moduleName
               optionC: 'C',
               optionD: 'D',
               answer: 'A' // Default answer for technical questions
+            }));
+          } else if (isSentenceModule) {
+            // Handle sentence format for listening and speaking
+            parsedQuestions = result.data.map(row => ({
+              question: row.sentence || row.Sentence || row.question || row.Question || '',
+              sentence: row.sentence || row.Sentence || row.question || row.Question || '',
+              audio_url: row.audio_url || row.AudioUrl || '',
+              audio_config: row.audio_config || row.AudioConfig || '',
+              transcript_validation: row.transcript_validation || row.TranscriptValidation || '',
+              has_audio: moduleName === 'LISTENING',
+              instructions: row.instructions || row.Instructions || ''
             }));
           } else {
             // Handle MCQ format
@@ -159,6 +171,17 @@ export default function TestQuestionUpload({ questions, setQuestions, moduleName
               optionC: 'C', 
               optionD: 'D',
               answer: 'A'
+            }));
+          } else if (isSentenceModule) {
+            // Handle sentence format for listening and speaking
+            parsedQuestions = jsonData.map(row => ({
+              question: row.sentence || row.Sentence || row.question || row.Question || '',
+              sentence: row.sentence || row.Sentence || row.question || row.Question || '',
+              audio_url: row.audio_url || row.AudioUrl || '',
+              audio_config: row.audio_config || row.AudioConfig || '',
+              transcript_validation: row.transcript_validation || row.TranscriptValidation || '',
+              has_audio: moduleName === 'LISTENING',
+              instructions: row.instructions || row.Instructions || ''
             }));
           } else {
             // Handle MCQ format

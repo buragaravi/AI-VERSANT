@@ -44,6 +44,12 @@ from routes.course_management import course_management_bp
 from routes.batch_management import batch_management_bp
 from routes.access_control import access_control_bp
 
+# Register modular test management blueprints
+from routes.test_management_mcq import mcq_test_bp
+from routes.test_management_audio import audio_test_bp
+from routes.test_management_writing import writing_test_bp
+from routes.test_management_technical import technical_test_bp
+
 app.register_blueprint(auth_bp, url_prefix='/auth')
 app.register_blueprint(superadmin_bp, url_prefix='/superadmin')
 app.register_blueprint(campus_admin_bp, url_prefix='/campus-admin')
@@ -58,6 +64,12 @@ app.register_blueprint(campus_management_bp, url_prefix='/campus-management')
 app.register_blueprint(course_management_bp, url_prefix='/course-management')
 app.register_blueprint(batch_management_bp, url_prefix='/batch-management')
 app.register_blueprint(access_control_bp, url_prefix='/access-control')
+
+# Register modular test management blueprints
+app.register_blueprint(mcq_test_bp, url_prefix='/test-management/mcq')
+app.register_blueprint(audio_test_bp, url_prefix='/test-management/audio')
+app.register_blueprint(writing_test_bp, url_prefix='/test-management/writing')
+app.register_blueprint(technical_test_bp, url_prefix='/test-management/technical')
 
 print("=== Registered Routes ===")
 for rule in app.url_map.iter_rules():
