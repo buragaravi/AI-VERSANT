@@ -624,9 +624,9 @@ def upload_module_questions():
                 doc['question_type'] = question_type
                 
                 if question_type == 'compiler_integrated':
-                    doc['testCases'] = q.get('testCases', '')
-                    doc['expectedOutput'] = q.get('expectedOutput', '')
-                    doc['language'] = q.get('language', 'python')
+                doc['testCases'] = q.get('testCases', '')
+                doc['expectedOutput'] = q.get('expectedOutput', '')
+                doc['language'] = q.get('language', 'python')
                     doc['testCaseId'] = q.get('testCaseId', '')
                 elif question_type == 'mcq':
                     # MCQ format for technical questions

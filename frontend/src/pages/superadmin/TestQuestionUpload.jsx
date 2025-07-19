@@ -144,16 +144,16 @@ export default function TestQuestionUpload({ questions, setQuestions, moduleName
             } else {
               // Legacy format - try to parse as old technical format
               parsedQuestions.push({
-                question: row.Question || row.question || '',
-                testCases: row.TestCases || row.testCases || '',
-                expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
-                language: row.Language || row.language || 'python',
+              question: row.Question || row.question || '',
+              testCases: row.TestCases || row.testCases || '',
+              expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
+              language: row.Language || row.language || 'python',
                 questionType: 'compiler_integrated',
                 // For compatibility with existing system
-                optionA: 'A',
-                optionB: 'B', 
-                optionC: 'C',
-                optionD: 'D',
+              optionA: 'A',
+              optionB: 'B', 
+              optionC: 'C',
+              optionD: 'D',
                 answer: 'A'
               });
             }
@@ -230,17 +230,17 @@ export default function TestQuestionUpload({ questions, setQuestions, moduleName
             } else {
               // Legacy format - try to parse as old technical format
               parsedQuestions.push({
-                question: row.Question || row.question || '',
-                testCases: row.TestCases || row.testCases || '',
-                expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
-                language: row.Language || row.language || 'python',
+              question: row.Question || row.question || '',
+              testCases: row.TestCases || row.testCases || '',
+              expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
+              language: row.Language || row.language || 'python',
                 questionType: 'compiler_integrated',
                 // For compatibility with existing system
-                optionA: 'A',
-                optionB: 'B',
-                optionC: 'C', 
-                optionD: 'D',
-                answer: 'A'
+              optionA: 'A',
+              optionB: 'B',
+              optionC: 'C', 
+              optionD: 'D',
+              answer: 'A'
               });
             }
           } else if (isSentenceModule) {
@@ -427,17 +427,17 @@ export default function TestQuestionUpload({ questions, setQuestions, moduleName
                         <div className="space-y-2 text-sm text-gray-600">
                           {q.questionType === 'compiler_integrated' ? (
                             <>
-                              <div className="p-2 bg-white rounded border">
-                                <strong>Test Cases:</strong>
-                                <pre className="mt-1 text-xs font-mono bg-gray-50 p-2 rounded">{q.testCases}</pre>
-                              </div>
-                              <div className="p-2 bg-white rounded border">
-                                <strong>Expected Output:</strong>
-                                <pre className="mt-1 text-xs font-mono bg-gray-50 p-2 rounded">{q.expectedOutput}</pre>
-                              </div>
-                              <div className="p-2 bg-white rounded border">
-                                <strong>Language:</strong> {q.language}
-                              </div>
+                          <div className="p-2 bg-white rounded border">
+                            <strong>Test Cases:</strong>
+                            <pre className="mt-1 text-xs font-mono bg-gray-50 p-2 rounded">{q.testCases}</pre>
+                          </div>
+                          <div className="p-2 bg-white rounded border">
+                            <strong>Expected Output:</strong>
+                            <pre className="mt-1 text-xs font-mono bg-gray-50 p-2 rounded">{q.expectedOutput}</pre>
+                          </div>
+                          <div className="p-2 bg-white rounded border">
+                            <strong>Language:</strong> {q.language}
+                          </div>
                               {q.testCaseId && (
                                 <div className="p-2 bg-white rounded border">
                                   <strong>Test Case ID:</strong> {q.testCaseId}

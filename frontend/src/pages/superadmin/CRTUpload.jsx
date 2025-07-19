@@ -72,11 +72,16 @@ const CRTUpload = () => {
     try {
       const response = await api.get('/test-management/crt-topics');
       if (response.data.success) {
-        // Filter topics for the selected module
-        const moduleTopics = response.data.data.filter(topic => 
-          topic.module_id === `CRT_${selectedModule}`
-        );
-        setTopics(moduleTopics);
+        if (viewMode === 'topics' && !selectedModule) {
+          // Show all topics when accessed from main page
+          setTopics(response.data.data);
+        } else {
+          // Filter topics for the selected module
+          const moduleTopics = response.data.data.filter(topic => 
+            topic.module_id === `CRT_${selectedModule}`
+          );
+          setTopics(moduleTopics);
+        }
       }
     } catch (error) {
       console.error('Error fetching topics:', error);
@@ -121,6 +126,7 @@ const CRTUpload = () => {
         toast.success('Topic updated successfully!');
         setShowEditTopicModal(false);
         setEditingTopic(null);
+        setNewTopicName('');
         fetchTopicsForModule();
       } else {
         toast.error(response.data.message || 'Failed to update topic');
@@ -483,16 +489,16 @@ const CRTUpload = () => {
               } else {
                 // Legacy format - try to parse as old technical format
                 parsedQuestions.push({
-                  question: row.Question || row.question || '',
-                  testCases: row.TestCases || row.testCases || '',
-                  expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
-                  language: row.Language || row.language || 'python',
+              question: row.Question || row.question || '',
+              testCases: row.TestCases || row.testCases || '',
+              expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
+              language: row.Language || row.language || 'python',
                   questionType: 'compiler_integrated',
                   // For compatibility with existing system
-                  optionA: 'A',
-                  optionB: 'B', 
-                  optionC: 'C',
-                  optionD: 'D',
+              optionA: 'A',
+              optionB: 'B', 
+              optionC: 'C',
+              optionD: 'D',
                   answer: 'A'
                 });
               }
@@ -539,17 +545,17 @@ const CRTUpload = () => {
               } else {
                 // Legacy format - try to parse as old technical format
                 parsedQuestions.push({
-                  question: row.Question || row.question || '',
-                  testCases: row.TestCases || row.testCases || '',
-                  expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
-                  language: row.Language || row.language || 'python',
+              question: row.Question || row.question || '',
+              testCases: row.TestCases || row.testCases || '',
+              expectedOutput: row.ExpectedOutput || row.expectedOutput || row.ExpectedOu || '',
+              language: row.Language || row.language || 'python',
                   questionType: 'compiler_integrated',
                   // For compatibility with existing system
-                  optionA: 'A',
-                  optionB: 'B',
-                  optionC: 'C', 
-                  optionD: 'D',
-                  answer: 'A'
+              optionA: 'A',
+              optionB: 'B',
+              optionC: 'C', 
+              optionD: 'D',
+              answer: 'A'
                 });
               }
             });
@@ -716,6 +722,18 @@ const CRTUpload = () => {
           Upload and manage CRT (Aptitude, Reasoning, Technical) questions for your question bank.
           Select a module to get started.
         </p>
+        <div className="mt-6">
+          <button
+            onClick={() => {
+              setSelectedModule('APTITUDE'); // Default module for topic management
+              setCurrentStep('upload');
+              setViewMode('topics');
+            }}
+            className="bg-purple-500 text-white px-6 py-3 rounded-md hover:bg-purple-600 transition-colors mr-4"
+          >
+            Manage All Topics
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -779,12 +797,20 @@ const CRTUpload = () => {
           <h1 className="text-3xl font-bold text-gray-900">Upload CRT Questions</h1>
           <p className="text-gray-600">Module: {CRT_MODULES.find(m => m.id === selectedModule)?.name}</p>
         </div>
-        <button
-          onClick={handleBackToModules}
-          className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors"
-        >
-          Back to Modules
-        </button>
+        <div className="flex space-x-3">
+          <button
+            onClick={() => setViewMode('topics')}
+            className="bg-purple-500 text-white px-4 py-2 rounded-md hover:bg-purple-600 transition-colors"
+          >
+            Manage Topics
+          </button>
+          <button
+            onClick={handleBackToModules}
+            className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors"
+          >
+            Back to Modules
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -1025,6 +1051,248 @@ const CRTUpload = () => {
     </motion.div>
   );
 
+  const renderTopicsView = () => (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Topic Management</h1>
+          <p className="text-gray-600">
+            {selectedModule 
+              ? `Module: ${CRT_MODULES.find(m => m.id === selectedModule)?.name}`
+              : 'All CRT Modules'
+            }
+          </p>
+        </div>
+        <div className="flex space-x-3">
+          <button
+            onClick={() => setShowCreateTopicModal(true)}
+            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+          >
+            Create New Topic
+          </button>
+          <button
+            onClick={handleBackToUpload}
+            className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors"
+          >
+            Back to Upload
+          </button>
+        </div>
+      </div>
+
+      {topics.length === 0 ? (
+        <div className="bg-white rounded-lg shadow-md p-8 text-center">
+          <div className="text-6xl mb-4">📚</div>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">No Topics Created Yet</h3>
+          <p className="text-gray-600 mb-4">Create your first topic to start organizing questions</p>
+          <button
+            onClick={() => setShowCreateTopicModal(true)}
+            className="bg-blue-500 text-white px-6 py-3 rounded-md hover:bg-blue-600 transition-colors"
+          >
+            Create First Topic
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {topics.map((topic) => (
+            <motion.div
+              key={topic._id}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 cursor-pointer transition-all duration-300 hover:shadow-xl"
+              onClick={() => handleViewTopicQuestions(topic)}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 flex items-center justify-center text-white text-lg font-semibold">
+                  {topic.topic_name.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingTopic(topic);
+                      setNewTopicName(topic.topic_name);
+                      setShowEditTopicModal(true);
+                    }}
+                    className="text-blue-500 hover:text-blue-700 text-sm p-1"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteTopic(topic._id);
+                    }}
+                    className="text-red-500 hover:text-red-700 text-sm p-1"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+              
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">{topic.topic_name}</h3>
+              <p className="text-sm text-gray-600 mb-3">
+                {topic.description || 'No description'}
+                {!selectedModule && (
+                  <span className="block mt-1 text-xs text-blue-600">
+                    Module: {topic.module_id?.replace('CRT_', '') || 'Unknown'}
+                  </span>
+                )}
+              </p>
+              
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">
+                  {topic.question_count || 0} questions
+                </span>
+                <span className="text-green-600 font-medium">
+                  {topic.completion_percentage || 0}% complete
+                </span>
+              </div>
+              
+              <div className="mt-3 w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${topic.completion_percentage || 0}%` }}
+                ></div>
+              </div>
+              
+              <div className="mt-4 text-center">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleViewTopicQuestions(topic);
+                  }}
+                  className="w-full bg-blue-500 text-white py-2 px-4 rounded-md text-sm hover:bg-blue-600 transition-colors"
+                >
+                  View Questions
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </motion.div>
+  );
+
+  const renderTopicQuestionsView = () => (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Topic Questions</h1>
+          <p className="text-gray-600">
+            {selectedTopicForView?.topic_name} - {CRT_MODULES.find(m => m.id === selectedModule)?.name}
+          </p>
+        </div>
+        <div className="flex space-x-3">
+          <button
+            onClick={() => setShowAddQuestion(true)}
+            className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors"
+          >
+            Add Question
+          </button>
+          <button
+            onClick={handleBackToTopics}
+            className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors"
+          >
+            Back to Topics
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-900">
+            Questions in "{selectedTopicForView?.topic_name}"
+          </h2>
+          <input
+            type="text"
+            placeholder="Search questions..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {topicQuestions.length === 0 ? (
+          <div className="text-center py-8">
+            <div className="text-4xl mb-4">❓</div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No Questions Yet</h3>
+            <p className="text-gray-600 mb-4">This topic doesn't have any questions yet.</p>
+            <button
+              onClick={() => setShowAddQuestion(true)}
+              className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+            >
+              Add First Question
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {topicQuestions.map((question, index) => (
+              <div key={question._id || index} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-900">Question {index + 1}</span>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => handleEditQuestion(question)}
+                      className="text-blue-500 hover:text-blue-700 text-sm"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteQuestion(question._id)}
+                      className="text-red-500 hover:text-red-700 text-sm"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                <p className="text-gray-900 mb-2">{question.question}</p>
+                
+                {selectedModule === 'TECHNICAL' ? (
+                  <div className="space-y-2 text-sm">
+                    <div className="p-2 bg-gray-50 rounded border">
+                      <strong>Test Cases:</strong>
+                      <pre className="mt-1 text-xs font-mono bg-white p-2 rounded border">{question.testCases || 'N/A'}</pre>
+                    </div>
+                    <div className="p-2 bg-gray-50 rounded border">
+                      <strong>Expected Output:</strong>
+                      <pre className="mt-1 text-xs font-mono bg-white p-2 rounded border">{question.expectedOutput || 'N/A'}</pre>
+                    </div>
+                    <div className="p-2 bg-gray-50 rounded border">
+                      <strong>Language:</strong> {question.language || 'python'}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>A: {question.optionA}</div>
+                    <div>B: {question.optionB}</div>
+                    <div>C: {question.optionC}</div>
+                    <div>D: {question.optionD}</div>
+                  </div>
+                )}
+                
+                {selectedModule !== 'TECHNICAL' && (
+                  <div className="mt-2 text-sm font-medium text-green-600">
+                    Answer: {question.answer}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+
   const renderEditQuestionModal = () => (
     editingQuestion && (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1062,7 +1330,13 @@ const CRTUpload = () => {
         <Header />
         <div className="px-4 mt-6">
           {currentStep === 'modules' && renderModuleCards()}
-          {currentStep === 'upload' && renderUploadSection()}
+          {currentStep === 'upload' && (
+            <>
+              {viewMode === 'topics' && renderTopicsView()}
+              {viewMode === 'topic-questions' && renderTopicQuestionsView()}
+              {viewMode === 'upload' && renderUploadSection()}
+            </>
+          )}
           {currentStep === 'questions' && renderFileDetails()}
         </div>
       </div>
@@ -1078,6 +1352,18 @@ const CRTUpload = () => {
         topicName={newTopicName}
         setTopicName={setNewTopicName}
         selectedModule={selectedModule}
+      />
+      <EditTopicModal
+        isOpen={showEditTopicModal}
+        onClose={() => {
+          setShowEditTopicModal(false);
+          setEditingTopic(null);
+          setNewTopicName('');
+        }}
+        onSave={handleEditTopic}
+        topic={editingTopic}
+        topicName={newTopicName}
+        setTopicName={setNewTopicName}
       />
     </div>
   );
@@ -1426,6 +1712,47 @@ const CreateTopicModal = ({ isOpen, onClose, onCreate, topicName, setTopicName, 
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               Create Topic
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Edit Topic Modal Component
+const EditTopicModal = ({ isOpen, onClose, onSave, topic, topicName, setTopicName }) => {
+  if (!isOpen || !topic) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Topic</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Topic Name
+            </label>
+            <input
+              type="text"
+              value={topicName}
+              onChange={(e) => setTopicName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter topic name"
+            />
+          </div>
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => onSave(topic._id, topicName)}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Save Changes
             </button>
           </div>
         </div>
