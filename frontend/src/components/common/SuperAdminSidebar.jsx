@@ -235,7 +235,7 @@ const SuperAdminSidebar = () => {
         }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         className={`fixed top-0 left-0 h-screen w-64 bg-gradient-to-b from-white to-gray-50 shadow-2xl z-30 flex flex-col border-r border-gray-200 lg:relative lg:translate-x-0 lg:z-auto ${
-          isMobileMenuOpen ? 'translate-x-0' : 'lg:translate-x-0 -translate-x-full'
+          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
         {/* Logo/Brand */}
