@@ -213,7 +213,7 @@ const SuperAdminSidebar = () => {
   const isActive = (path) => location.pathname.startsWith(path)
 
   return (
-    <div className="flex">
+    <div className="flex h-screen">
       {/* Mobile Menu Toggle */}
       <div className="lg:hidden fixed top-4 left-4 z-50">
         <button
@@ -234,7 +234,7 @@ const SuperAdminSidebar = () => {
           x: isMobileMenuOpen ? 0 : '-100%'
         }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-        className={`fixed top-0 left-0 h-screen w-64 bg-gradient-to-b from-white to-gray-50 shadow-2xl z-30 flex flex-col border-r border-gray-200 lg:relative lg:translate-x-0 lg:z-auto ${
+        className={`fixed lg:relative top-0 left-0 h-screen w-64 bg-gradient-to-b from-white to-gray-50 shadow-2xl z-30 lg:z-auto flex flex-col border-r border-gray-200 ${
           isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
@@ -403,9 +403,11 @@ const SuperAdminSidebar = () => {
       </motion.div>
       
       {/* Main Content */}
-      <div className="flex-1 bg-gray-50 w-full lg:ml-64">
+      <div className="flex-1 bg-gray-50 w-full lg:ml-64 flex flex-col min-h-screen">
         <Header />
-        <Outlet />
+        <div className="flex-1 overflow-auto">
+          <Outlet />
+        </div>
       </div>
     </div>
   )
