@@ -31,8 +31,8 @@ def create_app():
     
     # CORS configuration with Vercel domain included
     # IMPORTANT: Set CORS_ORIGINS in your environment variables to include your frontend URL, e.g.:
-    # CORS_ORIGINS=https://pydah-ai-versant.vercel.app,http://localhost:3000
-    default_origins = 'http://localhost:3000,http://localhost:5173,https://pydah-ai-versant.vercel.app'
+    # CORS_ORIGINS=https://pydah-studyedge.vercel.app,http://localhost:3000
+    default_origins = 'http://localhost:3000,http://localhost:5173,https://pydah-studyedge.vercel.app'
     cors_origins = os.getenv('CORS_ORIGINS', default_origins)
     CORS(app, origins=cors_origins.split(','), supports_credentials=True, allow_headers=["Content-Type", "Authorization"])
     

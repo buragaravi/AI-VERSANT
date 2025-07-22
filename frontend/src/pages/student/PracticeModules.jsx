@@ -173,7 +173,7 @@ const PracticeModules = () => {
 
   useEffect(() => {
     if (!user || !user._id) return;
-    const socket = io(process.env.VITE_SOCKET_IO_URL || 'https://pydah-ai-versant-backend-url', {
+    const socket = io(process.env.VITE_SOCKET_IO_URL || 'https://versant-backend.onrender.com', {
       transports: ['websocket'],
       auth: { token: localStorage.getItem('token') },
     });

@@ -26,7 +26,7 @@ bcrypt.init_app(app)
 socketio.init_app(app)
 
 # CORS configuration
-CORS(app, origins=os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:5173,https://pydah-ai-versant.vercel.app').split(','), supports_credentials=True, allow_headers=["Content-Type", "Authorization"])
+CORS(app, origins=os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:5173,https://pydah-studyedge.vercel.app').split(','), supports_credentials=True, allow_headers=["Content-Type", "Authorization"])
 
 # Root route for API status
 @app.route('/')
