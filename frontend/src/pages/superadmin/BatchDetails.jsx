@@ -456,7 +456,8 @@ const BatchDetails = () => {
     }
 
     return (
-        <main className="px-6 lg:px-10 py-12">
+        <>
+            <main className="px-6 lg:px-10 py-12">
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                         <div className="flex justify-between items-center mb-8">
                             <div>
@@ -538,7 +539,6 @@ const BatchDetails = () => {
                         </div>
                     </motion.div>
                 </main>
-            </div>
             {/* Student Modules Modal */}
             {isStudentModulesModalOpen && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
@@ -813,7 +813,7 @@ const BatchDetails = () => {
                 errors={detailedErrors}
                 title="Upload Errors"
             />
-        </div>
+        </>
     );
 };
 

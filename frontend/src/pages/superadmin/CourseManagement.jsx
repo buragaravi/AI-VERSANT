@@ -149,7 +149,8 @@ const CourseManagement = () => {
     };
 
     return (
-        <main className="px-6 lg:px-10 py-8">
+        <>
+            <main className="px-6 lg:px-10 py-8">
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                         <div className="flex justify-between items-center mb-8">
                             <div>
@@ -267,7 +268,6 @@ const CourseManagement = () => {
                         </div>
                     </motion.div>
                 </main>
-            </div>
             <AnimatePresence>
                 {isModalOpen && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -295,7 +295,7 @@ const CourseManagement = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </div>
+        </>
     );
 };
 

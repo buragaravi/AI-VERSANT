@@ -301,21 +301,14 @@ const BatchManagement = () => {
 
   if (loading) {
     return (
-      <div className="bg-gray-100 min-h-screen">
-        
-        <Header />
-        <main className="ml-64 p-6 flex items-center justify-center min-h-[calc(100vh-4rem)]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </main>
-      </div>
+      <main className="p-6 flex items-center justify-center min-h-[calc(100vh-4rem)]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </main>
     );
   }
 
   return (
-    <div className="bg-gray-100 min-h-screen">
-      
-      <Header />
-      <main className="ml-64 p-6">
+    <main className="p-6">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
@@ -687,7 +680,6 @@ const BatchManagement = () => {
           </div>
         )}
       </main>
-    </div>
   );
 };
 

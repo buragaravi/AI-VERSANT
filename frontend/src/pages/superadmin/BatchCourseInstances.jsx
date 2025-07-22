@@ -191,21 +191,14 @@ const BatchCourseInstances = () => {
 
   if (loading) {
     return (
-      <div className="bg-gray-100 min-h-screen">
-        
-        <Header />
-        <main className="ml-64 p-6 flex items-center justify-center min-h-[calc(100vh-4rem)]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </main>
-      </div>
+      <main className="p-6 flex items-center justify-center min-h-[calc(100vh-4rem)]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </main>
     );
   }
 
   return (
-    <div className="bg-gray-100 min-h-screen">
-      
-      <Header />
-      <main className="ml-64 p-6">
+    <main className="p-6">
         {/* Create Batch Modal */}
         {showCreateBatch && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
@@ -505,7 +498,6 @@ const BatchCourseInstances = () => {
           )}
 
         </main>
-      </div>
   );
 };
 

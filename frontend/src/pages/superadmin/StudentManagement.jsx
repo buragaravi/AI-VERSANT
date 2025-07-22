@@ -293,7 +293,8 @@ const StudentManagement = () => {
     }, [accessStatus]);
 
     return (
-        <main className="px-4 mt-6">
+        <>
+            <main className="px-4 mt-6">
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                         <div className="flex justify-between items-center mb-8">
                             <div>
@@ -541,7 +542,7 @@ const StudentManagement = () => {
             {unlockMsg && (
                 <div className="fixed top-8 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg z-50 text-lg font-semibold animate-fade-in">{unlockMsg}</div>
             )}
-        </div>
+        </>
     );
 };
 

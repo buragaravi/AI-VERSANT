@@ -151,27 +151,28 @@ const UserManagement = () => {
     }
 
     return (
-        <main className="px-6 lg:px-10 py-12 bg-background min-h-screen">
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-                        <h1 className="text-4xl font-extrabold text-headline mb-2 tracking-tight">User Management</h1>
-                        <p className="text-paragraph mb-10 text-lg">A centralized hub for managing all user roles.</p>
-                        
-                        {loading ? <LoadingSpinner /> : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                {Object.values(cardDetails).map(details => (
-                                    <StatCard 
-                                        key={details.dataKey}
-                                        title={details.title}
-                                        count={counts[details.dataKey]}
-                                        icon={details.icon}
-                                        color={details.color}
-                                        onClick={() => openModal(details.dataKey)}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </motion.div>
-                </main>
+        <>
+            <main className="px-6 lg:px-10 py-12 bg-background min-h-screen">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+                    <h1 className="text-4xl font-extrabold text-headline mb-2 tracking-tight">User Management</h1>
+                    <p className="text-paragraph mb-10 text-lg">A centralized hub for managing all user roles.</p>
+                    
+                    {loading ? <LoadingSpinner /> : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                            {Object.values(cardDetails).map(details => (
+                                <StatCard 
+                                    key={details.dataKey}
+                                    title={details.title}
+                                    count={counts[details.dataKey]}
+                                    icon={details.icon}
+                                    color={details.color}
+                                    onClick={() => openModal(details.dataKey)}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </motion.div>
+            </main>
             <AnimatePresence>
                 {isModalOpen && (
                      <UserListModal 
@@ -185,6 +186,7 @@ const UserManagement = () => {
                     />
                 )}
             </AnimatePresence>
+        </>
     );
 };
 

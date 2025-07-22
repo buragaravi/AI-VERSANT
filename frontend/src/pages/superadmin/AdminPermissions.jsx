@@ -110,12 +110,13 @@ const AdminPermissions = () => {
   };
 
   return (
-    <main className="px-6 lg:px-10 py-12 bg-background min-h-screen">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            transition={{ duration: 0.5 }}
-          >
+    <>
+      <main className="px-6 lg:px-10 py-12 bg-background min-h-screen">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          transition={{ duration: 0.5 }}
+        >
             <div className="flex items-center gap-3 mb-6">
               <div className="p-3 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl">
                 <Shield className="h-8 w-8 text-white" />
@@ -275,7 +276,6 @@ const AdminPermissions = () => {
             )}
           </motion.div>
         </main>
-      </div>
 
       <AnimatePresence>
         {isPermissionModalOpen && selectedAdmin && (
@@ -302,7 +302,7 @@ const AdminPermissions = () => {
           />
         )}
       </AnimatePresence>
-    </div>
+    </>
   );
 };
 
