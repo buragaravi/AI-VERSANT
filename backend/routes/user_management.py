@@ -386,7 +386,7 @@ def update_user(user_id):
             if user:
                 name = user.get('name', 'User')
                 email = user.get('email')
-                login_url = "https://pydah-ai-versant.vercel.app/login"
+                login_url = "https://pydah-studyedge.vercel.app/login"
                 html_content = render_template(
                     'reset_password_notification.html',
                     params={
@@ -493,7 +493,7 @@ def send_credentials_again(user_id):
                     'username': username,
                     'email': user.get('email', ''),
                     'password': password,
-                    'login_url': "https://pydah-ai-versant.vercel.app/login"
+                    'login_url': "https://pydah-studyedge.vercel.app/login"
                 }
             )
             send_email(

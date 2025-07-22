@@ -193,7 +193,7 @@ def create_course(campus_id):
                     'username': admin_name,
                     'email': admin_email,
                     'password': admin_password,
-                    'login_url': "https://pydah-ai-versant.vercel.app/login"
+                    'login_url': "https://pydah-studyedge.vercel.app/login"
                 }
             )
             send_email(

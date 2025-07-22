@@ -4,7 +4,12 @@ import axios from 'axios'
 // In development, use the Vite proxy (/api)
 // In production, use the full URL
 const isDevelopment = import.meta.env.DEV
-const API_URL = import.meta.env.VITE_API_URL || (isDevelopment ? '/api' : 'https://versant-backend.onrender.com')
+let API_URL = import.meta.env.VITE_API_URL || (isDevelopment ? '/api' : 'https://versant-backend.onrender.com')
+
+// Fix for incorrect backend URL - ensure we use the correct backend
+if (API_URL.includes('ai-versant-backend.onrender.com')) {
+  API_URL = 'https://versant-backend.onrender.com'
+}
 
 console.log('API Service - VITE_API_URL:', import.meta.env.VITE_API_URL)
 console.log('API Service - DEV mode:', isDevelopment)

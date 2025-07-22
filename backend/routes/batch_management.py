@@ -282,7 +282,7 @@ def create_batch():
                         'username': username,
                         'email': student['email_id'],
                         'password': password,
-                        'login_url': "https://pydah-ai-versant.vercel.app/login"
+                        'login_url': "https://pydah-studyedge.vercel.app/login"
                     }
                 )
                 send_email(
@@ -1090,7 +1090,7 @@ def create_batch_with_students():
                     'username': student_details['username'],
                     'email': student_details['email'],
                     'password': student_details['password'],
-                    'login_url': "https://pydah-ai-versant.vercel.app/login"
+                    'login_url': "https://pydah-studyedge.vercel.app/login"
                 })
                 send_email(to_email=student_details['email'], to_name=student_details['student_name'], subject="Welcome to VERSANT - Your Student Credentials", html_content=html_content)
              except Exception as email_error:
@@ -1364,7 +1364,7 @@ def add_students_to_batch(batch_id):
                         'username': username,
                         'email': student['email'],
                         'password': password,
-                        'login_url': "https://pydah-ai-versant.vercel.app/login"
+                        'login_url': "https://pydah-studyedge.vercel.app/login"
                     })
                     send_email(to_email=student['email'], to_name=student['student_name'], subject="Welcome to VERSANT - Your Student Credentials", html_content=html_content)
                 except Exception as e:
@@ -1453,7 +1453,7 @@ def add_single_student():
                     'username': roll_number,
                     'email': email,
                     'password': password,
-                    'login_url': "https://pydah-ai-versant.vercel.app/login"
+                    'login_url': "https://pydah-studyedge.vercel.app/login"
                 }
             )
             send_email(
