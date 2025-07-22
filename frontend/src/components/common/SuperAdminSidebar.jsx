@@ -226,7 +226,174 @@ const SuperAdminSidebar = () => {
         </button>
       </div>
 
-      {/* Sidebar */}
+      {/* Sidebar - Always visible on large screens */}
+      <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 lg:z-50">
+        <div className="flex flex-col flex-grow bg-gradient-to-b from-white to-gray-50 shadow-2xl border-r border-gray-200">
+        {/* Logo/Brand */}
+        <motion.div 
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.1, type: 'spring', stiffness: 100 }}
+          className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 flex-shrink-0"
+        >
+          <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+            Study Edge
+          </h1>
+          <p className="text-xs text-gray-600 font-medium">
+            {user?.role === 'campus_admin' ? 'Campus Admin Portal' : 
+             user?.role === 'course_admin' ? 'Course Admin Portal' : 
+             'Super Admin Portal'}
+          </p>
+          {(user?.role === 'campus_admin' || user?.role === 'course_admin') && (
+            <div className="mt-1 p-1.5 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-xs text-yellow-700 font-medium">
+                ⚠️ Upload features are restricted
+              </p>
+            </div>
+          )}
+        </motion.div>
+
+        <nav className="flex-1 flex flex-col justify-between min-h-0">
+          <div className="flex flex-col space-y-1 px-4 mt-4 overflow-y-auto flex-1 pb-4">
+            {navLinks.length > 0 ? (
+              <div className="space-y-1">
+                {navLinks.map((link, idx) => {
+                  const isRestricted = link.isUpload && (user?.role === 'campus_admin' || user?.role === 'course_admin')
+                  
+                  return (
+                    <motion.div
+                      key={link.name}
+                      initial={{ x: -30, opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      transition={{ delay: 0.05 * idx, type: 'spring', stiffness: 80, damping: 18 }}
+                      whileHover={{ scale: isRestricted ? 1 : 1.02 }}
+                      whileTap={{ scale: isRestricted ? 1 : 0.98 }}
+                    >
+                      <Link
+                        to={isRestricted ? '#' : link.path}
+                        onClick={(e) => {
+                          if (isRestricted) {
+                            e.preventDefault()
+                            toast.error('Upload features are restricted for your role. Please contact a Super Admin for assistance.')
+                          } else {
+                            // Close mobile menu on navigation
+                            setIsMobileMenuOpen(false)
+                          }
+                        }}
+                        className={`group flex items-center px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-300 relative overflow-hidden
+                          ${isActive(link.path) && !isRestricted
+                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105'
+                            : isRestricted
+                            ? 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed opacity-75'
+                            : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 hover:text-gray-900 hover:shadow-md'
+                          }
+                        `}
+                        title={isRestricted ? 'Upload features are restricted for your role' : undefined}
+                      >
+                        {/* Active indicator */}
+                        {isActive(link.path) && !isRestricted && (
+                          <motion.div
+                            layoutId="activeTab"
+                            className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl"
+                            initial={false}
+                            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                          />
+                        )}
+                        
+                        <link.icon className={`mr-3 h-4 w-4 transition-all duration-300 relative z-10
+                          ${isActive(link.path) && !isRestricted
+                            ? 'text-white' 
+                            : isRestricted
+                            ? 'text-gray-400'
+                            : 'text-gray-500 group-hover:text-blue-600 group-hover:scale-110'
+                          }`} 
+                        />
+                        <span className="relative z-10 transition-all duration-300 group-hover:translate-x-1 font-semibold text-sm">
+                          {link.name}
+                        </span>
+                        
+                        {/* Restriction indicator */}
+                        {isRestricted && (
+                          <svg className="ml-auto h-3 w-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                        )}
+                        
+                        {/* Hover effect */}
+                        {!isActive(link.path) && !isRestricted && (
+                          <motion.div
+                            className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 rounded-xl"
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            whileHover={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.2 }}
+                          />
+                        )}
+                      </Link>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            ) : (
+              // Fallback navigation if no links are loaded
+              <div className="space-y-2">
+                <div className="text-sm text-gray-500 mb-4">Loading navigation...</div>
+                <Link
+                  to="/superadmin/dashboard"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="group flex items-center px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-300 text-gray-700 hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 hover:text-gray-900 hover:shadow-md"
+                >
+                  <LayoutDashboard className="mr-3 h-4 w-4 text-gray-500 group-hover:text-blue-600" />
+                  <span className="text-sm">Dashboard</span>
+                </Link>
+                <Link
+                  to="/superadmin/question-bank-upload"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="group flex items-center px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-300 text-gray-700 hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 hover:text-gray-900 hover:shadow-md"
+                >
+                  <FilePlus className="mr-3 h-4 w-4 text-gray-500 group-hover:text-blue-600" />
+                  <span className="text-sm">Question Bank Upload</span>
+                </Link>
+                <Link
+                  to="/superadmin/crt-upload"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="group flex items-center px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-300 text-gray-700 hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 hover:text-gray-900 hover:shadow-md"
+                >
+                  <FilePlus className="mr-3 h-4 w-4 text-gray-500 group-hover:text-blue-600" />
+                  <span className="text-sm">CRT Upload</span>
+                </Link>
+              </div>
+            )}
+          </div>
+        </nav>
+        
+        {/* Logout Button */}
+        <motion.div 
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.3, type: 'spring', stiffness: 100 }}
+          className="px-4 pb-4 mt-auto flex-shrink-0"
+        >
+          <button
+            onClick={() => {
+              handleLogout()
+              setIsMobileMenuOpen(false)
+            }}
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white font-semibold px-3 py-2.5 rounded-xl hover:from-gray-700 hover:to-gray-800 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 text-sm"
+          >
+            <motion.div
+              whileHover={{ rotate: 180 }}
+              transition={{ duration: 0.3 }}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </motion.div>
+            Logout
+          </button>
+        </motion.div>
+      </div>
+
+      {/* Mobile Sidebar */}
       <motion.div
         data-sidebar
         initial={false}
@@ -234,8 +401,8 @@ const SuperAdminSidebar = () => {
           x: isMobileMenuOpen ? 0 : '-100%'
         }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-        className={`fixed lg:relative top-0 left-0 h-screen w-64 bg-gradient-to-b from-white to-gray-50 shadow-2xl z-30 lg:z-auto flex flex-col border-r border-gray-200 ${
-          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        className={`lg:hidden fixed top-0 left-0 h-screen w-64 bg-gradient-to-b from-white to-gray-50 shadow-2xl z-30 flex flex-col border-r border-gray-200 ${
+          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Logo/Brand */}
