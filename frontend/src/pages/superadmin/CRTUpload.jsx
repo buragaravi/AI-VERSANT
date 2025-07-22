@@ -4,8 +4,6 @@ import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { toast } from 'react-hot-toast';
 import api from '../../services/api';
-import Header from '../../components/common/Header';
-import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
 
 const CRT_MODULES = [
   { 
@@ -1324,21 +1322,17 @@ const CRTUpload = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <SuperAdminSidebar />
-      <div className="flex-1">
-        <Header />
-        <div className="px-4 mt-6">
-          {currentStep === 'modules' && renderModuleCards()}
-          {currentStep === 'upload' && (
-            <>
-              {viewMode === 'topics' && renderTopicsView()}
-              {viewMode === 'topic-questions' && renderTopicQuestionsView()}
-              {viewMode === 'upload' && renderUploadSection()}
-            </>
-          )}
-          {currentStep === 'questions' && renderFileDetails()}
-        </div>
+    <>
+      <div className="px-4 mt-6">
+        {currentStep === 'modules' && renderModuleCards()}
+        {currentStep === 'upload' && (
+          <>
+            {viewMode === 'topics' && renderTopicsView()}
+            {viewMode === 'topic-questions' && renderTopicQuestionsView()}
+            {viewMode === 'upload' && renderUploadSection()}
+          </>
+        )}
+        {currentStep === 'questions' && renderFileDetails()}
       </div>
       {renderEditQuestionModal()}
       {renderAddQuestionModal()}
@@ -1365,7 +1359,7 @@ const CRTUpload = () => {
         topicName={newTopicName}
         setTopicName={setNewTopicName}
       />
-    </div>
+        </>
   );
 };
 

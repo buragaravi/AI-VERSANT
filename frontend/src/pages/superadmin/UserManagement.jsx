@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNotification } from '../../contexts/NotificationContext';
-import Header from '../../components/common/Header';
-import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
+
+
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { Users, Building, BookOpen, ChevronRight, X, ArrowLeft, Mail, Phone, KeyRound, Milestone, Search, Edit, Trash2, Save, XCircle } from 'lucide-react';
@@ -151,11 +151,7 @@ const UserManagement = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            <SuperAdminSidebar />
-            <div className="flex-1">
-                <Header />
-                <main className="px-6 lg:px-10 py-12 bg-background min-h-screen">
+        <main className="px-6 lg:px-10 py-12 bg-background min-h-screen">
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
                         <h1 className="text-4xl font-extrabold text-headline mb-2 tracking-tight">User Management</h1>
                         <p className="text-paragraph mb-10 text-lg">A centralized hub for managing all user roles.</p>
@@ -176,7 +172,6 @@ const UserManagement = () => {
                         )}
                     </motion.div>
                 </main>
-            </div>
             <AnimatePresence>
                 {isModalOpen && (
                      <UserListModal 
@@ -190,7 +185,6 @@ const UserManagement = () => {
                     />
                 )}
             </AnimatePresence>
-        </div>
     );
 };
 

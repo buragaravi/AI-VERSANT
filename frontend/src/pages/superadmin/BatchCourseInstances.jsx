@@ -3,8 +3,6 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import Papa from 'papaparse';
 import api from '../../services/api';
-import Header from '../../components/common/Header';
-import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
 import { Plus, Building, BookOpen, Users, X } from 'lucide-react';
 
 const BatchCourseInstances = () => {
@@ -194,7 +192,7 @@ const BatchCourseInstances = () => {
   if (loading) {
     return (
       <div className="bg-gray-100 min-h-screen">
-        <SuperAdminSidebar />
+        
         <Header />
         <main className="ml-64 p-6 flex items-center justify-center min-h-[calc(100vh-4rem)]">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -205,7 +203,7 @@ const BatchCourseInstances = () => {
 
   return (
     <div className="bg-gray-100 min-h-screen">
-      <SuperAdminSidebar />
+      
       <Header />
       <main className="ml-64 p-6">
         {/* Create Batch Modal */}

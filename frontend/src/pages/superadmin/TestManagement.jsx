@@ -4,8 +4,8 @@ import { useForm, Controller } from 'react-hook-form'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNotification } from '../../contexts/NotificationContext'
 import { useLocation, useNavigate } from 'react-router-dom'
-import Header from '../../components/common/Header'
-import SuperAdminSidebar from '../../components/common/SuperAdminSidebar'
+
+
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import api from '../../services/api'
 import { Upload, Plus, Trash2, ChevronLeft, ChevronRight, FileText, CheckCircle, Briefcase, Users, FileQuestion, Sparkles, Eye, Edit, MoreVertical, Play, Pause, AlertTriangle, ChevronDown, Code, Mic } from 'lucide-react'
@@ -235,15 +235,9 @@ const TestManagement = () => {
   }
 
   return (
-          <div className="min-h-screen bg-gray-50">
-      <SuperAdminSidebar onModuleUpload={() => setView('module-upload')} />
-                  <div className="flex-1">
-        <Header />
         <main className="px-6 lg:px-10 py-12">
           {renderContent()}
         </main>
-      </div>
-    </div>
   )
 }
 

@@ -3,8 +3,7 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNotification } from '../../contexts/NotificationContext'
-import Header from '../../components/common/Header'
-import SuperAdminSidebar from '../../components/common/SuperAdminSidebar'
+
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import api, { getCoursesByCampus, getCampuses } from '../../services/api'
 
@@ -140,11 +139,7 @@ const SuperAdminDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <SuperAdminSidebar />
-      <div className="flex-1">
-        <Header />
-        <div className="px-4 mt-6">
+    <div className="px-4 mt-6">
           {/* Statistics Cards */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -219,8 +214,6 @@ const SuperAdminDashboard = () => {
             </div>
           </motion.div>
         </div>
-      </div>
-    </div>
   )
 }
 

@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useNotification } from '../../contexts/NotificationContext';
-import Header from '../../components/common/Header';
-import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { BookOpen, User, Calendar, Percent, Filter, Building, Briefcase, GraduationCap, ChevronDown, ChevronUp, Volume2, CheckCircle, XCircle } from 'lucide-react';
@@ -70,11 +68,7 @@ const ResultsManagement = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            <SuperAdminSidebar />
-            <div className="flex-1">
-                <Header />
-                <main className="px-6 lg:px-10 py-12">
+        <main className="px-6 lg:px-10 py-12">
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                         <h1 className="text-3xl font-bold text-headline">Test Results</h1>
                         <p className="mt-2 text-paragraph">View and analyze results from all student test submissions.</p>
@@ -219,8 +213,6 @@ const ResultsManagement = () => {
                         </div>
                     </motion.div>
                 </main>
-            </div>
-        </div>
     );
 };
 

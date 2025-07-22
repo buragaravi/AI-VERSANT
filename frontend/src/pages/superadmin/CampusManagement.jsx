@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNotification } from '../../contexts/NotificationContext';
-import Header from '../../components/common/Header';
-import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
+
+
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { Building, PlusCircle, Search, Trash2, Edit, X, User, Mail, Key, ChevronDown, ChevronUp, BookOpen, Users } from 'lucide-react';
@@ -132,11 +132,7 @@ const CampusManagement = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            <SuperAdminSidebar />
-            <div className="flex-1">
-                <Header />
-                <main className="px-6 lg:px-10 py-12">
+        <main className="px-6 lg:px-10 py-12">
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                         <div className="flex justify-between items-center mb-8">
                             <div>

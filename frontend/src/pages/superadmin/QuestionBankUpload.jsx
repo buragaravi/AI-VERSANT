@@ -4,8 +4,6 @@ import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { toast } from 'react-hot-toast';
 import api from '../../services/api';
-import Header from '../../components/common/Header';
-import SuperAdminSidebar from '../../components/common/SuperAdminSidebar';
 import MCQUpload from './MCQUpload';
 
 const MCQ_MODULES = [
@@ -493,11 +491,7 @@ const QuestionBankUpload = () => {
   };
 
   const renderModuleCards = () => (
-    <div className="min-h-screen bg-gray-50">
-      <SuperAdminSidebar />
-      <div className="flex-1">
-        <Header />
-        <main className="px-4 mt-6">
+    <main className="px-4 mt-6">
         {/* Header */}
           <div className="mb-8">
             <h1 className="text-2xl font-semibold text-gray-800 mb-2">
@@ -594,16 +588,10 @@ const QuestionBankUpload = () => {
           </div>
         )}
         </main>
-      </div>
-          </div>
   );
 
   const renderLevelsSection = () => (
-    <div className="min-h-screen bg-gray-50">
-      <SuperAdminSidebar />
-      <div className="flex-1">
-        <Header />
-        <main className="px-4 mt-6">
+    <main className="px-4 mt-6">
         {/* Header */}
         <div className="mb-8">
           <button
@@ -689,19 +677,13 @@ const QuestionBankUpload = () => {
             )}
           </div>
         </main>
-      </div>
-              </div>
   );
 
   const renderUploadSection = () => {
     // Don't render if we don't have the required data
     if (!selectedModule || !selectedLevel) {
       return (
-        <div className="min-h-screen bg-gray-50">
-          <SuperAdminSidebar />
-          <div className="flex-1">
-            <Header />
-            <main className="px-4 mt-6">
+        <main className="px-4 mt-6">
               <div className="text-center py-12">
                 <div className="text-4xl mb-4">⚠️</div>
                 <p className="text-gray-500 text-lg">Missing module or level information</p>
@@ -713,17 +695,11 @@ const QuestionBankUpload = () => {
                 </button>
               </div>
             </main>
-          </div>
-        </div>
       );
     }
 
     return (
-    <div className="min-h-screen bg-gray-50">
-      <SuperAdminSidebar />
-      <div className="flex-1">
-        <Header />
-        <main className="px-4 mt-6">
+    <main className="px-4 mt-6">
           {/* Header */}
           <div className="mb-8">
             <button
@@ -893,8 +869,6 @@ const QuestionBankUpload = () => {
           )}
         </div>
         </main>
-      </div>
-    </div>
   );
   };
 
