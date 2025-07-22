@@ -525,7 +525,7 @@ def upload_students_to_batch():
         # Validate columns - support both formats
         columns = list(rows[0].keys()) if rows else []
         required_fields_v1 = ['Student Name', 'Roll Number', 'Email', 'Mobile Number']
-        required_fields_v2 = ['Campus Name', 'Course Name', 'Student Name', 'Roll Number', 'Email', 'Mobile Number']
+        required_fields_v2 = ['Group', 'Roll Number', 'Student Name', 'Email', 'Mobile Number']
         
         missing_fields_v1 = [field for field in required_fields_v1 if field not in columns]
         missing_fields_v2 = [field for field in required_fields_v2 if field not in columns]
@@ -534,7 +534,7 @@ def upload_students_to_batch():
             return jsonify({'success': False, 'message': f"Invalid file structure. Expected either: {', '.join(required_fields_v1)} OR {', '.join(required_fields_v2)}"}), 400
 
         # Determine file format
-        is_v2_format = 'Campus Name' in columns and 'Course Name' in columns
+        is_v2_format = 'Group' in columns
 
         # Fetch batch and campus info
         batch = mongo_db.batches.find_one({'_id': ObjectId(batch_id)})
@@ -566,19 +566,12 @@ def upload_students_to_batch():
                 roll_number = str(row.get('Roll Number', '')).strip()
                 email = str(row.get('Email', '')).strip().lower()
                 mobile_number = str(row.get('Mobile Number', '')).strip()
-                campus_name = str(row.get('Campus Name', '')).strip()
-                course_name = str(row.get('Course Name', '')).strip()
+                group_name = str(row.get('Group', '')).strip()
                 
-                # Validate campus and course for v2 format
-                campus = mongo_db.campuses.find_one({'_id': campus_id})
-                if campus and campus_name != campus.get('name', ''):
-                    errors.append(f"{student_name}: Campus '{campus_name}' doesn't match batch campus '{campus.get('name', '')}'.")
-                    continue
-                
-                # Find course by name
-                course = mongo_db.courses.find_one({'name': course_name, '_id': {'$in': [ObjectId(cid) for cid in course_ids]}})
+                # Find course by group name (assuming group name matches course name)
+                course = mongo_db.courses.find_one({'name': group_name, '_id': {'$in': [ObjectId(cid) for cid in course_ids]}})
                 if not course:
-                    errors.append(f"{student_name}: Course '{course_name}' not found in this batch.")
+                    errors.append(f"{student_name}: Course/Group '{group_name}' not found in this batch.")
                     continue
                 course_id = str(course['_id'])
             else:

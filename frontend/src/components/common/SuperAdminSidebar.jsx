@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
 import api from '../../services/api'
+import Header from './Header'
 
 const SuperAdminSidebar = () => {
   const location = useLocation()
@@ -403,6 +404,7 @@ const SuperAdminSidebar = () => {
       
       {/* Main Content */}
       <div className="flex-1 bg-gray-50 w-full lg:ml-64">
+        <Header />
         <Outlet />
       </div>
     </div>

@@ -24,7 +24,7 @@ const BatchManagement = () => {
   const [campuses, setCampuses] = useState([]);
   const [courses, setCourses] = useState([]);
   const [selectedCampus, setSelectedCampus] = useState('');
-  const [selectedCourse, setSelectedCourse] = useState('');
+  const [selectedCourses, setSelectedCourses] = useState([]);
   const [batchName, setBatchName] = useState('');
 
   const [creatingBatch, setCreatingBatch] = useState(false);
@@ -103,8 +103,8 @@ const BatchManagement = () => {
 
   const handleCreateBatch = async (e) => {
     e.preventDefault();
-    if (!batchName || !selectedCampus || !selectedCourse) {
-      toast.error('Please fill all required fields.');
+    if (!batchName || !selectedCampus || selectedCourses.length === 0) {
+      toast.error('Please fill all required fields and select at least one course.');
       return;
     }
     setCreatingBatch(true);
@@ -112,14 +112,14 @@ const BatchManagement = () => {
       const response = await api.post('/batch-management/', {
         name: batchName,
         campus_ids: [selectedCampus],
-        course_ids: [selectedCourse],
+        course_ids: selectedCourses,
       });
       if (response.data.success) {
         toast.success('Batch created successfully!');
         setShowCreateBatch(false);
         setBatchName('');
         setSelectedCampus('');
-        setSelectedCourse('');
+        setSelectedCourses([]);
         fetchBatches();
       } else {
         toast.error(response.data.message || 'Failed to create batch');
@@ -256,16 +256,25 @@ const BatchManagement = () => {
   const downloadTemplate = () => {
     const templateData = [
       {
-        'Student Name': 'John Doe',
-        'Roll Number': '2024001',
-        'Email': 'john.doe@example.com',
-        'Mobile Number': '9876543210'
+        'Group': 'CSE',
+        'Roll Number': '216T1A0541',
+        'Student Name': 'KASU BABU',
+        'Email': 'kasusaranya3@gmail.com',
+        'Mobile Number': '77318 84484'
       },
       {
-        'Student Name': 'Jane Smith',
-        'Roll Number': '2024002',
-        'Email': 'jane.smith@example.com',
-        'Mobile Number': '9876543211'
+        'Group': 'CSE',
+        'Roll Number': '226T1A0501',
+        'Student Name': 'AKUMARTHI V SAI MANIKANTA PHANINDRA',
+        'Email': 'vaibhavsai@gmail.com',
+        'Mobile Number': '8466862444'
+      },
+      {
+        'Group': 'ECE',
+        'Roll Number': '226T1A0502',
+        'Student Name': 'ANDANAPALLI SASANK MOULI',
+        'Email': 'moulirock8@gmail.com',
+        'Mobile Number': '9701594799'
       }
     ];
 
@@ -483,19 +492,34 @@ const BatchManagement = () => {
               </div>
               
               <div className="mb-6">
-                <label className="block font-semibold text-gray-700 mb-2">Course *</label>
-                <select 
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 disabled:bg-gray-100 disabled:cursor-not-allowed" 
-                  value={selectedCourse} 
-                  onChange={e => setSelectedCourse(e.target.value)} 
-                  required
-                  disabled={!selectedCampus}
-                >
-                  <option value="">-- Select Course --</option>
+                <label className="block font-semibold text-gray-700 mb-2">Courses *</label>
+                <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-300 rounded-lg p-3 disabled:bg-gray-100 disabled:cursor-not-allowed">
                   {courses.map(course => (
-                    <option key={course.id} value={course.id}>{course.name}</option>
+                    <label key={course.id} className="flex items-center space-x-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        value={course.id}
+                        checked={selectedCourses.includes(course.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedCourses([...selectedCourses, course.id]);
+                          } else {
+                            setSelectedCourses(selectedCourses.filter(id => id !== course.id));
+                          }
+                        }}
+                        disabled={!selectedCampus}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">{course.name}</span>
+                    </label>
                   ))}
-                </select>
+                  {courses.length === 0 && (
+                    <p className="text-sm text-gray-500 italic">
+                      {selectedCampus ? 'No courses available for this campus' : 'Please select a campus first'}
+                    </p>
+                  )}
+                </div>
+                <p className="text-sm text-gray-500 mt-1">Select one or more courses for this batch</p>
               </div>
               
               <div className="flex justify-end gap-3">
