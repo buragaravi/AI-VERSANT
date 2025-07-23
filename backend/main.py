@@ -26,7 +26,18 @@ bcrypt.init_app(app)
 socketio.init_app(app)
 
 # CORS configuration
-CORS(app, origins=os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:5173,https://pydah-studyedge.vercel.app').split(','), supports_credentials=True, allow_headers=["Content-Type", "Authorization"])
+default_origins = 'http://localhost:3000,http://localhost:5173,https://pydah-studyedge.vercel.app,https://versant-frontend.vercel.app'
+cors_origins = os.getenv('CORS_ORIGINS', default_origins)
+CORS(app, origins=cors_origins.split(','), supports_credentials=True, allow_headers=["Content-Type", "Authorization", "X-Requested-With"], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+
+# CORS preflight handler
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
 
 # Root route for API status
 @app.route('/')
@@ -34,9 +45,11 @@ def api_status():
     """API status endpoint"""
     return jsonify({
         'success': True,
-        'message': 'AI Versant Backend API is running',
+        'message': 'Study Edge Backend API is running',
         'version': '1.0.0',
         'status': 'active',
+        'cors_enabled': True,
+        'allowed_origins': cors_origins.split(','),
         'endpoints': {
             'auth': '/auth',
             'superadmin': '/superadmin',
@@ -51,6 +64,25 @@ def api_status():
             'batch_management': '/batch-management',
             'access_control': '/access-control'
         }
+    }), 200
+
+# Test CORS endpoint
+@app.route('/test-cors', methods=['GET', 'OPTIONS'])
+def test_cors():
+    """Test CORS configuration"""
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+    
+    return jsonify({
+        'success': True,
+        'message': 'CORS test successful',
+        'origin': request.headers.get('Origin', 'No origin header'),
+        'method': request.method
     }), 200
 
 # Health check endpoint

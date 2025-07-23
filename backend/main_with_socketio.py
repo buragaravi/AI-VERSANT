@@ -32,9 +32,18 @@ def create_app():
     # CORS configuration with Vercel domain included
     # IMPORTANT: Set CORS_ORIGINS in your environment variables to include your frontend URL, e.g.:
     # CORS_ORIGINS=https://pydah-studyedge.vercel.app,http://localhost:3000
-    default_origins = 'http://localhost:3000,http://localhost:5173,https://pydah-studyedge.vercel.app'
+    default_origins = 'http://localhost:3000,http://localhost:5173,https://pydah-studyedge.vercel.app,https://versant-frontend.vercel.app'
     cors_origins = os.getenv('CORS_ORIGINS', default_origins)
-    CORS(app, origins=cors_origins.split(','), supports_credentials=True, allow_headers=["Content-Type", "Authorization"])
+    CORS(app, origins=cors_origins.split(','), supports_credentials=True, allow_headers=["Content-Type", "Authorization", "X-Requested-With"], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+    
+    # CORS preflight handler
+    @app.after_request
+    def after_request(response):
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
     
     # Initialize database and AWS with error handling
     try:

@@ -11,6 +11,11 @@ if (API_URL.includes('ai-versant-backend.onrender.com')) {
   API_URL = 'https://versant-backend.onrender.com'
 }
 
+// Ensure we're using the correct backend URL for production
+if (!isDevelopment && !API_URL.includes('versant-backend.onrender.com')) {
+  API_URL = 'https://versant-backend.onrender.com'
+}
+
 console.log('API Service - VITE_API_URL:', import.meta.env.VITE_API_URL)
 console.log('API Service - DEV mode:', isDevelopment)
 console.log('API Service - Using API_URL:', API_URL)
@@ -57,6 +62,17 @@ api.interceptors.response.use(
   },
   async (error) => {
     console.error('API Response Error:', error.response?.status, error.config?.url, error.message)
+    
+    // Handle CORS errors specifically
+    if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+      console.error('CORS/Network Error detected. This might be due to:')
+      console.error('1. Backend not running')
+      console.error('2. CORS configuration issue')
+      console.error('3. Network connectivity problem')
+      console.error('Current API URL:', API_URL)
+      console.error('Request URL:', error.config?.url)
+    }
+    
     const originalRequest = error.config
 
     if (error.response?.status === 401 && !originalRequest._retry) {
