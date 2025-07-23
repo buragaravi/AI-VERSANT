@@ -1,11 +1,11 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from bson import ObjectId
-import bcrypt
 import pytz
 from datetime import datetime
 from mongo import mongo_db
 from config.constants import ROLES
+from config.shared import bcrypt
 from routes.access_control import require_permission
 
 campus_management_bp = Blueprint('campus_management', __name__)

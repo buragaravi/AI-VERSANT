@@ -2,10 +2,10 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from mongo import mongo_db
 from bson import ObjectId
-import bcrypt
 import pytz
 from datetime import datetime
 from config.constants import ROLES
+from config.shared import bcrypt
 from routes.access_control import require_permission
 from utils.email_service import send_email, render_template
 

@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from bson import ObjectId
 from mongo import mongo_db
-import bcrypt
+from config.shared import bcrypt
 from routes.access_control import require_permission
 
 campus_admin_bp = Blueprint('campus_admin', __name__)
