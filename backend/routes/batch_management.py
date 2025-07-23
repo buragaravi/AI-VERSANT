@@ -412,6 +412,7 @@ def _parse_student_file(file):
             content = file.read().decode('utf-8-sig')
             csv_reader = csv.DictReader(io.StringIO(content))
             rows = list(csv_reader)
+            print(f"CSV parsing: Found {len(rows)} rows, headers: {list(rows[0].keys()) if rows else []}")
         else:
             # Read Excel file
             workbook = openpyxl.load_workbook(file, data_only=True)
@@ -430,10 +431,35 @@ def _parse_student_file(file):
                     if i < len(headers):
                         row_data[headers[i]] = str(cell.value).strip() if cell.value else ''
                 rows.append(row_data)
+            print(f"Excel parsing: Found {len(rows)} rows, headers: {headers}")
     except Exception as e:
+        print(f"File parsing error: {e}")
         raise ValueError(f"Error reading file: {e}")
 
     return rows
+
+@batch_management_bp.route('/test-file-parse', methods=['POST'])
+@jwt_required()
+def test_file_parse():
+    """Test endpoint to debug file parsing"""
+    try:
+        file = request.files.get('file')
+        if not file:
+            return jsonify({'success': False, 'message': 'No file provided'}), 400
+
+        rows = _parse_student_file(file)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'row_count': len(rows),
+                'columns': list(rows[0].keys()) if rows else [],
+                'first_row': rows[0] if rows else None,
+                'sample_rows': rows[:3] if len(rows) > 3 else rows
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @batch_management_bp.route('/validate-student-upload', methods=['POST'])
 @jwt_required()
@@ -515,26 +541,37 @@ def upload_students_to_batch():
         file = request.files.get('file')
         batch_id = request.form.get('batch_id')
         course_ids = request.form.getlist('course_ids')  # Accept multiple course IDs
+        
+        # Debug logging
+        current_app.logger.info(f"Upload request - batch_id: {batch_id}, course_ids: {course_ids}, filename: {file.filename if file else 'None'}")
+        
         if not file or not batch_id or not course_ids:
             return jsonify({'success': False, 'message': 'File, batch ID, and at least one course ID are required.'}), 400
 
         rows = _parse_student_file(file)
+        current_app.logger.info(f"Parsed {len(rows)} rows from file")
+        
         if not rows:
             return jsonify({'success': False, 'message': 'File is empty or invalid.'}), 400
 
         # Validate columns - support both formats
         columns = list(rows[0].keys()) if rows else []
+        current_app.logger.info(f"File columns: {columns}")
+        
         required_fields_v1 = ['Student Name', 'Roll Number', 'Email', 'Mobile Number']
         required_fields_v2 = ['Group', 'Roll Number', 'Student Name', 'Email', 'Mobile Number']
         
         missing_fields_v1 = [field for field in required_fields_v1 if field not in columns]
         missing_fields_v2 = [field for field in required_fields_v2 if field not in columns]
         
+        current_app.logger.info(f"Missing v1 fields: {missing_fields_v1}, Missing v2 fields: {missing_fields_v2}")
+        
         if missing_fields_v1 and missing_fields_v2:
-            return jsonify({'success': False, 'message': f"Invalid file structure. Expected either: {', '.join(required_fields_v1)} OR {', '.join(required_fields_v2)}"}), 400
+            return jsonify({'success': False, 'message': f"Invalid file structure. Expected either: {', '.join(required_fields_v1)} OR {', '.join(required_fields_v2)}. Found columns: {', '.join(columns)}"}), 400
 
         # Determine file format
         is_v2_format = 'Group' in columns
+        current_app.logger.info(f"Using format v2: {is_v2_format}")
 
         # Fetch batch and campus info
         batch = mongo_db.batches.find_one({'_id': ObjectId(batch_id)})
@@ -569,9 +606,20 @@ def upload_students_to_batch():
                 group_name = str(row.get('Group', '')).strip()
                 
                 # Find course by group name (assuming group name matches course name)
+                # Try exact match first, then case-insensitive match
                 course = mongo_db.courses.find_one({'name': group_name, '_id': {'$in': [ObjectId(cid) for cid in course_ids]}})
                 if not course:
-                    errors.append(f"{student_name}: Course/Group '{group_name}' not found in this batch.")
+                    # Try case-insensitive match
+                    course = mongo_db.courses.find_one({
+                        'name': {'$regex': f'^{group_name}$', '$options': 'i'}, 
+                        '_id': {'$in': [ObjectId(cid) for cid in course_ids]}
+                    })
+                
+                if not course:
+                    # Get available courses for better error message
+                    available_courses = list(mongo_db.courses.find({'_id': {'$in': [ObjectId(cid) for cid in course_ids]}}, {'name': 1}))
+                    available_names = [c['name'] for c in available_courses]
+                    errors.append(f"{student_name}: Course/Group '{group_name}' not found in this batch. Available courses: {', '.join(available_names)}")
                     continue
                 course_id = str(course['_id'])
             else:
@@ -720,7 +768,9 @@ def upload_students_to_batch():
 
     except Exception as e:
         current_app.logger.error(f"Error uploading students to batch: {e}")
-        return jsonify({'success': False, 'message': f'An unexpected error occurred: {str(e)}'}), 500
+        import traceback
+        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'success': False, 'message': f'Failed to upload students. Please check your file format and try again. Error: {str(e)}'}), 500
 
 @batch_management_bp.route('/batch/<batch_id>/students', methods=['GET'])
 @jwt_required()
