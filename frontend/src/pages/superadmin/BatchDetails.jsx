@@ -457,7 +457,7 @@ const BatchDetails = () => {
 
     return (
         <>
-            <main className="px-6 lg:px-10 py-12">
+        <main className="px-6 lg:px-10 py-12">
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                         <div className="flex justify-between items-center mb-8">
                             <div>

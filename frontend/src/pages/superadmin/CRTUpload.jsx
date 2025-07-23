@@ -1323,16 +1323,16 @@ const CRTUpload = () => {
 
   return (
     <>
-      <div className="px-4 mt-6">
-        {currentStep === 'modules' && renderModuleCards()}
-        {currentStep === 'upload' && (
-          <>
-            {viewMode === 'topics' && renderTopicsView()}
-            {viewMode === 'topic-questions' && renderTopicQuestionsView()}
-            {viewMode === 'upload' && renderUploadSection()}
-          </>
-        )}
-        {currentStep === 'questions' && renderFileDetails()}
+        <div className="px-4 mt-6">
+          {currentStep === 'modules' && renderModuleCards()}
+          {currentStep === 'upload' && (
+            <>
+              {viewMode === 'topics' && renderTopicsView()}
+              {viewMode === 'topic-questions' && renderTopicQuestionsView()}
+              {viewMode === 'upload' && renderUploadSection()}
+            </>
+          )}
+          {currentStep === 'questions' && renderFileDetails()}
       </div>
       {renderEditQuestionModal()}
       {renderAddQuestionModal()}

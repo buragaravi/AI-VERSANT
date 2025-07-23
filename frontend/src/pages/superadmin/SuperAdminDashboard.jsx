@@ -139,7 +139,7 @@ const SuperAdminDashboard = () => {
   }
 
   return (
-    <div className="px-4 mt-6">
+        <div className="px-4 mt-6">
           {/* Statistics Cards */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -213,7 +213,7 @@ const SuperAdminDashboard = () => {
               ))}
             </div>
           </motion.div>
-        </div>
+    </div>
   )
 }
 

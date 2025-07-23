@@ -574,7 +574,7 @@ const SuperAdminSidebar = () => {
       <div className="flex-1 bg-gray-50 w-full lg:ml-64 flex flex-col min-h-screen">
         <Header />
         <div className="flex-1 overflow-auto">
-          <Outlet />
+        <Outlet />
         </div>
       </div>
     </div>

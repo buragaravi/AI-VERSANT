@@ -150,7 +150,7 @@ const CourseManagement = () => {
 
     return (
         <>
-            <main className="px-6 lg:px-10 py-8">
+        <main className="px-6 lg:px-10 py-8">
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                         <div className="flex justify-between items-center mb-8">
                             <div>

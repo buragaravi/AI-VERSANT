@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useNotification } from '../../contexts/NotificationContext';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
-import { Users, Filter, Search, Trash2, ListChecks, CheckCircle, BookOpen, Lock, Unlock } from 'lucide-react';
+import { Users, Filter, Search, Trash2, ListChecks, CheckCircle, BookOpen, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import Modal from '../../components/common/Modal';
 import { getStudentAccessStatus, authorizeStudentModule, lockStudentModule, authorizeStudentLevel } from '../../services/api';
 
@@ -44,6 +44,10 @@ const StudentManagement = () => {
     const [levelPercentages, setLevelPercentages] = useState({}); // { levelId: { practice: %, online: % } }
     const [moduleActionLoading, setModuleActionLoading] = useState({});
     const [levelActionLoading, setLevelActionLoading] = useState({});
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [studentsPerPage] = useState(10); // Show 10 students per page
 
     const fetchStudents = useCallback(async () => {
         try {
@@ -119,6 +123,38 @@ const StudentManagement = () => {
             (student.roll_number?.toLowerCase() || '').includes(searchTerm.toLowerCase())
         );
     }, [students, searchTerm]);
+
+    // Pagination logic
+    const indexOfLastStudent = currentPage * studentsPerPage;
+    const indexOfFirstStudent = indexOfLastStudent - studentsPerPage;
+    const currentStudents = filteredStudents.slice(indexOfFirstStudent, indexOfLastStudent);
+    const totalPages = Math.ceil(filteredStudents.length / studentsPerPage);
+
+    // Reset to first page when search term changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm]);
+
+    // Pagination handlers
+    const goToPage = (pageNumber) => {
+        setCurrentPage(pageNumber);
+    };
+
+    const goToFirstPage = () => {
+        setCurrentPage(1);
+    };
+
+    const goToLastPage = () => {
+        setCurrentPage(totalPages);
+    };
+
+    const goToPreviousPage = () => {
+        setCurrentPage(prev => Math.max(prev - 1, 1));
+    };
+
+    const goToNextPage = () => {
+        setCurrentPage(prev => Math.min(prev + 1, totalPages));
+    };
 
     const handleStudentClick = async (student) => {
         setSelectedStudent(student);
@@ -294,12 +330,19 @@ const StudentManagement = () => {
 
     return (
         <>
-            <main className="px-4 mt-6">
+        <main className="px-4 mt-6">
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                         <div className="flex justify-between items-center mb-8">
                             <div>
                                 <h1 className="text-2xl font-semibold text-gray-800 mb-2">Student Management</h1>
-                                <p className="text-gray-600">View and manage student information across the system.</p>
+                                <p className="text-gray-600">
+                                    View and manage student information across the system.
+                                    {!loading && (
+                                        <span className="ml-2 text-blue-600 font-medium">
+                                            ({filteredStudents.length} students)
+                                        </span>
+                                    )}
+                                </p>
                             </div>
                         </div>
 
@@ -316,7 +359,15 @@ const StudentManagement = () => {
 
                         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
                             <div className="overflow-x-auto">
-                                {loading ? <LoadingSpinner /> : (
+                                {loading ? <LoadingSpinner /> : filteredStudents.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-12">
+                                        <Users className="w-16 h-16 text-gray-400 mb-4" />
+                                        <h3 className="text-lg font-medium text-gray-900 mb-2">No students found</h3>
+                                        <p className="text-gray-500">
+                                            {searchTerm ? `No students match your search for "${searchTerm}"` : 'No students have been added to the system yet.'}
+                                        </p>
+                                    </div>
+                                ) : (
                                     <table className="min-w-full">
                                         <thead className="bg-gray-50">
                                             <tr>
@@ -328,7 +379,7 @@ const StudentManagement = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="bg-white divide-y divide-gray-200">
-                                            {filteredStudents.map(student => (
+                                            {currentStudents.map(student => (
                                                 <tr key={student._id} className="hover:bg-gray-50 cursor-pointer transition-colors duration-150" onClick={() => handleStudentClick(student)}>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <div className="text-sm font-medium text-gray-900">{student.name}</div>
@@ -384,6 +435,89 @@ const StudentManagement = () => {
                                     </table>
                                 )}
                             </div>
+                            
+                            {/* Pagination */}
+                            {filteredStudents.length > 0 && (
+                                <div className="bg-white px-6 py-4 border-t border-gray-200">
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-sm text-gray-700">
+                                            Showing {indexOfFirstStudent + 1} to {Math.min(indexOfLastStudent, filteredStudents.length)} of {filteredStudents.length} students
+                                        </div>
+                                        
+                                        <div className="flex items-center space-x-2">
+                                            {/* First Page Button */}
+                                            <button
+                                                onClick={goToFirstPage}
+                                                disabled={currentPage === 1}
+                                                className="p-2 text-gray-500 hover:text-gray-700 disabled:text-gray-300 disabled:cursor-not-allowed rounded-md hover:bg-gray-100 transition-colors"
+                                                title="First Page"
+                                            >
+                                                <ChevronsLeft size={16} />
+                                            </button>
+                                            
+                                            {/* Previous Page Button */}
+                                            <button
+                                                onClick={goToPreviousPage}
+                                                disabled={currentPage === 1}
+                                                className="p-2 text-gray-500 hover:text-gray-700 disabled:text-gray-300 disabled:cursor-not-allowed rounded-md hover:bg-gray-100 transition-colors"
+                                                title="Previous Page"
+                                            >
+                                                <ChevronLeft size={16} />
+                                            </button>
+                                            
+                                            {/* Page Numbers */}
+                                            <div className="flex items-center space-x-1">
+                                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                                    let pageNumber;
+                                                    if (totalPages <= 5) {
+                                                        pageNumber = i + 1;
+                                                    } else if (currentPage <= 3) {
+                                                        pageNumber = i + 1;
+                                                    } else if (currentPage >= totalPages - 2) {
+                                                        pageNumber = totalPages - 4 + i;
+                                                    } else {
+                                                        pageNumber = currentPage - 2 + i;
+                                                    }
+                                                    
+                                                    return (
+                                                        <button
+                                                            key={pageNumber}
+                                                            onClick={() => goToPage(pageNumber)}
+                                                            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                                                                currentPage === pageNumber
+                                                                    ? 'bg-blue-600 text-white'
+                                                                    : 'text-gray-700 hover:bg-gray-100'
+                                                            }`}
+                                                        >
+                                                            {pageNumber}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                            
+                                            {/* Next Page Button */}
+                                            <button
+                                                onClick={goToNextPage}
+                                                disabled={currentPage === totalPages}
+                                                className="p-2 text-gray-500 hover:text-gray-700 disabled:text-gray-300 disabled:cursor-not-allowed rounded-md hover:bg-gray-100 transition-colors"
+                                                title="Next Page"
+                                            >
+                                                <ChevronRight size={16} />
+                                            </button>
+                                            
+                                            {/* Last Page Button */}
+                                            <button
+                                                onClick={goToLastPage}
+                                                disabled={currentPage === totalPages}
+                                                className="p-2 text-gray-500 hover:text-gray-700 disabled:text-gray-300 disabled:cursor-not-allowed rounded-md hover:bg-gray-100 transition-colors"
+                                                title="Last Page"
+                                            >
+                                                <ChevronsRight size={16} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </motion.div>
                 </main>
