@@ -3,7 +3,7 @@ import axios from 'axios'
 // API Configuration
 // Environment Variables:
 // - VITE_API_URL: Set to '/api' to use Vercel proxy (recommended for production)
-// - VITE_API_URL: Set to 'https://versant-backend.onrender.com' for direct backend access
+// - VITE_API_URL: Set to 'https://ai-versant-backend.onrender.com' for direct backend access
 // - VITE_API_URL: Set to '/api' for development with Vite proxy
 
 // Determine API URL based on environment
@@ -19,18 +19,36 @@ if (!API_URL) {
   if (isDevelopment) {
     API_URL = '/api' // Use Vite proxy in development
   } else {
+    // In production, try the proxy first, fallback to direct backend
     API_URL = '/api' // Use Vercel proxy in production to avoid CORS issues
   }
 }
 
 // Fix for incorrect backend URL - ensure we use the correct backend
-if (API_URL.includes('ai-versant-backend.onrender.com')) {
-  API_URL = '/api'
+if (API_URL.includes('versant-backend.onrender.com')) {
+  API_URL = 'https://ai-versant-backend.onrender.com'
 }
 
 console.log('API Service - VITE_API_URL:', import.meta.env.VITE_API_URL)
 console.log('API Service - DEV mode:', isDevelopment)
 console.log('API Service - Using API_URL:', API_URL)
+console.log('API Service - Full request URL example:', `${API_URL}/auth/login`)
+
+// Test backend connectivity
+if (!isDevelopment) {
+  // Test proxy
+  fetch(`${API_URL}/health`)
+    .then(response => response.json())
+    .then(data => console.log('Backend health check (proxy):', data))
+    .catch(error => {
+      console.error('Backend health check (proxy) failed:', error)
+      // Test direct backend
+      fetch('https://ai-versant-backend.onrender.com/health')
+        .then(response => response.json())
+        .then(data => console.log('Backend health check (direct):', data))
+        .catch(directError => console.error('Backend health check (direct) failed:', directError))
+    })
+}
 
 const api = axios.create({
   baseURL: API_URL,
@@ -74,6 +92,27 @@ api.interceptors.response.use(
   },
   async (error) => {
     console.error('API Response Error:', error.response?.status, error.config?.url, error.message)
+    
+    // Handle 404 errors - might be proxy issue
+    if (error.response?.status === 404 && !isDevelopment) {
+      console.error('404 Error - Proxy might not be working. Trying direct backend access...')
+      // Try direct backend access as fallback
+      const directBackendURL = 'https://ai-versant-backend.onrender.com'
+      const originalURL = error.config.url
+      const newURL = originalURL.replace('/api/', '')
+      
+      try {
+        const response = await axios({
+          ...error.config,
+          url: `${directBackendURL}/${newURL}`,
+          baseURL: directBackendURL
+        })
+        console.log('Direct backend access successful:', response.status)
+        return response
+      } catch (directError) {
+        console.error('Direct backend access also failed:', directError)
+      }
+    }
     
     // Handle CORS errors specifically
     if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
