@@ -1,19 +1,31 @@
 import axios from 'axios'
 
+// API Configuration
+// Environment Variables:
+// - VITE_API_URL: Set to '/api' to use Vercel proxy (recommended for production)
+// - VITE_API_URL: Set to 'https://versant-backend.onrender.com' for direct backend access
+// - VITE_API_URL: Set to '/api' for development with Vite proxy
+
 // Determine API URL based on environment
 // In development, use the Vite proxy (/api)
 // In production, use the full URL
 const isDevelopment = import.meta.env.DEV
-let API_URL = import.meta.env.VITE_API_URL || (isDevelopment ? '/api' : 'https://versant-backend.onrender.com')
+
+// Get API URL from environment variables
+let API_URL = import.meta.env.VITE_API_URL
+
+// If no environment variable is set, use defaults
+if (!API_URL) {
+  if (isDevelopment) {
+    API_URL = '/api' // Use Vite proxy in development
+  } else {
+    API_URL = '/api' // Use Vercel proxy in production to avoid CORS issues
+  }
+}
 
 // Fix for incorrect backend URL - ensure we use the correct backend
 if (API_URL.includes('ai-versant-backend.onrender.com')) {
-  API_URL = 'https://versant-backend.onrender.com'
-}
-
-// Ensure we're using the correct backend URL for production
-if (!isDevelopment && !API_URL.includes('versant-backend.onrender.com')) {
-  API_URL = 'https://versant-backend.onrender.com'
+  API_URL = '/api'
 }
 
 console.log('API Service - VITE_API_URL:', import.meta.env.VITE_API_URL)
@@ -69,8 +81,11 @@ api.interceptors.response.use(
       console.error('1. Backend not running')
       console.error('2. CORS configuration issue')
       console.error('3. Network connectivity problem')
+      console.error('4. Vercel proxy configuration issue')
       console.error('Current API URL:', API_URL)
       console.error('Request URL:', error.config?.url)
+      console.error('Environment:', isDevelopment ? 'Development' : 'Production')
+      console.error('VITE_API_URL:', import.meta.env.VITE_API_URL)
     }
     
     const originalRequest = error.config
@@ -83,7 +98,7 @@ api.interceptors.response.use(
         console.log('Attempting token refresh with:', refreshToken)
         if (refreshToken && refreshToken !== 'null' && refreshToken !== 'undefined') {
           const response = await axios.post(
-            `${API_URL}/auth/refresh`,
+            `/api/auth/refresh`,
             { refresh_token: refreshToken }
           )
           
