@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
-from config.shared import bcrypt
+from config.shared import bcrypt  # Flask-Bcrypt for password generation
+import bcrypt as raw_bcrypt  # Raw bcrypt for password verification
 from mongo import mongo_db
 from config.constants import ROLES
 import traceback
@@ -65,7 +66,7 @@ def login():
 
         print(f"🔍 Verifying password for user: {username}", file=sys.stderr)
         
-        if not bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+        if not raw_bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
             print(f"❌ Password verification failed for user: {username}", file=sys.stderr)
             return jsonify({
                 'success': False,
