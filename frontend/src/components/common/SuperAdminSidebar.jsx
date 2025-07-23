@@ -229,7 +229,7 @@ const SuperAdminSidebar = () => {
       {/* Sidebar - Always visible on large screens */}
       <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 lg:z-50">
         <div className="flex flex-col flex-grow bg-gradient-to-b from-white to-gray-50 shadow-2xl border-r border-gray-200">
-        {/* Logo/Brand */}
+          {/* Logo/Brand */}
         <motion.div 
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -391,6 +391,7 @@ const SuperAdminSidebar = () => {
             Logout
           </button>
         </motion.div>
+        </div>
       </div>
 
       {/* Mobile Sidebar */}
