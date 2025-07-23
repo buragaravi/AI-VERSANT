@@ -9,18 +9,7 @@ from bson.errors import InvalidId
 
 auth_bp = Blueprint('auth', __name__)
 
-# CORS preflight handler for auth routes
-@auth_bp.route('/login', methods=['OPTIONS'])
-@auth_bp.route('/logout', methods=['OPTIONS'])
-@auth_bp.route('/refresh', methods=['OPTIONS'])
-@auth_bp.route('/me', methods=['OPTIONS'])
-def handle_auth_preflight():
-    response = jsonify({'status': 'ok'})
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    return response
+
 
 @auth_bp.route('/login', methods=['POST'])
 def login():

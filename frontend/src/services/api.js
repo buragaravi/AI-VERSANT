@@ -2,13 +2,10 @@ import axios from 'axios'
 
 // API Configuration
 // Environment Variables:
-// - VITE_API_URL: Set to '/api' to use Vercel proxy (recommended for production)
 // - VITE_API_URL: Set to 'https://ai-versant-backend.onrender.com' for direct backend access
 // - VITE_API_URL: Set to '/api' for development with Vite proxy
 
 // Determine API URL based on environment
-// In development, use the Vite proxy (/api)
-// In production, use the full URL
 const isDevelopment = import.meta.env.DEV
 
 // Get API URL from environment variables
@@ -19,12 +16,12 @@ if (!API_URL) {
   if (isDevelopment) {
     API_URL = '/api' // Use Vite proxy in development
   } else {
-    // In production, try the proxy first, fallback to direct backend
-    API_URL = '/api' // Use Vercel proxy in production to avoid CORS issues
+    // In production, use direct backend access
+    API_URL = 'https://ai-versant-backend.onrender.com'
   }
 }
 
-// Fix for incorrect backend URL - ensure we use the correct backend
+// Ensure we're using the correct backend URL
 if (API_URL.includes('versant-backend.onrender.com')) {
   API_URL = 'https://ai-versant-backend.onrender.com'
 }
@@ -36,18 +33,10 @@ console.log('API Service - Full request URL example:', `${API_URL}/auth/login`)
 
 // Test backend connectivity
 if (!isDevelopment) {
-  // Test proxy
   fetch(`${API_URL}/health`)
     .then(response => response.json())
-    .then(data => console.log('Backend health check (proxy):', data))
-    .catch(error => {
-      console.error('Backend health check (proxy) failed:', error)
-      // Test direct backend
-      fetch('https://ai-versant-backend.onrender.com/health')
-        .then(response => response.json())
-        .then(data => console.log('Backend health check (direct):', data))
-        .catch(directError => console.error('Backend health check (direct) failed:', directError))
-    })
+    .then(data => console.log('Backend health check:', data))
+    .catch(error => console.error('Backend health check failed:', error))
 }
 
 const api = axios.create({
@@ -93,38 +82,23 @@ api.interceptors.response.use(
   async (error) => {
     console.error('API Response Error:', error.response?.status, error.config?.url, error.message)
     
-    // Handle 404 errors - might be proxy issue
-    if (error.response?.status === 404 && !isDevelopment) {
-      console.error('404 Error - Proxy might not be working. Trying direct backend access...')
-      // Try direct backend access as fallback
-      const directBackendURL = 'https://ai-versant-backend.onrender.com'
-      const originalURL = error.config.url
-      const newURL = originalURL.replace('/api/', '')
-      
-      try {
-        const response = await axios({
-          ...error.config,
-          url: `${directBackendURL}/${newURL}`,
-          baseURL: directBackendURL
-        })
-        console.log('Direct backend access successful:', response.status)
-        return response
-      } catch (directError) {
-        console.error('Direct backend access also failed:', directError)
-      }
+    // Handle 404 errors
+    if (error.response?.status === 404) {
+      console.error('404 Error - Endpoint not found:', error.config?.url)
     }
     
     // Handle CORS errors specifically
     if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
       console.error('CORS/Network Error detected. This might be due to:')
       console.error('1. Backend not running')
-      console.error('2. CORS configuration issue')
+      console.error('2. CORS configuration issue - check backend CORS settings')
       console.error('3. Network connectivity problem')
-      console.error('4. Vercel proxy configuration issue')
+      console.error('4. Environment variable VITE_API_URL not set correctly')
       console.error('Current API URL:', API_URL)
       console.error('Request URL:', error.config?.url)
       console.error('Environment:', isDevelopment ? 'Development' : 'Production')
       console.error('VITE_API_URL:', import.meta.env.VITE_API_URL)
+      console.error('Expected backend URL: https://ai-versant-backend.onrender.com')
     }
     
     const originalRequest = error.config
