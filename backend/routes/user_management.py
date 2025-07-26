@@ -205,9 +205,27 @@ def get_all_students():
                 'message': 'Access denied. Super admin privileges required.'
             }), 403
 
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 20))
+        search = request.args.get('search', '').strip()
+        
+        # Calculate skip value
+        skip = (page - 1) * limit
+
+        # Build match stage with search
+        match_stage = {'role': 'student'}
+        if search:
+            match_stage['$or'] = [
+                {'name': {'$regex': search, '$options': 'i'}},
+                {'email': {'$regex': search, '$options': 'i'}},
+                {'username': {'$regex': search, '$options': 'i'}},
+                {'roll_number': {'$regex': search, '$options': 'i'}}
+            ]
+
         pipeline = [
             {
-                '$match': {'role': 'student'}
+                '$match': match_stage
             },
             {
                 '$lookup': {
@@ -247,6 +265,19 @@ def get_all_students():
                 }
             }
         ]
+
+        # Get total count for pagination
+        count_pipeline = pipeline.copy()
+        count_pipeline.append({'$count': 'total'})
+        total_count_result = list(mongo_db.users.aggregate(count_pipeline))
+        total_count = total_count_result[0]['total'] if total_count_result else 0
+
+        # Add pagination stages
+        pipeline.extend([
+            {'$sort': {'name': 1}},  # Sort by name
+            {'$skip': skip},
+            {'$limit': limit}
+        ])
         students = list(mongo_db.users.aggregate(pipeline))
         for s in students:
             s['_id'] = str(s['_id'])
@@ -303,9 +334,191 @@ def get_all_students():
         # Debug print for the first student's modules/levels
         if students:
             print('DEBUG STUDENT MODULES:', students[0]['name'], students[0]['modules'])
-        return jsonify({'success': True, 'data': students})
+        
+        return jsonify({
+            'success': True, 
+            'data': students,
+            'pagination': {
+                'page': page,
+                'limit': limit,
+                'total': total_count,
+                'pages': (total_count + limit - 1) // limit,
+                'has_more': (page * limit) < total_count
+            }
+        })
     except Exception as e:
         current_app.logger.error(f"Error getting all students: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@user_management_bp.route('/students/filtered', methods=['GET'])
+@jwt_required()
+@require_permission(module='user_management')
+def get_filtered_students():
+    """Get students filtered by campus, course, and batch with pagination."""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Only super admin can access user management
+        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Super admin privileges required.'
+            }), 403
+
+        # Get filter parameters
+        campus_id = request.args.get('campus_id')
+        course_id = request.args.get('course_id')
+        batch_id = request.args.get('batch_id')
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 20))
+        search = request.args.get('search', '').strip()
+        
+        # Calculate skip value
+        skip = (page - 1) * limit
+
+        # Build match stage with filters
+        match_stage = {'role': 'student'}
+        
+        if campus_id:
+            match_stage['campus_id'] = ObjectId(campus_id)
+        if course_id:
+            match_stage['course_id'] = ObjectId(course_id)
+        if batch_id:
+            match_stage['batch_id'] = ObjectId(batch_id)
+            
+        if search:
+            match_stage['$or'] = [
+                {'name': {'$regex': search, '$options': 'i'}},
+                {'email': {'$regex': search, '$options': 'i'}},
+                {'username': {'$regex': search, '$options': 'i'}},
+                {'roll_number': {'$regex': search, '$options': 'i'}}
+            ]
+
+        pipeline = [
+            {
+                '$match': match_stage
+            },
+            {
+                '$lookup': {
+                    'from': 'campuses',
+                    'localField': 'campus_id',
+                    'foreignField': '_id',
+                    'as': 'campus_details'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'courses',
+                    'localField': 'course_id',
+                    'foreignField': '_id',
+                    'as': 'course_details'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'batches',
+                    'localField': 'batch_id',
+                    'foreignField': '_id',
+                    'as': 'batch_details'
+                }
+            },
+            {
+                '$project': {
+                    '_id': 1,
+                    'name': 1,
+                    'email': 1,
+                    'username': 1,
+                    'created_at': 1,
+                    'roll_number': { '$ifNull': ['$roll_number', ''] },
+                    'campus_name': { '$arrayElemAt': ['$campus_details.name', 0] },
+                    'course_name': { '$arrayElemAt': ['$course_details.name', 0] },
+                    'batch_name': { '$arrayElemAt': ['$batch_details.name', 0] }
+                }
+            }
+        ]
+
+        # Get total count for pagination
+        count_pipeline = pipeline.copy()
+        count_pipeline.append({'$count': 'total'})
+        total_count_result = list(mongo_db.users.aggregate(count_pipeline))
+        total_count = total_count_result[0]['total'] if total_count_result else 0
+
+        # Add pagination stages
+        pipeline.extend([
+            {'$sort': {'name': 1}},  # Sort by name
+            {'$skip': skip},
+            {'$limit': limit}
+        ])
+        
+        students = list(mongo_db.users.aggregate(pipeline))
+        for s in students:
+            s['_id'] = str(s['_id'])
+            if 'campus_name' not in s: s['campus_name'] = 'N/A'
+            if 'course_name' not in s: s['course_name'] = 'N/A'
+            if 'batch_name' not in s: s['batch_name'] = 'N/A'
+            if 'roll_number' not in s: s['roll_number'] = ''
+
+            # Fetch student progress
+            progress = list(mongo_db.student_progress.find({'student_id': ObjectId(s['_id'])}))
+            # Fetch student record for lock/unlock info
+            student_record = mongo_db.students.find_one({'user_id': ObjectId(s['_id'])})
+            authorized_levels = set(student_record.get('authorized_levels', [])) if student_record else set()
+            authorized_modules = set(student_record.get('authorized_modules', [])) if student_record else set()
+            # Group progress by module and level
+            progress_by_module_level = {}
+            for p in progress:
+                module_id = str(p.get('module_id'))
+                level_id = str(p.get('level_id'))
+                percentage = p.get('highest_score', 0)
+                progress_by_module_level[(module_id, level_id)] = percentage
+            # Always include all modules and all levels
+            modules_list = []
+            for module_id, module_name in MODULES.items():
+                levels = []
+                module_locked = False if (not authorized_modules or module_id in authorized_modules) else True
+                if module_id == 'GRAMMAR':
+                    for level_id, level_name in GRAMMAR_CATEGORIES.items():
+                        percentage = progress_by_module_level.get((module_id, level_id), 0)
+                        level_locked = False if (not authorized_levels or level_id in authorized_levels) else True
+                        levels.append({
+                            'level_id': level_id,
+                            'level_name': level_name,
+                            'percentage': percentage,
+                            'locked': level_locked
+                        })
+                else:
+                    for level_id, level_name in LEVELS.items():
+                        percentage = progress_by_module_level.get((module_id, level_id), 0)
+                        level_locked = False if (not authorized_levels or level_id in authorized_levels) else True
+                        levels.append({
+                            'level_id': level_id,
+                            'level_name': level_name,
+                            'percentage': percentage,
+                            'locked': level_locked
+                        })
+                modules_list.append({
+                    'module_id': module_id,
+                    'module_name': module_name,
+                    'levels': levels,
+                    'locked': module_locked
+                })
+            s['modules'] = modules_list
+        
+        return jsonify({
+            'success': True, 
+            'data': students,
+            'pagination': {
+                'page': page,
+                'limit': limit,
+                'total': total_count,
+                'pages': (total_count + limit - 1) // limit,
+                'has_more': (page * limit) < total_count
+            }
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting filtered students: {str(e)}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @user_management_bp.route('/<user_id>', methods=['GET'])

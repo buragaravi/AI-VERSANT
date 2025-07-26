@@ -45,25 +45,117 @@ const StudentManagement = () => {
     const [moduleActionLoading, setModuleActionLoading] = useState({});
     const [levelActionLoading, setLevelActionLoading] = useState({});
     
-    // Pagination state
+    // Filter and lazy loading state
     const [currentPage, setCurrentPage] = useState(1);
-    const [studentsPerPage] = useState(10); // Show 10 students per page
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [totalStudents, setTotalStudents] = useState(0);
+    const [campuses, setCampuses] = useState([]);
+    const [courses, setCourses] = useState([]);
+    const [batches, setBatches] = useState([]);
+    const [selectedCampus, setSelectedCampus] = useState('');
+    const [selectedCourse, setSelectedCourse] = useState('');
+    const [selectedBatch, setSelectedBatch] = useState('');
+    const [loadingFilters, setLoadingFilters] = useState(false);
 
-    const fetchStudents = useCallback(async () => {
+    // Fetch campuses on mount
+    useEffect(() => {
+        const fetchCampuses = async () => {
+            try {
+                const res = await api.get('/campus-management/');
+                setCampuses(res.data.data || []);
+            } catch (err) {
+                error('Failed to fetch campuses.');
+            }
+        };
+        fetchCampuses();
+    }, [error]);
+
+    // Fetch courses when campus changes
+    useEffect(() => {
+        const fetchCourses = async () => {
+            if (!selectedCampus) {
+                setCourses([]);
+                setSelectedCourse('');
+                return;
+            }
+            try {
+                setLoadingFilters(true);
+                const res = await api.get(`/course-management/courses?campus_id=${selectedCampus}`);
+                setCourses(res.data.data || []);
+                setSelectedCourse(''); // Reset course selection
+            } catch (err) {
+                error('Failed to fetch courses.');
+                setCourses([]);
+            } finally {
+                setLoadingFilters(false);
+            }
+        };
+        fetchCourses();
+    }, [selectedCampus, error]);
+
+    // Fetch batches when course changes
+    useEffect(() => {
+        const fetchBatches = async () => {
+            if (!selectedCourse) {
+                setBatches([]);
+                setSelectedBatch('');
+                return;
+            }
+            try {
+                setLoadingFilters(true);
+                const res = await api.get(`/batch-management/course/${selectedCourse}/batches`);
+                setBatches(res.data.data || []);
+                setSelectedBatch(''); // Reset batch selection
+            } catch (err) {
+                error('Failed to fetch batches.');
+                setBatches([]);
+            } finally {
+                setLoadingFilters(false);
+            }
+        };
+        fetchBatches();
+    }, [selectedCourse, error]);
+
+    const fetchStudents = useCallback(async (page = 1, search = '') => {
         try {
-            setLoading(true);
-            const res = await api.get('/user-management/students');
-            setStudents(res.data.data);
+            if (page === 1) {
+                setLoading(true);
+            } else {
+                setLoadingMore(true);
+            }
+            
+            const params = new URLSearchParams({
+                page: page.toString(),
+                limit: '20',
+                ...(search && { search }),
+                ...(selectedCampus && { campus_id: selectedCampus }),
+                ...(selectedCourse && { course_id: selectedCourse }),
+                ...(selectedBatch && { batch_id: selectedBatch })
+            });
+            
+            const res = await api.get(`/user-management/students/filtered?${params}`);
+            
+            if (page === 1) {
+                setStudents(res.data.data);
+            } else {
+                setStudents(prev => [...prev, ...res.data.data]);
+            }
+            
+            setHasMore(res.data.pagination.has_more);
+            setTotalStudents(res.data.pagination.total);
+            setCurrentPage(page);
         } catch (err) {
             error('Failed to fetch students.');
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
-    }, [error]);
+    }, [error, selectedCampus, selectedCourse, selectedBatch]);
 
     useEffect(() => {
-        fetchStudents();
-    }, [fetchStudents]);
+        fetchStudents(1, searchTerm);
+    }, [fetchStudents, searchTerm, selectedCampus, selectedCourse, selectedBatch]);
     
     const handleDeleteStudent = async (studentId) => {
         if (window.confirm('Are you sure you want to delete this student? This action is permanent.')) {
@@ -113,47 +205,11 @@ const StudentManagement = () => {
         }
     };
 
-    const filteredStudents = useMemo(() => {
-        return students.filter(student =>
-            (student.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-            (student.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-            (student.campus_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-            (student.course_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-            (student.batch_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-            (student.roll_number?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-        );
-    }, [students, searchTerm]);
-
-    // Pagination logic
-    const indexOfLastStudent = currentPage * studentsPerPage;
-    const indexOfFirstStudent = indexOfLastStudent - studentsPerPage;
-    const currentStudents = filteredStudents.slice(indexOfFirstStudent, indexOfLastStudent);
-    const totalPages = Math.ceil(filteredStudents.length / studentsPerPage);
-
-    // Reset to first page when search term changes
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTerm]);
-
-    // Pagination handlers
-    const goToPage = (pageNumber) => {
-        setCurrentPage(pageNumber);
-    };
-
-    const goToFirstPage = () => {
-        setCurrentPage(1);
-    };
-
-    const goToLastPage = () => {
-        setCurrentPage(totalPages);
-    };
-
-    const goToPreviousPage = () => {
-        setCurrentPage(prev => Math.max(prev - 1, 1));
-    };
-
-    const goToNextPage = () => {
-        setCurrentPage(prev => Math.min(prev + 1, totalPages));
+    // Load more function
+    const loadMore = () => {
+        if (hasMore && !loadingMore) {
+            fetchStudents(currentPage + 1, searchTerm);
+        }
     };
 
     const handleStudentClick = async (student) => {
@@ -339,18 +395,104 @@ const StudentManagement = () => {
                                     View and manage student information across the system.
                                     {!loading && (
                                         <span className="ml-2 text-blue-600 font-medium">
-                                            ({filteredStudents.length} students)
+                                            ({totalStudents} students)
+                                            {(selectedCampus || selectedCourse || selectedBatch) && (
+                                                <span className="text-sm text-gray-500">
+                                                    {' '}(filtered)
+                                                </span>
+                                            )}
                                         </span>
                                     )}
                                 </p>
                             </div>
                         </div>
 
+                        {/* Filter Section */}
+                        <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                                <Filter className="mr-2 h-5 w-5 text-gray-500" />
+                                Filter Students
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                {/* Campus Filter */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Campus</label>
+                                    <select
+                                        value={selectedCampus}
+                                        onChange={(e) => setSelectedCampus(e.target.value)}
+                                        className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                    >
+                                        <option value="">All Campuses</option>
+                                        {campuses.map(campus => (
+                                            <option key={campus.id} value={campus.id}>
+                                                {campus.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Course Filter */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Course</label>
+                                    <select
+                                        value={selectedCourse}
+                                        onChange={(e) => setSelectedCourse(e.target.value)}
+                                        disabled={!selectedCampus || loadingFilters}
+                                        className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                    >
+                                        <option value="">
+                                            {loadingFilters && selectedCampus ? 'Loading...' : 'All Courses'}
+                                        </option>
+                                        {courses.map(course => (
+                                            <option key={course.id} value={course.id}>
+                                                {course.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Batch Filter */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Batch</label>
+                                    <select
+                                        value={selectedBatch}
+                                        onChange={(e) => setSelectedBatch(e.target.value)}
+                                        disabled={!selectedCourse || loadingFilters}
+                                        className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                    >
+                                        <option value="">
+                                            {loadingFilters && selectedCourse ? 'Loading...' : 'All Batches'}
+                                        </option>
+                                        {batches.map(batch => (
+                                            <option key={batch.id} value={batch.id}>
+                                                {batch.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Clear Filters Button */}
+                            {(selectedCampus || selectedCourse || selectedBatch) && (
+                                <button
+                                    onClick={() => {
+                                        setSelectedCampus('');
+                                        setSelectedCourse('');
+                                        setSelectedBatch('');
+                                    }}
+                                    className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                                >
+                                    Clear Filters
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Search Section */}
                         <div className="mb-6 relative">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-tertiary" />
                             <input
                                 type="text"
-                                placeholder="Search by name, email, campus, course, batch, or roll number..."
+                                placeholder="Search by name, email, or roll number..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full pl-12 pr-4 py-3 border border-stroke rounded-lg shadow-sm focus:ring-1 focus:ring-highlight"
@@ -359,7 +501,7 @@ const StudentManagement = () => {
 
                         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
                             <div className="overflow-x-auto">
-                                {loading ? <LoadingSpinner /> : filteredStudents.length === 0 ? (
+                                {loading ? <LoadingSpinner /> : students.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-12">
                                         <Users className="w-16 h-16 text-gray-400 mb-4" />
                                         <h3 className="text-lg font-medium text-gray-900 mb-2">No students found</h3>
@@ -379,7 +521,7 @@ const StudentManagement = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="bg-white divide-y divide-gray-200">
-                                            {currentStudents.map(student => (
+                                            {students.map(student => (
                                                 <tr key={student._id} className="hover:bg-gray-50 cursor-pointer transition-colors duration-150" onClick={() => handleStudentClick(student)}>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <div className="text-sm font-medium text-gray-900">{student.name}</div>
@@ -436,85 +578,39 @@ const StudentManagement = () => {
                                 )}
                             </div>
                             
-                            {/* Pagination */}
-                            {filteredStudents.length > 0 && (
+                            {/* Load More Section */}
+                            {students.length > 0 && (
                                 <div className="bg-white px-6 py-4 border-t border-gray-200">
                                     <div className="flex items-center justify-between">
                                         <div className="text-sm text-gray-700">
-                                            Showing {indexOfFirstStudent + 1} to {Math.min(indexOfLastStudent, filteredStudents.length)} of {filteredStudents.length} students
+                                            Showing {students.length} of {totalStudents} students
                                         </div>
                                         
-                                        <div className="flex items-center space-x-2">
-                                            {/* First Page Button */}
+                                        {hasMore && (
                                             <button
-                                                onClick={goToFirstPage}
-                                                disabled={currentPage === 1}
-                                                className="p-2 text-gray-500 hover:text-gray-700 disabled:text-gray-300 disabled:cursor-not-allowed rounded-md hover:bg-gray-100 transition-colors"
-                                                title="First Page"
+                                                onClick={loadMore}
+                                                disabled={loadingMore}
+                                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                                             >
-                                                <ChevronsLeft size={16} />
+                                                {loadingMore ? (
+                                                    <>
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                        Loading...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        Load More Students
+                                                        <ChevronRight size={16} />
+                                                    </>
+                                                )}
                                             </button>
-                                            
-                                            {/* Previous Page Button */}
-                                            <button
-                                                onClick={goToPreviousPage}
-                                                disabled={currentPage === 1}
-                                                className="p-2 text-gray-500 hover:text-gray-700 disabled:text-gray-300 disabled:cursor-not-allowed rounded-md hover:bg-gray-100 transition-colors"
-                                                title="Previous Page"
-                                            >
-                                                <ChevronLeft size={16} />
-                                            </button>
-                                            
-                                            {/* Page Numbers */}
-                                            <div className="flex items-center space-x-1">
-                                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                                    let pageNumber;
-                                                    if (totalPages <= 5) {
-                                                        pageNumber = i + 1;
-                                                    } else if (currentPage <= 3) {
-                                                        pageNumber = i + 1;
-                                                    } else if (currentPage >= totalPages - 2) {
-                                                        pageNumber = totalPages - 4 + i;
-                                                    } else {
-                                                        pageNumber = currentPage - 2 + i;
-                                                    }
-                                                    
-                                                    return (
-                                                        <button
-                                                            key={pageNumber}
-                                                            onClick={() => goToPage(pageNumber)}
-                                                            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                                                                currentPage === pageNumber
-                                                                    ? 'bg-blue-600 text-white'
-                                                                    : 'text-gray-700 hover:bg-gray-100'
-                                                            }`}
-                                                        >
-                                                            {pageNumber}
-                                                        </button>
-                                                    );
-                                                })}
+                                        )}
+                                        
+                                        {!hasMore && students.length > 0 && (
+                                            <div className="text-sm text-gray-500">
+                                                All students loaded
                                             </div>
-                                            
-                                            {/* Next Page Button */}
-                                            <button
-                                                onClick={goToNextPage}
-                                                disabled={currentPage === totalPages}
-                                                className="p-2 text-gray-500 hover:text-gray-700 disabled:text-gray-300 disabled:cursor-not-allowed rounded-md hover:bg-gray-100 transition-colors"
-                                                title="Next Page"
-                                            >
-                                                <ChevronRight size={16} />
-                                            </button>
-                                            
-                                            {/* Last Page Button */}
-                                            <button
-                                                onClick={goToLastPage}
-                                                disabled={currentPage === totalPages}
-                                                className="p-2 text-gray-500 hover:text-gray-700 disabled:text-gray-300 disabled:cursor-not-allowed rounded-md hover:bg-gray-100 transition-colors"
-                                                title="Last Page"
-                                            >
-                                                <ChevronsRight size={16} />
-                                            </button>
-                                        </div>
+                                        )}
                                     </div>
                                 </div>
                             )}

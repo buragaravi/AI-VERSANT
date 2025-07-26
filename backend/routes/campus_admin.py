@@ -71,9 +71,29 @@ def get_campus_students():
         campus_id = user.get('campus_id')
         if not campus_id:
             return jsonify({'success': False, 'message': 'Campus not assigned'}), 400
+
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 20))
+        search = request.args.get('search', '').strip()
         
-        # Get students in this campus
-        students = list(mongo_db.students.find({'campus_id': ObjectId(campus_id)}))
+        # Calculate skip value
+        skip = (page - 1) * limit
+
+        # Build match stage with search
+        match_stage = {'campus_id': ObjectId(campus_id)}
+        if search:
+            match_stage['$or'] = [
+                {'name': {'$regex': search, '$options': 'i'}},
+                {'email': {'$regex': search, '$options': 'i'}},
+                {'roll_number': {'$regex': search, '$options': 'i'}}
+            ]
+
+        # Get total count for pagination
+        total_count = mongo_db.students.count_documents(match_stage)
+        
+        # Get students in this campus with pagination
+        students = list(mongo_db.students.find(match_stage).skip(skip).limit(limit).sort('name', 1))
         student_list = []
         
         for student in students:
@@ -93,7 +113,17 @@ def get_campus_students():
                 'created_at': student.get('created_at')
             })
         
-        return jsonify({'success': True, 'data': student_list}), 200
+        return jsonify({
+            'success': True, 
+            'data': student_list,
+            'pagination': {
+                'page': page,
+                'limit': limit,
+                'total': total_count,
+                'pages': (total_count + limit - 1) // limit,
+                'has_more': (page * limit) < total_count
+            }
+        }), 200
         
     except Exception as e:
         return jsonify({
