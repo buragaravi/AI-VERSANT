@@ -658,23 +658,24 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Create a New Test</h1>
-          <p className="mt-2 text-gray-500">Follow the steps to configure and launch a test.</p>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Create a New Test</h1>
+          <p className="mt-2 text-base text-gray-600">Follow the steps to configure and launch a test.</p>
         </div>
-        <button onClick={() => setView('list')} className="text-sm font-medium text-gray-500 hover:text-blue-500">
-          &larr; Back to Test List
+        <button onClick={() => setView('list')} className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200 hover:bg-blue-50 rounded-lg">
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          Back to Test List
         </button>
       </div>
-      <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8">
-        <div className="mb-8">
-          <div className="w-full bg-gray-200 rounded-full h-2.5">
+      <div className="bg-gradient-to-br from-white to-blue-50 rounded-3xl shadow-2xl border border-blue-100 p-8 sm:p-10">
+        <div className="mb-10">
+          <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
             <motion.div 
-              className="bg-blue-500 h-2.5 rounded-full" 
+              className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full shadow-lg" 
               animate={{ width: `${((step - 1) / 5) * 100}%` }}
-              transition={{ duration: 0.5 }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
             />
           </div>
-          <p className="text-right text-sm text-gray-500 mt-2">
+          <p className="text-right text-sm font-medium text-gray-600 mt-3">
             Step {step} of 6: {
               step === 1 ? 'Select Test Category' :
               step === 2 ? 'Select Test Type' :
@@ -701,91 +702,121 @@ const Step1TestCategory = ({ nextStep, prevStep, updateTestData, testData }) => 
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
-      <div className="space-y-8">
-        <div className="flex items-center space-x-3">
-          <div className="bg-blue-500 p-2 rounded-full text-white">
-            <Briefcase className="h-6 w-6"/>
+      <div className="space-y-10">
+        <div className="flex items-center space-x-4 border-b border-gray-100 pb-6">
+          <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-3 rounded-xl text-white shadow-lg">
+            <Briefcase className="h-7 w-7"/>
           </div>
-          <h2 className="text-2xl font-bold">Select Test Category</h2>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Select Test Category</h2>
+            <p className="text-gray-600 mt-1">Choose the category of test you want to create</p>
+          </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* CRT Option */}
           <button
             onClick={() => handleCategorySelect('CRT')}
-            className="p-8 border-2 border-gray-200 rounded-lg text-left transition-all duration-200 hover:border-blue-500 hover:shadow-lg hover:scale-105 bg-white"
+            className="group p-8 border-2 border-gray-200 rounded-2xl text-left transition-all duration-300 hover:border-orange-400 hover:shadow-xl hover:scale-105 bg-white hover:bg-gradient-to-br hover:from-orange-50 hover:to-orange-100"
           >
-            <div className="flex items-center space-x-4 mb-4">
-              <div className="bg-orange-100 p-3 rounded-full">
-                <Code className="h-8 w-8 text-orange-600" />
+            <div className="flex items-center space-x-4 mb-6">
+              <div className="bg-gradient-to-r from-orange-500 to-red-500 p-4 rounded-xl text-white shadow-lg group-hover:shadow-xl transition-shadow">
+                <Code className="h-8 w-8" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-gray-800">CRT (Campus Recruitment Test)</h3>
-                <p className="text-sm text-gray-600">Technical and aptitude assessment</p>
+                <h3 className="text-xl font-bold text-gray-800 group-hover:text-orange-700 transition-colors">CRT (Campus Recruitment Test)</h3>
+                <p className="text-gray-600 mt-1">Technical and aptitude assessment</p>
               </div>
             </div>
-            <div className="space-y-3">
-              <div className="flex items-center space-x-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm text-gray-700">Aptitude Testing</span>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3">
+                <div className="bg-green-100 p-2 rounded-full">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                </div>
+                <span className="text-gray-700 font-medium">Aptitude Testing</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm text-gray-700">Reasoning Assessment</span>
+              <div className="flex items-center space-x-3">
+                <div className="bg-green-100 p-2 rounded-full">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                </div>
+                <span className="text-gray-700 font-medium">Reasoning Assessment</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm text-gray-700">Technical Programming</span>
+              <div className="flex items-center space-x-3">
+                <div className="bg-green-100 p-2 rounded-full">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                </div>
+                <span className="text-gray-700 font-medium">Technical Programming</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm text-gray-700">Code Execution & Validation</span>
+              <div className="flex items-center space-x-3">
+                <div className="bg-green-100 p-2 rounded-full">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                </div>
+                <span className="text-gray-700 font-medium">Code Execution & Validation</span>
               </div>
+            </div>
+            <div className="mt-6">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800">
+                Technical Assessment
+              </span>
             </div>
           </button>
 
           {/* Versant Option */}
           <button
             onClick={() => handleCategorySelect('VERSANT')}
-            className="p-8 border-2 border-gray-200 rounded-lg text-left transition-all duration-200 hover:border-blue-500 hover:shadow-lg hover:scale-105 bg-white"
+            className="group p-8 border-2 border-gray-200 rounded-2xl text-left transition-all duration-300 hover:border-blue-400 hover:shadow-xl hover:scale-105 bg-white hover:bg-gradient-to-br hover:from-blue-50 hover:to-blue-100"
           >
-            <div className="flex items-center space-x-4 mb-4">
-              <div className="bg-blue-100 p-3 rounded-full">
-                <Mic className="h-8 w-8 text-blue-600" />
+            <div className="flex items-center space-x-4 mb-6">
+              <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-4 rounded-xl text-white shadow-lg group-hover:shadow-xl transition-shadow">
+                <Mic className="h-8 w-8" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-gray-800">Versant</h3>
-                <p className="text-sm text-gray-600">Language proficiency assessment</p>
+                <h3 className="text-xl font-bold text-gray-800 group-hover:text-blue-700 transition-colors">Versant</h3>
+                <p className="text-gray-600 mt-1">Language proficiency assessment</p>
               </div>
             </div>
-            <div className="space-y-3">
-              <div className="flex items-center space-x-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm text-gray-700">Grammar Testing</span>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3">
+                <div className="bg-green-100 p-2 rounded-full">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                </div>
+                <span className="text-gray-700 font-medium">Grammar Testing</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm text-gray-700">Vocabulary Assessment</span>
+              <div className="flex items-center space-x-3">
+                <div className="bg-green-100 p-2 rounded-full">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                </div>
+                <span className="text-gray-700 font-medium">Vocabulary Assessment</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm text-gray-700">Reading Comprehension</span>
+              <div className="flex items-center space-x-3">
+                <div className="bg-green-100 p-2 rounded-full">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                </div>
+                <span className="text-gray-700 font-medium">Reading Comprehension</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm text-gray-700">Listening & Speaking</span>
+              <div className="flex items-center space-x-3">
+                <div className="bg-green-100 p-2 rounded-full">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                </div>
+                <span className="text-gray-700 font-medium">Listening & Speaking</span>
               </div>
+            </div>
+            <div className="mt-6">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                Language Assessment
+              </span>
             </div>
           </button>
         </div>
 
-        <div className="flex justify-between items-center pt-8 border-t mt-8 border-gray-200">
+        <div className="flex justify-between items-center pt-8 border-t border-gray-100 mt-10">
           <button 
             type="button" 
             onClick={() => setView('list')} 
-            className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors"
+            className="inline-flex items-center justify-center px-6 py-3 text-sm font-medium rounded-xl text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all duration-200 hover:shadow-md transform hover:scale-105"
           >
-            <ChevronLeft className="h-5 w-5 mr-1" /> Back to Test List
+            <ChevronLeft className="h-5 w-5 mr-2" /> 
+            Back to Test List
           </button>
         </div>
       </div>
@@ -984,48 +1015,129 @@ const Step2TestType = ({ nextStep, prevStep, updateTestData, testData }) => {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-        <div className="flex items-center space-x-3 border-b pb-4 border-gray-200">
-          <div className="bg-blue-500 p-2 rounded-full text-white">
-            <Briefcase className="h-6 w-6"/>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-10">
+        <div className="flex items-center space-x-4 border-b border-gray-100 pb-6">
+          <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-3 rounded-xl text-white shadow-lg">
+            <Briefcase className="h-7 w-7"/>
           </div>
-          <h2 className="text-2xl font-bold mb-4">Select Test Type</h2>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>
-            <label className="block text-sm font-medium text-gray-800">Test Type</label>
-            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <label className={clsx('relative flex p-4 border rounded-lg cursor-pointer hover:bg-blue-50 transition', {
-                'bg-blue-50 border-blue-500 ring-2 ring-blue-500': testType === 'Practice'
-              })}>
-                <input type="radio" {...register('testType', { required: 'Please select a test type' })} value="Practice" className="sr-only" />
-                <div className="flex-1">
-                  <span className="font-medium text-gray-800">Practice Module</span>
-                  <p className="text-sm text-gray-500">Low-stakes module for student practice.</p>
-                </div>
-                {testType === 'Practice' && <CheckCircle className="h-5 w-5 text-blue-500 absolute top-2 right-2" />}
-              </label>
-              <label className={clsx('relative flex p-4 border rounded-lg cursor-pointer hover:bg-blue-50 transition', {
-                'bg-blue-50 border-blue-500 ring-2 ring-blue-500': testType === 'Online'
-              })}>
-                <input type="radio" {...register('testType', { required: 'Please select a test type' })} value="Online" className="sr-only" />
-                <div className="flex-1">
-                  <span className="font-medium text-gray-800">Online Exam</span>
-                  <p className="text-sm text-gray-500">Formal, graded assessment.</p>
-                </div>
-                {testType === 'Online' && <CheckCircle className="h-5 w-5 text-blue-500 absolute top-2 right-2" />}
-              </label>
-            </div>
+            <h2 className="text-2xl font-bold text-gray-800">Select Test Type</h2>
+            <p className="text-gray-600 mt-1">Choose the type of test you want to create</p>
           </div>
         </div>
         
-        <div className="flex justify-between items-center pt-8 border-t mt-8 border-gray-200">
-          <button type="button" onClick={prevStep} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors">
-            <ChevronLeft className="h-5 w-5 mr-1" /> Back
+        <div className="space-y-6">
+          <label className="block text-lg font-semibold text-gray-800 mb-4">Test Type</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <label className={clsx(
+              'relative group cursor-pointer transition-all duration-300 transform hover:scale-105',
+              'bg-white border-2 rounded-2xl p-6 shadow-lg hover:shadow-xl',
+              'hover:border-green-300 hover:bg-green-50/50',
+              {
+                'border-green-500 bg-gradient-to-br from-green-50 to-green-100 shadow-xl ring-4 ring-green-100': testType === 'Practice',
+                'border-gray-200': testType !== 'Practice'
+              }
+            )}>
+              <input 
+                type="radio" 
+                {...register('testType', { required: 'Please select a test type' })} 
+                value="Practice" 
+                className="sr-only"
+              />
+              <div className="flex items-start space-x-4">
+                <div className={clsx(
+                  'p-3 rounded-xl transition-colors duration-300',
+                  {
+                    'bg-gradient-to-r from-green-500 to-emerald-500 text-white': testType === 'Practice',
+                    'bg-gray-100 text-gray-400 group-hover:bg-green-100 group-hover:text-green-600': testType !== 'Practice'
+                  }
+                )}>
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-gray-800 mb-2">Practice Module</h3>
+                  <p className="text-gray-600 leading-relaxed">Low-stakes module for student practice and skill development.</p>
+                  <div className="mt-3 flex items-center text-sm text-gray-500">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      Recommended for learning
+                    </span>
+                  </div>
+                </div>
+                {testType === 'Practice' && (
+                  <div className="absolute top-4 right-4">
+                    <div className="bg-green-500 text-white rounded-full p-1">
+                      <CheckCircle className="h-5 w-5" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </label>
+            
+            <label className={clsx(
+              'relative group cursor-pointer transition-all duration-300 transform hover:scale-105',
+              'bg-white border-2 rounded-2xl p-6 shadow-lg hover:shadow-xl',
+              'hover:border-purple-300 hover:bg-purple-50/50',
+              {
+                'border-purple-500 bg-gradient-to-br from-purple-50 to-purple-100 shadow-xl ring-4 ring-purple-100': testType === 'Online',
+                'border-gray-200': testType !== 'Online'
+              }
+            )}>
+              <input 
+                type="radio" 
+                {...register('testType', { required: 'Please select a test type' })} 
+                value="Online" 
+                className="sr-only"
+              />
+              <div className="flex items-start space-x-4">
+                <div className={clsx(
+                  'p-3 rounded-xl transition-colors duration-300',
+                  {
+                    'bg-gradient-to-r from-purple-500 to-indigo-500 text-white': testType === 'Online',
+                    'bg-gray-100 text-gray-400 group-hover:bg-purple-100 group-hover:text-purple-600': testType !== 'Online'
+                  }
+                )}>
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-gray-800 mb-2">Online Exam</h3>
+                  <p className="text-gray-600 leading-relaxed">Formal, graded assessment with time limits and scoring.</p>
+                  <div className="mt-3 flex items-center text-sm text-gray-500">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      For evaluation
+                    </span>
+                  </div>
+                </div>
+                {testType === 'Online' && (
+                  <div className="absolute top-4 right-4">
+                    <div className="bg-purple-500 text-white rounded-full p-1">
+                      <CheckCircle className="h-5 w-5" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </label>
+          </div>
+        </div>
+        
+        <div className="flex justify-between items-center pt-8 border-t border-gray-100 mt-10">
+          <button 
+            type="button" 
+            onClick={prevStep} 
+            className="inline-flex items-center justify-center px-6 py-3 text-sm font-medium rounded-xl text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all duration-200 hover:shadow-md transform hover:scale-105"
+          >
+            <ChevronLeft className="h-5 w-5 mr-2" /> 
+            Back
           </button>
-          <button type="submit" className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105">
-            Next: Select Module and Level <ChevronRight className="h-5 w-5 ml-2" />
+          <button 
+            type="submit" 
+            className="inline-flex items-center justify-center px-8 py-3 text-sm font-medium rounded-xl shadow-lg text-white bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 focus:outline-none focus:ring-4 focus:ring-blue-200 transition-all duration-200 transform hover:scale-105 hover:shadow-xl"
+          >
+            Next: Select Module and Level 
+            <ChevronRight className="h-5 w-5 ml-2" />
           </button>
         </div>
       </form>
@@ -1212,32 +1324,37 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
     }
     
     setError('');
-    updateTestData({ 
+    const updateData = { 
       module, 
       level: module === 'GRAMMAR' ? subcategory : (module.startsWith('CRT_') ? module : level), 
       subcategory: module === 'GRAMMAR' ? subcategory : null,
       topic_id: module.startsWith('CRT_') ? selectedTopic : null,
       testName 
-    });
+    };
+    updateTestData(updateData);
     nextStep();
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center space-x-3">
-        <div className="bg-blue-500 p-2 rounded-full text-white">
-          <FileQuestion className="h-6 w-6"/>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
+      <div className="space-y-10">
+        <div className="flex items-center space-x-4 border-b border-gray-100 pb-6">
+          <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-3 rounded-xl text-white shadow-lg">
+            <FileQuestion className="h-7 w-7"/>
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Select Module, Level, and Enter Test Name</h2>
+            <p className="text-gray-600 mt-1">Configure the test details and provide a unique name</p>
+          </div>
         </div>
-        <h2 className="text-2xl font-bold">Select Module, Level, and Enter Test Name</h2>
-      </div>
 
-      <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 space-y-8">
         <div>
-          <label className="block font-semibold mb-2">Module</label>
+          <label className="block text-base font-semibold text-gray-800 mb-2">Module</label>
           <select 
             value={module} 
             onChange={handleModuleChange} 
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 bg-white hover:border-blue-300"
           >
             <option value="">Select Module</option>
             {getModulesForCategory().map(mod => (
@@ -1248,11 +1365,11 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
 
         {module && module === 'GRAMMAR' && (
           <div>
-            <label className="block font-semibold mb-2">Grammar Category</label>
+            <label className="block text-base font-semibold text-gray-800 mb-2">Grammar Category</label>
             <select 
               value={subcategory} 
               onChange={handleSubcategoryChange} 
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 bg-white hover:border-blue-300"
               disabled={loading}
             >
               <option value="">Select Grammar Category</option>
@@ -1265,11 +1382,11 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
 
         {module && module !== 'GRAMMAR' && !module.startsWith('CRT_') && (
           <div>
-            <label className="block font-semibold mb-2">Level</label>
+            <label className="block text-base font-semibold text-gray-800 mb-2">Level</label>
             <select 
               value={level} 
               onChange={handleLevelChange} 
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 bg-white hover:border-blue-300"
               disabled={loading}
             >
               <option value="">Select Level</option>
@@ -1282,11 +1399,11 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
 
         {module && module.startsWith('CRT_') && (
           <div>
-            <label className="block font-semibold mb-2">Topic (Optional)</label>
+            <label className="block text-base font-semibold text-gray-800 mb-2">Topic (Optional)</label>
             <select 
               value={selectedTopic} 
               onChange={handleTopicChange} 
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 bg-white hover:border-blue-300"
               disabled={loading}
             >
               <option value="">Select Topic (Optional)</option>
@@ -1303,15 +1420,15 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
         )}
 
         <div>
-          <label className="block font-semibold mb-2">Test Name</label>
+          <label className="block text-base font-semibold text-gray-800 mb-2">Test Name</label>
           <div className="relative">
             <input 
               value={testName} 
               onChange={e => setTestName(e.target.value)} 
-              className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+              className={`w-full p-4 border-2 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 ${
                 nameExists ? 'border-red-500 bg-red-50' : 
                 nameAvailable ? 'border-green-500 bg-green-50' : 
-                'border-gray-300'
+                'border-gray-200 hover:border-blue-300'
               }`}
               placeholder="Enter test name" 
             />
@@ -1343,24 +1460,27 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
           )}
         </div>
 
-        {error && <div className="text-red-600 p-3 bg-red-50 border border-red-200 rounded-lg">{error}</div>}
+        {error && <div className="text-red-600 p-4 bg-red-50 border-2 border-red-200 rounded-xl">{error}</div>}
 
-        <div className="flex justify-between items-center pt-4">
+        <div className="flex justify-between items-center pt-8 border-t border-gray-100 mt-10">
           <button 
             onClick={prevStep} 
-            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+            className="inline-flex items-center justify-center px-6 py-3 text-sm font-medium rounded-xl text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all duration-200 hover:shadow-md transform hover:scale-105"
           >
+            <ChevronLeft className="h-5 w-5 mr-2" /> 
             Back
           </button>
           <button 
             onClick={handleNext} 
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="inline-flex items-center justify-center px-8 py-3 text-sm font-medium rounded-xl shadow-lg text-white bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 focus:outline-none focus:ring-4 focus:ring-blue-200 transition-all duration-200 transform hover:scale-105 hover:shadow-xl"
           >
-            Next
+            Next: Select Audience 
+            <ChevronRight className="h-5 w-5 ml-2" />
           </button>
         </div>
       </div>
     </div>
+  </motion.div>
   );
 };
 
@@ -2283,11 +2403,6 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
   const [studentList, setStudentList] = useState([]);
   useEffect(() => {
     const fetchStudentCount = async () => {
-      console.log('Step4ConfirmAndGenerate - testData:', testData);
-      console.log('Campus:', testData.campus);
-      console.log('Batches:', testData.batches);
-      console.log('Courses:', testData.courses);
-      
       try {
         const res = await getStudentCount({
           campus: testData.campus?.value,
@@ -2315,7 +2430,7 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
   })
 
   // Check if this is an MCQ module
-  const isMcqModule = testData.module && ['GRAMMAR', 'VOCABULARY', 'CRT'].includes(testData.module)
+  const isMcqModule = testData.module && ['GRAMMAR', 'VOCABULARY', 'READING'].includes(testData.module) || testData.module?.startsWith('CRT_')
 
   // Helper to format date/time
   const formatDateTime = (dateString) => {
@@ -2359,7 +2474,7 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
         batch_ids: testData.batches.map(b => b.value),
         questions: testData.questions,
         audio_config: isMcqModule ? {} : { accent: data.accent, speed: data.speed },
-        assigned_student_ids: studentList.map(s => s.id), // Only assign to confirmed students
+        assigned_student_ids: studentList && studentList.length > 0 ? studentList.map(s => s.id) : [], // Only assign to confirmed students
       };
       if (testData.testType?.toLowerCase() === 'online') {
         // Always send ISO strings for startDateTime and endDateTime
@@ -2378,14 +2493,9 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
       } else if (testData.module === 'VOCABULARY') {
         payload.subcategory = null;
         payload.level_id = null;
-      } else if (testData.module === 'CRT') {
-        // For CRT modules, map the level to the appropriate CRT category
-        const crtLevelMapping = {
-          'Aptitude': 'CRT_APTITUDE',
-          'Reasoning': 'CRT_REASONING', 
-          'Technical': 'CRT_TECHNICAL'
-        };
-        payload.level_id = crtLevelMapping[testData.level] || testData.level;
+      } else if (testData.module?.startsWith('CRT_')) {
+        // For CRT modules, use the module ID directly as level_id
+        payload.level_id = testData.module;
         payload.subcategory = null;
       } else {
         payload.level_id = testData.level;
@@ -2458,17 +2568,17 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
             <h4 className="font-semibold text-gray-700 mb-2">Students who will get access:</h4>
             <div className="max-h-48 overflow-y-auto border border-gray-200 rounded bg-white">
               {studentList.length === 0 ? (
-                <div className="text-gray-500 text-sm p-4">No students found for the selected criteria.</div>
+                <div className="text-gray-500 text-sm p-4 text-center">
+                  <p>No students found for the selected batch-course combinations.</p>
+                  <p className="text-xs mt-1">Please check if students have been uploaded to the selected batches and courses.</p>
+                </div>
               ) : (
                 <table className="min-w-full text-sm border-separate border-spacing-0">
                   <thead className="bg-gray-100">
                     <tr>
                       <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Name</th>
                       <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Email</th>
-                      <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">Mobile</th>
-                      <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">Test Status</th>
-                      <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">Email Notification</th>
-                      <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">SMS Status</th>
+                      <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">Roll Number</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2476,10 +2586,7 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
                       <tr key={s.id} className={idx % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-50'}>
                         <td className="px-4 py-2 text-gray-900 border-b align-middle">{s.name}</td>
                         <td className="px-4 py-2 text-gray-900 border-b align-middle">{s.email}</td>
-                        <td className="px-4 py-2 text-gray-900 border-b align-middle text-center">{s.mobile_number || '-'}</td>
-                        <td className="px-4 py-2 text-gray-900 border-b align-middle text-center">{s.test_status === 'completed' ? <span className="text-green-600 font-semibold">Completed</span> : <span className="text-yellow-600 font-semibold">Pending</span>}</td>
-                        <td className="px-4 py-2 text-gray-900 border-b align-middle text-center">{s.notify_status === 'sent' ? <span className="text-green-700">Sent</span> : s.notify_status === 'skipped' ? <span className="text-gray-500">Skipped</span> : s.notify_status === 'pending' ? <span className="text-blue-500">Pending</span> : s.notify_status === 'failed' ? <span className="text-red-600">Failed</span> : <span className="text-gray-400">-</span>}</td>
-                        <td className="px-4 py-2 text-gray-900 border-b align-middle text-center">{s.sms_status === 'sent' ? <span className="text-green-700">Sent</span> : s.sms_status === 'failed' ? <span className="text-red-600">Failed</span> : s.sms_status === 'no_mobile' ? <span className="text-gray-500">No Mobile</span> : <span className="text-gray-400">-</span>}</td>
+                        <td className="px-4 py-2 text-gray-900 border-b align-middle text-center">{s.roll_number || '-'}</td>
                       </tr>
                     ))}
                   </tbody>

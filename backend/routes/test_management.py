@@ -481,6 +481,85 @@ def delete_test(test_id):
         current_app.logger.error(f"Error deleting test {test_id}: {e}")
         return jsonify({'success': False, 'message': 'An error occurred while deleting the test.'}), 500
 
+@test_management_bp.route('/student-count', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def get_student_count():
+    """Get student count and list for given campus, batches, and courses"""
+    try:
+        current_app.logger.info("Student count endpoint called")
+        data = request.get_json()
+        current_app.logger.info(f"Received data: {data}")
+        
+        campus_id = data.get('campus')
+        batch_ids = data.get('batches', [])
+        course_ids = data.get('courses', [])
+        
+        current_app.logger.info(f"Campus ID: {campus_id}")
+        current_app.logger.info(f"Batch IDs: {batch_ids}")
+        current_app.logger.info(f"Course IDs: {course_ids}")
+        
+        if not campus_id:
+            return jsonify({'success': False, 'message': 'Campus ID is required'}), 400
+        
+        # Get batch-course instances that match the criteria
+        instance_query = {'campus_id': ObjectId(campus_id)}
+        
+        if batch_ids:
+            instance_query['batch_id'] = {'$in': [ObjectId(bid) for bid in batch_ids]}
+        
+        if course_ids:
+            instance_query['course_id'] = {'$in': [ObjectId(cid) for cid in course_ids]}
+        
+        current_app.logger.info(f"Instance query: {instance_query}")
+        
+        # Find matching batch-course instances
+        instances = list(mongo_db.db.batch_course_instances.find(instance_query))
+        current_app.logger.info(f"Found {len(instances)} instances")
+        
+        if not instances:
+            return jsonify({
+                'success': True,
+                'count': 0,
+                'students': [],
+                'message': 'No batch-course instances found for the selected criteria'
+            }), 200
+        
+        # Get all students from these instances
+        instance_ids = [instance['_id'] for instance in instances]
+        students = list(mongo_db.students.find({'batch_course_instance_id': {'$in': instance_ids}}))
+        current_app.logger.info(f"Found {len(students)} students")
+        
+        # Convert ObjectIds to strings and format student data
+        student_list = []
+        for student in students:
+            # Get user details
+            user = mongo_db.users.find_one({'_id': student['user_id']})
+            if user:
+                student_list.append({
+                    'id': str(student['_id']),
+                    'name': user.get('name', ''),
+                    'email': user.get('email', ''),
+                    'roll_number': student.get('roll_number', '')
+                })
+            else:
+                current_app.logger.warning(f"User not found for student {student['_id']}")
+        
+        current_app.logger.info(f"Processed {len(student_list)} students with user details")
+        
+        current_app.logger.info(f"Returning {len(student_list)} students")
+        return jsonify({
+            'success': True,
+            'count': len(student_list),
+            'students': student_list
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting student count: {e}")
+        import traceback
+        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @test_management_bp.route('/check-test-name', methods=['POST'])
 @jwt_required()
 @require_superadmin

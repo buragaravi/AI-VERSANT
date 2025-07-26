@@ -23,7 +23,7 @@ def create_technical_test():
         course_ids = data.get('course_ids', [])
         batch_ids = data.get('batch_ids', [])
         questions = data.get('questions', [])
-        assigned_student_ids = data.get('assigned_student_ids', [])
+        assigned_student_ids = data.get('assigned_student_ids', []) or []
         startDateTime = data.get('startDateTime')
         endDateTime = data.get('endDateTime')
         duration = data.get('duration')
