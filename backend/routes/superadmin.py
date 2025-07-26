@@ -31,7 +31,7 @@ def dashboard():
             }), 403
         
         total_users = mongo_db.users.count_documents({})
-        total_students = mongo_db.students.count_documents({})
+        total_students = mongo_db.users.count_documents({'role': 'student'})
         total_tests = mongo_db.tests.count_documents({})
         # Optionally, count admins (super, campus, course)
         total_admins = mongo_db.users.count_documents({'role': {'$in': [ROLES['SUPER_ADMIN'], ROLES.get('CAMPUS_ADMIN'), ROLES.get('COURSE_ADMIN')]}})

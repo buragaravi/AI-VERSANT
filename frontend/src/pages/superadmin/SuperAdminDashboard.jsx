@@ -27,9 +27,15 @@ const SuperAdminDashboard = () => {
   const fetchDashboardStats = async () => {
     try {
       const response = await api.get('/superadmin/dashboard')
-      setStats(response.data.data)
+      if (response.data.success) {
+        setStats(response.data.data)
+      } else {
+        console.error('Dashboard API returned error:', response.data.message)
+        error('Failed to load dashboard data: ' + response.data.message)
+      }
     } catch (err) {
-      error('Failed to load dashboard data')
+      console.error('Dashboard API error:', err)
+      error('Failed to load dashboard data: ' + (err.response?.data?.message || err.message))
     } finally {
       setLoading(false)
     }
@@ -38,13 +44,21 @@ const SuperAdminDashboard = () => {
   const fetchActiveCourses = async () => {
     try {
       const campusesRes = await getCampuses()
-      let totalCourses = 0
-      for (const campus of campusesRes.data.data) {
-        const coursesRes = await getCoursesByCampus(campus.id)
-        totalCourses += (coursesRes.data.data?.length || 0)
+      if (campusesRes.data.success) {
+        let totalCourses = 0
+        for (const campus of campusesRes.data.data) {
+          const coursesRes = await getCoursesByCampus(campus.id)
+          if (coursesRes.data.success) {
+            totalCourses += (coursesRes.data.data?.length || 0)
+          }
+        }
+        setActiveCourses(totalCourses)
+      } else {
+        console.error('Failed to fetch campuses:', campusesRes.data.message)
+        setActiveCourses(0)
       }
-      setActiveCourses(totalCourses)
     } catch (e) {
+      console.error('Error fetching active courses:', e)
       setActiveCourses(0)
     }
   }
@@ -52,22 +66,30 @@ const SuperAdminDashboard = () => {
   const fetchAdminCount = async () => {
     try {
       const campusRes = await getCampuses()
-      const campuses = campusRes.data.data || []
-      let adminIds = new Set()
-      // Add campus admins
-      campuses.forEach(c => {
-        if (c.admin && c.admin.id) adminIds.add(c.admin.id)
-      })
-      // Add course admins
-      for (const campus of campuses) {
-        const courseRes = await getCoursesByCampus(campus.id)
-        const courses = courseRes.data.data || []
-        courses.forEach(course => {
-          if (course.admin && course.admin.id) adminIds.add(course.admin.id)
+      if (campusRes.data.success) {
+        const campuses = campusRes.data.data || []
+        let adminIds = new Set()
+        // Add campus admins
+        campuses.forEach(c => {
+          if (c.admin && c.admin.id) adminIds.add(c.admin.id)
         })
+        // Add course admins
+        for (const campus of campuses) {
+          const courseRes = await getCoursesByCampus(campus.id)
+          if (courseRes.data.success) {
+            const courses = courseRes.data.data || []
+            courses.forEach(course => {
+              if (course.admin && course.admin.id) adminIds.add(course.admin.id)
+            })
+          }
+        }
+        setAdminCount(adminIds.size)
+      } else {
+        console.error('Failed to fetch campuses for admin count:', campusRes.data.message)
+        setAdminCount(0)
       }
-      setAdminCount(adminIds.size)
     } catch (e) {
+      console.error('Error fetching admin count:', e)
       setAdminCount(0)
     }
   }
