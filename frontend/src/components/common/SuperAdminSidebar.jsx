@@ -99,7 +99,7 @@ const SuperAdminSidebar = () => {
 
     try {
       // For super admin, set permissions immediately without API call
-      if (user.role === 'super_admin' || user.role === 'superadmin') {
+      if (user.role === 'superadmin') {
         const superAdminPermissions = {
           modules: ['dashboard', 'campus_management', 'course_management', 'batch_management', 'user_management', 'admin_permissions', 'test_management', 'question_bank_upload', 'crt_upload', 'student_management', 'results_management'],
           can_upload_tests: true,
@@ -151,7 +151,7 @@ const SuperAdminSidebar = () => {
     console.log('getNavigation called - loading:', loading, 'userPermissions:', userPermissions, 'user:', user)
     
     // For super admin, always show all navigation items
-    if (user?.role === 'super_admin' || user?.role === 'superadmin') {
+    if (user?.role === 'superadmin') {
       console.log('Super admin detected, showing all navigation items')
       return [
         { name: 'Dashboard', path: '/superadmin/dashboard', icon: LayoutDashboard, module: 'dashboard' },

@@ -76,8 +76,16 @@ def require_permission(module=None, action=None):
                     'message': 'User not found'
                 }), 404
             
+            # Debug logging
+            print(f"Access control check - User role: {user.get('role')}")
+            print(f"Module required: {module}")
+            print(f"Action required: {action}")
+            
             # Super admin has all permissions
-            if user.get('role') in ['super_admin', 'superadmin']:
+            user_role = user.get('role', '').lower()
+            
+            if user_role == 'superadmin':
+                print("Super admin access granted")
                 return f(*args, **kwargs)
             
             # Check permissions for other admin roles
@@ -113,7 +121,7 @@ def get_available_modules():
         current_user_id = get_jwt_identity()
         user = mongo_db.find_user_by_id(current_user_id)
         
-        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+        if not user or user.get('role') != 'superadmin':
             return jsonify({
                 'success': False,
                 'message': 'Access denied. Super admin privileges required.'
@@ -361,4 +369,36 @@ def reset_admin_permissions(admin_id):
         return jsonify({
             'success': False,
             'message': f'Failed to reset permissions: {str(e)}'
+        }), 500
+
+@access_control_bp.route('/debug-user', methods=['GET'])
+@jwt_required()
+def debug_user():
+    """Debug endpoint to check current user's role and permissions"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user:
+            return jsonify({
+                'success': False,
+                'message': 'User not found'
+            }), 404
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'user_id': str(current_user_id),
+                'role': user.get('role'),
+                'username': user.get('username'),
+                'permissions': user.get('permissions', {}),
+                'role_lower': user.get('role', '').lower(),
+                'is_super_admin': user.get('role') == 'superadmin'
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Debug error: {str(e)}'
         }), 500 

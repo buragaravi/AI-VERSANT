@@ -14,7 +14,7 @@ from models import Test
 superadmin_bp = Blueprint('superadmin', __name__)
 
 # Define allowed admin roles
-ALLOWED_ADMIN_ROLES = {ROLES['SUPER_ADMIN'], ROLES.get('CAMPUS_ADMIN'), ROLES.get('COURSE_ADMIN')}
+ALLOWED_ADMIN_ROLES = {ROLES['SUPER_ADMIN'], ROLES['CAMPUS_ADMIN'], ROLES['COURSE_ADMIN']}
 
 @superadmin_bp.route('/dashboard', methods=['GET'])
 @jwt_required()
@@ -24,17 +24,33 @@ def dashboard():
         current_user_id = get_jwt_identity()
         user = mongo_db.find_user_by_id(current_user_id)
         
-        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+        # Debug logging
+        current_app.logger.info(f"Dashboard access attempt - User ID: {current_user_id}")
+        current_app.logger.info(f"User found: {user is not None}")
+        if user:
+            current_app.logger.info(f"User role: {user.get('role')}")
+            current_app.logger.info(f"Allowed roles: {ALLOWED_ADMIN_ROLES}")
+            current_app.logger.info(f"Role check: {user.get('role') in ALLOWED_ADMIN_ROLES}")
+        
+        # More permissive check for superadmin dashboard
+        if not user:
             return jsonify({
                 'success': False,
-                'message': 'Access denied. Admin privileges required.'
+                'message': 'User not found'
+            }), 403
+        
+        user_role = user.get('role')
+        if user_role != 'superadmin':
+            return jsonify({
+                'success': False,
+                'message': f'Access denied. Super admin privileges required. User role: {user_role}'
             }), 403
         
         total_users = mongo_db.users.count_documents({})
         total_students = mongo_db.users.count_documents({'role': 'student'})
         total_tests = mongo_db.tests.count_documents({})
         # Optionally, count admins (super, campus, course)
-        total_admins = mongo_db.users.count_documents({'role': {'$in': [ROLES['SUPER_ADMIN'], ROLES.get('CAMPUS_ADMIN'), ROLES.get('COURSE_ADMIN')]}})
+        total_admins = mongo_db.users.count_documents({'role': {'$in': [ROLES['SUPER_ADMIN'], ROLES['CAMPUS_ADMIN'], ROLES['COURSE_ADMIN']]}})
         # Optionally, count active courses
         total_courses = mongo_db.courses.count_documents({})
 
@@ -61,6 +77,37 @@ def dashboard():
             'message': f'Failed to get dashboard data: {str(e)}'
         }), 500
 
+@superadmin_bp.route('/debug-roles', methods=['GET'])
+@jwt_required()
+def debug_roles():
+    """Debug endpoint to check user roles"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Get all unique roles in the database
+        all_roles = mongo_db.users.distinct('role')
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'current_user': {
+                    'id': str(current_user_id),
+                    'role': user.get('role') if user else None,
+                    'username': user.get('username') if user else None
+                },
+                'allowed_roles': list(ALLOWED_ADMIN_ROLES),
+                'all_roles_in_db': all_roles,
+                'role_constants': ROLES
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Debug error: {str(e)}'
+        }), 500
+
 @superadmin_bp.route('/users', methods=['POST'])
 @jwt_required()
 def create_user():
@@ -69,10 +116,10 @@ def create_user():
         current_user_id = get_jwt_identity()
         user = mongo_db.find_user_by_id(current_user_id)
         
-        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+        if not user or user.get('role') != 'superadmin':
             return jsonify({
                 'success': False,
-                'message': 'Access denied. Admin privileges required.'
+                'message': 'Access denied. Super admin privileges required.'
             }), 403
         
         data = request.get_json()
@@ -127,10 +174,10 @@ def get_users():
         current_user_id = get_jwt_identity()
         user = mongo_db.find_user_by_id(current_user_id)
         
-        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+        if not user or user.get('role') != 'superadmin':
             return jsonify({
                 'success': False,
-                'message': 'Access denied. Admin privileges required.'
+                'message': 'Access denied. Super admin privileges required.'
             }), 403
         
         users = list(mongo_db.users.find().sort('created_at', -1))
@@ -166,10 +213,10 @@ def create_test():
         current_user_id = get_jwt_identity()
         user = mongo_db.find_user_by_id(current_user_id)
         
-        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+        if not user or user.get('role') != 'superadmin':
             return jsonify({
                 'success': False,
-                'message': 'Access denied. Admin privileges required.'
+                'message': 'Access denied. Super admin privileges required.'
             }), 403
         
         data = request.get_json()
@@ -216,10 +263,10 @@ def get_tests():
         current_user_id = get_jwt_identity()
         user = mongo_db.find_user_by_id(current_user_id)
         
-        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+        if not user or user.get('role') != 'superadmin':
             return jsonify({
                 'success': False,
-                'message': 'Access denied. Admin privileges required.'
+                'message': 'Access denied. Super admin privileges required.'
             }), 403
         
         page = int(request.args.get('page', 1))
@@ -288,10 +335,10 @@ def create_online_exam():
         current_user_id = get_jwt_identity()
         user = mongo_db.find_user_by_id(current_user_id)
         
-        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+        if not user or user.get('role') != 'superadmin':
             return jsonify({
                 'success': False,
-                'message': 'Access denied. Admin privileges required.'
+                'message': 'Access denied. Super admin privileges required.'
             }), 403
         
         data = request.get_json()
@@ -1368,7 +1415,7 @@ def migrate_batch_course_instances():
     # Only super admin
     current_user_id = get_jwt_identity()
     user = mongo_db.find_user_by_id(current_user_id)
-    if not user or user.get('role') != ROLES['SUPER_ADMIN']:
+    if not user or user.get('role') != 'superadmin':
         return jsonify({'success': False, 'message': 'Access denied. Super admin privileges required.'}), 403
     # Migrate students
     students = list(mongo_db.students.find())

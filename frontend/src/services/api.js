@@ -21,8 +21,13 @@ if (!API_URL) {
   }
 }
 
-// Ensure we're using the correct backend URL
-if (API_URL.includes('versant-backend.onrender.com')) {
+// For development, always use the proxy regardless of VITE_API_URL
+if (isDevelopment) {
+  API_URL = '/api'
+}
+
+// Ensure we're using the correct backend URL for production
+if (!isDevelopment && API_URL.includes('versant-backend.onrender.com')) {
   API_URL = 'https://ai-versant-backend.onrender.com'
 }
 

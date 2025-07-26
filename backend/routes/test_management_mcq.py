@@ -38,6 +38,11 @@ def create_mcq_test():
         if module_id not in mcq_modules:
             return jsonify({'success': False, 'message': f'Invalid module for MCQ test: {module_id}'}), 400
 
+        # Check if test name already exists
+        existing_test = mongo_db.tests.find_one({'name': test_name})
+        if existing_test:
+            return jsonify({'success': False, 'message': f'Test name "{test_name}" already exists. Please choose a different name.'}), 409
+
         # Generate unique test ID
         test_id = generate_unique_test_id()
 

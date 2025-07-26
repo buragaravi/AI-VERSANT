@@ -1044,6 +1044,9 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
   const [grammarCategories, setGrammarCategories] = useState([]);
   const [crtTopics, setCrtTopics] = useState([]);
   const [selectedTopic, setSelectedTopic] = useState('');
+  const [isCheckingName, setIsCheckingName] = useState(false);
+  const [nameExists, setNameExists] = useState(false);
+  const [nameAvailable, setNameAvailable] = useState(false);
   const { error: showError } = useNotification();
 
   // Fetch levels and grammar categories when component mounts
@@ -1138,6 +1141,47 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
     setSubcategory(e.target.value);
   };
 
+  // Check if test name already exists
+  const checkTestName = async (name) => {
+    if (!name.trim()) {
+      setNameExists(false);
+      setNameAvailable(false);
+      return;
+    }
+
+    setIsCheckingName(true);
+    try {
+      const response = await api.post('/test-management/check-test-name', { name: name.trim() });
+      if (response.data.exists) {
+        setNameExists(true);
+        setNameAvailable(false);
+      } else {
+        setNameExists(false);
+        setNameAvailable(true);
+      }
+    } catch (error) {
+      console.error('Error checking test name:', error);
+      setNameExists(false);
+      setNameAvailable(false);
+    } finally {
+      setIsCheckingName(false);
+    }
+  };
+
+  // Debounced test name check
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (testName.trim()) {
+        checkTestName(testName);
+      } else {
+        setNameExists(false);
+        setNameAvailable(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [testName]);
+
   const handleNext = () => {
     if (!module) {
       setError('Please select a module.');
@@ -1154,6 +1198,16 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
     
     if (!testName.trim()) {
       setError('Please enter a test name.');
+      return;
+    }
+
+    if (nameExists) {
+      setError('This test name already exists. Please choose a different name.');
+      return;
+    }
+
+    if (isCheckingName) {
+      setError('Please wait while we check the test name availability.');
       return;
     }
     
@@ -1250,12 +1304,43 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
 
         <div>
           <label className="block font-semibold mb-2">Test Name</label>
-          <input 
-            value={testName} 
-            onChange={e => setTestName(e.target.value)} 
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-            placeholder="Enter test name" 
-          />
+          <div className="relative">
+            <input 
+              value={testName} 
+              onChange={e => setTestName(e.target.value)} 
+              className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                nameExists ? 'border-red-500 bg-red-50' : 
+                nameAvailable ? 'border-green-500 bg-green-50' : 
+                'border-gray-300'
+              }`}
+              placeholder="Enter test name" 
+            />
+            {isCheckingName && (
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+              </div>
+            )}
+            {nameAvailable && !isCheckingName && (
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                <svg className="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            )}
+            {nameExists && !isCheckingName && (
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                <svg className="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+            )}
+          </div>
+          {nameExists && !isCheckingName && (
+            <p className="text-red-600 text-sm mt-1">This test name already exists. Please choose a different name.</p>
+          )}
+          {nameAvailable && !isCheckingName && (
+            <p className="text-green-600 text-sm mt-1">Test name is available!</p>
+          )}
         </div>
 
         {error && <div className="text-red-600 p-3 bg-red-50 border border-red-200 rounded-lg">{error}</div>}
