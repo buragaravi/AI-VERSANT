@@ -51,11 +51,7 @@ const StudentManagement = () => {
     const [loadingMore, setLoadingMore] = useState(false);
     const [totalStudents, setTotalStudents] = useState(0);
     const [campuses, setCampuses] = useState([]);
-    const [courses, setCourses] = useState([]);
-    const [batches, setBatches] = useState([]);
     const [selectedCampus, setSelectedCampus] = useState('');
-    const [selectedCourse, setSelectedCourse] = useState('');
-    const [selectedBatch, setSelectedBatch] = useState('');
     const [loadingFilters, setLoadingFilters] = useState(false);
 
     // Fetch campuses on mount
@@ -76,14 +72,14 @@ const StudentManagement = () => {
         const fetchCourses = async () => {
             if (!selectedCampus) {
                 setCourses([]);
-                setSelectedCourse('');
+                setSelectedCourse(null);
                 return;
             }
             try {
                 setLoadingFilters(true);
                 const res = await api.get(`/course-management/courses?campus_id=${selectedCampus}`);
                 setCourses(res.data.data || []);
-                setSelectedCourse(''); // Reset course selection
+                setSelectedCourse(null); // Reset course selection
             } catch (err) {
                 error('Failed to fetch courses.');
                 setCourses([]);
@@ -99,14 +95,14 @@ const StudentManagement = () => {
         const fetchBatches = async () => {
             if (!selectedCourse) {
                 setBatches([]);
-                setSelectedBatch('');
+                setSelectedBatch(null);
                 return;
             }
             try {
                 setLoadingFilters(true);
                 const res = await api.get(`/batch-management/course/${selectedCourse}/batches`);
                 setBatches(res.data.data || []);
-                setSelectedBatch(''); // Reset batch selection
+                setSelectedBatch(null); // Reset batch selection
             } catch (err) {
                 error('Failed to fetch batches.');
                 setBatches([]);
@@ -435,8 +431,8 @@ const StudentManagement = () => {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Course</label>
                                     <select
-                                        value={selectedCourse}
-                                        onChange={(e) => setSelectedCourse(e.target.value)}
+                                        value={selectedCourse || ''}
+                                        onChange={(e) => setSelectedCourse(e.target.value || null)}
                                         disabled={!selectedCampus || loadingFilters}
                                         className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                     >
@@ -455,8 +451,8 @@ const StudentManagement = () => {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Batch</label>
                                     <select
-                                        value={selectedBatch}
-                                        onChange={(e) => setSelectedBatch(e.target.value)}
+                                        value={selectedBatch || ''}
+                                        onChange={(e) => setSelectedBatch(e.target.value || null)}
                                         disabled={!selectedCourse || loadingFilters}
                                         className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                     >
@@ -477,8 +473,8 @@ const StudentManagement = () => {
                                 <button
                                     onClick={() => {
                                         setSelectedCampus('');
-                                        setSelectedCourse('');
-                                        setSelectedBatch('');
+                                        setSelectedCourse(null);
+                                        setSelectedBatch(null);
                                     }}
                                     className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
                                 >
