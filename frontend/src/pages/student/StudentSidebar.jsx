@@ -28,12 +28,10 @@ const StudentSidebar = () => {
             navigate('/login');
         } catch (error) {
             console.error('StudentSidebar logout error:', error)
-            // Still navigate to login even if logout fails
             navigate('/login');
         }
     };
 
-    // Handle window resize to close mobile menu on desktop
     useEffect(() => {
         const handleResize = () => {
             const newIsDesktop = window.innerWidth >= 1024;
@@ -47,7 +45,6 @@ const StudentSidebar = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, [isMobileMenuOpen]);
 
-    // Handle swipe gestures for mobile
     useEffect(() => {
         let startX = 0;
         let currentX = 0;
@@ -62,8 +59,6 @@ const StudentSidebar = () => {
 
         const handleTouchEnd = () => {
             const diffX = startX - currentX;
-            
-            // If swiped left more than 50px and menu is open, close it
             if (diffX > 50 && isMobileMenuOpen) {
                 setIsMobileMenuOpen(false);
             }
@@ -82,7 +77,6 @@ const StudentSidebar = () => {
         };
     }, [isMobileMenuOpen]);
 
-    // Handle click outside to close mobile menu
     useEffect(() => {
         const handleClickOutside = (e) => {
             const sidebar = document.querySelector('[data-student-sidebar]');
@@ -113,10 +107,14 @@ const StudentSidebar = () => {
                 <button
                     data-student-toggle-button
                     onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                    className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    className="p-3 bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                     aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
                 >
-                    {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                    {isMobileMenuOpen ? (
+                        <X className="h-5 w-5" />
+                    ) : (
+                        <Menu className="h-5 w-5" />
+                    )}
                 </button>
             </div>
 
@@ -128,12 +126,12 @@ const StudentSidebar = () => {
                     x: isDesktop ? 0 : (isMobileMenuOpen ? 0 : '-100%')
                 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                className={`fixed top-0 left-0 h-screen w-64 bg-gradient-to-b from-white to-gray-50 shadow-2xl z-30 flex flex-col border-r border-gray-200 lg:relative lg:translate-x-0 lg:z-auto ${
+                className={`fixed top-0 left-0 h-screen w-72 bg-gradient-to-b from-white to-gray-50 shadow-2xl z-30 flex flex-col border-r border-gray-200/70 ${
                     isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
                 }`}
                 style={{ 
-                  transform: isDesktop ? 'translateX(0)' : undefined,
-                  position: isDesktop ? 'relative' : 'fixed'
+                    transform: isDesktop ? 'translateX(0)' : undefined,
+                    position: 'fixed'
                 }}
             >
                 {/* Logo/Brand */}
@@ -141,7 +139,7 @@ const StudentSidebar = () => {
                     initial={{ y: -20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     transition={{ delay: 0.1, type: 'spring', stiffness: 100 }}
-                    className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 flex-shrink-0"
+                    className="p-4 border-b border-gray-200/50 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 flex-shrink-0"
                 >
                     <div className="flex items-center justify-center">
                         <img
@@ -150,30 +148,35 @@ const StudentSidebar = () => {
                             alt="PYDAH GROUP"
                         />
                     </div>
-                    <p className="text-xs text-gray-600 font-medium text-center mt-2">
+                    <p className="text-xs text-gray-600/80 font-medium text-center mt-2">
                         Education & Beyond
                     </p>
                 </motion.div>
 
                 <nav className="flex-1 flex flex-col justify-between min-h-0">
-                    <div className="flex flex-col space-y-1 px-4 mt-4 overflow-y-auto flex-1 pb-4">
-                        <div className="space-y-1">
+                    <div className="flex flex-col space-y-1 px-4 mt-6 overflow-y-auto flex-1 pb-4">
+                        <div className="space-y-2">
                             {navLinks.map((link, idx) => (
                                 <motion.div
                                     key={link.name}
                                     initial={{ x: -30, opacity: 0 }}
                                     animate={{ x: 0, opacity: 1 }}
-                                    transition={{ delay: 0.05 * idx, type: 'spring', stiffness: 80, damping: 18 }}
+                                    transition={{ 
+                                        delay: 0.05 * idx, 
+                                        type: 'spring', 
+                                        stiffness: 80, 
+                                        damping: 18 
+                                    }}
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
                                 >
                                     <Link
                                         to={link.path}
                                         onClick={() => setIsMobileMenuOpen(false)}
-                                        className={`group flex items-center px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-300 relative overflow-hidden
+                                        className={`group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-300 relative overflow-hidden
                                             ${isActive(link.path)
-                                                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105'
-                                                : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 hover:text-gray-900 hover:shadow-md'
+                                                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
+                                                : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900 hover:shadow-sm'
                                             }
                                         `}
                                     >
@@ -181,28 +184,28 @@ const StudentSidebar = () => {
                                         {isActive(link.path) && (
                                             <motion.div
                                                 layoutId="studentActiveTab"
-                                                className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl"
+                                                className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl"
                                                 initial={false}
                                                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                                             />
                                         )}
                                         
-                                        <link.icon className={`mr-3 h-4 w-4 transition-all duration-300 relative z-10
+                                        <link.icon className={`mr-3 h-5 w-5 transition-all duration-300 relative z-10
                                             ${isActive(link.path)
                                                 ? 'text-white' 
-                                                : 'text-gray-500 group-hover:text-blue-600 group-hover:scale-110'
+                                                : 'text-gray-500 group-hover:text-blue-600'
                                             }`} 
                                         />
-                                        <span className="relative z-10 transition-all duration-300 group-hover:translate-x-1 font-semibold text-sm">
+                                        <span className="relative z-10 transition-all duration-300 font-medium text-sm">
                                             {link.name}
                                         </span>
                                         
                                         {/* Hover effect */}
                                         {!isActive(link.path) && (
                                             <motion.div
-                                                className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 rounded-xl"
-                                                initial={{ opacity: 0, scale: 0.8 }}
-                                                whileHover={{ opacity: 1, scale: 1 }}
+                                                className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-indigo-500/5 rounded-xl"
+                                                initial={{ opacity: 0 }}
+                                                whileHover={{ opacity: 1 }}
                                                 transition={{ duration: 0.2 }}
                                             />
                                         )}
@@ -218,40 +221,45 @@ const StudentSidebar = () => {
                     initial={{ y: 20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     transition={{ delay: 0.3, type: 'spring', stiffness: 100 }}
-                    className="px-4 pb-4 mt-auto flex-shrink-0 border-t border-gray-200"
+                    className="px-4 pb-6 mt-auto flex-shrink-0 border-t border-gray-200/50"
                 >
                     <Link 
                         to="/student/profile" 
                         onClick={() => setIsMobileMenuOpen(false)}
-                        className="flex items-center w-full px-4 py-3 text-sm font-medium text-gray-700 rounded-xl hover:bg-gray-100 transition-all duration-300"
+                        className="flex items-center w-full px-4 py-3 text-sm font-medium text-gray-700 rounded-xl hover:bg-gray-100/80 transition-all duration-300 group"
                     >
-                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                        <motion.div 
+                            whileHover={{ rotate: 5 }}
+                            className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mr-3 flex-shrink-0 shadow-md group-hover:shadow-lg"
+                        >
                             <User className="w-4 h-4 text-white" />
-                        </div>
+                        </motion.div>
                         <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-sm truncate">{user?.name || 'Student'}</p>
-                            <p className="text-xs text-gray-500">Student</p>
+                            <p className="font-medium text-sm truncate">{user?.name || 'Student'}</p>
+                            <p className="text-xs text-gray-500/80">Student Account</p>
                         </div>
                     </Link>
                     
                     {/* Logout Button */}
-                    <button
+                    <motion.button
                         onClick={() => {
                             handleLogout();
                             setIsMobileMenuOpen(false);
                         }}
-                        className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white font-semibold px-3 py-2.5 rounded-xl hover:from-gray-700 hover:to-gray-800 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 text-sm mt-3"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="w-full flex items-center justify-center gap-2 bg-gradient-to-br from-gray-700 to-gray-800 text-white font-medium px-4 py-2.5 rounded-xl hover:shadow-lg transition-all duration-300 shadow-md mt-4 focus:outline-none focus:ring-2 focus:ring-gray-500/50"
                     >
-                        <motion.div
-                            whileHover={{ rotate: 180 }}
-                            transition={{ duration: 0.3 }}
+                        <svg 
+                            className="h-4 w-4 transition-transform duration-300 group-hover:rotate-180" 
+                            fill="none" 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24"
                         >
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                            </svg>
-                        </motion.div>
-                        Logout
-                    </button>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        <span>Sign Out</span>
+                    </motion.button>
                 </motion.div>
             </motion.div>
             
@@ -261,52 +269,64 @@ const StudentSidebar = () => {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
+                    className="fixed inset-0 bg-black/30 backdrop-blur-sm z-20 lg:hidden"
                     onClick={() => setIsMobileMenuOpen(false)}
                 />
             )}
             
             {/* Main Content */}
-            <div className="flex-1 bg-gray-50">
+            <div className="flex-1 bg-gray-50/95 lg:ml-72">
                 {/* Header */}
-                <header className="sticky top-0 z-40 bg-white shadow-md flex items-center h-16 sm:h-20 px-2 sm:px-4 border-b-2 border-emerald-400">
+                <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm shadow-sm flex items-center h-16 sm:h-20 px-4 sm:px-6 border-b border-gray-200/70">
                     {/* Left: Hamburger menu */}
                     <div className="flex items-center flex-shrink-0 mr-2">
                         <button
-                            className="lg:hidden p-3 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500"
+                            className="lg:hidden p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-all duration-200"
                             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                             style={{ minWidth: 44, minHeight: 44 }}
                         >
-                            <Menu className="h-7 w-7" />
+                            <Menu className="h-6 w-6" />
                         </button>
                     </div>
                     {/* Center: Logo and system name */}
                     <div className="flex-1 flex items-center justify-center min-w-0">
-                        <div className="h-7 w-12 sm:h-10 sm:w-20 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center mr-1 sm:mr-2 shadow-md">
-                            <img src="https://static.wixstatic.com/media/bfee2e_7d499a9b2c40442e85bb0fa99e7d5d37~mv2.png/v1/fill/w_203,h_111,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/logo1.png" alt="Logo" className="h-5 w-auto sm:h-7 object-contain rounded-xl" />
+                        <div className="h-8 w-14 sm:h-10 sm:w-20 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mr-2 shadow-sm">
+                            <img 
+                                src="https://static.wixstatic.com/media/bfee2e_7d499a9b2c40442e85bb0fa99e7d5d37~mv2.png/v1/fill/w_203,h_111,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/logo1.png" 
+                                alt="Logo" 
+                                className="h-5 w-auto sm:h-6 object-contain rounded-lg" 
+                            />
                         </div>
-                        <span className="text-base sm:text-2xl font-bold text-black ml-1 sm:ml-2 truncate" style={{maxWidth: 'calc(100vw - 120px)'}}>VERSANT SYSTEM</span>
+                        <span className="text-lg sm:text-xl font-semibold text-gray-800 ml-2 truncate" style={{maxWidth: 'calc(100vw - 120px)'}}>
+                            VERSANT SYSTEM
+                        </span>
                     </div>
                     {/* Right: User info */}
                     <div className="flex items-center space-x-4 flex-shrink-0">
+                        <button className="p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 transition-colors duration-200">
+                            <Bell className="h-5 w-5" />
+                        </button>
                         <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center">
-                                <User className="h-6 w-6 text-white" />
-                            </div>
-                            <span className="hidden md:block text-lg font-medium text-black">
+                            <motion.div 
+                                whileHover={{ scale: 1.05 }}
+                                className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-sm"
+                            >
+                                <User className="h-4 w-4 text-white" />
+                            </motion.div>
+                            <span className="hidden md:block text-sm font-medium text-gray-700">
                                 {user?.name}
                             </span>
                         </div>
                     </div>
                 </header>
                 
-                                {/* Content Area */}
+                {/* Content Area */}
                 <div className="p-4 sm:p-6 lg:p-8 min-h-screen">
-                  <Outlet />
+                    <Outlet />
                 </div>
             </div>
         </div>
     );
 };
 
-export default StudentSidebar; 
+export default StudentSidebar;
