@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import Header from '../../components/common/Header'
-import Sidebar from '../../components/common/Sidebar'
+
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import api from '../../services/api'
 import { useNotification } from '../../contexts/NotificationContext'
@@ -121,21 +120,16 @@ const OnlineExams = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar />
-      <div className="flex-1 lg:pl-64">
-        <Header />
-        <main className="px-6 lg:px-10 py-12">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <h1 className="text-3xl font-bold text-gray-800">Online Exams</h1>
-            <p className="mt-2 text-gray-500">
-              View and start your scheduled online exams.
-            </p>
-          </motion.div>
+    <div className="max-w-7xl mx-auto">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <h1 className="text-3xl font-bold text-gray-800">Online Exams</h1>
+        <p className="mt-2 text-gray-500">
+          View and start your scheduled online exams.
+        </p>
           
           <div className="mt-8">
             {loading ? (
@@ -223,10 +217,9 @@ const OnlineExams = () => {
               </motion.div>
             )}
           </div>
-        </main>
+        </motion.div>
       </div>
-    </div>
-  )
+    )
 }
 
 export default OnlineExams 

@@ -3,8 +3,7 @@ import { motion } from 'framer-motion';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
-import Header from '../../components/common/Header';
-import Sidebar from '../../components/common/Sidebar';
+
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { BookOpen, BrainCircuit, ChevronLeft, Lock, Unlock, CheckCircle, XCircle, Ear } from 'lucide-react';
@@ -226,19 +225,13 @@ const PracticeModules = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-      <Sidebar />
-      <div className="lg:ml-64 p-4 sm:p-6 lg:p-8 pt-20 sm:pt-24 w-full">
-        <div className="max-w-7xl mx-auto">
-          {renderContent()}
-        </div>
-      </div>
-
-              <PopupModal 
-          isVisible={isPopupVisible} 
-          onClose={() => setIsPopupVisible(false)} 
-        />
+    <div className="max-w-7xl mx-auto">
+      {renderContent()}
+      
+      <PopupModal 
+        isVisible={isPopupVisible} 
+        onClose={() => setIsPopupVisible(false)} 
+      />
         {/* Motivational Unlock Popup */}
         {showUnlockPopup && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">

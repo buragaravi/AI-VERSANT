@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { Home, Book, Calendar, BarChart2, PieChart, User, Menu, X } from 'lucide-react';
+import { Home, Book, Calendar, BarChart2, PieChart, User, Menu, X, Bell } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { motion } from 'framer-motion';
 
@@ -9,6 +9,7 @@ const StudentSidebar = () => {
     const navigate = useNavigate();
     const { user, logout } = useAuth();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
 
     const navLinks = [
         { name: 'Dashboard', path: '/student', icon: Home },
@@ -20,14 +21,24 @@ const StudentSidebar = () => {
     ];
 
     const handleLogout = () => {
-        logout();
-        navigate('/login');
+        console.log('StudentSidebar logout initiated')
+        try {
+            logout();
+            console.log('StudentSidebar logout successful')
+            navigate('/login');
+        } catch (error) {
+            console.error('StudentSidebar logout error:', error)
+            // Still navigate to login even if logout fails
+            navigate('/login');
+        }
     };
 
     // Handle window resize to close mobile menu on desktop
     useEffect(() => {
         const handleResize = () => {
-            if (window.innerWidth >= 1024 && isMobileMenuOpen) {
+            const newIsDesktop = window.innerWidth >= 1024;
+            setIsDesktop(newIsDesktop);
+            if (newIsDesktop && isMobileMenuOpen) {
                 setIsMobileMenuOpen(false);
             }
         };
@@ -114,12 +125,16 @@ const StudentSidebar = () => {
                 data-student-sidebar
                 initial={false}
                 animate={{ 
-                    x: isMobileMenuOpen ? 0 : '-100%'
+                    x: isDesktop ? 0 : (isMobileMenuOpen ? 0 : '-100%')
                 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                 className={`fixed top-0 left-0 h-screen w-64 bg-gradient-to-b from-white to-gray-50 shadow-2xl z-30 flex flex-col border-r border-gray-200 lg:relative lg:translate-x-0 lg:z-auto ${
-                    isMobileMenuOpen ? 'translate-x-0' : 'lg:translate-x-0 -translate-x-full'
+                    isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
                 }`}
+                style={{ 
+                  transform: isDesktop ? 'translateX(0)' : undefined,
+                  position: isDesktop ? 'relative' : 'fixed'
+                }}
             >
                 {/* Logo/Brand */}
                 <motion.div 
@@ -240,9 +255,55 @@ const StudentSidebar = () => {
                 </motion.div>
             </motion.div>
             
+            {/* Mobile Overlay */}
+            {isMobileMenuOpen && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                />
+            )}
+            
             {/* Main Content */}
-            <div className="flex-1 bg-gray-50 w-full lg:ml-64">
-                <Outlet />
+            <div className="flex-1 bg-gray-50">
+                {/* Header */}
+                <header className="sticky top-0 z-40 bg-white shadow-md flex items-center h-16 sm:h-20 px-2 sm:px-4 border-b-2 border-emerald-400">
+                    {/* Left: Hamburger menu */}
+                    <div className="flex items-center flex-shrink-0 mr-2">
+                        <button
+                            className="lg:hidden p-3 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500"
+                            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                            style={{ minWidth: 44, minHeight: 44 }}
+                        >
+                            <Menu className="h-7 w-7" />
+                        </button>
+                    </div>
+                    {/* Center: Logo and system name */}
+                    <div className="flex-1 flex items-center justify-center min-w-0">
+                        <div className="h-7 w-12 sm:h-10 sm:w-20 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center mr-1 sm:mr-2 shadow-md">
+                            <img src="https://static.wixstatic.com/media/bfee2e_7d499a9b2c40442e85bb0fa99e7d5d37~mv2.png/v1/fill/w_203,h_111,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/logo1.png" alt="Logo" className="h-5 w-auto sm:h-7 object-contain rounded-xl" />
+                        </div>
+                        <span className="text-base sm:text-2xl font-bold text-black ml-1 sm:ml-2 truncate" style={{maxWidth: 'calc(100vw - 120px)'}}>VERSANT SYSTEM</span>
+                    </div>
+                    {/* Right: User info */}
+                    <div className="flex items-center space-x-4 flex-shrink-0">
+                        <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center">
+                                <User className="h-6 w-6 text-white" />
+                            </div>
+                            <span className="hidden md:block text-lg font-medium text-black">
+                                {user?.name}
+                            </span>
+                        </div>
+                    </div>
+                </header>
+                
+                                {/* Content Area */}
+                <div className="p-4 sm:p-6 lg:p-8 min-h-screen">
+                  <Outlet />
+                </div>
             </div>
         </div>
     );
