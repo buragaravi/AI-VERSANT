@@ -113,15 +113,20 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      console.log('Logout initiated')
       await authService.logout()
+      console.log('Logout API call successful')
     } catch (err) {
       console.error('Logout error:', err)
+      // Even if the API call fails, we should still clear local storage
     } finally {
+      console.log('Clearing local storage and user state')
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
       localStorage.removeItem('user')
       setUser(null)
       setError(null)
+      console.log('Logout completed')
     }
   }
 

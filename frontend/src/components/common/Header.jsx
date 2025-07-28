@@ -10,8 +10,15 @@ const Header = () => {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   const handleLogout = async () => {
-    await logout()
-    setUserMenuOpen(false)
+    console.log('Header logout initiated')
+    try {
+      await logout()
+      console.log('Header logout successful')
+    } catch (error) {
+      console.error('Header logout error:', error)
+    } finally {
+      setUserMenuOpen(false)
+    }
   }
 
   return (
@@ -34,7 +41,7 @@ const Header = () => {
         <span className="text-base sm:text-2xl font-bold text-black ml-1 sm:ml-2 truncate" style={{maxWidth: 'calc(100vw - 120px)'}}>VERSANT SYSTEM</span>
       </div>
       {/* Right: Profile icon and menu */}
-      {(user?.role === 'superadmin' || user?.role === 'student') && (
+      {(user?.role === 'superadmin' || user?.role === 'campus_admin' || user?.role === 'course_admin' || user?.role === 'student') && (
         <div className="flex items-center space-x-6 flex-shrink-0">
           {/* Notifications - Only for superadmin */}
           {user?.role === 'superadmin' && (
@@ -62,7 +69,13 @@ const Header = () => {
                   <p className="text-gray-500 capitalize">{user?.role?.replace('_', ' ')}</p>
                 </div>
                 <Link
-                  to={user?.role === 'student' ? '/student/profile' : '/profile'}
+                  to={
+                    user?.role === 'student' ? '/student/profile' : 
+                    user?.role === 'superadmin' ? '/superadmin/profile' : 
+                    user?.role === 'campus_admin' ? '/campus-admin/profile' : 
+                    user?.role === 'course_admin' ? '/course-admin/profile' : 
+                    '/profile'
+                  }
                   className="block px-4 py-2 text-base text-black hover:bg-gray-100"
                   onClick={() => setUserMenuOpen(false)}
                 >

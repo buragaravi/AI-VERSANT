@@ -44,6 +44,7 @@ import OnlineExams from './pages/student/OnlineExams'
 import TestHistory from './pages/student/TestHistory'
 import ProgressTracker from './pages/student/ProgressTracker'
 import StudentProfile from './pages/student/Profile'
+import SuperAdminProfile from './pages/superadmin/Profile'
 import OnlineExamTaking from './pages/student/OnlineExamTaking'
 import TestResult from './pages/student/TestResult'
 import PracticeModuleTaking from './pages/student/PracticeModuleTaking'
@@ -118,6 +119,7 @@ function App() {
                     <Route path="crt-upload" element={<CRTUpload />} />
                     <Route path="batch-course-instances" element={<BatchCourseInstances />} />
                     <Route path="batch-management" element={<BatchManagement />} />
+                    <Route path="profile" element={<SuperAdminProfile />} />
                   </Route>
 
                   {/* Campus Admin Routes */}
@@ -131,6 +133,7 @@ function App() {
                     <Route path="results" element={<ResultsManagement />} />
                     <Route path="analytics" element={<CampusReports />} />
                     <Route path="reports" element={<CampusReports />} />
+                    <Route path="profile" element={<SuperAdminProfile />} />
                   </Route>
 
                   {/* Course Admin Routes */}
@@ -142,6 +145,7 @@ function App() {
                     <Route path="tests" element={<TestManagement />} />
                     <Route path="results" element={<ResultsManagement />} />
                     <Route path="analytics" element={<StudentProgress />} />
+                    <Route path="profile" element={<SuperAdminProfile />} />
                   </Route>
 
                 {/* Student Routes */}

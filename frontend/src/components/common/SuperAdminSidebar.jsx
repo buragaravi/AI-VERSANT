@@ -142,8 +142,16 @@ const SuperAdminSidebar = () => {
   }
 
   const handleLogout = () => {
-    logout()
-    navigate('/login')
+    console.log('SuperAdminSidebar logout initiated')
+    try {
+      logout()
+      console.log('SuperAdminSidebar logout successful')
+      navigate('/login')
+    } catch (error) {
+      console.error('SuperAdminSidebar logout error:', error)
+      // Still navigate to login even if logout fails
+      navigate('/login')
+    }
   }
 
   // Define navigation based on user role and permissions
