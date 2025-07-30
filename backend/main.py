@@ -50,7 +50,7 @@ def api_status():
             'course_admin': '/course-admin',
             'student': '/student',
             'test_management': '/test-management',
-            'user_management': '/user-management',
+
             'analytics': '/analytics',
             'campus_management': '/campus-management',
             'course_management': '/course-management',
@@ -80,7 +80,7 @@ from routes.student import student_bp
 from routes.test_management import test_management_bp
 from routes.practice_management import practice_management_bp
 from routes.online_exam_management import online_exam_management_bp
-from routes.user_management import user_management_bp
+
 from routes.analytics import analytics_bp
 from routes.campus_management import campus_management_bp
 from routes.course_management import course_management_bp
@@ -101,7 +101,7 @@ app.register_blueprint(student_bp, url_prefix='/student')
 app.register_blueprint(test_management_bp, url_prefix='/test-management')
 app.register_blueprint(practice_management_bp, url_prefix='/practice-management')
 app.register_blueprint(online_exam_management_bp, url_prefix='/online-exam-management')
-app.register_blueprint(user_management_bp, url_prefix='/user-management')
+
 app.register_blueprint(analytics_bp, url_prefix='/analytics')
 app.register_blueprint(campus_management_bp, url_prefix='/campus-management')
 app.register_blueprint(course_management_bp, url_prefix='/course-management')

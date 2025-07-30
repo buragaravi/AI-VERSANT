@@ -126,15 +126,7 @@ const AdminSidebar = () => {
       })
     }
 
-    // User Management - only for super admin
-    if (userPermissions.modules?.includes('user_management') && 
-        (user.role === 'super_admin' || user.role === 'superadmin')) {
-      navigation.push({ 
-        name: 'User Management', 
-        path: '/superadmin/users', 
-        icon: Users 
-      })
-    }
+
 
     // Student Management - for all admins
     if (userPermissions.modules?.includes('student_management')) {

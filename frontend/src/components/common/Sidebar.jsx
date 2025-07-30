@@ -37,7 +37,6 @@ const Sidebar = () => {
       case 'superadmin':
         return [
           { name: 'Dashboard', href: '/superadmin', icon: Home },
-          { name: 'Users', href: '/superadmin/users', icon: Users },
           { name: 'Campuses', href: '/superadmin/campuses', icon: Building },
           { name: 'Courses', href: '/superadmin/courses', icon: BookOpen },
           { name: 'Modules', href: '/superadmin/tests', icon: FileText },
@@ -81,12 +80,7 @@ const Sidebar = () => {
   const navigationItems = getNavigationItems()
 
   const quickActions = [
-    {
-      name: 'Create User',
-      href: '/superadmin/users/create',
-      icon: Plus,
-      color: 'bg-blue-600',
-    },
+
     {
       name: 'Create Module',
       href: '/superadmin/tests/create',
@@ -227,9 +221,7 @@ export const SuperAdminSidebar = () => {
             <Home className={`mr-3 h-5 w-5 ${isActive('/superadmin') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500'}`} />
             Dashboard
           </Link>
-          <Link to="/superadmin/users/create" className="flex items-center px-3 py-2 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium transition">
-            <Users className="h-5 w-5 mr-2" /> Student Creation
-          </Link>
+
           <Link to="/superadmin/tests/create" className="flex items-center px-3 py-2 rounded-md bg-green-50 text-green-700 hover:bg-green-100 font-medium transition">
             <FilePlus className="h-5 w-5 mr-2" /> Module Creation
           </Link>

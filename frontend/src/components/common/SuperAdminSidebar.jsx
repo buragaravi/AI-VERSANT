@@ -166,7 +166,7 @@ const SuperAdminSidebar = () => {
         { name: 'Campus Management', path: '/superadmin/campuses', icon: Building2, module: 'campus_management' },
         { name: 'Course Management', path: '/superadmin/courses', icon: BookCopy, module: 'course_management' },
         { name: 'Batch Management', path: '/superadmin/batch-management', icon: GraduationCap, module: 'batch_management' },
-        { name: 'User Management', path: '/superadmin/users', icon: Users, module: 'user_management' },
+
         { name: 'Admin Permissions', path: '/superadmin/admin-permissions', icon: Shield, module: 'admin_permissions' },
         { name: 'Test Management', path: '/superadmin/tests', icon: FilePlus, module: 'test_management' },
         { name: 'Question Bank Upload', path: '/superadmin/question-bank-upload', icon: FilePlus, module: 'question_bank_upload', isUpload: true },
@@ -186,7 +186,7 @@ const SuperAdminSidebar = () => {
       { name: 'Campus Management', path: '/superadmin/campuses', icon: Building2, module: 'campus_management' },
       { name: 'Course Management', path: '/superadmin/courses', icon: BookCopy, module: 'course_management' },
       { name: 'Batch Management', path: '/superadmin/batch-management', icon: GraduationCap, module: 'batch_management' },
-      { name: 'User Management', path: '/superadmin/users', icon: Users, module: 'user_management' },
+
       { name: 'Admin Permissions', path: '/superadmin/admin-permissions', icon: Shield, module: 'admin_permissions' },
       { name: 'Test Management', path: '/superadmin/tests', icon: FilePlus, module: 'test_management' },
       { name: 'Question Bank Upload', path: '/superadmin/question-bank-upload', icon: FilePlus, module: 'question_bank_upload', isUpload: true },

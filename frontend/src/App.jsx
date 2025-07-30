@@ -13,7 +13,7 @@ import GetStarted from './pages/auth/GetStarted'
 import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard'
 import CampusManagement from './pages/superadmin/CampusManagement'
 import CourseManagement from './pages/superadmin/CourseManagement'
-import UserManagement from './pages/superadmin/UserManagement'
+
 import AdminPermissions from './pages/superadmin/AdminPermissions'
 import TestManagement from './pages/superadmin/TestManagement'
 import StudentManagement from './pages/superadmin/StudentManagement'
@@ -108,7 +108,7 @@ function App() {
                     <Route path="dashboard" element={<SuperAdminDashboard />} />
                     <Route path="campuses" element={<CampusManagement />} />
                     <Route path="courses" element={<CourseManagement />} />
-                    <Route path="users" element={<UserManagement />} />
+
                     <Route path="admin-permissions" element={<AdminPermissions />} />
                     <Route path="students" element={<StudentManagement />} />
                     <Route path="results" element={<ResultsManagement />} />

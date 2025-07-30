@@ -2,13 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNotification } from '../../contexts/NotificationContext';
 
-
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { 
   Shield, Users, Settings, Check, X, Edit, RotateCcw, 
   Building2, BookOpen, GraduationCap, FileText, BarChart3,
-  Eye, EyeOff, Save, AlertCircle
+  Eye, EyeOff, Save, AlertCircle, Plus, UserPlus, Mail, Lock
 } from 'lucide-react';
 
 const AdminPermissions = () => {
@@ -20,13 +19,34 @@ const AdminPermissions = () => {
   const [loading, setLoading] = useState(true);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
+  const [isCreateAdminModalOpen, setIsCreateAdminModalOpen] = useState(false);
   const [availableModules, setAvailableModules] = useState({});
+  const [campuses, setCampuses] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [selectedCampus, setSelectedCampus] = useState('');
+  const [selectedCourse, setSelectedCourse] = useState('');
+  const [adminForm, setAdminForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'campus_admin'
+  });
+  const [creatingAdmin, setCreatingAdmin] = useState(false);
   const { success, error } = useNotification();
 
   useEffect(() => {
     fetchAdmins();
     fetchAvailableModules();
+    fetchCampuses();
   }, []);
+
+  useEffect(() => {
+    if (selectedCampus) {
+      fetchCoursesByCampus(selectedCampus);
+    } else {
+      setCourses([]);
+    }
+  }, [selectedCampus]);
 
   const fetchAdmins = async () => {
     try {
@@ -49,6 +69,24 @@ const AdminPermissions = () => {
     }
   };
 
+  const fetchCampuses = async () => {
+    try {
+      const response = await api.get('/campus-management/campuses');
+      setCampuses(response.data.data || []);
+    } catch (err) {
+      error('Failed to fetch campuses');
+    }
+  };
+
+  const fetchCoursesByCampus = async (campusId) => {
+    try {
+      const response = await api.get(`/course-management/courses?campus_id=${campusId}`);
+      setCourses(response.data.data || []);
+    } catch (err) {
+      error('Failed to fetch courses');
+    }
+  };
+
   const handleEditPermissions = async (admin) => {
     try {
       const response = await api.get(`/access-control/permissions/${admin.id}`);
@@ -66,6 +104,54 @@ const AdminPermissions = () => {
       fetchAdmins();
     } catch (err) {
       error('Failed to reset permissions');
+    }
+  };
+
+  const handleCreateAdmin = async () => {
+    if (!adminForm.name || !adminForm.email || !adminForm.password) {
+      error('Please fill all required fields');
+      return;
+    }
+
+    if (adminForm.role === 'campus_admin' && !selectedCampus) {
+      error('Please select a campus for campus admin');
+      return;
+    }
+
+    if (adminForm.role === 'course_admin' && !selectedCourse) {
+      error('Please select a course for course admin');
+      return;
+    }
+
+    setCreatingAdmin(true);
+    try {
+      const adminData = {
+        name: adminForm.name,
+        email: adminForm.email,
+        password: adminForm.password,
+        role: adminForm.role
+      };
+
+      if (adminForm.role === 'campus_admin') {
+        adminData.campus_id = selectedCampus;
+      } else if (adminForm.role === 'course_admin') {
+        adminData.course_id = selectedCourse;
+      }
+
+      const response = await api.post('/admin-management/create', adminData);
+      
+      if (response.data.success) {
+        success('Admin created successfully');
+        setIsCreateAdminModalOpen(false);
+        setAdminForm({ name: '', email: '', password: '', role: 'campus_admin' });
+        setSelectedCampus('');
+        setSelectedCourse('');
+        fetchAdmins();
+      }
+    } catch (err) {
+      error(err.response?.data?.message || 'Failed to create admin');
+    } finally {
+      setCreatingAdmin(false);
     }
   };
 
@@ -97,7 +183,6 @@ const AdminPermissions = () => {
       campus_management: <Building2 className="h-4 w-4" />,
       course_management: <BookOpen className="h-4 w-4" />,
       batch_management: <GraduationCap className="h-4 w-4" />,
-      user_management: <Users className="h-4 w-4" />,
       student_management: <GraduationCap className="h-4 w-4" />,
       test_management: <FileText className="h-4 w-4" />,
       question_bank_upload: <FileText className="h-4 w-4" />,
@@ -111,41 +196,59 @@ const AdminPermissions = () => {
 
   return (
     <>
-    <main className="px-6 lg:px-10 py-12 bg-background min-h-screen">
+    <main className="px-6 lg:px-10 py-12 bg-gradient-to-br from-gray-50 to-blue-50 min-h-screen">
           <motion.div 
             initial={{ opacity: 0, y: 20 }} 
             animate={{ opacity: 1, y: 0 }} 
             transition={{ duration: 0.5 }}
           >
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl">
-                <Shield className="h-8 w-8 text-white" />
+            {/* Header Section */}
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-4">
+                <div className="p-4 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl shadow-lg">
+                  <Shield className="h-10 w-10 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Admin Permissions</h1>
+                  <p className="text-lg text-gray-600 mt-1">Manage access controls for campus and course administrators</p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-4xl font-extrabold text-headline tracking-tight">Admin Permissions</h1>
-                <p className="text-paragraph text-lg">Manage access controls for campus and course administrators</p>
-              </div>
+              
+              {/* Create Admin Button */}
+              <motion.button
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.2 }}
+                onClick={() => setIsCreateAdminModalOpen(true)}
+                className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+              >
+                <UserPlus className="h-5 w-5" />
+                Create New Admin
+              </motion.button>
             </div>
 
             {loading ? (
-              <LoadingSpinner />
+              <div className="flex justify-center items-center h-64">
+                <LoadingSpinner />
+              </div>
             ) : (
-              <div className="grid gap-6">
+              <div className="space-y-8">
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200"
+                    className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow duration-300"
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-gray-600">Total Admins</p>
-                        <p className="text-3xl font-bold text-gray-900">{admins.length}</p>
+                        <p className="text-sm font-medium text-gray-600 mb-1">Total Admins</p>
+                        <p className="text-4xl font-bold text-gray-900">{admins.length}</p>
+                        <p className="text-sm text-gray-500 mt-1">Active administrators</p>
                       </div>
-                      <div className="p-3 bg-blue-100 rounded-xl">
-                        <Users className="h-8 w-8 text-blue-600" />
+                      <div className="p-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl">
+                        <Users className="h-8 w-8 text-white" />
                       </div>
                     </div>
                   </motion.div>
@@ -154,17 +257,18 @@ const AdminPermissions = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200"
+                    className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow duration-300"
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-gray-600">Campus Admins</p>
-                        <p className="text-3xl font-bold text-gray-900">
+                        <p className="text-sm font-medium text-gray-600 mb-1">Campus Admins</p>
+                        <p className="text-4xl font-bold text-gray-900">
                           {admins.filter(a => a.role === 'campus_admin').length}
                         </p>
+                        <p className="text-sm text-gray-500 mt-1">Campus managers</p>
                       </div>
-                      <div className="p-3 bg-green-100 rounded-xl">
-                        <Building2 className="h-8 w-8 text-green-600" />
+                      <div className="p-4 bg-gradient-to-r from-green-500 to-green-600 rounded-2xl">
+                        <Building2 className="h-8 w-8 text-white" />
                       </div>
                     </div>
                   </motion.div>
@@ -173,17 +277,18 @@ const AdminPermissions = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.3 }}
-                    className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200"
+                    className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow duration-300"
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-gray-600">Course Admins</p>
-                        <p className="text-3xl font-bold text-gray-900">
+                        <p className="text-sm font-medium text-gray-600 mb-1">Course Admins</p>
+                        <p className="text-4xl font-bold text-gray-900">
                           {admins.filter(a => a.role === 'course_admin').length}
                         </p>
+                        <p className="text-sm text-gray-500 mt-1">Course managers</p>
                       </div>
-                      <div className="p-3 bg-purple-100 rounded-xl">
-                        <BookOpen className="h-8 w-8 text-purple-600" />
+                      <div className="p-4 bg-gradient-to-r from-purple-500 to-purple-600 rounded-2xl">
+                        <BookOpen className="h-8 w-8 text-white" />
                       </div>
                     </div>
                   </motion.div>
@@ -194,32 +299,42 @@ const AdminPermissions = () => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
-                  className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden"
+                  className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden"
                 >
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <h2 className="text-xl font-semibold text-gray-900">Admin List</h2>
-                    <p className="text-sm text-gray-600">Manage permissions for each administrator</p>
+                  <div className="px-8 py-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-2xl font-bold text-gray-900">Admin List</h2>
+                        <p className="text-gray-600 mt-1">Manage permissions for each administrator</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-500">Total: {admins.length} admins</p>
+                      </div>
+                    </div>
                   </div>
                   
-                  <div className="divide-y divide-gray-200">
+                  <div className="divide-y divide-gray-100">
                     {admins.map((admin, index) => (
                       <motion.div
                         key={admin.id}
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.1 * index }}
-                        className="p-6 hover:bg-gray-50 transition-colors"
+                        className="p-6 hover:bg-gray-50 transition-colors duration-200"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
-                            <div className="p-2 bg-gray-100 rounded-lg">
+                            <div className="p-3 bg-gradient-to-r from-gray-100 to-gray-200 rounded-xl">
                               {getRoleIcon(admin.role)}
                             </div>
                             <div>
                               <h3 className="text-lg font-semibold text-gray-900">{admin.name}</h3>
-                              <p className="text-sm text-gray-600">{admin.email}</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getRoleColor(admin.role)}`}>
+                              <p className="text-sm text-gray-600 flex items-center gap-2">
+                                <Mail className="h-4 w-4" />
+                                {admin.email}
+                              </p>
+                              <div className="flex items-center gap-3 mt-2">
+                                <span className={`px-3 py-1 text-xs font-medium rounded-full border ${getRoleColor(admin.role)}`}>
                                   {admin.role.replace('_', ' ')}
                                 </span>
                                 {admin.permissions_updated_at && (
@@ -231,7 +346,7 @@ const AdminPermissions = () => {
                             </div>
                           </div>
                           
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-4">
                             <div className="text-right">
                               <p className="text-sm font-medium text-gray-900">
                                 {admin.permissions?.modules?.length || 0} modules
@@ -242,7 +357,7 @@ const AdminPermissions = () => {
                             <div className="flex gap-2">
                               <button
                                 onClick={() => handleEditPermissions(admin)}
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                className="p-3 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors duration-200"
                                 title="Edit Permissions"
                               >
                                 <Edit className="h-5 w-5" />
@@ -250,7 +365,7 @@ const AdminPermissions = () => {
                               
                               <button
                                 onClick={() => handleResetPermissions(admin.id)}
-                                className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                className="p-3 text-orange-600 hover:bg-orange-50 rounded-xl transition-colors duration-200"
                                 title="Reset to Default"
                               >
                                 <RotateCcw className="h-5 w-5" />
@@ -264,11 +379,18 @@ const AdminPermissions = () => {
                   
                   {admins.length === 0 && (
                     <div className="p-12 text-center">
-                      <div className="p-4 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                        <Users className="h-8 w-8 text-gray-400" />
+                      <div className="p-6 bg-gray-100 rounded-full w-20 h-20 mx-auto mb-6 flex items-center justify-center">
+                        <Users className="h-10 w-10 text-gray-400" />
                       </div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No Admins Found</h3>
-                      <p className="text-gray-600">Create campus and course admins to manage their permissions here.</p>
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">No Admins Found</h3>
+                      <p className="text-gray-600 mb-6">Create campus and course admins to manage their permissions here.</p>
+                      <button
+                        onClick={() => setIsCreateAdminModalOpen(true)}
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+                      >
+                        <UserPlus className="h-5 w-5" />
+                        Create First Admin
+                      </button>
                     </div>
                   )}
                 </motion.div>
@@ -276,6 +398,31 @@ const AdminPermissions = () => {
             )}
           </motion.div>
         </main>
+
+      {/* Create Admin Modal */}
+      <AnimatePresence>
+        {isCreateAdminModalOpen && (
+          <CreateAdminModal
+            isOpen={isCreateAdminModalOpen}
+            onClose={() => {
+              setIsCreateAdminModalOpen(false);
+              setAdminForm({ name: '', email: '', password: '', role: 'campus_admin' });
+              setSelectedCampus('');
+              setSelectedCourse('');
+            }}
+            adminForm={adminForm}
+            setAdminForm={setAdminForm}
+            selectedCampus={selectedCampus}
+            setSelectedCampus={setSelectedCampus}
+            selectedCourse={selectedCourse}
+            setSelectedCourse={setSelectedCourse}
+            campuses={campuses}
+            courses={courses}
+            creatingAdmin={creatingAdmin}
+            onCreateAdmin={handleCreateAdmin}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {isPermissionModalOpen && selectedAdmin && (
@@ -303,6 +450,203 @@ const AdminPermissions = () => {
         )}
       </AnimatePresence>
     </>
+  );
+};
+
+// Create Admin Modal Component
+const CreateAdminModal = ({ 
+  isOpen, 
+  onClose, 
+  adminForm, 
+  setAdminForm, 
+  selectedCampus, 
+  setSelectedCampus, 
+  selectedCourse, 
+  setSelectedCourse, 
+  campuses, 
+  courses, 
+  creatingAdmin, 
+  onCreateAdmin 
+}) => {
+  const handleInputChange = (field, value) => {
+    setAdminForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
+      >
+        <div className="px-8 py-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl">
+                <UserPlus className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Create New Admin</h2>
+                <p className="text-gray-600">Add a new campus or course administrator</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-8 overflow-y-auto max-h-[calc(90vh-140px)]">
+          <div className="space-y-6">
+            {/* Admin Role Selection */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-900 mb-3">Admin Role</label>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => handleInputChange('role', 'campus_admin')}
+                  className={`p-4 rounded-xl border-2 transition-all duration-200 ${
+                    adminForm.role === 'campus_admin'
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <Building2 className="h-6 w-6 mb-2" />
+                  <div className="font-semibold">Campus Admin</div>
+                  <div className="text-sm text-gray-600">Manage campus operations</div>
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => handleInputChange('role', 'course_admin')}
+                  className={`p-4 rounded-xl border-2 transition-all duration-200 ${
+                    adminForm.role === 'course_admin'
+                      ? 'border-green-500 bg-green-50 text-green-700'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <BookOpen className="h-6 w-6 mb-2" />
+                  <div className="font-semibold">Course Admin</div>
+                  <div className="text-sm text-gray-600">Manage course operations</div>
+                </button>
+              </div>
+            </div>
+
+            {/* Campus Selection for Campus Admin */}
+            {adminForm.role === 'campus_admin' && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">Select Campus</label>
+                <select
+                  value={selectedCampus}
+                  onChange={(e) => setSelectedCampus(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                >
+                  <option value="">-- Select Campus --</option>
+                  {campuses.map(campus => (
+                    <option key={campus.id || campus._id} value={campus.id || campus._id}>
+                      {campus.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Course Selection for Course Admin */}
+            {adminForm.role === 'course_admin' && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">Select Course</label>
+                <select
+                  value={selectedCourse}
+                  onChange={(e) => setSelectedCourse(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                >
+                  <option value="">-- Select Course --</option>
+                  {courses.map(course => (
+                    <option key={course.id || course._id} value={course.id || course._id}>
+                      {course.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Admin Details */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">Full Name</label>
+                <input
+                  type="text"
+                  value={adminForm.name}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  placeholder="Enter admin name"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">Email Address</label>
+                <input
+                  type="email"
+                  value={adminForm.email}
+                  onChange={(e) => handleInputChange('email', e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  placeholder="Enter email address"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-900 mb-2">Password</label>
+              <div className="relative">
+                <input
+                  type="password"
+                  value={adminForm.password}
+                  onChange={(e) => handleInputChange('password', e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors pr-12"
+                  placeholder="Enter password"
+                />
+                <Lock className="h-5 w-5 text-gray-400 absolute right-4 top-1/2 transform -translate-y-1/2" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-8 py-6 border-t border-gray-200 bg-gray-50 flex items-center justify-end gap-4">
+          <button
+            onClick={onClose}
+            className="px-6 py-3 text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors font-semibold"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onCreateAdmin}
+            disabled={creatingAdmin}
+            className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:shadow-lg transform hover:scale-105 transition-all duration-200 font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {creatingAdmin ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <UserPlus className="h-4 w-4" />
+                Create Admin
+              </>
+            )}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 };
 
@@ -341,7 +685,6 @@ const PermissionModal = ({ admin, availableModules, onClose, onSave }) => {
       campus_management: <Building2 className="h-4 w-4" />,
       course_management: <BookOpen className="h-4 w-4" />,
       batch_management: <GraduationCap className="h-4 w-4" />,
-      user_management: <Users className="h-4 w-4" />,
       student_management: <GraduationCap className="h-4 w-4" />,
       test_management: <FileText className="h-4 w-4" />,
       question_bank_upload: <FileText className="h-4 w-4" />,
@@ -366,24 +709,26 @@ const PermissionModal = ({ admin, availableModules, onClose, onSave }) => {
         exit={{ scale: 0.9, opacity: 0 }}
         className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
       >
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Edit Permissions</h2>
-            <p className="text-sm text-gray-600">{admin.admin_name} ({admin.admin_role.replace('_', ' ')})</p>
+        <div className="px-8 py-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Edit Permissions</h2>
+              <p className="text-gray-600">{admin.admin_name} ({admin.admin_role.replace('_', ' ')})</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
         </div>
 
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+        <div className="p-8 overflow-y-auto max-h-[calc(90vh-140px)]">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Module Permissions */}
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
                 <Settings className="h-5 w-5" />
                 Module Access
               </h3>
@@ -391,7 +736,7 @@ const PermissionModal = ({ admin, availableModules, onClose, onSave }) => {
                 {Object.entries(availableModules).map(([module, name]) => (
                   <div
                     key={module}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                    className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       {getModuleIcon(module)}
@@ -418,7 +763,7 @@ const PermissionModal = ({ admin, availableModules, onClose, onSave }) => {
 
             {/* Action Permissions */}
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
                 <Shield className="h-5 w-5" />
                 Feature Permissions
               </h3>
@@ -433,7 +778,7 @@ const PermissionModal = ({ admin, availableModules, onClose, onSave }) => {
                 ].map(({ key, label, icon }) => (
                   <div
                     key={key}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                    className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       {icon}
@@ -460,17 +805,17 @@ const PermissionModal = ({ admin, availableModules, onClose, onSave }) => {
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-3">
+        <div className="px-8 py-6 border-t border-gray-200 bg-gray-50 flex items-center justify-end gap-4">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            className="px-6 py-3 text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors font-semibold"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+            className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:shadow-lg transform hover:scale-105 transition-all duration-200 font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {saving ? (
               <>

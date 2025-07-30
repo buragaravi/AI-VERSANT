@@ -15,7 +15,7 @@ ADMIN_MODULES = {
     'campus_management': 'Campus Management',
     'course_management': 'Course Management', 
     'batch_management': 'Batch Management',
-    'user_management': 'User Management',
+
     'student_management': 'Student Management',
     'test_management': 'Test Management',
     'question_bank_upload': 'Question Bank Upload',
@@ -39,7 +39,7 @@ DEFAULT_PERMISSIONS = {
         'can_view_all_data': True
     },
     'campus_admin': {
-        'modules': ['dashboard', 'course_management', 'batch_management', 'user_management', 'student_management', 'test_management', 'question_bank_upload', 'crt_upload', 'results_management', 'analytics', 'reports'],
+        'modules': ['dashboard', 'course_management', 'batch_management', 'student_management', 'test_management', 'question_bank_upload', 'crt_upload', 'results_management', 'analytics', 'reports'],
         'can_create_campus': False,
         'can_create_course': True,
         'can_create_batch': True,
@@ -50,7 +50,7 @@ DEFAULT_PERMISSIONS = {
         'can_view_all_data': False
     },
     'course_admin': {
-        'modules': ['dashboard', 'batch_management', 'user_management', 'student_management', 'test_management', 'question_bank_upload', 'crt_upload', 'results_management', 'analytics', 'reports'],
+        'modules': ['dashboard', 'batch_management', 'student_management', 'test_management', 'question_bank_upload', 'crt_upload', 'results_management', 'analytics', 'reports'],
         'can_create_campus': False,
         'can_create_course': False,
         'can_create_batch': True,

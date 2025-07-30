@@ -118,7 +118,7 @@ def test_imports():
         from routes.test_management import test_management_bp
         from routes.practice_management import practice_management_bp
         from routes.online_exam_management import online_exam_management_bp
-        from routes.user_management import user_management_bp
+
         from routes.analytics import analytics_bp
         from routes.campus_management import campus_management_bp
         from routes.course_management import course_management_bp
