@@ -26,7 +26,7 @@ def get_batches():
         user = mongo_db.find_user_by_id(current_user_id)
         
         # Super admin can see all batches
-        if user.get('role') in ['super_admin', 'superadmin']:
+        if user.get('role') == 'superadmin':
             batches = list(mongo_db.batches.find())
         else:
             # Campus and course admins can only see batches in their campus
@@ -39,11 +39,21 @@ def get_batches():
         for batch in batches:
             # Get course details
             course_objs = list(mongo_db.courses.find({'_id': {'$in': batch.get('course_ids', [])}}))
+            
+            # Handle both old and new batch structures for campus data
+            campus_ids = batch.get('campus_ids', [])
+            if not campus_ids and batch.get('campus_id'):
+                # Handle old structure with single campus_id
+                campus_ids = [batch.get('campus_id')]
+            
+            # Get campus details
+            campus_objs = list(mongo_db.campuses.find({'_id': {'$in': campus_ids}}))
             student_count = mongo_db.students.count_documents({'batch_id': batch['_id']})
             
             batch_list.append({
                 'id': str(batch['_id']),
                 'name': batch.get('name'),
+                'campuses': [{'id': str(c['_id']), 'name': c['name']} for c in campus_objs],
                 'courses': [{'id': str(c['_id']), 'name': c['name']} for c in course_objs],
                 'student_count': student_count,
                 'created_at': batch.get('created_at')
@@ -64,7 +74,7 @@ def create_batch_from_selection():
         user = mongo_db.find_user_by_id(current_user_id)
         
         # Check if user has permission to create batches
-        if not user or user.get('role') not in ['super_admin', 'superadmin', 'campus_admin', 'course_admin']:
+        if not user or user.get('role') not in ['superadmin', 'campus_admin', 'course_admin']:
             return jsonify({
                 'success': False,
                 'message': 'Access denied. You do not have permission to create batches.'
@@ -173,7 +183,7 @@ def create_batch():
         user = mongo_db.find_user_by_id(current_user_id)
         
         # Only super admin can create batches
-        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+        if not user or user.get('role') != 'superadmin':
             return jsonify({
                 'success': False,
                 'message': 'Access denied. Only super admin can create batches.'
@@ -774,6 +784,7 @@ def upload_students_to_batch():
 
 @batch_management_bp.route('/batch/<batch_id>/students', methods=['GET'])
 @jwt_required()
+@require_permission(module='batch_management')
 def get_batch_students(batch_id):
     """Get all students and detailed info for a specific batch."""
     try:
@@ -787,7 +798,13 @@ def get_batch_students(batch_id):
         # Check if user has access to this batch
         if user.get('role') in ['campus_admin', 'course_admin']:
             user_campus_id = user.get('campus_id')
-            if not user_campus_id or user_campus_id not in batch.get('campus_ids', []):
+            batch_campus_ids = batch.get('campus_ids', [])
+            
+            # Handle both old and new batch structures
+            if not batch_campus_ids and batch.get('campus_id'):
+                batch_campus_ids = [batch.get('campus_id')]
+            
+            if not user_campus_id or ObjectId(user_campus_id) not in batch_campus_ids:
                 return jsonify({'success': False, 'message': 'Access denied. You do not have permission to view this batch.'}), 403
 
         # Fetch campus and course names for the batch header
@@ -815,6 +832,95 @@ def get_batch_students(batch_id):
         }), 200
     except Exception as e:
         current_app.logger.error(f"Error fetching batch students: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@batch_management_bp.route('/students/filtered', methods=['GET'])
+@jwt_required()
+@require_permission(module='batch_management')
+def get_filtered_students():
+    """Get filtered students with pagination"""
+    try:
+        current_app.logger.info("get_filtered_students endpoint called")
+        print("get_filtered_students endpoint called")
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Get query parameters
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 20))
+        search = request.args.get('search', '')
+        campus_id = request.args.get('campus_id', '')
+        course_id = request.args.get('course_id', '')
+        batch_id = request.args.get('batch_id', '')
+        
+        # Build query
+        query = {'role': 'student'}
+        
+        if search:
+            query['$or'] = [
+                {'name': {'$regex': search, '$options': 'i'}},
+                {'email': {'$regex': search, '$options': 'i'}}
+            ]
+        
+        if campus_id:
+            query['campus_id'] = ObjectId(campus_id)
+        
+        if course_id:
+            query['course_id'] = ObjectId(course_id)
+        
+        if batch_id:
+            query['batch_id'] = ObjectId(batch_id)
+        
+        # Super admin can see all students, others only their campus
+        if user.get('role') != 'superadmin':
+            user_campus_id = user.get('campus_id')
+            if user_campus_id:
+                query['campus_id'] = ObjectId(user_campus_id)
+        
+        # Get total count
+        total = mongo_db.users.count_documents(query)
+        
+        # Get paginated results
+        skip = (page - 1) * limit
+        students = list(mongo_db.users.find(query).skip(skip).limit(limit))
+        
+        # Get additional student details
+        student_details = []
+        for student in students:
+            # Get student profile
+            student_profile = mongo_db.students.find_one({'user_id': student['_id']})
+            
+            # Get campus and course names
+            campus = mongo_db.campuses.find_one({'_id': student.get('campus_id')})
+            course = mongo_db.courses.find_one({'_id': student.get('course_id')})
+            batch = mongo_db.batches.find_one({'_id': student.get('batch_id')})
+            
+            student_details.append({
+                '_id': str(student['_id']),
+                'name': student.get('name', ''),
+                'email': student.get('email', ''),
+                'roll_number': student_profile.get('roll_number', '') if student_profile else '',
+                'mobile_number': student_profile.get('mobile_number', '') if student_profile else '',
+                'campus_name': campus.get('name', '') if campus else '',
+                'course_name': course.get('name', '') if course else '',
+                'batch_name': batch.get('name', '') if batch else '',
+                'is_active': student.get('is_active', True),
+                'created_at': student.get('created_at')
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': student_details,
+            'pagination': {
+                'page': page,
+                'limit': limit,
+                'total': total,
+                'has_more': (page * limit) < total
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching filtered students: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @batch_management_bp.route('/student/<student_id>', methods=['GET'])
@@ -1962,3 +2068,114 @@ def cleanup_failed_students(batch_id):
     except Exception as e:
         current_app.logger.error(f"Error cleaning up failed students: {e}")
         return jsonify({'success': False, 'message': f'An unexpected error occurred: {str(e)}'}), 500
+
+@batch_management_bp.route('/students/<student_id>', methods=['DELETE'])
+@jwt_required()
+@require_permission(module='batch_management')
+def delete_student_management(student_id):
+    """Delete a student"""
+    try:
+        # Delete user account
+        mongo_db.users.delete_one({'_id': ObjectId(student_id)})
+        
+        # Delete student profile
+        mongo_db.students.delete_one({'user_id': ObjectId(student_id)})
+        
+        return jsonify({'success': True, 'message': 'Student deleted successfully'}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error deleting student: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@batch_management_bp.route('/students/<student_id>/send-credentials', methods=['POST'])
+@jwt_required()
+@require_permission(module='batch_management')
+def send_student_credentials(student_id):
+    """Send credentials to student"""
+    try:
+        student = mongo_db.users.find_one({'_id': ObjectId(student_id)})
+        if not student:
+            return jsonify({'success': False, 'message': 'Student not found'}), 404
+        
+        # Get student profile for roll number
+        student_profile = mongo_db.students.find_one({'user_id': ObjectId(student_id)})
+        
+        # Generate temporary password
+        import secrets
+        import string
+        temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
+        
+        # Update password
+        password_hash = bcrypt.generate_password_hash(temp_password).decode('utf-8')
+        mongo_db.users.update_one(
+            {'_id': ObjectId(student_id)},
+            {'$set': {'password_hash': password_hash}}
+        )
+        
+        # Send email with credentials
+        subject = "Your Study Edge Login Credentials"
+        html_content = render_template(
+            'emails/student_credentials.html',
+            student_name=student.get('name', ''),
+            email=student.get('email', ''),
+            username=student.get('username', ''),
+            password=temp_password,
+            roll_number=student_profile.get('roll_number', '') if student_profile else ''
+        )
+        
+        send_email(student.get('email'), subject, html_content)
+        
+        return jsonify({'success': True, 'message': 'Credentials sent successfully'}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error sending credentials: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@batch_management_bp.route('/students/<student_id>/credentials', methods=['GET'])
+@jwt_required()
+@require_permission(module='batch_management')
+def download_student_credentials(student_id):
+    """Download student credentials as CSV"""
+    try:
+        student = mongo_db.users.find_one({'_id': ObjectId(student_id)})
+        if not student:
+            return jsonify({'success': False, 'message': 'Student not found'}), 404
+        
+        student_profile = mongo_db.students.find_one({'user_id': ObjectId(student_id)})
+        
+        # Generate temporary password
+        import secrets
+        import string
+        temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
+        
+        # Update password
+        password_hash = bcrypt.generate_password_hash(temp_password).decode('utf-8')
+        mongo_db.users.update_one(
+            {'_id': ObjectId(student_id)},
+            {'$set': {'password_hash': password_hash}}
+        )
+        
+        # Create CSV content
+        import csv
+        import io
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Name', 'Email', 'Roll Number', 'Username', 'Password'])
+        writer.writerow([
+            student.get('name', ''),
+            student.get('email', ''),
+            student_profile.get('roll_number', '') if student_profile else '',
+            student.get('username', ''),
+            temp_password
+        ])
+        
+        output.seek(0)
+        return output.getvalue(), 200, {
+            'Content-Type': 'text/csv',
+            'Content-Disposition': f'attachment; filename="{student.get("name", "student")}_credentials.csv"'
+        }
+        
+    except Exception as e:
+        current_app.logger.error(f"Error downloading credentials: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500

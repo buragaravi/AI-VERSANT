@@ -5,7 +5,7 @@ import Papa from 'papaparse';
 import api from '../../services/api';
 
 
-import { Plus, Users, Upload, Download, Building, BookOpen, Trash2, Edit, Eye } from 'lucide-react';
+import { Plus, Users, Upload, Download, Building, BookOpen, Trash2, Edit, Eye, X, User, Hash, Mail, Phone } from 'lucide-react';
 
 const BatchManagement = () => {
   useEffect(() => {
@@ -318,7 +318,7 @@ const BatchManagement = () => {
 
   return (
     <main className="p-6">
-        {/* Header */}
+        {/* Simple Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
@@ -350,7 +350,7 @@ const BatchManagement = () => {
 
 
 
-        {/* Batches Grid */}
+        {/* Simple Batches Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {batches.map((batch, index) => (
             <motion.div
@@ -395,12 +395,6 @@ const BatchManagement = () => {
                 
                 <div className="space-y-2 mb-4">
                   <p className="text-sm text-gray-600">
-                    <span className="font-medium">Campus:</span> {batch.campuses?.map(c => c.name).join(', ') || 'N/A'}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    <span className="font-medium">Course:</span> {batch.courses?.map(c => c.name).join(', ') || 'N/A'}
-                  </p>
-                  <p className="text-sm text-gray-600">
                     <span className="font-medium">Students:</span> {batch.student_count || 0}
                   </p>
                 </div>
@@ -429,24 +423,31 @@ const BatchManagement = () => {
           ))}
         </div>
 
-        {/* Empty State */}
+        {/* Enhanced Empty State */}
         {batches.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-6xl mb-4">📚</div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-center py-16"
+          >
+            <div className="mx-auto w-32 h-32 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center mb-6">
+              <BookOpen className="h-16 w-16 text-blue-600" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-3">
               No Batches Found
             </h3>
-            <p className="text-gray-600 mb-6">
-              Create your first batch to get started with student management.
+            <p className="text-gray-600 mb-8 max-w-md mx-auto">
+              Create your first batch to get started with student management. 
+              Batches help you organize students by academic year and course.
             </p>
             <button
               onClick={() => setShowCreateBatch(true)}
-              className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:shadow-xl transform hover:scale-105 transition-all duration-200"
             >
               <Plus className="w-5 h-5 mr-2" />
               Create New Batch
             </button>
-          </div>
+          </motion.div>
         )}
 
         {/* Create Batch Modal */}
@@ -655,53 +656,164 @@ const BatchManagement = () => {
           </div>
         )}
 
-        {/* Batch Details Modal */}
+        {/* Enhanced Batch Details Modal */}
         {showBatchDetails && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-            <div className="bg-white rounded-2xl shadow-xl p-8 max-w-4xl w-full relative max-h-[80vh] overflow-y-auto">
-              <button type="button" onClick={() => setShowBatchDetails(false)} className="absolute top-3 right-3 text-gray-500 hover:text-red-600 text-xl">&times;</button>
-              <h2 className="text-2xl font-bold mb-6">Batch Students</h2>
-              
-              {batchStudents.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse border border-gray-300">
-                    <thead>
-                      <tr className="bg-gray-100">
-                        <th className="border border-gray-300 px-4 py-2 text-left">Name</th>
-                        <th className="border border-gray-300 px-4 py-2 text-left">Roll Number</th>
-                        <th className="border border-gray-300 px-4 py-2 text-left">Email</th>
-                        <th className="border border-gray-300 px-4 py-2 text-left">Mobile</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {batchStudents.map((student, index) => (
-                        <tr key={index} className="hover:bg-gray-50">
-                          <td className="border border-gray-300 px-4 py-2">{student.name}</td>
-                          <td className="border border-gray-300 px-4 py-2">{student.roll_number}</td>
-                          <td className="border border-gray-300 px-4 py-2">{student.email}</td>
-                          <td className="border border-gray-300 px-4 py-2">{student.mobile_number || 'N/A'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden border border-gray-100 flex flex-col"
+            >
+              {/* Enhanced Header */}
+              <div className="px-8 py-6 border-b border-gray-100 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-2xl shadow-lg">
+                      <Users className="h-7 w-7 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                        Batch Students
+                      </h2>
+                      <p className="text-gray-600 mt-1">
+                        {batchStudents.length} student{batchStudents.length !== 1 ? 's' : ''} in this batch
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowBatchDetails(false)}
+                    className="p-3 hover:bg-gray-100 rounded-2xl transition-all duration-200 hover:scale-110"
+                  >
+                    <X className="h-6 w-6 text-gray-500" />
+                  </button>
                 </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-gray-600">No students found in this batch.</p>
-                </div>
-              )}
-              
-              <div className="flex justify-end mt-6">
-                <button 
-                  type="button" 
+              </div>
+
+              {/* Enhanced Table Content */}
+              <div className="flex-1 overflow-y-auto p-8" style={{ minHeight: '400px', maxHeight: 'calc(95vh - 200px)' }}>
+                {batchStudents.length > 0 ? (
+                  <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-lg">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                            <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
+                              <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-blue-600" />
+                                Name
+                              </div>
+                            </th>
+                            <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
+                              <div className="flex items-center gap-2">
+                                <Hash className="h-4 w-4 text-green-600" />
+                                Roll Number
+                              </div>
+                            </th>
+                            <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-4 w-4 text-purple-600" />
+                                Email
+                              </div>
+                            </th>
+                            <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
+                              <div className="flex items-center gap-2">
+                                <Phone className="h-4 w-4 text-orange-600" />
+                                Mobile
+                              </div>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {batchStudents.map((student, index) => (
+                            <motion.tr
+                              key={index}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: index * 0.05 }}
+                              className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 group"
+                            >
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center">
+                                  <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                                    <span className="text-sm font-bold text-white">
+                                      {student.name.charAt(0).toUpperCase()}
+                                    </span>
+                                  </div>
+                                  <div className="ml-4">
+                                    <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                                      {student.name}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900 font-mono bg-gray-50 px-3 py-1 rounded-lg border">
+                                  {student.roll_number}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  <a 
+                                    href={`mailto:${student.email}`}
+                                    className="text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                                  >
+                                    {student.email}
+                                  </a>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  {student.mobile_number ? (
+                                    <a 
+                                      href={`tel:${student.mobile_number}`}
+                                      className="text-green-600 hover:text-green-800 hover:underline transition-colors"
+                                    >
+                                      {student.mobile_number}
+                                    </a>
+                                  ) : (
+                                    <span className="text-gray-400 italic">N/A</span>
+                                  )}
+                                </div>
+                              </td>
+                            </motion.tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="text-center py-12"
+                  >
+                    <div className="mx-auto w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-4">
+                      <Users className="h-12 w-12 text-gray-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Students Found</h3>
+                    <p className="text-gray-600">This batch doesn't have any students yet.</p>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Enhanced Footer */}
+              <div className="px-8 py-6 border-t border-gray-100 bg-gradient-to-r from-gray-50 to-gray-100 flex items-center justify-end gap-4">
+                <button
                   onClick={() => setShowBatchDetails(false)}
-                  className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                  className="px-6 py-3 text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-200 font-semibold hover:shadow-md"
                 >
                   Close
                 </button>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
       </main>
   );

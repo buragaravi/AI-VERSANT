@@ -116,7 +116,7 @@ api.interceptors.response.use(
         console.log('Attempting token refresh with:', refreshToken)
         if (refreshToken && refreshToken !== 'null' && refreshToken !== 'undefined') {
           const response = await axios.post(
-            `/api/auth/refresh`,
+            `${API_URL}/auth/refresh`,
             { refresh_token: refreshToken }
           )
           

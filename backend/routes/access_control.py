@@ -147,7 +147,7 @@ def get_admin_permissions(admin_id):
         current_user_id = get_jwt_identity()
         current_user = mongo_db.find_user_by_id(current_user_id)
         
-        if not current_user or current_user.get('role') not in ['super_admin', 'superadmin']:
+        if not current_user or current_user.get('role') != 'superadmin':
             return jsonify({
                 'success': False,
                 'message': 'Access denied. Super admin privileges required.'
@@ -189,7 +189,7 @@ def update_admin_permissions(admin_id):
         current_user_id = get_jwt_identity()
         current_user = mongo_db.find_user_by_id(current_user_id)
         
-        if not current_user or current_user.get('role') not in ['super_admin', 'superadmin']:
+        if not current_user or current_user.get('role') != 'superadmin':
             return jsonify({
                 'success': False,
                 'message': 'Access denied. Super admin privileges required.'
@@ -239,7 +239,7 @@ def get_all_admins_with_permissions():
         current_user_id = get_jwt_identity()
         current_user = mongo_db.find_user_by_id(current_user_id)
         
-        if not current_user or current_user.get('role') not in ['super_admin', 'superadmin']:
+        if not current_user or current_user.get('role') != 'superadmin':
             return jsonify({
                 'success': False,
                 'message': 'Access denied. Super admin privileges required.'
@@ -301,7 +301,7 @@ def check_permission():
             }), 400
         
         # Super admin has all permissions
-        if user.get('role') in ['super_admin', 'superadmin']:
+        if user.get('role') == 'superadmin':
             return jsonify({
                 'success': True,
                 'data': {'has_permission': True}
@@ -339,7 +339,7 @@ def reset_admin_permissions(admin_id):
         current_user_id = get_jwt_identity()
         current_user = mongo_db.find_user_by_id(current_user_id)
         
-        if not current_user or current_user.get('role') not in ['super_admin', 'superadmin']:
+        if not current_user or current_user.get('role') != 'superadmin':
             return jsonify({
                 'success': False,
                 'message': 'Access denied. Super admin privileges required.'

@@ -130,7 +130,7 @@ const StudentManagement = () => {
                 ...(selectedBatch && { batch_id: selectedBatch })
             });
             
-            const res = await api.get(`/user-management/students/filtered?${params}`);
+            const res = await api.get(`/batch-management/students/filtered?${params}`);
             
             if (page === 1) {
                 setStudents(res.data.data);
@@ -156,7 +156,7 @@ const StudentManagement = () => {
     const handleDeleteStudent = async (studentId) => {
         if (window.confirm('Are you sure you want to delete this student? This action is permanent.')) {
             try {
-                await api.delete(`/user-management/${studentId}`);
+                await api.delete(`/batch-management/students/${studentId}`);
                 success('Student deleted successfully.');
                 fetchStudents(); // Refresh the list
             } catch (err) {
@@ -167,7 +167,7 @@ const StudentManagement = () => {
 
     const handleSendCredentialsAgain = async (student) => {
         try {
-            const response = await api.post(`/user-management/${student._id}/send-credentials`);
+            const response = await api.post(`/batch-management/students/${student._id}/send-credentials`);
             if (response.data.success) {
                 success('Credentials sent successfully to ' + student.email);
             } else {
@@ -180,7 +180,7 @@ const StudentManagement = () => {
 
     const handleDownloadCredentials = async (student) => {
         try {
-            const response = await api.get(`/user-management/${student._id}/credentials`, {
+            const response = await api.get(`/batch-management/students/${student._id}/credentials`, {
                 responseType: 'blob'
             });
             
