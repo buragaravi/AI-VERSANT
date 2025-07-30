@@ -7,7 +7,7 @@ import api from '../../services/api';
 import { 
   Shield, Users, Settings, Check, X, Edit, RotateCcw, 
   Building2, BookOpen, GraduationCap, FileText, BarChart3,
-  Eye, EyeOff, Save, AlertCircle, Plus, UserPlus, Mail, Lock
+  Eye, EyeOff, Save, AlertCircle, Plus, UserPlus, Mail, Lock, User
 } from 'lucide-react';
 
 const AdminPermissions = () => {
@@ -477,78 +477,115 @@ const CreateAdminModal = ({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
     >
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+        className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-hidden border border-gray-100 flex flex-col"
       >
-        <div className="px-8 py-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
+        {/* Enhanced Header */}
+        <div className="px-8 py-8 border-b border-gray-100 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl">
-                <UserPlus className="h-6 w-6 text-white" />
+            <div className="flex items-center gap-4">
+              <div className="p-4 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-lg">
+                <UserPlus className="h-7 w-7 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Create New Admin</h2>
-                <p className="text-gray-600">Add a new campus or course administrator</p>
+                <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                  Create New Admin
+                </h2>
+                <p className="text-gray-600 mt-1">Add a new campus or course administrator to your system</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+              className="p-3 hover:bg-gray-100 rounded-2xl transition-all duration-200 hover:scale-110"
             >
-              <X className="h-6 w-6" />
+              <X className="h-6 w-6 text-gray-500" />
             </button>
           </div>
         </div>
 
-        <div className="p-8 overflow-y-auto max-h-[calc(90vh-140px)]">
-          <div className="space-y-6">
-            {/* Admin Role Selection */}
+        <div className="p-8 overflow-y-auto flex-1" style={{ minHeight: '400px', maxHeight: 'calc(95vh - 300px)' }}>
+          <div className="space-y-8">
+            {/* Enhanced Admin Role Selection */}
             <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-3">Admin Role</label>
-              <div className="grid grid-cols-2 gap-4">
+              <label className="block text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <Shield className="h-5 w-5 text-indigo-600" />
+                Admin Role
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <button
                   type="button"
                   onClick={() => handleInputChange('role', 'campus_admin')}
-                  className={`p-4 rounded-xl border-2 transition-all duration-200 ${
+                  className={`p-6 rounded-2xl border-2 transition-all duration-300 transform hover:scale-105 ${
                     adminForm.role === 'campus_admin'
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-indigo-500 bg-gradient-to-br from-indigo-50 to-blue-50 text-indigo-700 shadow-lg'
+                      : 'border-gray-200 hover:border-indigo-300 hover:bg-gray-50'
                   }`}
                 >
-                  <Building2 className="h-6 w-6 mb-2" />
-                  <div className="font-semibold">Campus Admin</div>
-                  <div className="text-sm text-gray-600">Manage campus operations</div>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className={`p-3 rounded-xl ${adminForm.role === 'campus_admin' ? 'bg-indigo-100' : 'bg-gray-100'}`}>
+                      <Building2 className="h-6 w-6" />
+                    </div>
+                    <div className="text-left">
+                      <div className="font-bold text-lg">Campus Admin</div>
+                      <div className="text-sm text-gray-600">Manage campus operations</div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    • Manage campus-wide operations<br/>
+                    • Oversee multiple courses<br/>
+                    • Access campus analytics
+                  </div>
                 </button>
                 
                 <button
                   type="button"
                   onClick={() => handleInputChange('role', 'course_admin')}
-                  className={`p-4 rounded-xl border-2 transition-all duration-200 ${
+                  className={`p-6 rounded-2xl border-2 transition-all duration-300 transform hover:scale-105 ${
                     adminForm.role === 'course_admin'
-                      ? 'border-green-500 bg-green-50 text-green-700'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-green-500 bg-gradient-to-br from-green-50 to-emerald-50 text-green-700 shadow-lg'
+                      : 'border-gray-200 hover:border-green-300 hover:bg-gray-50'
                   }`}
                 >
-                  <BookOpen className="h-6 w-6 mb-2" />
-                  <div className="font-semibold">Course Admin</div>
-                  <div className="text-sm text-gray-600">Manage course operations</div>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className={`p-3 rounded-xl ${adminForm.role === 'course_admin' ? 'bg-green-100' : 'bg-gray-100'}`}>
+                      <BookOpen className="h-6 w-6" />
+                    </div>
+                    <div className="text-left">
+                      <div className="font-bold text-lg">Course Admin</div>
+                      <div className="text-sm text-gray-600">Manage course operations</div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    • Manage specific course<br/>
+                    • Handle student progress<br/>
+                    • Course-specific analytics
+                  </div>
                 </button>
               </div>
             </div>
 
-            {/* Campus Selection for Campus Admin */}
+            {/* Enhanced Campus/Course Selection */}
             {adminForm.role === 'campus_admin' && (
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Select Campus</label>
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-100"
+              >
+                <label className="block text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-blue-600" />
+                  Select Campus
+                </label>
                 <select
                   value={selectedCampus}
                   onChange={(e) => setSelectedCampus(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="w-full px-4 py-4 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
                 >
                   <option value="">-- Select Campus --</option>
                   {campuses.map(campus => (
@@ -557,17 +594,24 @@ const CreateAdminModal = ({
                     </option>
                   ))}
                 </select>
-              </div>
+              </motion.div>
             )}
 
-            {/* Course Selection for Course Admin */}
             {adminForm.role === 'course_admin' && (
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Select Course</label>
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-2xl border border-green-100"
+              >
+                <label className="block text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 text-green-600" />
+                  Select Course
+                </label>
                 <select
                   value={selectedCourse}
                   onChange={(e) => setSelectedCourse(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="w-full px-4 py-4 border border-green-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white"
                 >
                   <option value="">-- Select Course --</option>
                   {courses.map(course => (
@@ -576,70 +620,85 @@ const CreateAdminModal = ({
                     </option>
                   ))}
                 </select>
-              </div>
+              </motion.div>
             )}
 
-            {/* Admin Details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Full Name</label>
-                <input
-                  type="text"
-                  value={adminForm.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                  placeholder="Enter admin name"
-                />
-              </div>
+            {/* Enhanced Admin Details */}
+            <div className="space-y-6">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <User className="h-5 w-5 text-purple-600" />
+                Admin Details
+              </h3>
               
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Email Address</label>
-                <input
-                  type="email"
-                  value={adminForm.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                  placeholder="Enter email address"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700">Full Name</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={adminForm.name}
+                      onChange={(e) => handleInputChange('name', e.target.value)}
+                      className="w-full px-4 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 bg-white"
+                      placeholder="Enter admin name"
+                    />
+                    <User className="h-5 w-5 text-gray-400 absolute right-4 top-1/2 transform -translate-y-1/2" />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700">Email Address</label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      value={adminForm.email}
+                      onChange={(e) => handleInputChange('email', e.target.value)}
+                      className="w-full px-4 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 bg-white"
+                      placeholder="Enter email address"
+                    />
+                    <Mail className="h-5 w-5 text-gray-400 absolute right-4 top-1/2 transform -translate-y-1/2" />
+                  </div>
+                </div>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">Password</label>
-              <div className="relative">
-                <input
-                  type="password"
-                  value={adminForm.password}
-                  onChange={(e) => handleInputChange('password', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors pr-12"
-                  placeholder="Enter password"
-                />
-                <Lock className="h-5 w-5 text-gray-400 absolute right-4 top-1/2 transform -translate-y-1/2" />
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-gray-700">Password</label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    value={adminForm.password}
+                    onChange={(e) => handleInputChange('password', e.target.value)}
+                    className="w-full px-4 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 bg-white pr-12"
+                    placeholder="Enter secure password"
+                  />
+                  <Lock className="h-5 w-5 text-gray-400 absolute right-4 top-1/2 transform -translate-y-1/2" />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Password should be at least 8 characters long</p>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="px-8 py-6 border-t border-gray-200 bg-gray-50 flex items-center justify-end gap-4">
+        {/* Enhanced Footer - Clean Version */}
+        <div className="px-8 py-6 border-t border-gray-100 bg-gradient-to-r from-gray-50 to-gray-100 flex items-center justify-end gap-4">
           <button
             onClick={onClose}
-            className="px-6 py-3 text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors font-semibold"
+            className="px-6 py-3 text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-200 font-semibold hover:shadow-md"
           >
             Cancel
           </button>
           <button
             onClick={onCreateAdmin}
             disabled={creatingAdmin}
-            className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:shadow-lg transform hover:scale-105 transition-all duration-200 font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-8 py-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white rounded-xl hover:shadow-xl transform hover:scale-105 transition-all duration-300 font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
           >
             {creatingAdmin ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                Creating...
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+                Creating Admin...
               </>
             ) : (
               <>
-                <UserPlus className="h-4 w-4" />
+                <UserPlus className="h-5 w-5" />
                 Create Admin
               </>
             )}
