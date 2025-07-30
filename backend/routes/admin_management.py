@@ -21,7 +21,7 @@ def create_admin():
         user = mongo_db.find_user_by_id(current_user_id)
         
         # Only super admin can create admins
-        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+        if not user or user.get('role') != 'superadmin':
             return jsonify({
                 'success': False,
                 'message': 'Access denied. Super admin privileges required.'
@@ -163,7 +163,7 @@ def list_admins():
         user = mongo_db.find_user_by_id(current_user_id)
         
         # Only super admin can access admin list
-        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+        if not user or user.get('role') != 'superadmin':
             return jsonify({
                 'success': False,
                 'message': 'Access denied. Super admin privileges required.'
@@ -219,7 +219,7 @@ def delete_admin(admin_id):
         user = mongo_db.find_user_by_id(current_user_id)
         
         # Only super admin can delete admins
-        if not user or user.get('role') not in ['super_admin', 'superadmin']:
+        if not user or user.get('role') != 'superadmin':
             return jsonify({
                 'success': False,
                 'message': 'Access denied. Super admin privileges required.'

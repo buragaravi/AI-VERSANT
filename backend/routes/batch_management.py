@@ -1043,6 +1043,34 @@ def authorize_student_level(student_id):
         current_app.logger.error(f"Error authorizing level: {e}")
         return jsonify({'success': False, 'message': 'An error occurred authorizing the level.'}), 500
 
+@batch_management_bp.route('/student/<student_id>/lock-level', methods=['POST'])
+@jwt_required()
+def lock_student_level(student_id):
+    try:
+        data = request.json
+        level = data.get('level')
+        if not level:
+            return jsonify({'success': False, 'message': 'Level is required'}), 400
+
+        # Find student by user_id or _id
+        student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+        if not student:
+            student = mongo_db.students.find_one({'user_id': ObjectId(student_id)})
+        if not student:
+            return jsonify({'success': False, 'message': 'Student not found.'}), 404
+
+        # Remove level from authorized_levels
+        mongo_db.students.update_one({'_id': student['_id']}, {'$pull': {'authorized_levels': level}})
+        student = mongo_db.students.find_one({'_id': student['_id']})
+
+        # Emit real-time event to the student
+        socketio.emit('level_access_changed', {'student_id': str(student['_id']), 'level': level, 'action': 'locked'}, room=str(student['_id']))
+
+        return jsonify({'success': True, 'message': f"Level '{level}' locked for student.", 'authorized_levels': student.get('authorized_levels', [])}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error locking level: {e}")
+        return jsonify({'success': False, 'message': 'An error occurred locking the level.'}), 500
+
 @batch_management_bp.route('/student/<student_id>/authorize-module', methods=['POST'])
 @batch_management_bp.route('/student/<student_id>/authorize-module/', methods=['POST'])
 @jwt_required()
@@ -2115,15 +2143,23 @@ def send_student_credentials(student_id):
         # Send email with credentials
         subject = "Your Study Edge Login Credentials"
         html_content = render_template(
-            'emails/student_credentials.html',
-            student_name=student.get('name', ''),
-            email=student.get('email', ''),
-            username=student.get('username', ''),
-            password=temp_password,
-            roll_number=student_profile.get('roll_number', '') if student_profile else ''
+            'student_credentials.html',
+            params={
+                'name': student.get('name', ''),
+                'email': student.get('email', ''),
+                'username': student.get('username', ''),
+                'password': temp_password,
+                'roll_number': student_profile.get('roll_number', '') if student_profile else '',
+                'login_url': "https://pydah-studyedge.vercel.app/login"
+            }
         )
         
-        send_email(student.get('email'), subject, html_content)
+        send_email(
+            to_email=student.get('email'),
+            to_name=student.get('name', 'Student'),
+            subject=subject,
+            html_content=html_content
+        )
         
         return jsonify({'success': True, 'message': 'Credentials sent successfully'}), 200
         

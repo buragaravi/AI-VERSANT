@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useNotification } from '../../contexts/NotificationContext';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
-import { Users, Filter, Search, Trash2, ListChecks, CheckCircle, BookOpen, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Users, Filter, Search, Trash2, ListChecks, CheckCircle, BookOpen, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, User } from 'lucide-react';
 import Modal from '../../components/common/Modal';
 import { getStudentAccessStatus, authorizeStudentModule, lockStudentModule, authorizeStudentLevel } from '../../services/api';
 
@@ -337,7 +337,7 @@ const StudentManagement = () => {
         // Fetch batches and courses for selection
         const fetchBatchCourse = async () => {
             try {
-                const batchRes = await api.get('/batch-management/batches');
+                const batchRes = await api.get('/batch-management/');
                 setBatches(batchRes.data.data || []);
                 const courseRes = await api.get('/course-management/courses');
                 setCourses(courseRes.data.data || []);
@@ -495,82 +495,182 @@ const StudentManagement = () => {
                             />
                         </div>
 
-                        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+                        {/* Enhanced Student Display Table */}
+                        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
                             <div className="overflow-x-auto">
-                                {loading ? <LoadingSpinner /> : students.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-12">
-                                        <Users className="w-16 h-16 text-gray-400 mb-4" />
-                                        <h3 className="text-lg font-medium text-gray-900 mb-2">No students found</h3>
-                                        <p className="text-gray-500">
+                                {loading ? (
+                                    <div className="flex items-center justify-center py-16">
+                                        <LoadingSpinner />
+                                    </div>
+                                ) : students.length === 0 ? (
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: 20 }} 
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="flex flex-col items-center justify-center py-16"
+                                    >
+                                        <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-full mb-6">
+                                            <Users className="w-12 h-12 text-blue-500" />
+                                        </div>
+                                        <h3 className="text-xl font-semibold text-gray-900 mb-3">No students found</h3>
+                                        <p className="text-gray-600 text-center max-w-md">
                                             {searchTerm ? `No students match your search for "${searchTerm}"` : 'No students have been added to the system yet.'}
                                         </p>
-                                    </div>
+                                    </motion.div>
                                 ) : (
-                                    <table className="min-w-full">
-                                        <thead className="bg-gray-50">
-                                            <tr>
-                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-gray-200">Student</th>
-                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-gray-200">Campus</th>
-                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-gray-200">Course & Batch</th>
-                                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-gray-200">Username</th>
-                                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-gray-200">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white divide-y divide-gray-200">
-                                            {students.map(student => (
-                                                <tr key={student._id} className="hover:bg-gray-50 cursor-pointer transition-colors duration-150" onClick={() => handleStudentClick(student)}>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="text-sm font-medium text-gray-900">{student.name}</div>
-                                                        <div className="text-sm text-gray-500">{student.email}</div>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{student.campus_name || 'N/A'}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="text-sm text-gray-900">{student.course_name || 'N/A'}</div>
-                                                        <div className="text-sm text-gray-500">{student.batch_name || 'N/A'}</div>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{student.username}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                        <div className="flex items-center justify-end space-x-2">
-                                                            <button 
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleSendCredentialsAgain(student);
-                                                                }} 
-                                                                className="text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-50 transition-colors duration-150"
-                                                                title="Send Credentials Again"
-                                                            >
-                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                                                </svg>
-                                                            </button>
-                                                            <button 
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDownloadCredentials(student);
-                                                                }} 
-                                                                className="text-green-600 hover:text-green-800 p-2 rounded-full hover:bg-green-50 transition-colors duration-150"
-                                                                title="Download Credentials"
-                                                            >
-                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                                </svg>
-                                                            </button>
-                                                            <button 
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDeleteStudent(student._id);
-                                                                }} 
-                                                                className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-50 transition-colors duration-150"
-                                                                title="Delete Student"
-                                                            >
-                                                                <Trash2 size={18} />
-                                                            </button>
+                                    <div className="relative">
+                                        {/* Enhanced Table Header */}
+                                        <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-b border-gray-200">
+                                            <div className="px-8 py-6">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-3 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-lg">
+                                                            <Users className="w-6 h-6 text-white" />
                                                         </div>
-                                                    </td>
+                                                        <div>
+                                                            <h3 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                                                                Student Directory
+                                                            </h3>
+                                                            <p className="text-sm text-gray-600">
+                                                                {students.length} students found
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Enhanced Table */}
+                                        <table className="min-w-full">
+                                            <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+                                                <tr>
+                                                    <th className="px-8 py-5 text-left border-b border-gray-200">
+                                                        <div className="flex items-center gap-2">
+                                                            <User className="w-4 h-4 text-gray-500" />
+                                                            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">Student</span>
+                                                        </div>
+                                                    </th>
+                                                    <th className="px-8 py-5 text-left border-b border-gray-200">
+                                                        <div className="flex items-center gap-2">
+                                                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                                            </svg>
+                                                            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">Campus</span>
+                                                        </div>
+                                                    </th>
+                                                    <th className="px-8 py-5 text-left border-b border-gray-200">
+                                                        <div className="flex items-center gap-2">
+                                                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                                            </svg>
+                                                            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">Course & Batch</span>
+                                                        </div>
+                                                    </th>
+                                                    <th className="px-8 py-5 text-left border-b border-gray-200">
+                                                        <div className="flex items-center gap-2">
+                                                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                            </svg>
+                                                            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">Username</span>
+                                                        </div>
+                                                    </th>
+                                                    <th className="px-8 py-5 text-right border-b border-gray-200">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                                                            </svg>
+                                                            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</span>
+                                                        </div>
+                                                    </th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-gray-100">
+                                                {students.map((student, index) => (
+                                                    <motion.tr 
+                                                        key={student._id} 
+                                                        initial={{ opacity: 0, y: 20 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        transition={{ delay: index * 0.05 }}
+                                                        className="group hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 cursor-pointer transition-all duration-300 transform hover:scale-[1.01]" 
+                                                        onClick={() => handleStudentClick(student)}
+                                                    >
+                                                        <td className="px-8 py-6 whitespace-nowrap">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                                                                    {student.name?.charAt(0)?.toUpperCase() || 'S'}
+                                                                </div>
+                                                                <div>
+                                                                    <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
+                                                                        {student.name}
+                                                                    </div>
+                                                                    <div className="text-sm text-gray-500 group-hover:text-gray-600 transition-colors">
+                                                                        {student.email}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-8 py-6 whitespace-nowrap">
+                                                            <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                                {student.campus_name || 'N/A'}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-8 py-6 whitespace-nowrap">
+                                                            <div className="space-y-1">
+                                                                <div className="text-sm font-medium text-gray-900">
+                                                                    {student.course_name || 'N/A'}
+                                                                </div>
+                                                                <div className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
+                                                                    {student.batch_name || 'N/A'}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-8 py-6 whitespace-nowrap">
+                                                            <div className="text-sm text-gray-600 font-mono bg-gray-50 px-3 py-1 rounded">
+                                                                {student.username || student.roll_number || 'N/A'}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-8 py-6 whitespace-nowrap text-right">
+                                                            <div className="flex items-center justify-end gap-3">
+                                                                <button 
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleSendCredentialsAgain(student);
+                                                                    }} 
+                                                                    className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl transition-all duration-200 hover:shadow-md group/btn"
+                                                                    title="Send Credentials Again"
+                                                                >
+                                                                    <svg className="w-5 h-5 group-hover/btn:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                                    </svg>
+                                                                </button>
+                                                                <button 
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleDownloadCredentials(student);
+                                                                    }} 
+                                                                    className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-xl transition-all duration-200 hover:shadow-md group/btn"
+                                                                    title="Download Credentials"
+                                                                >
+                                                                    <svg className="w-5 h-5 group-hover/btn:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                    </svg>
+                                                                </button>
+                                                                <button 
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleDeleteStudent(student._id);
+                                                                    }} 
+                                                                    className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-all duration-200 hover:shadow-md group/btn"
+                                                                    title="Delete Student"
+                                                                >
+                                                                    <Trash2 className="w-5 h-5 group-hover/btn:scale-110 transition-transform" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </motion.tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 )}
                             </div>
                             
