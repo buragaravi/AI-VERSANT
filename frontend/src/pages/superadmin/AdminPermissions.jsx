@@ -513,7 +513,7 @@ const CreateAdminModal = ({
           <div className="space-y-8">
             {/* Enhanced Admin Role Selection */}
             <div>
-              <label className="block text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <label className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <Shield className="h-5 w-5 text-indigo-600" />
                 Admin Role
               </label>
@@ -578,7 +578,7 @@ const CreateAdminModal = ({
                 transition={{ delay: 0.1 }}
                 className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-100"
               >
-                <label className="block text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                <label className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
                   <Building2 className="h-5 w-5 text-blue-600" />
                   Select Campus
                 </label>
@@ -604,7 +604,7 @@ const CreateAdminModal = ({
                 transition={{ delay: 0.1 }}
                 className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-2xl border border-green-100"
               >
-                <label className="block text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                <label className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
                   <BookOpen className="h-5 w-5 text-green-600" />
                   Select Course
                 </label>
