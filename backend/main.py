@@ -55,7 +55,8 @@ def api_status():
             'campus_management': '/campus-management',
             'course_management': '/course-management',
             'batch_management': '/batch-management',
-            'access_control': '/access-control'
+            'access_control': '/access-control',
+            'admin_management': '/admin-management'
         }
     }), 200
 
@@ -86,6 +87,7 @@ from routes.campus_management import campus_management_bp
 from routes.course_management import course_management_bp
 from routes.batch_management import batch_management_bp
 from routes.access_control import access_control_bp
+from routes.admin_management import admin_management_bp
 
 # Register modular test management blueprints
 from routes.test_management_mcq import mcq_test_bp
@@ -107,6 +109,7 @@ app.register_blueprint(campus_management_bp, url_prefix='/campus-management')
 app.register_blueprint(course_management_bp, url_prefix='/course-management')
 app.register_blueprint(batch_management_bp, url_prefix='/batch-management')
 app.register_blueprint(access_control_bp, url_prefix='/access-control')
+app.register_blueprint(admin_management_bp, url_prefix='/admin-management')
 
 # Register modular test management blueprints
 app.register_blueprint(mcq_test_bp, url_prefix='/test-management/mcq')

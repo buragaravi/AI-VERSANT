@@ -22,13 +22,14 @@ ADMIN_MODULES = {
     'crt_upload': 'CRT Upload',
     'results_management': 'Results Management',
     'analytics': 'Analytics',
-    'reports': 'Reports'
+    'reports': 'Reports',
+    'admin_permissions': 'Admin Permissions'
 }
 
 # Default permissions for each admin role
 DEFAULT_PERMISSIONS = {
     'super_admin': {
-        'modules': list(ADMIN_MODULES.keys()),  # All modules
+        'modules': list(ADMIN_MODULES.keys()) + ['admin_permissions'],  # All modules
         'can_create_campus': True,
         'can_create_course': True,
         'can_create_batch': True,

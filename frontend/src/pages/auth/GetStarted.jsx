@@ -222,7 +222,7 @@ const GetStarted = () => {
                       scrollToSection(item.href.substring(1))
                       setIsMenuOpen(false)
                     }}
-                    className="flex items-center space-x-3 text-gray-700 hover:text-blue-600 transition-colors block text-sm font-semibold py-2 px-3 rounded-lg hover:bg-blue-50"
+                    className="flex items-center space-x-3 text-gray-700 hover:text-blue-600 transition-colors text-sm font-semibold py-2 px-3 rounded-lg hover:bg-blue-50"
                   >
                     {item.icon && <item.icon className="w-4 h-4" />}
                     <span>{item.name}</span>
