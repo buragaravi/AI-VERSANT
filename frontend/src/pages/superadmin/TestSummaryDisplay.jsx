@@ -22,7 +22,7 @@ export default function TestSummaryDisplay({ testData, modules = [], levels = []
       <div><strong className="text-gray-500 block">Campus:</strong><span className="text-gray-800">{getDisplay(testData.campus)}</span></div>
       <div><strong className="text-gray-500 block">Batches:</strong><span className="text-gray-800">{getArrayDisplay(testData.batches)}</span></div>
       <div><strong className="text-gray-500 block">Courses:</strong><span className="text-gray-800">{getArrayDisplay(testData.courses)}</span></div>
-      <div><strong className="text-gray-500 block">Test Type:</strong><span className="text-gray-800">{testData.testType || 'N/A'}</span></div>
+      <div><strong className="text-gray-500 block">Test Type:</strong><span className="text-gray-800">{testData.test_type || 'N/A'}</span></div>
       <div><strong className="text-gray-500 block">Module:</strong><span className="text-gray-800">{getDisplay(testData.module, modules)}</span></div>
       {testData.module === 'GRAMMAR' && testData.subcategory ? (
         <div><strong className="text-gray-500 block">Grammar Category:</strong><span className="text-gray-800">{getDisplay(testData.subcategory, grammarCategories)}</span></div>

@@ -523,17 +523,6 @@ const StudentManagement = () => {
                                             <div className="px-8 py-6">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="p-3 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-lg">
-                                                            <Users className="w-6 h-6 text-white" />
-                                                        </div>
-                                                        <div>
-                                                            <h3 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                                                                Student Directory
-                                                            </h3>
-                                                            <p className="text-sm text-gray-600">
-                                                                {students.length} students found
-                                                            </p>
-                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -545,7 +534,6 @@ const StudentManagement = () => {
                                                 <tr>
                                                     <th className="px-8 py-5 text-left border-b border-gray-200">
                                                         <div className="flex items-center gap-2">
-                                                            <User className="w-4 h-4 text-gray-500" />
                                                             <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">Student</span>
                                                         </div>
                                                     </th>

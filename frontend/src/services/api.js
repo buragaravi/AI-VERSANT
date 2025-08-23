@@ -50,6 +50,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Enable credentials for CORS
 })
 
 console.log('API Service - Created axios instance with baseURL:', api.defaults.baseURL)
@@ -279,6 +280,48 @@ export const deleteStudent = async (studentId) => {
   return api.delete(`/batch-management/student/${studentId}`);
 };
 
+// New organized question bank upload endpoints
+export const uploadQuestions = async (formData) => {
+  return api.post('/test-management/upload-questions', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+};
+
+export const uploadSentences = async (formData) => {
+  return api.post('/test-management/upload-sentences', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+};
+
+export const uploadParagraphs = async (formData) => {
+  return api.post('/test-management/upload-paragraphs', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+};
+
+export const uploadTechnicalQuestions = async (formData) => {
+  return api.post('/test-management/upload-technical-questions', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+};
+
+export const getModules = async () => {
+  return api.get('/test-management/modules');
+};
+
+export const getLevels = async (moduleId) => {
+  return api.get(`/test-management/levels?module_id=${moduleId}`);
+};
+
+// Legacy endpoint for backward compatibility
 export const uploadModuleQuestions = async (moduleId, levelId, questions) => {
   return api.post('/test-management/module-question-bank/upload', {
     module_id: moduleId,
@@ -340,6 +383,27 @@ export const authorizeStudentModule = async (studentId, moduleId) => {
 
 export const lockStudentModule = async (studentId, moduleId) => {
   return api.post(`/batch-management/student/${studentId}/lock-module`, { module: moduleId });
+};
+
+// Question Bank CRUD Operations
+export const getQuestions = async (moduleId, levelId) => {
+  return api.get('/test-management/questions', {
+    params: { module_id: moduleId, level_id: levelId }
+  });
+};
+
+export const updateQuestion = async (questionId, data) => {
+  return api.put(`/test-management/questions/${questionId}`, data);
+};
+
+export const deleteQuestion = async (questionId) => {
+  return api.delete(`/test-management/questions/${questionId}`);
+};
+
+export const bulkDeleteQuestions = async (questionIds) => {
+  return api.delete('/test-management/questions/bulk', {
+    data: { ids: questionIds }
+  });
 };
 
 export default api

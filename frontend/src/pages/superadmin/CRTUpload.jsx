@@ -811,102 +811,88 @@ const CRTUpload = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Upload Section */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Upload Questions</h2>
-          
-          {/* Topic Selection */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Select Topic (Optional but Recommended)
-            </label>
-            <div className="flex space-x-2 mb-2">
-              <select
-                value={selectedTopic}
-                onChange={(e) => setSelectedTopic(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select a topic...</option>
-                {topics.map(topic => (
-                  <option key={topic._id} value={topic._id}>
-                    {topic.topic_name} ({topic.completion_percentage}% completed)
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => setShowCreateTopicModal(true)}
-                className="px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-sm"
-              >
-                New Topic
-              </button>
-            </div>
-            {topics.length === 0 && (
-              <p className="text-sm text-gray-500">
-                No topics available. Create a new topic to organize your questions better.
-              </p>
-            )}
-            {selectedTopic && (
-              <p className="text-sm text-green-600">
-                Selected: {topics.find(t => t._id === selectedTopic)?.topic_name}
-              </p>
-            )}
-          </div>
-          
-          <div className="mb-6">
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Upload Questions</h2>
+        
+        {/* Topic Selection */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Select Topic (Optional but Recommended)
+          </label>
+          <div className="flex space-x-2 mb-2">
+            <select
+              value={selectedTopic}
+              onChange={(e) => setSelectedTopic(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select a topic...</option>
+              {topics.map(topic => (
+                <option key={topic._id} value={topic._id}>
+                  {topic.topic_name} ({topic.completion_percentage}% completed)
+                </option>
+              ))}
+            </select>
             <button
-              onClick={downloadTemplate}
-              className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors mb-4"
+              onClick={() => setShowCreateTopicModal(true)}
+              className="px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-sm"
             >
-              Download Template
+              New Topic
             </button>
-            <p className="text-sm text-gray-600">
-              Download the CSV template to see the required format for uploading questions.
-              {selectedModule === 'TECHNICAL' && (
-                <span className="block mt-1">
-                  <strong>Compiler-integrated format:</strong> QuestionTitle, ProblemStatement, TestCaseID, Input, ExpectedOutput, Language<br/>
-                  <strong>MCQ format:</strong> Question, A, B, C, D, Answer
-                </span>
-              )}
+          </div>
+          {topics.length === 0 && (
+            <p className="text-sm text-gray-500">
+              No topics available. Create a new topic to organize your questions better.
             </p>
-          </div>
-
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-            <input
-              type="file"
-              accept=".csv,.xlsx,.xls"
-              onChange={(e) => {
-                const file = e.target.files[0];
-                if (file) handleFileUpload(file);
-              }}
-              className="hidden"
-              id="file-upload"
-              disabled={loading}
-            />
-            <label
-              htmlFor="file-upload"
-              className="cursor-pointer block"
-            >
-              <div className="text-4xl mb-4">📁</div>
-              <p className="text-lg font-medium text-gray-900 mb-2">
-                {loading ? 'Uploading...' : 'Click to upload file'}
-              </p>
-              <p className="text-sm text-gray-600">
-                Supports CSV, Excel files
-              </p>
-            </label>
-          </div>
+          )}
+          {selectedTopic && (
+            <p className="text-sm text-green-600">
+              Selected: {topics.find(t => t._id === selectedTopic)?.topic_name}
+            </p>
+          )}
+        </div>
+        
+        <div className="mb-6">
+          <button
+            onClick={downloadTemplate}
+            className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors mb-4"
+          >
+            Download Template
+          </button>
+          <p className="text-sm text-gray-600">
+            Download the CSV template to see the required format for uploading questions.
+            {selectedModule === 'TECHNICAL' && (
+              <span className="block mt-1">
+                <strong>Compiler-integrated format:</strong> QuestionTitle, ProblemStatement, TestCaseID, Input, ExpectedOutput, Language<br/>
+                <strong>MCQ format:</strong> Question, A, B, C, D, Answer
+              </span>
+            )}
+          </p>
         </div>
 
-        {/* Add Question Manually */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Add Question Manually</h2>
-          <button
-            onClick={() => setShowAddQuestion(true)}
-            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+          <input
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            onChange={(e) => {
+              const file = e.target.files[0];
+              if (file) handleFileUpload(file);
+            }}
+            className="hidden"
+            id="file-upload"
+            disabled={loading}
+          />
+          <label
+            htmlFor="file-upload"
+            className="cursor-pointer block"
           >
-            Add New Question
-          </button>
+            <div className="text-4xl mb-4">📁</div>
+            <p className="text-lg font-medium text-gray-900 mb-2">
+              {loading ? 'Uploading...' : 'Click to upload file'}
+            </p>
+            <p className="text-sm text-gray-600">
+              Supports CSV, Excel files
+            </p>
+          </label>
         </div>
       </div>
 

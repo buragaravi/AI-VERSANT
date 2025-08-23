@@ -7,7 +7,7 @@ import io
 import json
 from mongo import mongo_db
 from config.constants import ROLES, MODULES, LEVELS, TEST_TYPES, WRITING_CONFIG
-from datetime import datetime
+from datetime import datetime, timedelta
 from routes.test_management import require_superadmin
 from models import Test
 
@@ -441,36 +441,46 @@ def get_student_practice_results():
             },
             {'$unwind': '$campus_details'},
             {
-                '$group': {
-                    '_id': {
-                        'student_id': '$student_id',
-                        'module_id': '$test_details.module_id',
-                        'subcategory': '$subcategory'
-                    },
-                    'student_name': {'$first': '$student_details.name'},
-                    'student_email': {'$first': '$student_details.email'},
-                    'campus_name': {'$first': '$campus_details.name'},
-                    'module_name': {'$first': '$test_details.module_id'},
-                    'subcategory_name': {'$first': '$subcategory'},
-                    'total_attempts': {'$sum': 1},
-                    'highest_score': {'$max': '$average_score'},
-                    'average_score': {'$avg': '$average_score'},
-                    'total_questions': {'$sum': '$total_questions'},
-                    'total_correct': {'$sum': '$correct_answers'},
-                    'last_attempt': {'$max': '$submitted_at'},
-                    'attempts': {
-                        '$push': {
-                            'test_name': '$test_details.name',
-                            'score': '$average_score',
-                            'correct_answers': '$correct_answers',
-                            'total_questions': '$total_questions',
-                            'submitted_at': '$submitted_at',
-                            'result_id': '$_id'
-                        }
-                    }
+                '$lookup': {
+                    'from': 'courses',
+                    'localField': 'student_profile.course_id',
+                    'foreignField': '_id',
+                    'as': 'course_details'
                 }
             },
-            {'$sort': {'student_name': 1, 'module_name': 1}}
+            {'$unwind': '$course_details'},
+            {
+                '$lookup': {
+                    'from': 'batches',
+                    'localField': 'student_profile.batch_id',
+                    'foreignField': '_id',
+                    'as': 'batch_details'
+                }
+            },
+            {'$unwind': '$batch_details'},
+            {
+                '$project': {
+                    '_id': 1,
+                    'student_id': 1,
+                    'student_name': '$student_details.name',
+                    'student_email': '$student_details.email',
+                    'campus_name': '$campus_details.name',
+                    'course_name': '$course_details.name',
+                    'batch_name': '$batch_details.name',
+                    'test_name': '$test_details.name',
+                    'module_name': '$test_details.module_id',
+                    'test_type': 1,
+                    'average_score': 1,
+                    'total_questions': 1,
+                    'correct_answers': 1,
+                    'submitted_at': 1,
+                    'duration': 1,
+                    'time_taken': 1,
+                    'auto_submitted': 1,
+                    'cheat_detected': 1
+                }
+            },
+            {'$sort': {'submitted_at': -1}}
         ]
         
         # Apply additional filters
@@ -482,28 +492,23 @@ def get_student_practice_results():
                 {'student_email': {'$regex': student_filter, '$options': 'i'}}
             ]}})
         
-        results = list(mongo_db.db.test_results.aggregate(pipeline))
-
-        # Fetch detailed answers for each attempt
+        # Try both collections
+        results = []
+        try:
+            results = list(mongo_db.student_test_attempts.aggregate(pipeline))
+        except:
+            try:
+                results = list(mongo_db.db.test_results.aggregate(pipeline))
+            except:
+                results = []
+        
+        # Process results
         for result in results:
-            result['module_display_name'] = MODULES.get(result['module_name'], 'Unknown')
-            result['accuracy'] = (result['total_correct'] / result['total_questions'] * 100) if result['total_questions'] > 0 else 0
-            result['last_attempt'] = result['last_attempt'].isoformat() if result['last_attempt'] else None
-            result['status'] = 'completed' if result['highest_score'] >= 60 else 'needs_improvement'
-
-            # Sort attempts by date
-            result['attempts'].sort(key=lambda x: x['submitted_at'], reverse=True)
-
-            # Convert ObjectIds to strings and fetch detailed results
-            for attempt in result['attempts']:
-                attempt['result_id'] = str(attempt['result_id'])
-                attempt['submitted_at'] = attempt['submitted_at'].isoformat()
-                # Fetch the full test result document for detailed answers
-                test_result_doc = mongo_db.db.test_results.find_one({'_id': ObjectId(attempt['result_id'])})
-                if test_result_doc and 'results' in test_result_doc:
-                    attempt['detailed_results'] = test_result_doc['results']
-                else:
-                    attempt['detailed_results'] = []
+            result['_id'] = str(result['_id'])
+            result['student_id'] = str(result['student_id'])
+            result['module_name'] = MODULES.get(result.get('module_name', ''), result.get('module_name', 'Unknown'))
+            if result.get('submitted_at'):
+                result['submitted_at'] = result['submitted_at'].isoformat()
 
         return jsonify({
             'success': True,
@@ -511,12 +516,12 @@ def get_student_practice_results():
         }), 200
         
     except Exception as e:
+        current_app.logger.error(f"Error fetching practice results: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'Failed to get student practice results: {str(e)}'
         }), 500
 
-# NEW ENDPOINT: Online results only
 @superadmin_bp.route('/student-online-results', methods=['GET'])
 @jwt_required()
 def get_student_online_results():
@@ -536,8 +541,8 @@ def get_student_online_results():
         campus_filter = request.args.get('campus')
         student_filter = request.args.get('student')
         
-        # Build match conditions
-        match_conditions = {'test_type': 'online'}
+        # Build match conditions - exclude practice tests
+        match_conditions = {'test_type': {'$ne': 'practice'}}
         if module_filter:
             match_conditions['module_id'] = module_filter
         
@@ -580,36 +585,46 @@ def get_student_online_results():
             },
             {'$unwind': '$campus_details'},
             {
-                '$group': {
-                    '_id': {
-                        'student_id': '$student_id',
-                        'module_id': '$test_details.module_id',
-                        'subcategory': '$subcategory'
-                    },
-                    'student_name': {'$first': '$student_details.name'},
-                    'student_email': {'$first': '$student_details.email'},
-                    'campus_name': {'$first': '$campus_details.name'},
-                    'module_name': {'$first': '$test_details.module_id'},
-                    'subcategory_name': {'$first': '$subcategory'},
-                    'total_attempts': {'$sum': 1},
-                    'highest_score': {'$max': '$average_score'},
-                    'average_score': {'$avg': '$average_score'},
-                    'total_questions': {'$sum': '$total_questions'},
-                    'total_correct': {'$sum': '$correct_answers'},
-                    'last_attempt': {'$max': '$submitted_at'},
-                    'attempts': {
-                        '$push': {
-                            'test_name': '$test_details.name',
-                            'score': '$average_score',
-                            'correct_answers': '$correct_answers',
-                            'total_questions': '$total_questions',
-                            'submitted_at': '$submitted_at',
-                            'result_id': '$_id'
-                        }
-                    }
+                '$lookup': {
+                    'from': 'courses',
+                    'localField': 'student_profile.course_id',
+                    'foreignField': '_id',
+                    'as': 'course_details'
                 }
             },
-            {'$sort': {'student_name': 1, 'module_name': 1}}
+            {'$unwind': '$course_details'},
+            {
+                '$lookup': {
+                    'from': 'batches',
+                    'localField': 'student_profile.batch_id',
+                    'foreignField': '_id',
+                    'as': 'batch_details'
+                }
+            },
+            {'$unwind': '$batch_details'},
+            {
+                '$project': {
+                    '_id': 1,
+                    'student_id': 1,
+                    'student_name': '$student_details.name',
+                    'student_email': '$student_details.email',
+                    'campus_name': '$campus_details.name',
+                    'course_name': '$course_details.name',
+                    'batch_name': '$batch_details.name',
+                    'test_name': '$test_details.name',
+                    'module_name': '$test_details.module_id',
+                    'test_type': 1,
+                    'average_score': 1,
+                    'total_questions': 1,
+                    'correct_answers': 1,
+                    'submitted_at': 1,
+                    'duration': 1,
+                    'time_taken': 1,
+                    'auto_submitted': 1,
+                    'cheat_detected': 1
+                }
+            },
+            {'$sort': {'submitted_at': -1}}
         ]
         
         # Apply additional filters
@@ -621,29 +636,31 @@ def get_student_online_results():
                 {'student_email': {'$regex': student_filter, '$options': 'i'}}
             ]}})
         
-        results = list(mongo_db.db.test_results.aggregate(pipeline))
+        # Try both collections
+        results = []
+        try:
+            results = list(mongo_db.student_test_attempts.aggregate(pipeline))
+        except:
+            try:
+                results = list(mongo_db.db.test_results.aggregate(pipeline))
+            except:
+                results = []
         
         # Process results
         for result in results:
-            result['module_display_name'] = MODULES.get(result['module_name'], 'Unknown')
-            result['accuracy'] = (result['total_correct'] / result['total_questions'] * 100) if result['total_questions'] > 0 else 0
-            result['last_attempt'] = result['last_attempt'].isoformat() if result['last_attempt'] else None
-            result['status'] = 'completed' if result['highest_score'] >= 60 else 'needs_improvement'
-            
-            # Sort attempts by date
-            result['attempts'].sort(key=lambda x: x['submitted_at'], reverse=True)
-            
-            # Convert ObjectIds to strings
-            for attempt in result['attempts']:
-                attempt['result_id'] = str(attempt['result_id'])
-                attempt['submitted_at'] = attempt['submitted_at'].isoformat()
-        
+            result['_id'] = str(result['_id'])
+            result['student_id'] = str(result['student_id'])
+            result['module_name'] = MODULES.get(result.get('module_name', ''), result.get('module_name', 'Unknown'))
+            if result.get('submitted_at'):
+                result['submitted_at'] = result['submitted_at'].isoformat()
+
         return jsonify({
             'success': True,
             'data': results
         }), 200
         
     except Exception as e:
+        current_app.logger.error(f"Error fetching online results: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'Failed to get student online results: {str(e)}'
@@ -1407,6 +1424,209 @@ def sentence_upload():
             'message': f'Upload failed: {str(e)}'
         }), 500
 
+@superadmin_bp.route('/export-results', methods=['GET'])
+@jwt_required()
+def export_results():
+    """Export test results as CSV"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
+        # Get query parameters
+        module_filter = request.args.get('module')
+        test_type_filter = request.args.get('test_type')
+        campus_filter = request.args.get('campus')
+        course_filter = request.args.get('course')
+        batch_filter = request.args.get('batch')
+        date_range = request.args.get('dateRange', 'all')
+        score_range = request.args.get('scoreRange', 'all')
+        
+        # Build match conditions
+        match_conditions = {}
+        if module_filter:
+            match_conditions['module_id'] = module_filter
+        if test_type_filter:
+            match_conditions['test_type'] = test_type_filter
+        
+        # Date range filter
+        if date_range != 'all':
+            now = datetime.utcnow()
+            if date_range == 'today':
+                start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            elif date_range == 'week':
+                start_date = now - timedelta(days=7)
+            elif date_range == 'month':
+                start_date = now - timedelta(days=30)
+            else:
+                start_date = None
+            
+            if start_date:
+                match_conditions['submitted_at'] = {'$gte': start_date}
+        
+        # Score range filter
+        if score_range != 'all':
+            if score_range == 'excellent':
+                match_conditions['average_score'] = {'$gte': 90}
+            elif score_range == 'good':
+                match_conditions['average_score'] = {'$gte': 70, '$lt': 90}
+            elif score_range == 'average':
+                match_conditions['average_score'] = {'$gte': 50, '$lt': 70}
+            elif score_range == 'poor':
+                match_conditions['average_score'] = {'$lt': 50}
+        
+        pipeline = [
+            {'$match': match_conditions},
+            {
+                '$lookup': {
+                    'from': 'users',
+                    'localField': 'student_id',
+                    'foreignField': '_id',
+                    'as': 'student_details'
+                }
+            },
+            {'$unwind': '$student_details'},
+            {
+                '$lookup': {
+                    'from': 'tests',
+                    'localField': 'test_id',
+                    'foreignField': '_id',
+                    'as': 'test_details'
+                }
+            },
+            {'$unwind': '$test_details'},
+            {
+                '$lookup': {
+                    'from': 'students',
+                    'localField': 'student_id',
+                    'foreignField': 'user_id',
+                    'as': 'student_profile'
+                }
+            },
+            {'$unwind': '$student_profile'},
+            {
+                '$lookup': {
+                    'from': 'campuses',
+                    'localField': 'student_profile.campus_id',
+                    'foreignField': '_id',
+                    'as': 'campus_details'
+                }
+            },
+            {'$unwind': '$campus_details'},
+            {
+                '$lookup': {
+                    'from': 'courses',
+                    'localField': 'student_profile.course_id',
+                    'foreignField': '_id',
+                    'as': 'course_details'
+                }
+            },
+            {'$unwind': '$course_details'},
+            {
+                '$lookup': {
+                    'from': 'batches',
+                    'localField': 'student_profile.batch_id',
+                    'foreignField': '_id',
+                    'as': 'batch_details'
+                }
+            },
+            {'$unwind': '$batch_details'},
+            {
+                '$project': {
+                    'student_name': '$student_details.name',
+                    'student_email': '$student_details.email',
+                    'campus_name': '$campus_details.name',
+                    'course_name': '$course_details.name',
+                    'batch_name': '$batch_details.name',
+                    'test_name': '$test_details.name',
+                    'module_name': '$test_details.module_id',
+                    'test_type': '$test_type',
+                    'average_score': '$average_score',
+                    'total_questions': '$total_questions',
+                    'correct_answers': '$correct_answers',
+                    'submitted_at': '$submitted_at',
+                    'duration': '$duration',
+                    'time_taken': '$time_taken'
+                }
+            },
+            {'$sort': {'submitted_at': -1}}
+        ]
+        
+        # Apply additional filters
+        if campus_filter:
+            pipeline.insert(0, {'$match': {'campus_name': campus_filter}})
+        if course_filter:
+            pipeline.insert(0, {'$match': {'course_name': course_filter}})
+        if batch_filter:
+            pipeline.insert(0, {'$match': {'batch_name': batch_filter}})
+        
+        results = list(mongo_db.db.test_results.aggregate(pipeline))
+        
+        # Convert to CSV
+        import csv
+        import io
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'Student Name',
+            'Student Email',
+            'Campus',
+            'Course',
+            'Batch',
+            'Test Name',
+            'Module',
+            'Test Type',
+            'Score (%)',
+            'Total Questions',
+            'Correct Answers',
+            'Submitted At',
+            'Duration (min)',
+            'Time Taken (min)'
+        ])
+        
+        # Write data
+        for result in results:
+            writer.writerow([
+                result.get('student_name', ''),
+                result.get('student_email', ''),
+                result.get('campus_name', ''),
+                result.get('course_name', ''),
+                result.get('batch_name', ''),
+                result.get('test_name', ''),
+                result.get('module_name', ''),
+                result.get('test_type', ''),
+                result.get('average_score', 0),
+                result.get('total_questions', 0),
+                result.get('correct_answers', 0),
+                result.get('submitted_at', '').isoformat() if result.get('submitted_at') else '',
+                result.get('duration', 0),
+                result.get('time_taken', 0)
+            ])
+        
+        output.seek(0)
+        csv_content = output.getvalue()
+        
+        from flask import Response
+        return Response(
+            csv_content,
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename=test-results-{datetime.now().strftime("%Y%m%d")}.csv'}
+        )
+        
+    except Exception as e:
+        current_app.logger.error(f"Error exporting results: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to export results: {str(e)}'
+        }), 500
 
 
 @superadmin_bp.route('/migrate-batch-course-instances', methods=['POST'])
@@ -1448,3 +1668,165 @@ def migrate_batch_course_instances():
             mongo_db.db.test_results.update_one({'_id': r['_id']}, {'$set': {'batch_course_instance_id': instance_id}})
             updated_results += 1
     return jsonify({'success': True, 'students_updated': updated_students, 'modules_updated': updated_modules, 'results_updated': updated_results}), 200 
+
+@superadmin_bp.route('/debug-test-results', methods=['GET'])
+@jwt_required()
+def debug_test_results():
+    """Debug endpoint to check test results data"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
+        # Check both collections
+        debug_info = {
+            'student_test_attempts_count': 0,
+            'test_results_count': 0,
+            'sample_student_attempts': [],
+            'sample_test_results': [],
+            'collections_exist': {
+                'student_test_attempts': False,
+                'test_results': False
+            }
+        }
+        
+        try:
+            # Check student_test_attempts collection
+            debug_info['student_test_attempts_count'] = mongo_db.student_test_attempts.count_documents({})
+            debug_info['collections_exist']['student_test_attempts'] = True
+            debug_info['sample_student_attempts'] = list(mongo_db.student_test_attempts.find().limit(3))
+        except Exception as e:
+            debug_info['student_test_attempts_error'] = str(e)
+        
+        try:
+            # Check test_results collection
+            debug_info['test_results_count'] = mongo_db.db.test_results.count_documents({})
+            debug_info['collections_exist']['test_results'] = True
+            debug_info['sample_test_results'] = list(mongo_db.db.test_results.find().limit(3))
+        except Exception as e:
+            debug_info['test_results_error'] = str(e)
+        
+        # Convert ObjectIds to strings for JSON serialization
+        for sample in debug_info['sample_student_attempts']:
+            sample['_id'] = str(sample['_id'])
+            if 'student_id' in sample:
+                sample['student_id'] = str(sample['student_id'])
+            if 'test_id' in sample:
+                sample['test_id'] = str(sample['test_id'])
+        
+        for sample in debug_info['sample_test_results']:
+            sample['_id'] = str(sample['_id'])
+            if 'student_id' in sample:
+                sample['student_id'] = str(sample['student_id'])
+            if 'test_id' in sample:
+                sample['test_id'] = str(sample['test_id'])
+        
+        return jsonify({
+            'success': True,
+            'data': debug_info
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in debug endpoint: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Debug endpoint error: {str(e)}'
+        }), 500 
+
+@superadmin_bp.route('/filter-options', methods=['GET'])
+@jwt_required()
+def get_filter_options():
+    """Get filter options for results page"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
+        # Get modules
+        modules = []
+        for module_id, module_info in MODULES.items():
+            modules.append({
+                'id': module_id,
+                'name': module_info
+            })
+        
+        # Get test types
+        test_types = [
+            {'id': 'practice', 'name': 'Practice'},
+            {'id': 'online', 'name': 'Online Exam'},
+            {'id': 'technical', 'name': 'Technical'},
+            {'id': 'mcq', 'name': 'MCQ'}
+        ]
+        
+        # Get campuses
+        campuses = []
+        try:
+            campus_cursor = mongo_db.campuses.find({}, {'name': 1})
+            for campus in campus_cursor:
+                campuses.append({
+                    'id': str(campus['_id']),
+                    'name': campus['name']
+                })
+        except Exception as e:
+            current_app.logger.error(f"Error fetching campuses: {e}")
+        
+        # Get courses
+        courses = []
+        try:
+            course_cursor = mongo_db.courses.find({}, {'name': 1})
+            for course in course_cursor:
+                courses.append({
+                    'id': str(course['_id']),
+                    'name': course['name']
+                })
+        except Exception as e:
+            current_app.logger.error(f"Error fetching courses: {e}")
+        
+        # Get batches
+        batches = []
+        try:
+            batch_cursor = mongo_db.batches.find({}, {'name': 1})
+            for batch in batch_cursor:
+                batches.append({
+                    'id': str(batch['_id']),
+                    'name': batch['name']
+                })
+        except Exception as e:
+            current_app.logger.error(f"Error fetching batches: {e}")
+        
+        # Get levels
+        levels = []
+        for level_id, level_info in LEVELS.items():
+            levels.append({
+                'id': level_id,
+                'name': level_info.get('name', level_id)
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'modules': modules,
+                'test_types': test_types,
+                'campuses': campuses,
+                'courses': courses,
+                'batches': batches,
+                'levels': levels
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching filter options: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to fetch filter options: {str(e)}'
+        }), 500 

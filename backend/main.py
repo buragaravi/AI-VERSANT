@@ -26,11 +26,46 @@ bcrypt.init_app(app)
 socketio.init_app(app)
 
 # CORS configuration
-default_origins = 'http://localhost:3000,http://localhost:5173,https://pydah-studyedge.vercel.app,https://versant-frontend.vercel.app,https://crt.pydahsoft.in'
+default_origins = 'http://localhost:3000,http://localhost:5173,https://pydah-studyedge.vercel.app,https://versant-frontend.vercel.app,https://crt.pydahsoft.in,https://ai-versant-backend.onrender.com'
 cors_origins = os.getenv('CORS_ORIGINS', default_origins)
-CORS(app, origins=cors_origins.split(','), supports_credentials=True, allow_headers=["Content-Type", "Authorization", "X-Requested-With"], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+
+# Enhanced CORS configuration to handle all possible origins
+# Check if we should allow all origins (for development/testing)
+allow_all_origins = os.getenv('ALLOW_ALL_CORS', 'false').lower() == 'true'
+
+if allow_all_origins:
+    # Allow all origins for development/testing
+    CORS(app, 
+         origins="*", 
+         supports_credentials=False,  # Must be False when origins="*"
+         allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+         expose_headers=["Content-Type", "Authorization"],
+         max_age=3600)
+else:
+    # Production CORS with specific origins
+    CORS(app, 
+         origins=cors_origins.split(','), 
+         supports_credentials=True, 
+         allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+         expose_headers=["Content-Type", "Authorization"],
+         max_age=3600)
 
 
+
+# CORS preflight handler
+@app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
+@app.route('/<path:path>', methods=['OPTIONS'])
+def handle_options(path):
+    """Handle CORS preflight requests"""
+    response = jsonify({'message': 'CORS preflight handled'})
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin,Access-Control-Request-Method,Access-Control-Request-Headers')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    response.headers.add('Access-Control-Max-Age', '3600')
+    return response
 
 # Root route for API status
 @app.route('/')
@@ -43,6 +78,7 @@ def api_status():
         'status': 'active',
         'cors_enabled': True,
         'allowed_origins': cors_origins.split(','),
+        'allow_all_origins': allow_all_origins,
         'endpoints': {
             'auth': '/auth',
             'superadmin': '/superadmin',

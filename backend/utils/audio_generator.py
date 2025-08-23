@@ -20,9 +20,11 @@ except ImportError:
 
 def generate_audio_from_text(text, accent='en', speed=1.0):
     """Generate audio from text using gTTS with custom accent and speed"""
-    if not GTTS_AVAILABLE or not PYDUB_AVAILABLE:
-        print("Audio generation not available - missing required packages")
-        return None
+    if not GTTS_AVAILABLE:
+        raise Exception("Audio generation not available - gTTS package is missing. Please install it using: pip install gtts")
+    
+    if not PYDUB_AVAILABLE:
+        raise Exception("Audio generation not available - pydub package is missing. Please install it using: pip install pydub")
     
     try:
         # Create gTTS object with specified accent
@@ -46,16 +48,26 @@ def generate_audio_from_text(text, accent='en', speed=1.0):
         
         # Upload to S3
         s3_key = f"audio/practice_tests/{uuid.uuid4()}.mp3"
-        s3_client.upload_file(adjusted_filename, S3_BUCKET_NAME, s3_key)
+        try:
+            s3_client.upload_file(adjusted_filename, S3_BUCKET_NAME, s3_key)
+        except Exception as s3_error:
+            raise Exception(f"Failed to upload audio to S3: {str(s3_error)}. Please check S3 configuration.")
         
         # Clean up temporary files
-        os.remove(temp_filename)
-        os.remove(adjusted_filename)
+        try:
+            os.remove(temp_filename)
+            os.remove(adjusted_filename)
+        except Exception as cleanup_error:
+            print(f"Warning: Failed to cleanup temporary files: {cleanup_error}")
         
         return s3_key
     except Exception as e:
-        print(f"Error generating audio: {str(e)}")
-        return None
+        if "gTTS" in str(e):
+            raise Exception(f"Text-to-speech conversion failed: {str(e)}. Please check the text content and try again.")
+        elif "AudioSegment" in str(e):
+            raise Exception(f"Audio processing failed: {str(e)}. Please check if the audio file was generated correctly.")
+        else:
+            raise Exception(f"Audio generation failed: {str(e)}. Please try again or contact support.")
 
 def calculate_similarity_score(original_text, student_audio_text):
     """Calculate similarity score between original and student audio text"""

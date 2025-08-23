@@ -169,7 +169,7 @@ const SuperAdminSidebar = () => {
 
         { name: 'Admin Permissions', path: '/superadmin/admin-permissions', icon: Shield, module: 'admin_permissions' },
         { name: 'Test Management', path: '/superadmin/tests', icon: FilePlus, module: 'test_management' },
-        { name: 'Question Bank Upload', path: '/superadmin/question-bank-upload', icon: FilePlus, module: 'question_bank_upload', isUpload: true },
+        { name: 'Versant Upload', path: '/superadmin/question-bank-upload', icon: FilePlus, module: 'question_bank_upload', isUpload: true },
         { name: 'CRT Upload', path: '/superadmin/crt-upload', icon: FilePlus, module: 'crt_upload', isUpload: true },
         { name: 'Student Management', path: '/superadmin/students', icon: GraduationCap, module: 'student_management' },
         { name: 'Results Management', path: '/superadmin/results', icon: BarChart, module: 'results_management' },
@@ -189,7 +189,7 @@ const SuperAdminSidebar = () => {
 
       { name: 'Admin Permissions', path: '/superadmin/admin-permissions', icon: Shield, module: 'admin_permissions' },
       { name: 'Test Management', path: '/superadmin/tests', icon: FilePlus, module: 'test_management' },
-      { name: 'Question Bank Upload', path: '/superadmin/question-bank-upload', icon: FilePlus, module: 'question_bank_upload', isUpload: true },
+      { name: 'Versant Upload', path: '/superadmin/question-bank-upload', icon: FilePlus, module: 'question_bank_upload', isUpload: true },
       { name: 'CRT Upload', path: '/superadmin/crt-upload', icon: FilePlus, module: 'crt_upload', isUpload: true },
       { name: 'Student Management', path: '/superadmin/students', icon: GraduationCap, module: 'student_management' },
       { name: 'Results Management', path: '/superadmin/results', icon: BarChart, module: 'results_management' },
@@ -359,7 +359,7 @@ const SuperAdminSidebar = () => {
                   className="group flex items-center px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-300 text-gray-700 hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 hover:text-gray-900 hover:shadow-md"
                 >
                   <FilePlus className="mr-3 h-4 w-4 text-gray-500 group-hover:text-blue-600" />
-                  <span className="text-sm">Question Bank Upload</span>
+                  <span className="text-sm">Versant Upload</span>
                 </Link>
                 <Link
                   to="/superadmin/crt-upload"
@@ -536,7 +536,7 @@ const SuperAdminSidebar = () => {
                   className="group flex items-center px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-300 text-gray-700 hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 hover:text-gray-900 hover:shadow-md"
                 >
                   <FilePlus className="mr-3 h-4 w-4 text-gray-500 group-hover:text-blue-600" />
-                  <span className="text-sm">Question Bank Upload</span>
+                  <span className="text-sm">Versant Upload</span>
                 </Link>
                 <Link
                   to="/superadmin/crt-upload"

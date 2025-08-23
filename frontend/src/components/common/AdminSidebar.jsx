@@ -150,7 +150,7 @@ const AdminSidebar = () => {
     if (userPermissions.modules?.includes('question_bank_upload') && 
         (user.role === 'super_admin' || user.role === 'superadmin')) {
       navigation.push({ 
-        name: 'Question Bank Upload', 
+        name: 'Versant Upload', 
         path: '/superadmin/question-bank-upload', 
         icon: FileText 
       })

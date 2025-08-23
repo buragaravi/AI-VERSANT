@@ -502,56 +502,96 @@ def get_student_count():
         if not campus_id:
             return jsonify({'success': False, 'message': 'Campus ID is required'}), 400
         
-        # Get batch-course instances that match the criteria
-        instance_query = {'campus_id': ObjectId(campus_id)}
+        # Enhanced student query - try multiple approaches
+        student_query = {}
+        student_list = []
         
-        if batch_ids:
+        # Approach 1: Try batch-course instances first
+        if batch_ids and course_ids:
+            instance_query = {'campus_id': ObjectId(campus_id)}
             instance_query['batch_id'] = {'$in': [ObjectId(bid) for bid in batch_ids]}
-        
-        if course_ids:
             instance_query['course_id'] = {'$in': [ObjectId(cid) for cid in course_ids]}
+            
+            current_app.logger.info(f"Instance query: {instance_query}")
+            instances = list(mongo_db.db.batch_course_instances.find(instance_query))
+            current_app.logger.info(f"Found {len(instances)} instances")
+            
+            if instances:
+                instance_ids = [instance['_id'] for instance in instances]
+                students = list(mongo_db.students.find({'batch_course_instance_id': {'$in': instance_ids}}))
+                current_app.logger.info(f"Found {len(students)} students via instances")
+                
+                for student in students:
+                    user = mongo_db.users.find_one({'_id': student['user_id']})
+                    if user:
+                        student_list.append({
+                            'id': str(student['_id']),
+                            'name': user.get('name', ''),
+                            'email': user.get('email', ''),
+                            'roll_number': student.get('roll_number', ''),
+                            'source': 'batch_course_instance'
+                        })
         
-        current_app.logger.info(f"Instance query: {instance_query}")
+        # Approach 2: If no students found, try direct batch query
+        if not student_list and batch_ids:
+            current_app.logger.info("Trying direct batch query")
+            students = list(mongo_db.students.find({'batch_id': {'$in': [ObjectId(bid) for bid in batch_ids]}}))
+            current_app.logger.info(f"Found {len(students)} students via direct batch query")
+            
+            for student in students:
+                user = mongo_db.users.find_one({'_id': student['user_id']})
+                if user:
+                    student_list.append({
+                        'id': str(student['_id']),
+                        'name': user.get('name', ''),
+                        'email': user.get('email', ''),
+                        'roll_number': student.get('roll_number', ''),
+                        'source': 'direct_batch'
+                    })
         
-        # Find matching batch-course instances
-        instances = list(mongo_db.db.batch_course_instances.find(instance_query))
-        current_app.logger.info(f"Found {len(instances)} instances")
+        # Approach 3: If still no students, try campus-wide query
+        if not student_list:
+            current_app.logger.info("Trying campus-wide query")
+            # Get all batches for this campus
+            campus_batches = list(mongo_db.batches.find({'campus_id': ObjectId(campus_id)}))
+            if campus_batches:
+                batch_ids_campus = [str(batch['_id']) for batch in campus_batches]
+                students = list(mongo_db.students.find({'batch_id': {'$in': [ObjectId(bid) for bid in batch_ids_campus]}}))
+                current_app.logger.info(f"Found {len(students)} students via campus-wide query")
+                
+                for student in students:
+                    user = mongo_db.users.find_one({'_id': student['user_id']})
+                    if user:
+                        student_list.append({
+                            'id': str(student['_id']),
+                            'name': user.get('name', ''),
+                            'email': user.get('email', ''),
+                            'roll_number': student.get('roll_number', ''),
+                            'source': 'campus_wide'
+                        })
         
-        if not instances:
+        # Remove duplicates based on student ID
+        unique_students = {}
+        for student in student_list:
+            if student['id'] not in unique_students:
+                unique_students[student['id']] = student
+        
+        final_student_list = list(unique_students.values())
+        
+        current_app.logger.info(f"Final student count: {len(final_student_list)}")
+        
+        if not final_student_list:
             return jsonify({
                 'success': True,
                 'count': 0,
                 'students': [],
-                'message': 'No batch-course instances found for the selected criteria'
+                'message': 'No students found for the selected criteria. Please ensure students are uploaded to the selected batches and courses.'
             }), 200
         
-        # Get all students from these instances
-        instance_ids = [instance['_id'] for instance in instances]
-        students = list(mongo_db.students.find({'batch_course_instance_id': {'$in': instance_ids}}))
-        current_app.logger.info(f"Found {len(students)} students")
-        
-        # Convert ObjectIds to strings and format student data
-        student_list = []
-        for student in students:
-            # Get user details
-            user = mongo_db.users.find_one({'_id': student['user_id']})
-            if user:
-                student_list.append({
-                    'id': str(student['_id']),
-                    'name': user.get('name', ''),
-                    'email': user.get('email', ''),
-                    'roll_number': student.get('roll_number', '')
-                })
-            else:
-                current_app.logger.warning(f"User not found for student {student['_id']}")
-        
-        current_app.logger.info(f"Processed {len(student_list)} students with user details")
-        
-        current_app.logger.info(f"Returning {len(student_list)} students")
         return jsonify({
             'success': True,
-            'count': len(student_list),
-            'students': student_list
+            'count': len(final_student_list),
+            'students': final_student_list
         }), 200
         
     except Exception as e:
@@ -707,10 +747,21 @@ def upload_module_questions():
                     doc['expectedOutput'] = q.get('expectedOutput', '')
                     doc['language'] = q.get('language', 'python')
                     doc['testCaseId'] = q.get('testCaseId', '')
+                    
+                    # Validate compiler-integrated question
+                    if not doc['testCases'] or not doc['expectedOutput']:
+                        current_app.logger.warning(f"Skipping question without test cases: {q.get('question', '')}")
+                        continue
+                        
                 elif question_type == 'mcq':
                     # MCQ format for technical questions
                     doc['question_type'] = 'mcq'
                     # The MCQ fields are already set above
+                    
+                    # Validate MCQ question
+                    if not doc['optionA'] or not doc['optionB'] or not doc['optionC'] or not doc['optionD'] or not doc['answer']:
+                        current_app.logger.warning(f"Skipping incomplete MCQ question: {q.get('question', '')}")
+                        continue
             elif module_id in ['LISTENING', 'SPEAKING']:
                 # For listening and speaking, handle sentence-type questions
                 doc['question_type'] = 'sentence'
@@ -732,6 +783,8 @@ def upload_module_questions():
                 
             mongo_db.question_bank.insert_one(doc)
             inserted.append(doc['question'])
+        
+        current_app.logger.info(f"Successfully uploaded {len(inserted)} questions to module bank")
         
         return jsonify({'success': True, 'message': f'Uploaded {len(inserted)} questions to module bank.'}), 201
     except Exception as e:
@@ -864,6 +917,355 @@ def fetch_questions_for_test():
     return jsonify({'success': True, 'questions': questions}), 200
 
 # ==================== RANDOM QUESTION SELECTION FOR ONLINE TESTS ====================
+
+@test_management_bp.route('/question-bank/bulk-selection', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def get_bulk_questions_from_bank():
+    """Get bulk questions from question bank with filtering options"""
+    try:
+        data = request.get_json()
+        module_id = data.get('module_id')
+        level_id = data.get('level_id')
+        subcategory = data.get('subcategory')
+        topic_id = data.get('topic_id')  # For CRT modules
+        question_count = data.get('question_count', 50)
+        page = data.get('page', 1)
+        limit = data.get('limit', 50)
+        
+        if not module_id:
+            return jsonify({'success': False, 'message': 'Module ID is required'}), 400
+        
+        # Build query based on module type
+        query = {'module_id': module_id}
+        
+        # Handle CRT modules differently
+        if module_id.startswith('CRT_'):
+            # For CRT modules, level_id contains the category
+            if level_id:
+                query['level_id'] = level_id
+            
+            if topic_id and topic_id.strip():
+                # Check if topic_id is a valid ObjectId
+                try:
+                    # If it's a valid ObjectId, use it directly
+                    if len(topic_id) == 24 and all(c in '0123456789abcdef' for c in topic_id.lower()):
+                        query['topic_id'] = ObjectId(topic_id)
+                    else:
+                        # If it's not a valid ObjectId, try to find the topic by name
+                        # Remove any percentage or completion info
+                        topic_name = topic_id.split('(')[0].strip()
+                        topic = mongo_db.crt_topics.find_one({'topic_name': topic_name})
+                        if topic:
+                            query['topic_id'] = topic['_id']
+                        else:
+                            current_app.logger.warning(f"Topic not found: {topic_id}")
+                            # Don't add topic_id to query if not found
+                except Exception as e:
+                    current_app.logger.error(f"Error processing topic_id {topic_id}: {e}")
+                    # Don't add topic_id to query if there's an error
+        else:
+            # For non-CRT modules, level_id is required
+            if not level_id:
+                return jsonify({'success': False, 'message': 'level_id is required for non-CRT modules.'}), 400
+            query['level_id'] = level_id
+            
+            # Add subcategory if provided (for Grammar module)
+            if subcategory:
+                query['subcategory'] = subcategory
+        
+        current_app.logger.info(f"Bulk question query: {query}")
+        
+        # Get total count
+        total_count = mongo_db.question_bank.count_documents(query)
+        
+        # Get questions with pagination
+        skip = (page - 1) * limit
+        questions = list(mongo_db.question_bank.find(query).skip(skip).limit(limit))
+        
+        # If no questions found for CRT_TECHNICAL and level_id is set, try without level_id
+        if module_id == 'CRT_TECHNICAL' and len(questions) == 0 and level_id:
+            current_app.logger.info(f"No questions found with level_id {level_id}, trying without level_id")
+            fallback_query = {'module_id': module_id}
+            if topic_id and topic_id.strip():
+                try:
+                    if len(topic_id) == 24 and all(c in '0123456789abcdef' for c in topic_id.lower()):
+                        fallback_query['topic_id'] = ObjectId(topic_id)
+                    else:
+                        topic_name = topic_id.split('(')[0].strip()
+                        topic = mongo_db.crt_topics.find_one({'topic_name': topic_name})
+                        if topic:
+                            fallback_query['topic_id'] = topic['_id']
+                except Exception as e:
+                    current_app.logger.error(f"Error processing topic_id {topic_id}: {e}")
+            
+            current_app.logger.info(f"Fallback query: {fallback_query}")
+            total_count = mongo_db.question_bank.count_documents(fallback_query)
+            questions = list(mongo_db.question_bank.find(fallback_query).skip(skip).limit(limit))
+        
+        # Convert ObjectIds to strings and format questions
+        for question in questions:
+            question['_id'] = str(question['_id'])
+            if 'topic_id' in question:
+                question['topic_id'] = str(question['topic_id'])
+            
+            # Handle sentence-based questions (LISTENING and SPEAKING)
+            if module_id in ['LISTENING', 'SPEAKING']:
+                if question.get('question_type') == 'sentence' or 'sentence' in question:
+                    question['question_type'] = 'sentence'
+                    # Map sentence field to question field for consistency
+                    if 'sentence' in question:
+                        question['question'] = question['sentence']
+                        question['text'] = question['sentence']  # Add text field for frontend compatibility
+                    # Ensure audio information is preserved
+                    if module_id == 'LISTENING':
+                        question['has_audio'] = question.get('has_audio', False)
+                        question['audio_url'] = question.get('audio_url', None)
+                        question['audio_config'] = question.get('audio_config', {})
+            
+            # Ensure question_type is set for technical questions
+            if question.get('module_id') == 'CRT_TECHNICAL':
+                # Check for compiler-integrated questions first
+                if ('questionTitle' in question and question['questionTitle']) or ('problemStatement' in question and question['problemStatement']):
+                    question['question_type'] = 'compiler_integrated'
+                    # Ensure proper field mapping for compiler questions
+                    if 'questionTitle' in question:
+                        question['question'] = question['questionTitle']
+                    if 'problemStatement' in question:
+                        question['statement'] = question['problemStatement']
+                    # Ensure testCases are properly formatted
+                    if 'testCases' in question and isinstance(question['testCases'], list):
+                        # Convert testCases array to string format for display
+                        test_cases_input = []
+                        test_cases_output = []
+                        for tc in question['testCases']:
+                            if isinstance(tc, dict):
+                                test_cases_input.append(tc.get('input', ''))
+                                test_cases_output.append(tc.get('expectedOutput', ''))
+                        question['testCases'] = '\n'.join(test_cases_input)
+                        question['expectedOutput'] = '\n'.join(test_cases_output)
+                elif 'question' in question and 'optionA' in question:
+                    question['question_type'] = 'mcq'
+                else:
+                    # Default to compiler_integrated for CRT_TECHNICAL if unclear
+                    question['question_type'] = 'compiler_integrated'
+                    # Ensure proper field mapping
+                    if 'questionTitle' in question:
+                        question['question'] = question['questionTitle']
+                    if 'problemStatement' in question:
+                        question['statement'] = question['problemStatement']
+            
+            # For other modules, preserve existing question_type
+            elif 'question_type' not in question:
+                # Check if it's a sentence-based question (LISTENING or SPEAKING)
+                if module_id in ['LISTENING', 'SPEAKING']:
+                    question['question_type'] = 'sentence'
+                    # Map sentence field to question field for consistency
+                    if 'sentence' in question:
+                        question['question'] = question['sentence']
+                        question['text'] = question['sentence']  # Add text field for frontend compatibility
+                else:
+                    question['question_type'] = 'mcq'  # Default for other modules
+        
+        current_app.logger.info(f"Found {len(questions)} questions out of {total_count} total")
+        
+        return jsonify({
+            'success': True,
+            'questions': questions,
+            'total_count': total_count,
+            'current_page': page,
+            'total_pages': (total_count + limit - 1) // limit,
+            'has_more': (page * limit) < total_count
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting bulk questions: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@test_management_bp.route('/check-audio-generation', methods=['GET'])
+@jwt_required()
+@require_superadmin
+def check_audio_generation_availability():
+    """Check if audio generation packages are available"""
+    try:
+        from utils.audio_generator import GTTS_AVAILABLE, PYDUB_AVAILABLE
+        
+        available = GTTS_AVAILABLE and PYDUB_AVAILABLE
+        
+        return jsonify({
+            'success': True,
+            'available': available,
+            'gtts_available': GTTS_AVAILABLE,
+            'pydub_available': PYDUB_AVAILABLE,
+            'message': 'Audio generation availability checked successfully'
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error checking audio generation availability: {e}")
+        return jsonify({
+            'success': False,
+            'available': False,
+            'message': f'Error checking availability: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/generate-audio', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def generate_audio_for_question():
+    """Generate audio for a specific question"""
+    try:
+        data = request.get_json()
+        text = data.get('text')
+        question_id = data.get('question_id')
+        module_id = data.get('module_id')
+        level_id = data.get('level_id')
+        audio_config = data.get('audio_config', {})
+        
+        if not text or not question_id:
+            return jsonify({'success': False, 'message': 'Text and question_id are required'}), 400
+        
+        # Generate audio using the existing utility
+        accent = audio_config.get('accent', 'en-US')
+        speed = audio_config.get('speed', 1.0)
+        
+        try:
+            audio_url = generate_audio_from_text(text, accent, speed)
+            
+            if audio_url:
+                # Update the question in the database with the audio URL
+                try:
+                    mongo_db.question_bank.update_one(
+                        {'_id': ObjectId(question_id)},
+                        {
+                            '$set': {
+                                'audio_url': audio_url,
+                                'has_audio': True,
+                                'audio_config': audio_config,
+                                'audio_generated_at': datetime.utcnow()
+                            }
+                        }
+                    )
+                except Exception as e:
+                    current_app.logger.warning(f"Failed to update question with audio URL: {e}")
+                
+                return jsonify({
+                    'success': True,
+                    'audio_url': audio_url,
+                    'message': 'Audio generated successfully'
+                }), 200
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': 'Audio generation returned no result'
+                }), 500
+                
+        except Exception as audio_error:
+            current_app.logger.error(f"Audio generation error for text '{text}': {audio_error}")
+            return jsonify({
+                'success': False,
+                'message': f'Failed to generate audio for question: {text}. Error: {str(audio_error)}'
+            }), 500
+            
+    except Exception as e:
+        current_app.logger.error(f"Error generating audio: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@test_management_bp.route('/question-bank/count', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def get_question_count():
+    """Get question count for CRT modules and topics"""
+    try:
+        data = request.get_json()
+        module_id = data.get('module_id')
+        level_id = data.get('level_id')  # Add level_id parameter
+        topic_id = data.get('topic_id')
+        
+        if not module_id:
+            return jsonify({'success': False, 'message': 'Module ID is required'}), 400
+        
+        # Build query
+        query = {'module_id': module_id}
+        
+        # Handle CRT modules with level_id
+        if module_id.startswith('CRT_'):
+            if level_id:
+                query['level_id'] = level_id
+            
+            if topic_id and topic_id.strip():
+                try:
+                    # Check if topic_id is a valid ObjectId
+                    if len(topic_id) == 24 and all(c in '0123456789abcdef' for c in topic_id.lower()):
+                        query['topic_id'] = ObjectId(topic_id)
+                    else:
+                        # If it's not a valid ObjectId, try to find the topic by name
+                        topic_name = topic_id.split('(')[0].strip()
+                        topic = mongo_db.crt_topics.find_one({'topic_name': topic_name})
+                        if topic:
+                            query['topic_id'] = topic['_id']
+                except Exception as e:
+                    current_app.logger.error(f"Error processing topic_id {topic_id}: {e}")
+        else:
+            # For non-CRT modules, level_id is required
+            if level_id:
+                query['level_id'] = level_id
+        
+        current_app.logger.info(f"Question count query: {query}")
+        
+        # Get total count
+        total_count = mongo_db.question_bank.count_documents(query)
+        
+        # If no questions found for CRT_TECHNICAL and level_id is set, try without level_id
+        if module_id == 'CRT_TECHNICAL' and total_count == 0 and level_id:
+            current_app.logger.info(f"No questions found with level_id {level_id}, trying without level_id")
+            fallback_query = {'module_id': module_id}
+            if topic_id and topic_id.strip():
+                try:
+                    if len(topic_id) == 24 and all(c in '0123456789abcdef' for c in topic_id.lower()):
+                        fallback_query['topic_id'] = ObjectId(topic_id)
+                    else:
+                        topic_name = topic_id.split('(')[0].strip()
+                        topic = mongo_db.crt_topics.find_one({'topic_name': topic_name})
+                        if topic:
+                            fallback_query['topic_id'] = topic['_id']
+                except Exception as e:
+                    current_app.logger.error(f"Error processing topic_id {topic_id}: {e}")
+            
+            current_app.logger.info(f"Fallback count query: {fallback_query}")
+            total_count = mongo_db.question_bank.count_documents(fallback_query)
+        
+        # Get available count (questions not used or used less frequently)
+        available_query = {**query, 'used_count': {'$lt': 3}}  # Questions used less than 3 times
+        available_count = mongo_db.question_bank.count_documents(available_query)
+        
+        # Get topic info if it's a CRT module
+        topic_info = None
+        if module_id.startswith('CRT_') and topic_id and topic_id.strip():
+            try:
+                if len(topic_id) == 24 and all(c in '0123456789abcdef' for c in topic_id.lower()):
+                    topic_info = mongo_db.crt_topics.find_one({'_id': ObjectId(topic_id)})
+                else:
+                    topic_name = topic_id.split('(')[0].strip()
+                    topic_info = mongo_db.crt_topics.find_one({'topic_name': topic_name})
+                
+                if topic_info:
+                    topic_info['_id'] = str(topic_info['_id'])
+            except Exception as e:
+                current_app.logger.error(f"Error getting topic info: {e}")
+        
+        current_app.logger.info(f"Found {total_count} total questions, {available_count} available")
+        
+        return jsonify({
+            'success': True,
+            'total_count': total_count,
+            'available_count': available_count,
+            'topic_info': topic_info,
+            'module_id': module_id
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting question count: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @test_management_bp.route('/question-bank/random-selection', methods=['POST'])
 @jwt_required()
@@ -1323,6 +1725,90 @@ def submit_practice_test():
             'message': f'Failed to submit test: {str(e)}'
         }), 500
 
+@test_management_bp.route('/submit-technical-test', methods=['POST'])
+@jwt_required()
+def submit_technical_test():
+    """Submit technical test with compiler integration"""
+    try:
+        data = request.get_json()
+        test_id = data.get('test_id')
+        answers = data.get('answers', {})
+        results = data.get('results', {})
+        
+        if not test_id:
+            return jsonify({'success': False, 'message': 'Test ID is required'}), 400
+        
+        # Get test details
+        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
+        if not test:
+            return jsonify({'success': False, 'message': 'Test not found'}), 404
+        
+        # Calculate scores
+        total_questions = len(test.get('questions', []))
+        correct_answers = 0
+        total_score = 0
+        
+        for question_index, result in results.items():
+            if result.get('passed'):
+                correct_answers += 1
+                total_score += result.get('score', 100)
+        
+        # Calculate percentage
+        percentage = (total_score / (total_questions * 100)) * 100 if total_questions > 0 else 0
+        
+        # Determine pass/fail
+        passing_score = test.get('passing_score', 70)
+        passed = percentage >= passing_score
+        
+        # Create result document
+        result_doc = {
+            'test_id': ObjectId(test_id),
+            'student_id': get_jwt_identity(),
+            'answers': answers,
+            'results': results,
+            'total_questions': total_questions,
+            'correct_answers': correct_answers,
+            'total_score': total_score,
+            'percentage': percentage,
+            'passed': passed,
+            'submitted_at': datetime.utcnow(),
+            'test_type': 'technical'
+        }
+        
+        # Insert result
+        result_id = mongo_db.test_results.insert_one(result_doc).inserted_id
+        
+        # Update test usage statistics
+        for question_index, answer in answers.items():
+            if int(question_index) < len(test.get('questions', [])):
+                question_id = test['questions'][int(question_index)].get('_id')
+                if question_id:
+                    # Update question usage
+                    mongo_db.question_bank.update_one(
+                        {'_id': ObjectId(question_id)},
+                        {
+                            '$inc': {'used_count': 1},
+                            '$set': {'last_used': datetime.utcnow()},
+                            '$addToSet': {'used_in_tests': test_id}
+                        }
+                    )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Technical test submitted successfully',
+            'data': {
+                'result_id': str(result_id),
+                'total_questions': total_questions,
+                'correct_answers': correct_answers,
+                'percentage': percentage,
+                'passed': passed
+            }
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error submitting technical test: {e}")
+        return jsonify({'success': False, 'message': f'Failed to submit test: {str(e)}'}), 500
+
 # ==================== TECHNICAL TEST ENDPOINTS ====================
 
 @test_management_bp.route('/run-code', methods=['POST'])
@@ -1334,6 +1820,7 @@ def run_code():
         code = data.get('code')
         language = data.get('language', 'python')
         test_cases = data.get('test_cases', [])
+        stdin = data.get('stdin', '')
         
         if not code:
             return jsonify({'success': False, 'message': 'Code is required'}), 400
@@ -1348,34 +1835,64 @@ def run_code():
         # Create the request body
         request_body = {
             'language': language,
-            'stdin': '',
+            'stdin': stdin,
             'files': [{'name': f'main.{get_file_extension(language)}', 'content': code}]
         }
         
         # Add test cases if provided
-        if test_cases:
+        if test_cases and isinstance(test_cases, list):
             stdin_data = '\n'.join(test_cases)
             request_body['stdin'] = stdin_data
+        elif stdin:
+            request_body['stdin'] = stdin
+        
+        current_app.logger.info(f"Running code with language: {language}, stdin: {stdin[:100]}...")
         
         # Make the API call
         response = requests.post(
             'https://onecompiler-apis.p.rapidapi.com/api/v1/run',
             headers=headers,
-            json=request_body
+            json=request_body,
+            timeout=30  # Add timeout
         )
         
         if response.status_code == 200:
             result = response.json()
+            
+            # Check for compilation errors
+            if result.get('stderr'):
+                return jsonify({
+                    'success': False,
+                    'message': 'Compilation error',
+                    'data': {
+                        'stdout': result.get('stdout', ''),
+                        'stderr': result.get('stderr', ''),
+                        'executionTime': result.get('executionTime', 0)
+                    }
+                }), 200
+            
             return jsonify({
                 'success': True,
-                'data': result
+                'data': {
+                    'stdout': result.get('stdout', ''),
+                    'stderr': result.get('stderr', ''),
+                    'executionTime': result.get('executionTime', 0),
+                    'memory': result.get('memory', 0)
+                }
             }), 200
         else:
+            current_app.logger.error(f"OneCompiler API error: {response.status_code} - {response.text}")
             return jsonify({
                 'success': False,
                 'message': f'Code execution failed: {response.text}'
             }), 500
             
+    except requests.exceptions.Timeout:
+        current_app.logger.error("Code execution timeout")
+        return jsonify({
+            'success': False,
+            'message': 'Code execution timed out. Please try again.'
+        }), 500
     except Exception as e:
         current_app.logger.error(f"Error running code: {str(e)}")
         return jsonify({
@@ -1783,6 +2300,66 @@ def get_topic_questions(topic_id):
             'message': f'Failed to fetch topic questions: {str(e)}'
         }), 500
 
+@test_management_bp.route('/crt-modules/separate', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def separate_crt_modules():
+    """Separate CRT modules into distinct categories for better organization"""
+    try:
+        data = request.get_json()
+        module_id = data.get('module_id')
+        
+        if not module_id or not module_id.startswith('CRT_'):
+            return jsonify({'success': False, 'message': 'Invalid CRT module ID'}), 400
+        
+        # Define CRT module categories
+        crt_categories = {
+            'CRT_APTITUDE': {
+                'name': 'Aptitude',
+                'description': 'Mathematical and logical reasoning questions',
+                'subcategories': ['Numbers', 'Algebra', 'Geometry', 'Data Interpretation']
+            },
+            'CRT_REASONING': {
+                'name': 'Reasoning',
+                'description': 'Logical and analytical reasoning questions',
+                'subcategories': ['Verbal', 'Non-Verbal', 'Analytical', 'Critical Thinking']
+            },
+            'CRT_TECHNICAL': {
+                'name': 'Technical',
+                'description': 'Technical and domain-specific questions',
+                'subcategories': ['Programming', 'Database', 'Networking', 'System Design']
+            }
+        }
+        
+        if module_id not in crt_categories:
+            return jsonify({'success': False, 'message': f'Invalid CRT module: {module_id}'}), 400
+        
+        category_info = crt_categories[module_id]
+        
+        # Get questions for this CRT module
+        questions = list(mongo_db.question_bank.find({'module_id': module_id}))
+        
+        # Group questions by subcategory if available
+        grouped_questions = {}
+        for question in questions:
+            subcategory = question.get('subcategory', 'General')
+            if subcategory not in grouped_questions:
+                grouped_questions[subcategory] = []
+            grouped_questions[subcategory].append(question)
+        
+        return jsonify({
+            'success': True,
+            'module_id': module_id,
+            'category_info': category_info,
+            'total_questions': len(questions),
+            'grouped_questions': grouped_questions,
+            'subcategories': list(grouped_questions.keys())
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error separating CRT modules: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @test_management_bp.route('/crt-topics/<topic_id>/questions', methods=['POST'])
 @jwt_required()
 @require_superadmin
@@ -1997,6 +2574,42 @@ def add_question_to_file(file_id):
 
 # ==================== QUESTIONS MANAGEMENT ENDPOINTS ====================
 
+@test_management_bp.route('/questions', methods=['GET'])
+@jwt_required()
+@require_superadmin
+def get_questions():
+    """Get questions for a specific module and level"""
+    try:
+        module_id = request.args.get('module_id')
+        level_id = request.args.get('level_id')
+        
+        if not module_id or not level_id:
+            return jsonify({'success': False, 'message': 'module_id and level_id are required'}), 400
+        
+        # Build query
+        query = {
+            'module_id': module_id,
+            'level_id': level_id
+        }
+        
+        # Get questions from question_bank collection
+        questions = list(mongo_db.question_bank.find(query))
+        
+        # Convert ObjectIds to strings
+        for question in questions:
+            question['_id'] = str(question['_id'])
+            if 'created_at' not in question:
+                question['created_at'] = question.get('uploaded_at', datetime.now())
+        
+        return jsonify({
+            'success': True,
+            'data': questions
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching questions: {e}")
+        return jsonify({'success': False, 'message': f'Failed to fetch questions: {str(e)}'}), 500
+
 @test_management_bp.route('/questions/add', methods=['POST'])
 @jwt_required()
 @require_superadmin
@@ -2128,3 +2741,1014 @@ def delete_question(question_id):
             'success': False,
             'message': f'Failed to delete question: {str(e)}'
         }), 500
+
+@test_management_bp.route('/questions/bulk', methods=['DELETE'])
+@jwt_required()
+@require_superadmin
+def bulk_delete_questions():
+    """Bulk delete question bank items"""
+    try:
+        data = request.get_json()
+        question_ids = data.get('ids', [])
+        
+        if not question_ids:
+            return jsonify({'success': False, 'message': 'No question IDs provided'}), 400
+        
+        # Convert string IDs to ObjectIds
+        object_ids = [ObjectId(qid) for qid in question_ids]
+        
+        result = mongo_db.question_bank.delete_many({'_id': {'$in': object_ids}})
+        
+        return jsonify({
+            'success': True,
+            'message': f'{result.deleted_count} questions deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error bulk deleting questions: {e}")
+        return jsonify({'success': False, 'message': f'Failed to delete questions: {str(e)}'}), 500
+
+@test_management_bp.route('/technical-questions', methods=['GET'])
+@jwt_required()
+def get_technical_questions():
+    """Get technical questions with compiler integration details"""
+    try:
+        module_id = request.args.get('module_id')
+        level_id = request.args.get('level_id')
+        topic_id = request.args.get('topic_id')
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 20))
+        
+        if not module_id:
+            return jsonify({'success': False, 'message': 'Module ID is required'}), 400
+        
+        # Build query
+        query = {'module_id': module_id}
+        
+        if level_id:
+            query['level_id'] = level_id
+            
+        if topic_id and topic_id.strip():
+            try:
+                if len(topic_id) == 24 and all(c in '0123456789abcdef' for c in topic_id.lower()):
+                    query['topic_id'] = ObjectId(topic_id)
+                else:
+                    topic_name = topic_id.split('(')[0].strip()
+                    topic = mongo_db.crt_topics.find_one({'topic_name': topic_name})
+                    if topic:
+                        query['topic_id'] = topic['_id']
+            except Exception as e:
+                current_app.logger.error(f"Error processing topic_id {topic_id}: {e}")
+        
+        # Get questions with pagination
+        skip = (page - 1) * limit
+        questions = list(mongo_db.question_bank.find(query).skip(skip).limit(limit))
+        
+        # Convert ObjectIds to strings and format for frontend
+        formatted_questions = []
+        for question in questions:
+            formatted_question = {
+                'id': str(question['_id']),
+                'question': question.get('question', ''),
+                'question_type': question.get('question_type', 'mcq'),
+                'instructions': question.get('instructions', ''),
+                'created_at': question.get('created_at', ''),
+                'used_count': question.get('used_count', 0)
+            }
+            
+            # Add compiler-specific fields for technical questions
+            if question.get('question_type') == 'compiler_integrated':
+                formatted_question.update({
+                    'testCases': question.get('testCases', ''),
+                    'expectedOutput': question.get('expectedOutput', ''),
+                    'language': question.get('language', 'python'),
+                    'testCaseId': question.get('testCaseId', '')
+                })
+            else:
+                # Add MCQ fields
+                formatted_question.update({
+                    'optionA': question.get('optionA', ''),
+                    'optionB': question.get('optionB', ''),
+                    'optionC': question.get('optionC', ''),
+                    'optionD': question.get('optionD', ''),
+                    'answer': question.get('answer', '')
+                })
+            
+            if 'topic_id' in question:
+                formatted_question['topic_id'] = str(question['topic_id'])
+                
+            formatted_questions.append(formatted_question)
+        
+        # Get total count
+        total_count = mongo_db.question_bank.count_documents(query)
+        
+        return jsonify({
+            'success': True,
+            'questions': formatted_questions,
+            'total_count': total_count,
+            'current_page': page,
+            'total_pages': (total_count + limit - 1) // limit,
+            'has_more': (page * limit) < total_count
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting technical questions: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+# ==================== FILE UPLOAD ENDPOINTS FOR ORGANIZED QUESTION BANK ====================
+
+@test_management_bp.route('/upload-questions', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def upload_questions():
+    """Upload MCQ questions from file"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': 'No file uploaded'}), 400
+        
+        file = request.files['file']
+        module_id = request.form.get('module_id')
+        level_id = request.form.get('level_id')
+        question_type = request.form.get('question_type', 'mcq')
+        
+        if not file or file.filename == '':
+            return jsonify({'success': False, 'message': 'No file selected'}), 400
+        
+        if not module_id or not level_id:
+            return jsonify({'success': False, 'message': 'module_id and level_id are required'}), 400
+        
+        # Read and parse the file
+        content = file.read().decode('utf-8')
+        questions = []
+        
+        if file.filename.endswith('.csv'):
+            import csv
+            import io
+            csv_reader = csv.DictReader(io.StringIO(content))
+            for row in csv_reader:
+                question = {
+                    'question': row.get('Question', row.get('question', '')),
+                    'optionA': row.get('OptionA', row.get('A', '')),
+                    'optionB': row.get('OptionB', row.get('B', '')),
+                    'optionC': row.get('OptionC', row.get('C', '')),
+                    'optionD': row.get('OptionD', row.get('D', '')),
+                    'answer': row.get('Answer', row.get('answer', '')),
+                    'instructions': row.get('Instructions', row.get('instructions', ''))
+                }
+                questions.append(question)
+        elif file.filename.endswith('.txt'):
+            # Parse human-readable format
+            lines = content.split('\n')
+            current_question = None
+            
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                if line[0].isdigit() and '. ' in line:
+                    # New question
+                    if current_question:
+                        questions.append(current_question)
+                    current_question = {
+                        'question': line.split('. ', 1)[1],
+                        'optionA': '',
+                        'optionB': '',
+                        'optionC': '',
+                        'optionD': '',
+                        'answer': ''
+                    }
+                elif line.startswith('A)') and current_question:
+                    current_question['optionA'] = line[2:].strip()
+                elif line.startswith('B)') and current_question:
+                    current_question['optionB'] = line[2:].strip()
+                elif line.startswith('C)') and current_question:
+                    current_question['optionC'] = line[2:].strip()
+                elif line.startswith('D)') and current_question:
+                    current_question['optionD'] = line[2:].strip()
+                elif line.startswith('Answer:') and current_question:
+                    current_question['answer'] = line[7:].strip()
+            
+            if current_question:
+                questions.append(current_question)
+        
+        # Validate questions
+        valid_questions = []
+        for q in questions:
+            if (q['question'] and q['optionA'] and q['optionB'] and 
+                q['optionC'] and q['optionD'] and q['answer']):
+                valid_questions.append(q)
+        
+        if not valid_questions:
+            return jsonify({'success': False, 'message': 'No valid questions found in file'}), 400
+        
+        # Store questions in database
+        upload_session_id = str(uuid.uuid4())
+        inserted_count = 0
+        
+        for q in valid_questions:
+            doc = {
+                'module_id': module_id,
+                'level_id': level_id,
+                'question_type': question_type,
+                'question': q['question'],
+                'optionA': q['optionA'],
+                'optionB': q['optionB'],
+                'optionC': q['optionC'],
+                'optionD': q['optionD'],
+                'answer': q['answer'].upper(),
+                'instructions': q.get('instructions', ''),
+                'used_in_tests': [],
+                'used_count': 0,
+                'last_used': None,
+                'created_at': datetime.utcnow(),
+                'upload_session_id': upload_session_id
+            }
+            
+            mongo_db.question_bank.insert_one(doc)
+            inserted_count += 1
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully uploaded {inserted_count} questions',
+            'count': inserted_count
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error uploading questions: {e}")
+        return jsonify({'success': False, 'message': f'Upload failed: {str(e)}'}), 500
+
+@test_management_bp.route('/upload-sentences', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def upload_sentences():
+    """Upload sentence questions for listening/speaking modules"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': 'No file uploaded'}), 400
+        
+        file = request.files['file']
+        module_id = request.form.get('module_id')
+        level_id = request.form.get('level_id')
+        module_type = request.form.get('module_type', 'LISTENING')
+        
+        if not file or file.filename == '':
+            return jsonify({'success': False, 'message': 'No file selected'}), 400
+        
+        if not module_id or not level_id:
+            return jsonify({'success': False, 'message': 'module_id and level_id are required'}), 400
+        
+        # Handle audio file if present
+        audio_file = request.files.get('audio_file')
+        audio_url = None
+        
+        if audio_file and module_type == 'LISTENING':
+            # Upload audio to S3
+            audio_filename = f"audio_{uuid.uuid4()}.{audio_file.filename.split('.')[-1]}"
+            s3_key = f"audio/{module_id}/{level_id}/{audio_filename}"
+            
+            try:
+                s3_client.upload_fileobj(audio_file, S3_BUCKET_NAME, s3_key)
+                audio_url = f"https://{S3_BUCKET_NAME}.s3.amazonaws.com/{s3_key}"
+            except Exception as e:
+                current_app.logger.error(f"Error uploading audio: {e}")
+                return jsonify({'success': False, 'message': 'Failed to upload audio file'}), 500
+        
+        # Parse configuration
+        audio_config = json.loads(request.form.get('audio_config', '{}'))
+        transcript_validation = json.loads(request.form.get('transcript_validation', '{}'))
+        
+        # Read and parse the file
+        content = file.read().decode('utf-8')
+        sentences = []
+        
+        if file.filename.endswith('.csv'):
+            import csv
+            import io
+            csv_reader = csv.DictReader(io.StringIO(content))
+            for row in csv_reader:
+                sentence = {
+                    'sentence': row.get('Sentence', row.get('sentence', '')),
+                    'level': row.get('Level', row.get('level', '')),
+                    'instructions': row.get('Instructions', row.get('instructions', ''))
+                }
+                sentences.append(sentence)
+        elif file.filename.endswith('.txt'):
+            # Parse text file - one sentence per line
+            lines = content.split('\n')
+            for line in lines:
+                line = line.strip()
+                if line:
+                    sentences.append({
+                        'sentence': line,
+                        'level': 'Beginner',
+                        'instructions': ''
+                    })
+        
+        # Validate sentences
+        valid_sentences = []
+        for s in sentences:
+            if s['sentence'] and len(s['sentence']) >= 10:
+                valid_sentences.append(s)
+        
+        if not valid_sentences:
+            return jsonify({'success': False, 'message': 'No valid sentences found in file'}), 400
+        
+        # Store sentences in database
+        upload_session_id = str(uuid.uuid4())
+        inserted_count = 0
+        
+        for s in valid_sentences:
+            doc = {
+                'module_id': module_id,
+                'level_id': level_id,
+                'question_type': 'sentence',
+                'module_type': module_type,
+                'sentence': s['sentence'],
+                'level': s['level'],
+                'instructions': s.get('instructions', ''),
+                'audio_url': audio_url,
+                'audio_config': audio_config,
+                'transcript_validation': transcript_validation,
+                'has_audio': bool(audio_url),
+                'used_in_tests': [],
+                'used_count': 0,
+                'last_used': None,
+                'created_at': datetime.utcnow(),
+                'upload_session_id': upload_session_id
+            }
+            
+            mongo_db.question_bank.insert_one(doc)
+            inserted_count += 1
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully uploaded {inserted_count} sentences',
+            'count': inserted_count
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error uploading sentences: {e}")
+        return jsonify({'success': False, 'message': f'Upload failed: {str(e)}'}), 500
+
+@test_management_bp.route('/upload-paragraphs', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def upload_paragraphs():
+    """Upload paragraph questions for writing module"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': 'No file uploaded'}), 400
+        
+        file = request.files['file']
+        module_id = request.form.get('module_id')
+        level_id = request.form.get('level_id')
+        
+        if not file or file.filename == '':
+            return jsonify({'success': False, 'message': 'No file selected'}), 400
+        
+        if not module_id or not level_id:
+            return jsonify({'success': False, 'message': 'module_id and level_id are required'}), 400
+        
+        # Parse writing configuration
+        writing_config = json.loads(request.form.get('writing_config', '{}'))
+        
+        # Read and parse the file
+        content = file.read().decode('utf-8')
+        paragraphs = []
+        
+        if file.filename.endswith('.csv'):
+            import csv
+            import io
+            csv_reader = csv.DictReader(io.StringIO(content))
+            for row in csv_reader:
+                paragraph = {
+                    'topic': row.get('Topic', row.get('topic', '')),
+                    'paragraph': row.get('Paragraph', row.get('paragraph', '')),
+                    'level': row.get('Level', row.get('level', '')),
+                    'instructions': row.get('Instructions', row.get('instructions', ''))
+                }
+                paragraphs.append(paragraph)
+        elif file.filename.endswith('.txt'):
+            # Parse text file - paragraphs separated by double newlines
+            blocks = content.split('\n\n')
+            for i, block in enumerate(blocks):
+                block = block.strip()
+                if block:
+                    lines = block.split('\n')
+                    topic = f"Topic {i+1}"
+                    paragraph = block
+                    
+                    # Try to extract topic from first line
+                    if lines and lines[0].startswith('Topic:'):
+                        topic = lines[0].replace('Topic:', '').strip()
+                        paragraph = '\n'.join(lines[1:]).strip()
+                    
+                    paragraphs.append({
+                        'topic': topic,
+                        'paragraph': paragraph,
+                        'level': 'Beginner',
+                        'instructions': ''
+                    })
+        
+        # Validate paragraphs
+        valid_paragraphs = []
+        for p in paragraphs:
+            if p['paragraph'] and len(p['paragraph']) >= 150:
+                valid_paragraphs.append(p)
+        
+        if not valid_paragraphs:
+            return jsonify({'success': False, 'message': 'No valid paragraphs found in file'}), 400
+        
+        # Store paragraphs in database
+        upload_session_id = str(uuid.uuid4())
+        inserted_count = 0
+        
+        for p in valid_paragraphs:
+            doc = {
+                'module_id': module_id,
+                'level_id': level_id,
+                'question_type': 'paragraph',
+                'topic': p['topic'],
+                'paragraph': p['paragraph'],
+                'level': p['level'],
+                'instructions': p.get('instructions', ''),
+                'writing_config': writing_config,
+                'used_in_tests': [],
+                'used_count': 0,
+                'last_used': None,
+                'created_at': datetime.utcnow(),
+                'upload_session_id': upload_session_id
+            }
+            
+            mongo_db.question_bank.insert_one(doc)
+            inserted_count += 1
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully uploaded {inserted_count} paragraphs',
+            'count': inserted_count
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error uploading paragraphs: {e}")
+        return jsonify({'success': False, 'message': f'Upload failed: {str(e)}'}), 500
+
+@test_management_bp.route('/upload-technical-questions', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def upload_technical_questions():
+    """Upload technical questions (MCQ + Compiler)"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': 'No file uploaded'}), 400
+        
+        file = request.files['file']
+        module_id = request.form.get('module_id')
+        level_id = request.form.get('level_id')
+        question_type = request.form.get('question_type', 'compiler')
+        language = request.form.get('language', 'python')
+        
+        if not file or file.filename == '':
+            return jsonify({'success': False, 'message': 'No file selected'}), 400
+        
+        if not module_id or not level_id:
+            return jsonify({'success': False, 'message': 'module_id and level_id are required'}), 400
+        
+        # Read and parse the file
+        content = file.read().decode('utf-8')
+        questions = []
+        
+        if file.filename.endswith('.csv'):
+            import csv
+            import io
+            csv_reader = csv.DictReader(io.StringIO(content))
+            for row in csv_reader:
+                if question_type == 'compiler':
+                    question = {
+                        'questionTitle': row.get('QuestionTitle', row.get('title', '')),
+                        'problemStatement': row.get('ProblemStatement', row.get('statement', '')),
+                        'language': row.get('Language', row.get('language', language)),
+                        'testCases': [],
+                        'instructions': row.get('Instructions', row.get('instructions', ''))
+                    }
+                    
+                    # Parse test cases
+                    for i in range(1, 6):
+                        input_key = f'TestCase{i}Input'
+                        output_key = f'TestCase{i}Output'
+                        if row.get(input_key) or row.get(output_key):
+                            question['testCases'].append({
+                                'id': i,
+                                'input': row.get(input_key, ''),
+                                'expectedOutput': row.get(output_key, '')
+                            })
+                else:
+                    question = {
+                        'question': row.get('Question', row.get('question', '')),
+                        'optionA': row.get('OptionA', row.get('A', '')),
+                        'optionB': row.get('OptionB', row.get('B', '')),
+                        'optionC': row.get('OptionC', row.get('C', '')),
+                        'optionD': row.get('OptionD', row.get('D', '')),
+                        'answer': row.get('Answer', row.get('answer', '')),
+                        'instructions': row.get('Instructions', row.get('instructions', ''))
+                    }
+                questions.append(question)
+        
+        # Validate questions
+        valid_questions = []
+        for q in questions:
+            if question_type == 'compiler':
+                if (q['questionTitle'] and q['problemStatement'] and 
+                    q['language'] and q['testCases']):
+                    valid_questions.append(q)
+            else:
+                if (q['question'] and q['optionA'] and q['optionB'] and 
+                    q['optionC'] and q['optionD'] and q['answer']):
+                    valid_questions.append(q)
+        
+        if not valid_questions:
+            return jsonify({'success': False, 'message': 'No valid questions found in file'}), 400
+        
+        # Store questions in database
+        upload_session_id = str(uuid.uuid4())
+        inserted_count = 0
+        
+        for q in valid_questions:
+            if question_type == 'compiler':
+                doc = {
+                    'module_id': module_id,
+                    'level_id': level_id,
+                    'question_type': 'compiler_integrated',
+                    'questionTitle': q['questionTitle'],
+                    'problemStatement': q['problemStatement'],
+                    'language': q['language'],
+                    'difficulty': q.get('difficulty', 'medium'),
+                    'category': q.get('category', 'algorithms'),
+                    'timeLimit': q.get('timeLimit', 30),
+                    'memoryLimit': q.get('memoryLimit', 256),
+                    'testCases': q['testCases'],
+                    'instructions': q.get('instructions', ''),
+                    'used_in_tests': [],
+                    'used_count': 0,
+                    'last_used': None,
+                    'created_at': datetime.utcnow(),
+                    'upload_session_id': upload_session_id
+                }
+                
+                # Ensure testCases are properly formatted as array of objects
+                if isinstance(doc['testCases'], list):
+                    # Already in correct format
+                    pass
+                elif isinstance(doc['testCases'], str):
+                    # Convert string format to array format
+                    test_cases = []
+                    lines = doc['testCases'].split('\n')
+                    for i, line in enumerate(lines):
+                        if line.strip():
+                            test_cases.append({
+                                'id': i + 1,
+                                'input': line.strip(),
+                                'expectedOutput': '',
+                                'description': f'Test case {i + 1}'
+                            })
+                    doc['testCases'] = test_cases
+            else:
+                doc = {
+                    'module_id': module_id,
+                    'level_id': level_id,
+                    'question_type': 'mcq',
+                    'question': q['question'],
+                    'optionA': q['optionA'],
+                    'optionB': q['optionB'],
+                    'optionC': q['optionC'],
+                    'optionD': q['optionD'],
+                    'answer': q['answer'].upper(),
+                    'difficulty': q.get('difficulty', 'medium'),
+                    'category': q.get('category', 'general'),
+                    'explanation': q.get('explanation', ''),
+                    'timeLimit': q.get('timeLimit', 2),
+                    'instructions': q.get('instructions', ''),
+                    'used_in_tests': [],
+                    'used_count': 0,
+                    'last_used': None,
+                    'created_at': datetime.utcnow(),
+                    'upload_session_id': upload_session_id
+                }
+            
+            mongo_db.question_bank.insert_one(doc)
+            inserted_count += 1
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully uploaded {inserted_count} technical questions',
+            'count': inserted_count
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error uploading technical questions: {e}")
+        return jsonify({'success': False, 'message': f'Upload failed: {str(e)}'}), 500
+
+# ==================== MODULES AND LEVELS ENDPOINTS ====================
+
+@test_management_bp.route('/modules', methods=['GET'])
+@jwt_required()
+@require_superadmin
+def get_modules():
+    """Get available modules with question counts"""
+    try:
+        modules = []
+        
+        # Define module configurations
+        module_configs = {
+            'GRAMMAR': {'name': 'Grammar', 'type': 'mcq'},
+            'VOCABULARY': {'name': 'Vocabulary', 'type': 'mcq'},
+            'READING': {'name': 'Reading', 'type': 'mcq'},
+            'LISTENING': {'name': 'Listening', 'type': 'sentence'},
+            'SPEAKING': {'name': 'Speaking', 'type': 'sentence'},
+            'WRITING': {'name': 'Writing', 'type': 'paragraph'}
+        }
+        
+        # Only return Versant modules (exclude CRT modules and Technical)
+        versant_modules = ['GRAMMAR', 'VOCABULARY', 'READING', 'LISTENING', 'SPEAKING', 'WRITING']
+        
+        for module_id, config in module_configs.items():
+            # Only include Versant modules
+            if module_id in versant_modules:
+                # Get question count for this module
+                count = mongo_db.question_bank.count_documents({'module_id': module_id})
+                
+                modules.append({
+                    'id': module_id,
+                    'name': config['name'],
+                    'type': config['type'],
+                    'question_count': count
+                })
+        
+        return jsonify({
+            'success': True,
+            'data': modules
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching modules: {e}")
+        return jsonify({'success': False, 'message': f'Failed to fetch modules: {str(e)}'}), 500
+
+@test_management_bp.route('/levels', methods=['GET'])
+@jwt_required()
+@require_superadmin
+def get_levels():
+    """Get levels for a specific module"""
+    try:
+        module_id = request.args.get('module_id')
+        
+        if not module_id:
+            return jsonify({'success': False, 'message': 'module_id is required'}), 400
+        
+        levels = []
+        
+        if module_id == 'GRAMMAR':
+            # Grammar has specific categories
+            grammar_categories = [
+                {'id': 'NOUN', 'name': 'Noun'},
+                {'id': 'PRONOUN', 'name': 'Pronoun'},
+                {'id': 'ADJECTIVE', 'name': 'Adjective'},
+                {'id': 'VERB', 'name': 'Verb'},
+                {'id': 'ADVERB', 'name': 'Adverb'},
+                {'id': 'CONJUNCTION', 'name': 'Conjunction'}
+            ]
+            
+            for category in grammar_categories:
+                count = mongo_db.question_bank.count_documents({
+                    'module_id': module_id,
+                    'level_id': category['id']
+                })
+                levels.append({
+                    **category,
+                    'question_count': count
+                })
+        else:
+            # Other modules have standard levels
+            standard_levels = [
+                {'id': f'{module_id}_BEGINNER', 'name': 'Beginner'},
+                {'id': f'{module_id}_INTERMEDIATE', 'name': 'Intermediate'},
+                {'id': f'{module_id}_ADVANCED', 'name': 'Advanced'}
+            ]
+            
+            for level in standard_levels:
+                count = mongo_db.question_bank.count_documents({
+                    'module_id': module_id,
+                    'level_id': level['id']
+                })
+                levels.append({
+                    **level,
+                    'question_count': count
+                })
+        
+        return jsonify({
+            'success': True,
+            'data': levels
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching levels: {e}")
+        return jsonify({'success': False, 'message': f'Failed to fetch levels: {str(e)}'}), 500
+
+# ==================== TEST RESULT ENDPOINTS ====================
+
+@test_management_bp.route('/get-test-result/<result_id>', methods=['GET'])
+@jwt_required()
+def get_test_result(result_id):
+    """Get detailed test result by result ID"""
+    try:
+        current_user_id = get_jwt_identity()
+        
+        # Find the result document
+        result = mongo_db.student_test_attempts.find_one({'_id': ObjectId(result_id)})
+        if not result:
+            return jsonify({'success': False, 'message': 'Test result not found'}), 404
+        
+        # Check if user has permission to view this result
+        if str(result.get('student_id')) != str(current_user_id):
+            # Check if user is admin
+            user = mongo_db.find_user_by_id(current_user_id)
+            if not user or user.get('role') not in ['superadmin', 'admin', 'campus_admin', 'course_admin']:
+                return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        # Get test details
+        test = mongo_db.tests.find_one({'_id': ObjectId(result.get('test_id'))})
+        if not test:
+            return jsonify({'success': False, 'message': 'Test not found'}), 404
+        
+        # Process detailed results based on test type
+        detailed_results = []
+        
+        if result.get('test_type') == 'practice':
+            # For practice tests (audio/speaking/listening)
+            for i, question_result in enumerate(result.get('results', [])):
+                detailed_result = {
+                    'question_index': i,
+                    'question': question_result.get('question', ''),
+                    'question_type': question_result.get('question_type', 'audio'),
+                    'student_audio_url': question_result.get('student_audio_url', ''),
+                    'student_text': question_result.get('student_text', ''),
+                    'original_text': question_result.get('original_text', ''),
+                    'similarity_score': question_result.get('similarity_score', 0),
+                    'is_correct': question_result.get('is_correct', False),
+                    'score': question_result.get('score', 0),
+                    'missing_words': question_result.get('missing_words', []),
+                    'extra_words': question_result.get('extra_words', [])
+                }
+                detailed_results.append(detailed_result)
+        
+        elif result.get('test_type') == 'technical':
+            # For technical tests (compiler-integrated)
+            for i, question_result in enumerate(result.get('results', [])):
+                detailed_result = {
+                    'question_index': i,
+                    'question': question_result.get('question', ''),
+                    'question_type': 'compiler_integrated',
+                    'student_code': question_result.get('student_code', ''),
+                    'language': question_result.get('language', ''),
+                    'test_cases': question_result.get('test_cases', []),
+                    'passed_test_cases': question_result.get('passed_test_cases', 0),
+                    'total_test_cases': question_result.get('total_test_cases', 0),
+                    'is_correct': question_result.get('passed', False),
+                    'score': question_result.get('score', 0),
+                    'execution_time': question_result.get('execution_time', 0),
+                    'memory_used': question_result.get('memory_used', 0),
+                    'compiler_output': question_result.get('compiler_output', ''),
+                    'error_message': question_result.get('error_message', '')
+                }
+                detailed_results.append(detailed_result)
+        
+        elif result.get('test_type') == 'mcq':
+            # For MCQ tests
+            for i, question_result in enumerate(result.get('results', [])):
+                detailed_result = {
+                    'question_index': i,
+                    'question': question_result.get('question', ''),
+                    'question_type': 'mcq',
+                    'options': question_result.get('options', {}),
+                    'student_answer': question_result.get('student_answer', ''),
+                    'correct_answer': question_result.get('correct_answer', ''),
+                    'is_correct': question_result.get('is_correct', False),
+                    'score': question_result.get('score', 0),
+                    'explanation': question_result.get('explanation', '')
+                }
+                detailed_results.append(detailed_result)
+        
+        # Prepare the response
+        response_data = {
+            '_id': str(result['_id']),
+            'test_id': str(result.get('test_id')),
+            'test_name': test.get('name', ''),
+            'module_id': test.get('module_id', ''),
+            'module_name': test.get('module_id', ''),  # Will be converted to readable name
+            'test_type': result.get('test_type', ''),
+            'student_id': str(result.get('student_id')),
+            'total_questions': result.get('total_questions', 0),
+            'correct_answers': result.get('correct_answers', 0),
+            'average_score': result.get('average_score', 0),
+            'total_score': result.get('total_score', 0),
+            'submitted_at': result.get('submitted_at', '').isoformat() if result.get('submitted_at') else '',
+            'duration': result.get('duration', 0),
+            'time_taken': result.get('time_taken', 0),
+            'auto_submitted': result.get('auto_submitted', False),
+            'cheat_detected': result.get('cheat_detected', False),
+            'detailed_results': detailed_results
+        }
+        
+        # Add student details if available
+        student = mongo_db.users.find_one({'_id': ObjectId(result.get('student_id'))})
+        if student:
+            response_data['student_name'] = student.get('name', '')
+            response_data['student_email'] = student.get('email', '')
+        
+        # Add campus and course details if available
+        student_profile = mongo_db.students.find_one({'user_id': ObjectId(result.get('student_id'))})
+        if student_profile:
+            campus = mongo_db.campuses.find_one({'_id': ObjectId(student_profile.get('campus_id'))})
+            if campus:
+                response_data['campus_name'] = campus.get('name', '')
+            
+            course = mongo_db.courses.find_one({'_id': ObjectId(student_profile.get('course_id'))})
+            if course:
+                response_data['course_name'] = course.get('name', '')
+            
+            batch = mongo_db.batches.find_one({'_id': ObjectId(student_profile.get('batch_id'))})
+            if batch:
+                response_data['batch_name'] = batch.get('name', '')
+        
+        return jsonify({
+            'success': True,
+            'data': response_data
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching test result {result_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to fetch test result: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/validate-mcq-result', methods=['POST'])
+@jwt_required()
+def validate_mcq_result():
+    """Validate MCQ test result with detailed analysis"""
+    try:
+        data = request.get_json()
+        result_id = data.get('result_id')
+        question_index = data.get('question_index')
+        
+        if not result_id:
+            return jsonify({'success': False, 'message': 'Result ID is required'}), 400
+        
+        # Get the result
+        result = mongo_db.student_test_attempts.find_one({'_id': ObjectId(result_id)})
+        if not result:
+            return jsonify({'success': False, 'message': 'Test result not found'}), 404
+        
+        # Get the specific question result
+        if question_index is not None:
+            question_result = result.get('results', [])[question_index] if question_index < len(result.get('results', [])) else None
+            if not question_result:
+                return jsonify({'success': False, 'message': 'Question result not found'}), 404
+            
+            # Validate MCQ answer
+            validation = {
+                'question': question_result.get('question', ''),
+                'student_answer': question_result.get('student_answer', ''),
+                'correct_answer': question_result.get('correct_answer', ''),
+                'is_correct': question_result.get('is_correct', False),
+                'score': question_result.get('score', 0),
+                'options': question_result.get('options', {}),
+                'explanation': question_result.get('explanation', ''),
+                'time_taken': question_result.get('time_taken', 0)
+            }
+            
+            return jsonify({
+                'success': True,
+                'data': validation
+            }), 200
+        
+        return jsonify({'success': False, 'message': 'Question index is required'}), 400
+        
+    except Exception as e:
+        current_app.logger.error(f"Error validating MCQ result: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to validate MCQ result: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/validate-technical-result', methods=['POST'])
+@jwt_required()
+def validate_technical_result():
+    """Validate technical test result with compiler analysis"""
+    try:
+        data = request.get_json()
+        result_id = data.get('result_id')
+        question_index = data.get('question_index')
+        
+        if not result_id:
+            return jsonify({'success': False, 'message': 'Result ID is required'}), 400
+        
+        # Get the result
+        result = mongo_db.student_test_attempts.find_one({'_id': ObjectId(result_id)})
+        if not result:
+            return jsonify({'success': False, 'message': 'Test result not found'}), 404
+        
+        # Get the specific question result
+        if question_index is not None:
+            question_result = result.get('results', [])[question_index] if question_index < len(result.get('results', [])) else None
+            if not question_result:
+                return jsonify({'success': False, 'message': 'Question result not found'}), 404
+            
+            # Validate technical result
+            validation = {
+                'question': question_result.get('question', ''),
+                'student_code': question_result.get('student_code', ''),
+                'language': question_result.get('language', ''),
+                'test_cases': question_result.get('test_cases', []),
+                'passed_test_cases': question_result.get('passed_test_cases', 0),
+                'total_test_cases': question_result.get('total_test_cases', 0),
+                'passed': question_result.get('passed', False),
+                'score': question_result.get('score', 0),
+                'execution_time': question_result.get('execution_time', 0),
+                'memory_used': question_result.get('memory_used', 0),
+                'compiler_output': question_result.get('compiler_output', ''),
+                'error_message': question_result.get('error_message', ''),
+                'difficulty': question_result.get('difficulty', ''),
+                'category': question_result.get('category', ''),
+                'time_limit': question_result.get('time_limit', 0),
+                'memory_limit': question_result.get('memory_limit', 0)
+            }
+            
+            return jsonify({
+                'success': True,
+                'data': validation
+            }), 200
+        
+        return jsonify({'success': False, 'message': 'Question index is required'}), 400
+        
+    except Exception as e:
+        current_app.logger.error(f"Error validating technical result: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to validate technical result: {str(e)}'
+        }), 500
+
+@test_management_bp.route('/validate-audio-result', methods=['POST'])
+@jwt_required()
+def validate_audio_result():
+    """Validate audio test result with transcript analysis"""
+    try:
+        data = request.get_json()
+        result_id = data.get('result_id')
+        question_index = data.get('question_index')
+        
+        if not result_id:
+            return jsonify({'success': False, 'message': 'Result ID is required'}), 400
+        
+        # Get the result
+        result = mongo_db.student_test_attempts.find_one({'_id': ObjectId(result_id)})
+        if not result:
+            return jsonify({'success': False, 'message': 'Test result not found'}), 404
+        
+        # Get the specific question result
+        if question_index is not None:
+            question_result = result.get('results', [])[question_index] if question_index < len(result.get('results', [])) else None
+            if not question_result:
+                return jsonify({'success': False, 'message': 'Question result not found'}), 404
+            
+            # Validate audio result
+            validation = {
+                'question': question_result.get('question', ''),
+                'student_audio_url': question_result.get('student_audio_url', ''),
+                'student_text': question_result.get('student_text', ''),
+                'original_text': question_result.get('original_text', ''),
+                'similarity_score': question_result.get('similarity_score', 0),
+                'is_correct': question_result.get('is_correct', False),
+                'score': question_result.get('score', 0),
+                'missing_words': question_result.get('missing_words', []),
+                'extra_words': question_result.get('extra_words', []),
+                'tolerance': question_result.get('tolerance', 0.8),
+                'pronunciation_score': question_result.get('pronunciation_score', 0),
+                'fluency_score': question_result.get('fluency_score', 0),
+                'completeness_score': question_result.get('completeness_score', 0)
+            }
+            
+            return jsonify({
+                'success': True,
+                'data': validation
+            }), 200
+        
+        return jsonify({'success': False, 'message': 'Question index is required'}), 400
+        
+    except Exception as e:
+        current_app.logger.error(f"Error validating audio result: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to validate audio result: {str(e)}'
+        }), 500
+

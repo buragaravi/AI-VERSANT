@@ -4,11 +4,12 @@ import { useForm, Controller } from 'react-hook-form'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNotification } from '../../contexts/NotificationContext'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { toast } from 'react-hot-toast'
 
 
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import api from '../../services/api'
-import { Upload, Plus, Trash2, ChevronLeft, ChevronRight, FileText, CheckCircle, Briefcase, Users, FileQuestion, Sparkles, Eye, Edit, MoreVertical, Play, Pause, AlertTriangle, ChevronDown, Code, Mic } from 'lucide-react'
+import { Upload, Plus, Trash2, ChevronLeft, ChevronRight, FileText, CheckCircle, Briefcase, Users, FileQuestion, Sparkles, Eye, Edit, MoreVertical, Play, Pause, AlertTriangle, ChevronDown, Code, Mic, AlertCircle, X, Shuffle } from 'lucide-react'
 import { MultiSelect } from 'react-multi-select-component'
 import clsx from 'clsx'
 import Papa from 'papaparse'
@@ -24,6 +25,7 @@ import SentenceUpload from './SentenceUpload';
 import ReadingUpload from './ReadingUpload';
 import TestQuestionUpload from './TestQuestionUpload';
 import WritingUpload from './WritingUpload';
+import TechnicalTestQuestionType from './TechnicalTestQuestionType';
 
 // Config for modules and levels
 const MODULE_CONFIG = {
@@ -88,6 +90,7 @@ const TestManagement = () => {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false)
   const [baseName, setBaseName] = useState('')
   const [sequence, setSequence] = useState(1)
+  const [uploadedQuestions, setUploadedQuestions] = useState([])
 
   // Check if we're on the question-bank-upload route and set view accordingly
   useEffect(() => {
@@ -159,6 +162,7 @@ const TestManagement = () => {
 
   const handleTestCreated = (newTestId) => {
     setView('list')
+    setUploadedQuestions([]) // Reset uploaded questions when test is created
     if (newTestId) {
       setProcessingTests(prev => new Set(prev).add(newTestId));
       // Manually add a placeholder to the list for immediate feedback
@@ -220,7 +224,7 @@ const TestManagement = () => {
   const renderContent = () => {
     switch (view) {
       case 'create':
-        return <TestCreationWizard onTestCreated={handleTestCreated} setView={setView} />
+        return <TestCreationWizard onTestCreated={handleTestCreated} setView={setView} uploadedQuestions={uploadedQuestions} setUploadedQuestions={setUploadedQuestions} />
       case 'preview':
         if (isPreviewLoading) {
           return <div className="flex justify-center items-center h-screen"><LoadingSpinner /></div>;
@@ -282,7 +286,10 @@ const TestListView = ({ tests, loading, setView, onViewTest, onDeleteTest }) => 
           <p className="mt-2 text-gray-500">Browse, manage, and create new tests.</p>
         </div>
         <button 
-          onClick={() => setView('create')}
+          onClick={() => {
+            setView('create');
+            setUploadedQuestions([]);
+          }}
           className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105"
         >
           <Plus className="h-5 w-5 mr-2"/>
@@ -580,60 +587,53 @@ const TestPreviewView = ({ test, onBack }) => {
   )
 }
 
-const TestCreationWizard = ({ onTestCreated, setView }) => {
-  const [step, setStep] = useState(1)
+const TestCreationWizard = ({ onTestCreated, setView, uploadedQuestions, setUploadedQuestions }) => {
+  const [step, setStep] = useState(1);
   const [testData, setTestData] = useState({
-    testType: '', // Start empty, force selection
-    testCategory: '', // CRT or Versant
-    module: null,
-    level: null,
-    subcategory: null,
-    campus: null,
-    batches: [],
-    courses: [],
-    questions: [],
-    accent: 'en-US',
-    speed: 1.0,
-  })
+    category: '',
+    module: '',
+    level: '',
+    subcategory: '',
+    test_name: '',
+    test_type: '',
+    duration: 30,
+    passing_score: 70,
+    selectedCampuses: [],
+    selectedBatches: [],
+    selectedCourses: [],
+    topic_id: '',
+    selectedTopic: '',
+    technical_question_type: 'compiler', // Default for technical tests
+    question_type: 'mcq' // Default for other tests
+  });
 
-  const nextStep = () => setStep(prev => prev < 6 ? prev + 1 : prev)
-  const prevStep = () => setStep(prev => prev > 1 ? prev - 1 : prev)
+  const nextStep = () => {
+    // For CRT_TECHNICAL module, add an extra step for question type selection
+    if (testData.module === 'CRT_TECHNICAL' && step === 4) {
+      setStep(5); // Go to technical question type step
+    } else if (testData.module === 'CRT_TECHNICAL' && step === 5) {
+      setStep(6); // Go to question upload step
+    } else if (testData.module === 'CRT_TECHNICAL' && step === 6) {
+      setStep(7); // Go to final confirmation step
+    } else {
+      setStep(prev => prev < 7 ? prev + 1 : prev);
+    }
+  }
+  
+  const prevStep = () => {
+    // For CRT_TECHNICAL module, handle the extra step
+    if (testData.module === 'CRT_TECHNICAL' && step === 6) {
+      setStep(5); // Go back to technical question type step
+    } else if (testData.module === 'CRT_TECHNICAL' && step === 5) {
+      setStep(4); // Go back to audience selection step
+    } else {
+      setStep(prev => prev > 1 ? prev - 1 : prev);
+    }
+  }
 
   const updateTestData = (data) => {
-    // Normalize data to ensure we always store string IDs, not objects
-    const normalizedData = {};
-    
-    Object.keys(data).forEach(key => {
-      const value = data[key];
-      if (typeof value === 'object' && value !== null) {
-        // Special handling for audience selection data (campus, batches, courses)
-        if (key === 'campus' || key === 'batches' || key === 'courses') {
-          // Keep the full objects for display purposes
-          normalizedData[key] = value;
-        } else if (value.id !== undefined) {
-          normalizedData[key] = value.id;
-        } else if (value.name !== undefined) {
-          normalizedData[key] = value.name;
-        } else if (value.value !== undefined) {
-          normalizedData[key] = value.value;
-        } else if (Array.isArray(value)) {
-          // Handle arrays of objects
-          normalizedData[key] = value.map(item => 
-            typeof item === 'object' ? (item.id || item.value || item.name) : item
-          );
-        } else {
-          normalizedData[key] = value;
-        }
-      } else {
-        normalizedData[key] = value;
-      }
-    });
-    
-    console.log('updateTestData - Input:', data);
-    console.log('updateTestData - Normalized:', normalizedData);
-    
-    setTestData(prev => ({ ...prev, ...normalizedData }))
-  }
+    setTestData(prev => ({ ...prev, ...data }));
+  };
 
   const renderStep = () => {
     switch (step) {
@@ -646,13 +646,29 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
       case 4:
         return <Step4AudienceSelection nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
       case 5:
-        return <Step5QuestionUpload nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
+        // Show technical question type step only for CRT_TECHNICAL
+        if (testData.module === 'CRT_TECHNICAL') {
+          return <TechnicalTestQuestionType onNext={nextStep} onBack={prevStep} updateTestData={updateTestData} testData={testData} />;
+        } else {
+          return <Step5QuestionUpload nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} uploadedQuestions={uploadedQuestions} setUploadedQuestions={setUploadedQuestions} />;
+        }
       case 6:
-        return <Step6ConfirmAndGenerate prevStep={prevStep} testData={testData} onTestCreated={onTestCreated} />;
+        // Show question upload step
+        if (testData.module === 'CRT_TECHNICAL') {
+          return <Step5QuestionUpload nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} uploadedQuestions={uploadedQuestions} setUploadedQuestions={setUploadedQuestions} />;
+        } else {
+          return <Step6ConfirmAndGenerate prevStep={prevStep} testData={testData} onTestCreated={onTestCreated} uploadedQuestions={uploadedQuestions} />;
+        }
+      case 7:
+        // Final confirmation step for CRT_TECHNICAL
+        return <Step6ConfirmAndGenerate prevStep={prevStep} testData={testData} onTestCreated={onTestCreated} uploadedQuestions={uploadedQuestions} />;
       default:
         return <Step1TestCategory nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
     }
-  }
+  };
+
+  // Calculate total steps based on module
+  const totalSteps = testData.module === 'CRT_TECHNICAL' ? 7 : 6;
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
@@ -671,18 +687,19 @@ const TestCreationWizard = ({ onTestCreated, setView }) => {
           <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
             <motion.div 
               className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full shadow-lg" 
-              animate={{ width: `${((step - 1) / 5) * 100}%` }}
+              animate={{ width: `${((step - 1) / (totalSteps - 1)) * 100}%` }}
               transition={{ duration: 0.8, ease: "easeOut" }}
             />
           </div>
           <p className="text-right text-sm font-medium text-gray-600 mt-3">
-            Step {step} of 6: {
+            Step {step} of {totalSteps}: {
               step === 1 ? 'Select Test Category' :
               step === 2 ? 'Select Test Type' :
               step === 3 ? 'Select Module and Level' :
               step === 4 ? 'Select Audience' :
-              step === 5 ? 'Upload Questions' :
-              step === 6 ? 'Final Confirmation' : ''
+              step === 5 ? (testData.module === 'CRT_TECHNICAL' ? 'Select Question Type' : 'Upload Questions') :
+              step === 6 ? (testData.module === 'CRT_TECHNICAL' ? 'Upload Questions' : 'Final Confirmation') :
+              step === 7 ? 'Final Confirmation' : ''
             }
           </p>
         </div>
@@ -850,7 +867,14 @@ const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }
       try {
         const res = await api.get('/test-management/get-test-data')
         setModules(res.data.data.modules || [])
-        setAllLevels(res.data.data.levels || [])
+        // Convert levels object to array format
+        const levelsData = res.data.data.levels || {};
+        const levelsArray = Object.entries(levelsData).map(([id, levelData]) => ({
+          id: id,
+          name: levelData.name || levelData,
+          module_id: levelData.module_id || id.split('_')[0]
+        }));
+        setAllLevels(levelsArray)
         setGrammarCategories(res.data.data.grammar_categories || [])
       } catch (err) {
         error("Failed to fetch modules and levels")
@@ -997,7 +1021,7 @@ const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }
 const Step2TestType = ({ nextStep, prevStep, updateTestData, testData }) => {
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm({
     defaultValues: {
-      testType: testData.testType,
+      testType: testData.test_type,
     }
   })
   const { error } = useNotification()
@@ -1009,7 +1033,7 @@ const Step2TestType = ({ nextStep, prevStep, updateTestData, testData }) => {
       error("Please select a test type");
       return;
     }
-    updateTestData({ testType: data.testType })
+    updateTestData({ test_type: data.testType })
     nextStep()
   }
 
@@ -1149,7 +1173,7 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
   const [module, setModule] = useState(testData.module || '');
   const [level, setLevel] = useState(testData.level || '');
   const [subcategory, setSubcategory] = useState(testData.subcategory || '');
-  const [testName, setTestName] = useState(testData.testName || '');
+  const [testName, setTestName] = useState(testData.test_name || '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [levels, setLevels] = useState([]);
@@ -1168,7 +1192,14 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
       try {
         const response = await api.get('/test-management/get-test-data');
         if (response.data.success) {
-          setLevels(response.data.data.levels || []);
+          // Convert levels object to array format
+          const levelsData = response.data.data.levels || {};
+          const levelsArray = Object.entries(levelsData).map(([id, levelData]) => ({
+            id: id,
+            name: levelData.name || levelData,
+            module_id: levelData.module_id || id.split('_')[0]
+          }));
+          setLevels(levelsArray);
           setGrammarCategories(response.data.data.grammar_categories || []);
           setCrtTopics(response.data.data.crt_topics || []);
         }
@@ -1186,9 +1217,24 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
   const getModulesForCategory = () => {
     if (testData.testCategory === 'CRT') {
       return [
-        { id: 'CRT_APTITUDE', name: 'Aptitude' },
-        { id: 'CRT_REASONING', name: 'Reasoning' },
-        { id: 'CRT_TECHNICAL', name: 'Technical' }
+        { 
+          id: 'CRT_APTITUDE', 
+          name: 'Aptitude',
+          description: 'Mathematical and logical reasoning questions',
+          icon: '🧮'
+        },
+        { 
+          id: 'CRT_REASONING', 
+          name: 'Reasoning',
+          description: 'Logical and analytical reasoning questions',
+          icon: '🧠'
+        },
+        { 
+          id: 'CRT_TECHNICAL', 
+          name: 'Technical',
+          description: 'Technical and domain-specific questions',
+          icon: '💻'
+        }
       ];
     } else if (testData.testCategory === 'VERSANT') {
       return [
@@ -1329,7 +1375,7 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
       level: module === 'GRAMMAR' ? subcategory : (module.startsWith('CRT_') ? module : level), 
       subcategory: module === 'GRAMMAR' ? subcategory : null,
       topic_id: module.startsWith('CRT_') ? selectedTopic : null,
-      testName 
+      test_name: testName 
     };
     updateTestData(updateData);
     nextStep();
@@ -1351,16 +1397,40 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 space-y-8">
         <div>
           <label className="block text-base font-semibold text-gray-800 mb-2">Module</label>
-          <select 
-            value={module} 
-            onChange={handleModuleChange} 
-            className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 bg-white hover:border-blue-300"
-          >
-            <option value="">Select Module</option>
-            {getModulesForCategory().map(mod => (
-              <option key={mod.id} value={mod.id}>{mod.name}</option>
-            ))}
-          </select>
+          {testData.testCategory === 'CRT' ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {getModulesForCategory().map(mod => (
+                <div
+                  key={mod.id}
+                  onClick={() => setModule(mod.id)}
+                  className={`p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 ${
+                    module === mod.id
+                      ? 'border-blue-500 bg-blue-50 ring-4 ring-blue-200'
+                      : 'border-gray-200 hover:border-blue-300 bg-white'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <span className="text-2xl">{mod.icon}</span>
+                    <div>
+                      <h3 className="font-semibold text-gray-800">{mod.name}</h3>
+                      <p className="text-sm text-gray-600">{mod.description}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <select 
+              value={module} 
+              onChange={handleModuleChange} 
+              className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 bg-white hover:border-blue-300"
+            >
+              <option value="">Select Module</option>
+              {getModulesForCategory().map(mod => (
+                <option key={mod.id} value={mod.id}>{mod.name}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {module && module === 'GRAMMAR' && (
@@ -1408,13 +1478,24 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
             >
               <option value="">Select Topic (Optional)</option>
               {getTopicsForModule().map(topic => (
-                <option key={topic.id} value={topic.id}>
-                  {topic.topic_name} ({topic.completion_percentage}% completed)
+                <option key={topic._id} value={topic._id}>
+                  {topic.topic_name} ({topic.total_questions || 0} questions, {topic.completion_percentage}% completed)
                 </option>
               ))}
             </select>
             {getTopicsForModule().length === 0 && (
               <p className="text-sm text-gray-500 mt-1">No topics available for this module. Questions will be selected from all available questions.</p>
+            )}
+            {selectedTopic && (
+              <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-sm text-blue-800">
+                  <strong>Selected Topic:</strong> {getTopicsForModule().find(t => t._id === selectedTopic)?.topic_name}
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  Total Questions: {getTopicsForModule().find(t => t._id === selectedTopic)?.total_questions || 0} | 
+                  Available: {getTopicsForModule().find(t => t._id === selectedTopic)?.total_questions - getTopicsForModule().find(t => t._id === selectedTopic)?.used_questions || 0}
+                </p>
+              </div>
             )}
           </div>
         )}
@@ -1748,21 +1829,92 @@ const CheckboxCard = ({ id, label, checked, onChange }) => {
   );
 }
 
-const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) => {
-  const module = testData.module;
-  const UploadComponent = MODULE_CONFIG[module]?.uploadComponent || (() => <div>Unknown module</div>);
-  const [questions, setQuestions] = useState(testData.questions || []);
+// Audio Generation Status Component
+const AudioGenerationStatus = () => {
+  const [status, setStatus] = useState('checking');
+  const [available, setAvailable] = useState(false);
+  const [details, setDetails] = useState('');
+
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const response = await api.get('/test-management/check-audio-generation');
+        if (response.data.success) {
+          setAvailable(response.data.available);
+          if (response.data.available) {
+            setStatus('available');
+            setDetails('Audio generation is working properly');
+          } else {
+            setStatus('unavailable');
+            const missing = [];
+            if (!response.data.gtts_available) missing.push('gtts');
+            if (!response.data.pydub_available) missing.push('pydub');
+            setDetails(`Missing packages: ${missing.join(', ')}`);
+          }
+        } else {
+          setStatus('error');
+          setDetails('Unable to check audio generation status');
+        }
+      } catch (error) {
+        setStatus('error');
+        setDetails('Failed to check audio generation status');
+      }
+    };
+
+    checkStatus();
+  }, []);
+
+  const getStatusColor = () => {
+    switch (status) {
+      case 'available': return 'text-green-600';
+      case 'unavailable': return 'text-red-600';
+      case 'error': return 'text-yellow-600';
+      default: return 'text-gray-600';
+    }
+  };
+
+  const getStatusIcon = () => {
+    switch (status) {
+      case 'available': return '✅';
+      case 'unavailable': return '❌';
+      case 'error': return '⚠️';
+      default: return '⏳';
+    }
+  };
+
+  return (
+    <div className={`text-xs ${getStatusColor()} flex items-center space-x-1`}>
+      <span>{getStatusIcon()}</span>
+      <span>{details}</span>
+    </div>
+  );
+};
+
+const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, uploadedQuestions, setUploadedQuestions }) => {
+  const { success, error: showError } = useNotification();
+  const [questionSource, setQuestionSource] = useState('manual');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [questionSource, setQuestionSource] = useState('manual'); // 'manual', 'bank', or 'random'
   const [bankQuestions, setBankQuestions] = useState([]);
   const [selectedBankQuestions, setSelectedBankQuestions] = useState([]);
   const [loadingBankQuestions, setLoadingBankQuestions] = useState(false);
   const [showQuestionCountModal, setShowQuestionCountModal] = useState(false);
-  const [questionCount, setQuestionCount] = useState(10);
   const [showQuestionPreview, setShowQuestionPreview] = useState(false);
-  const [previewQuestions, setPreviewQuestions] = useState([]);
-  const [useRandomQuestions, setUseRandomQuestions] = useState(false);
-  const { error: showError } = useNotification();
+  const [questionCount, setQuestionCount] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMoreQuestions, setHasMoreQuestions] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [selectedTopic, setSelectedTopic] = useState('');
+  
+  // New state for technical test question type
+  const [technicalQuestionType, setTechnicalQuestionType] = useState('compiler'); // 'compiler' or 'mcq'
+  const [showQuestionTypeModal, setShowQuestionTypeModal] = useState(false);
+  
+  // Audio generation state
+  const [generatedAudioFiles, setGeneratedAudioFiles] = useState([]);
+  const [audioGenerationProgress, setAudioGenerationProgress] = useState(0);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
 
   // Fetch questions from bank when source changes
   useEffect(() => {
@@ -1771,16 +1923,28 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
     }
   }, [questionSource, testData.module, testData.level, testData.subcategory]);
 
-  const fetchQuestionsFromBank = async (count = 50) => {
-    setLoadingBankQuestions(true);
+  // Update selectedTopic when testData changes
+  useEffect(() => {
+    if (testData.topic_id || testData.selectedTopic) {
+      setSelectedTopic(testData.topic_id || testData.selectedTopic || '');
+    }
+  }, [testData.topic_id, testData.selectedTopic]);
+
+  const fetchQuestionsFromBank = async (count = 50, page = 1, append = false) => {
+    if (page === 1) {
+      setLoadingBankQuestions(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
     try {
       // Determine the correct level_id based on module type
       let levelId = testData.level;
       let subcategory = testData.subcategory;
-      let topicId = testData.topic_id;
+      let topicId = testData.topic_id || selectedTopic;
       
       if (testData.module.startsWith('CRT_')) {
-        // For CRT modules, use the module_id directly
+        // For CRT modules, use the module_id directly as level_id
         levelId = testData.module;
         subcategory = null;
       } else if (testData.module === 'GRAMMAR') {
@@ -1799,32 +1963,67 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
         subcategory: subcategory,
         topic_id: topicId,
         count: count,
+        page: page,
         original_level: testData.level,
         original_subcategory: testData.subcategory
       });
       
-      // Build the API URL with parameters
-      let url = `/test-management/existing-questions?module_id=${testData.module}&level_id=${levelId}`;
-      if (topicId) {
-        url += `&topic_id=${topicId}`;
-      }
+      // Use the new bulk selection endpoint
+      const payload = {
+        module_id: testData.module,
+        level_id: levelId,
+        subcategory: subcategory,
+        topic_id: topicId,
+        question_count: count,
+        page: page,
+        limit: count
+      };
       
-      // Use the same endpoint as Question Bank Upload page
-      let response = await api.get(url);
+      let response = await api.post('/test-management/question-bank/bulk-selection', payload);
       
       // If no questions found and it's Grammar, try with subcategory as level_id
-      if (testData.module === 'GRAMMAR' && (!response.data.success || !response.data.data || response.data.data.length === 0)) {
+      if (testData.module === 'GRAMMAR' && (!response.data.success || !response.data.questions || response.data.questions.length === 0)) {
         console.log('No questions found with level, trying with subcategory as level_id');
-        response = await api.get(`/test-management/existing-questions?module_id=${testData.module}&level_id=${testData.subcategory}`);
+        payload.level_id = testData.subcategory;
+        payload.subcategory = null;
+        response = await api.post('/test-management/question-bank/bulk-selection', payload);
+      }
+      
+      // If no questions found for CRT_TECHNICAL, try without level_id
+      if (testData.module === 'CRT_TECHNICAL' && (!response.data.success || !response.data.questions || response.data.questions.length === 0)) {
+        console.log('No questions found for CRT_TECHNICAL with level_id, trying without level_id');
+        delete payload.level_id;
+        response = await api.post('/test-management/question-bank/bulk-selection', payload);
       }
       
       if (response.data.success) {
-        const questions = response.data.data || [];
-        setBankQuestions(questions);
-        console.log('Fetched questions:', questions.length);
+        const questions = response.data.questions || [];
+        const totalQuestions = response.data.total_count || 0;
+        const hasMore = response.data.has_more || false;
+        
+        console.log('Successfully fetched questions:', {
+          questionsCount: questions.length,
+          totalQuestions: totalQuestions,
+          hasMore: hasMore,
+          firstQuestion: questions[0] ? questions[0].question?.substring(0, 100) : 'No questions',
+          module: testData.module,
+          level: testData.level,
+          topic_id: testData.topic_id
+        });
+        
+        if (append) {
+          setBankQuestions(prev => [...prev, ...questions]);
+        } else {
+          setBankQuestions(questions);
+        }
+        
+        setHasMoreQuestions(hasMore);
+        setCurrentPage(page);
+        console.log('Fetched questions:', questions.length, 'Total:', totalQuestions, 'Has more:', hasMore);
         return questions;
       } else {
         console.error('Failed to fetch questions:', response.data.message);
+        console.error('Response data:', response.data);
         setError('Failed to fetch questions from bank');
         return [];
       }
@@ -1834,7 +2033,15 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
       return [];
     } finally {
       setLoadingBankQuestions(false);
+      setLoadingMore(false);
     }
+  };
+
+  const loadMoreQuestions = async () => {
+    if (loadingMore || !hasMoreQuestions) return;
+    
+    const nextPage = currentPage + 1;
+    await fetchQuestionsFromBank(50, nextPage, true);
   };
 
   const handleQuestionBankSelect = async () => {
@@ -1843,53 +2050,145 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
 
   const handleQuestionCountConfirm = async () => {
     setShowQuestionCountModal(false);
-    const fetchedQuestions = await fetchQuestionsFromBank(questionCount * 3); // fetch more to ensure we have enough unique questions
-    if (fetchedQuestions.length > 0) {
-      // Sample WITHOUT replacement to avoid repeats within the same test
-      const shuffledQuestions = shuffleArray([...fetchedQuestions]);
-      const selectedQuestions = shuffledQuestions.slice(0, Math.min(questionCount, fetchedQuestions.length));
-      
-      if (selectedQuestions.length < questionCount) {
-        showError(`Only ${selectedQuestions.length} unique questions available in the bank. Please reduce the count or add more questions.`);
-        return;
-      }
-      
-      // Add repeat count information to each question
-      const questionsWithRepeatInfo = selectedQuestions.map(question => {
-        const historicalUsage = question.used_count || 0;
-        const currentUsage = historicalUsage + 1; // This will be the current usage count
-        
-        // Determine repetition status
-        let repetitionStatus = '';
-        if (currentUsage === 1) {
-          repetitionStatus = 'first_time'; // First time being used
-        } else if (currentUsage === 2) {
-          repetitionStatus = 'repeating_first_time'; // Second time total (first repeat)
-        } else if (currentUsage === 3) {
-          repetitionStatus = 'repeating_second_time'; // Third time total (second repeat)
-        } else {
-          repetitionStatus = `repeating_${currentUsage - 1}_time`; // Nth time total ((N-1)th repeat)
-        }
-        
-        return {
-          ...question,
-          repeatCount: historicalUsage, // Keep original for display
-          currentUsage: currentUsage, // Total times this question will be used
-          repetitionStatus: repetitionStatus // Status for display
-        };
+    setLoadingBankQuestions(true);
+    
+    try {
+      console.log('Starting question selection with:', {
+        module: testData.module,
+        level: testData.level,
+        topic_id: testData.topic_id,
+        selectedTopic: selectedTopic,
+        questionCount: questionCount
       });
       
-      setPreviewQuestions(questionsWithRepeatInfo);
-      setShowQuestionPreview(true);
-    } else {
-      setError('No questions found in the bank for the selected criteria');
-      showError('No questions found in the bank for the selected criteria');
+      // Debug: Log the test data to understand the configuration
+      console.log('Test data configuration:', {
+        module: testData.module,
+        level: testData.level,
+        moduleType: typeof testData.module,
+        levelType: typeof testData.level
+      });
+      
+      // For CRT modules, try to get more questions to ensure variety
+      const fetchCount = testData.module?.startsWith('CRT_') ? questionCount * 2 : questionCount * 3;
+      const fetchedQuestions = await fetchQuestionsFromBank(fetchCount);
+      
+      console.log('Fetched questions result:', {
+        count: fetchedQuestions.length,
+        questions: fetchedQuestions.slice(0, 2) // Log first 2 questions for debugging
+      });
+      
+      // Debug: Log the structure of the first question to understand the data format
+      if (fetchedQuestions.length > 0) {
+        console.log('First question structure:', {
+          id: fetchedQuestions[0]._id,
+          question: fetchedQuestions[0].question,
+          sentence: fetchedQuestions[0].sentence,
+          text: fetchedQuestions[0].text,
+          question_type: fetchedQuestions[0].question_type,
+          module_id: fetchedQuestions[0].module_id,
+          level_id: fetchedQuestions[0].level_id,
+          fullQuestion: fetchedQuestions[0]
+        });
+      }
+      
+      if (fetchedQuestions.length > 0) {
+        // Sample WITHOUT replacement to avoid repeats within the same test
+        const shuffledQuestions = shuffleArray([...fetchedQuestions]);
+        const selectedQuestions = shuffledQuestions.slice(0, Math.min(questionCount, fetchedQuestions.length));
+        
+        if (selectedQuestions.length < questionCount) {
+          const moduleName = testData.module?.startsWith('CRT_') ? testData.module.replace('CRT_', '') : testData.module;
+          showError(`Only ${selectedQuestions.length} unique questions available in the ${moduleName} bank. Please reduce the count or add more questions.`);
+          return;
+        }
+        
+        // Add repeat count information to each question
+        const questionsWithRepeatInfo = selectedQuestions.map(question => {
+          const historicalUsage = question.used_count || 0;
+          const currentUsage = historicalUsage + 1; // This will be the current usage count
+          
+          // Determine repetition status
+          let repetitionStatus = '';
+          if (currentUsage === 1) {
+            repetitionStatus = 'first_time'; // First time being used
+          } else if (currentUsage === 2) {
+            repetitionStatus = 'repeating_first_time'; // Second time total (first repeat)
+          } else if (currentUsage === 3) {
+            repetitionStatus = 'repeating_second_time'; // Third time total (second repeat)
+          } else {
+            repetitionStatus = `repeating_${currentUsage - 1}_time`; // Nth time total ((N-1)th repeat)
+          }
+          
+          return {
+            ...question,
+            repeatCount: historicalUsage, // Keep original for display
+            currentUsage: currentUsage, // Total times this question will be used
+            repetitionStatus: repetitionStatus // Status for display
+          };
+        });
+        
+        // For LISTENING module, check and generate audio files if needed
+        if (testData.module === 'LISTENING') {
+          const questionsNeedingAudio = questionsWithRepeatInfo.filter(q => !q.audio_url && !q.has_audio);
+          if (questionsNeedingAudio.length > 0) {
+            success(`Selected ${selectedQuestions.length} questions. ${questionsNeedingAudio.length} questions need audio generation. Audio will be generated automatically.`);
+            
+            // Generate audio for questions that don't have it
+            try {
+              await generateAudioForQuestions(questionsNeedingAudio);
+              // Update questions with audio URLs
+              const updatedQuestions = questionsWithRepeatInfo.map(q => {
+                if (!q.audio_url && !q.has_audio) {
+                  // Find the generated audio for this question
+                  const generatedAudio = generatedAudioFiles.find(audio => audio.question_id === q._id);
+                  if (generatedAudio) {
+                    return { ...q, audio_url: generatedAudio.audio_url, has_audio: true };
+                  }
+                }
+                return q;
+              });
+              setUploadedQuestions(updatedQuestions);
+              setSelectedBankQuestions(updatedQuestions);
+            } catch (error) {
+              console.error('Error generating audio:', error);
+              const errorMessage = error.message.includes('packages') 
+                ? `Audio generation is not available on the server. Required packages (gtts, pydub) are not installed. You can continue without audio or contact your administrator to install the required packages.`
+                : `Audio generation failed for ${questionsNeedingAudio.length} questions: ${error.message}. You can continue without audio or try again later.`;
+              
+              // Show warning instead of error, since user can continue
+              showError(errorMessage);
+              // Still show questions but without audio
+              setUploadedQuestions(questionsWithRepeatInfo);
+              setSelectedBankQuestions(questionsWithRepeatInfo);
+            }
+          } else {
+            success(`Successfully selected ${selectedQuestions.length} questions from ${fetchedQuestions.length} available questions in the ${testData.module} question bank. All questions have audio files.`);
+            setUploadedQuestions(questionsWithRepeatInfo);
+            setSelectedBankQuestions(questionsWithRepeatInfo);
+          }
+        } else {
+          setUploadedQuestions(questionsWithRepeatInfo);
+          setSelectedBankQuestions(questionsWithRepeatInfo);
+        }
+        
+        setShowQuestionPreview(true);
+      } else {
+        const moduleName = testData.module?.startsWith('CRT_') ? testData.module.replace('CRT_', '') : testData.module;
+        const errorMessage = `No questions found in the ${moduleName} bank for the selected criteria. Please upload questions first using the "Manual Upload" option or check the question bank.`;
+        setError(errorMessage);
+        showError(errorMessage);
+      }
+    } catch (error) {
+      console.error('Error selecting questions:', error);
+      showError('Failed to select questions from the question bank.');
+    } finally {
+      setLoadingBankQuestions(false);
     }
   };
 
   const handlePreviewConfirm = () => {
-    setQuestions(previewQuestions);
-    setSelectedBankQuestions(previewQuestions);
+    setUploadedQuestions(selectedBankQuestions);
     setShowQuestionPreview(false);
     setQuestionSource('bank');
   };
@@ -1903,14 +2202,97 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
     return shuffled;
   };
 
+  // Function to check if audio generation is available
+  const checkAudioGenerationAvailability = async () => {
+    try {
+      const response = await api.get('/test-management/check-audio-generation');
+      return response.data.available;
+    } catch (error) {
+      console.error('Error checking audio generation availability:', error);
+      return false;
+    }
+  };
+
+  // Function to generate audio for questions
+  const generateAudioForQuestions = async (questions) => {
+    // Check if audio generation is available first
+    const isAvailable = await checkAudioGenerationAvailability();
+    if (!isAvailable) {
+      throw new Error('Audio generation is not available on the server. Required packages (gtts, pydub) are not installed.');
+    }
+    
+    setIsGeneratingAudio(true);
+    setAudioGenerationProgress(0);
+    
+    try {
+      const audioPromises = questions.map(async (question, index) => {
+        try {
+          // Call backend to generate audio
+          const response = await api.post('/test-management/generate-audio', {
+            text: question.text || question.question || question.sentence,
+            question_id: question._id,
+            module_id: testData.module,
+            level_id: testData.level,
+            audio_config: {
+              accent: 'en-US',
+              speed: 1.0
+            }
+          });
+          
+          if (response.data.success) {
+            setAudioGenerationProgress((index + 1) / questions.length * 100);
+            return {
+              question_id: question._id,
+              audio_url: response.data.audio_url,
+              success: true
+            };
+          } else {
+            throw new Error(response.data.message || 'Audio generation failed');
+          }
+        } catch (error) {
+          console.error(`Error generating audio for question ${question._id}:`, error);
+          return {
+            question_id: question._id,
+            error: error.message,
+            success: false
+          };
+        }
+      });
+      
+      const results = await Promise.all(audioPromises);
+      const successfulAudio = results.filter(r => r.success);
+      const failedAudio = results.filter(r => !r.success);
+      
+      if (failedAudio.length > 0) {
+        console.warn(`${failedAudio.length} audio files failed to generate:`, failedAudio);
+        // Show specific error messages for failed audio generation
+        failedAudio.forEach(failed => {
+          if (failed.error) {
+            showError(failed.error);
+          }
+        });
+      }
+      
+      setGeneratedAudioFiles(successfulAudio);
+      return successfulAudio;
+      
+    } catch (error) {
+      console.error('Error in audio generation:', error);
+      throw error;
+    } finally {
+      setIsGeneratingAudio(false);
+      setAudioGenerationProgress(0);
+    }
+  };
+
   const handleQuestionSourceChange = (source) => {
     setQuestionSource(source);
     setError(''); // Clear any previous errors
     if (source === 'manual') {
-      setQuestions([]);
+      setUploadedQuestions([]);
       setSelectedBankQuestions([]);
     } else {
-      setQuestions([]);
+      setUploadedQuestions([]);
     }
   };
 
@@ -1926,17 +2308,64 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
   };
 
   const handleConfirmBankQuestions = () => {
-    setQuestions(selectedBankQuestions);
+    setUploadedQuestions(selectedBankQuestions);
     setQuestionSource('manual'); // Switch back to manual view to show selected questions
   };
 
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      setSelectedFile(file);
+      setError('');
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      setError('Please select a file first.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('module_id', testData.module);
+      formData.append('level_id', testData.level);
+      
+      if (testData.subcategory) {
+        formData.append('subcategory', testData.subcategory);
+      }
+      
+      if (testData.topic_id) {
+        formData.append('topic_id', testData.topic_id);
+      }
+
+      const response = await api.post('/test-management/upload-questions', formData);
+      
+      if (response.data.success) {
+        setUploadedQuestions(response.data.questions);
+        toast.success('Questions uploaded successfully!');
+      } else {
+        setError(response.data.message || 'Failed to upload questions');
+      }
+    } catch (error) {
+      console.error('Error uploading questions:', error);
+      setError(error.response?.data?.message || 'Failed to upload questions');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleNext = () => {
-    if (questions.length === 0) {
+    if (uploadedQuestions.length === 0) {
       setError('Please add at least one question.');
       return;
     }
     setError('');
-    updateTestData({ questions });
+    updateTestData({ questions: uploadedQuestions });
     nextStep();
   };
 
@@ -1963,6 +2392,49 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
       return testData.level || 'Unknown Level';
     }
   };
+
+  // Get question count for the current module/topic
+  const [localQuestionCount, setLocalQuestionCount] = useState(null);
+  
+  const getQuestionCount = () => {
+    return localQuestionCount;
+  };
+
+  // Fetch question count when module/topic changes
+  useEffect(() => {
+    const fetchQuestionCount = async () => {
+      if (!testData.module) return;
+      
+      try {
+        // Determine the correct level_id based on module type
+        let levelId = testData.level;
+        
+        if (testData.module.startsWith('CRT_')) {
+          // For CRT modules, use the module_id directly as level_id
+          levelId = testData.module;
+        }
+        
+        const payload = {
+          module_id: testData.module,
+          level_id: levelId,
+          topic_id: testData.topic_id || selectedTopic
+        };
+        
+        console.log('Fetching question count with payload:', payload);
+        
+        const response = await api.post('/test-management/question-bank/count', payload);
+        if (response.data.success) {
+          setLocalQuestionCount(response.data.available_count);
+          console.log('Question count response:', response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching question count:', error);
+        setLocalQuestionCount(0);
+      }
+    };
+
+    fetchQuestionCount();
+  }, [testData.module, testData.level, testData.topic_id, selectedTopic]);
 
   return (
     <div className="space-y-6">
@@ -2027,11 +2499,24 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
               <div>
                 <h4 className="font-semibold">Question Bank</h4>
                 <p className="text-sm text-gray-600">Select questions from existing question bank</p>
+                {testData.module && (
+                  <p className="text-xs text-blue-600 mt-1">
+                    Available: {getQuestionCount() || 'Loading...'} questions
+                  </p>
+                )}
+                {testData.module === 'LISTENING' && (
+                  <div className="mt-1">
+                    <p className="text-xs text-green-600">
+                      🎵 Audio will be auto-generated for listening tests
+                    </p>
+                    <AudioGenerationStatus />
+                  </div>
+                )}
               </div>
             </div>
           </button>
 
-          {testData.testType?.toLowerCase() === 'online' && (
+          {testData.test_type?.toLowerCase() === 'online' && (
             <button
               onClick={() => handleQuestionSourceChange('random')}
               className={`p-4 border-2 rounded-lg text-left transition-colors ${
@@ -2058,11 +2543,11 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold">Selected Questions from Bank</h3>
             <div className="text-sm text-gray-600">
-              {questions.length} questions selected
+              {uploadedQuestions.length} questions selected
             </div>
           </div>
 
-          {questions.length === 0 ? (
+          {uploadedQuestions.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <p>No questions selected from the bank.</p>
               <p className="text-sm mt-2">Click on "Question Bank" to select questions.</p>
@@ -2073,18 +2558,49 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="h-5 w-5 text-green-600" />
                   <span className="text-green-800 font-medium">
-                    {questions.length} unique questions randomly selected from the question bank
+                    {uploadedQuestions.length} unique questions randomly selected from the question bank
                   </span>
                 </div>
                 <p className="text-green-700 text-sm mt-1">
                   Questions have been shuffled and no duplicates within this test. Repetition status shows how many times each question has been used across all tests. Click "Next" to proceed.
                 </p>
+                {testData.module === 'LISTENING' && (
+                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs">🎵</span>
+                      </div>
+                      <span className="text-blue-800 font-medium text-sm">Audio Generation</span>
+                    </div>
+                    <p className="text-blue-700 text-xs mt-1">
+                      For LISTENING tests, audio files will be automatically generated from sentence text using AWS text-to-speech. 
+                      Students will hear the audio during the test.
+                    </p>
+                  </div>
+                )}
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {questions.map((question, index) => {
+                {uploadedQuestions.map((question, index) => {
+                  // Debug: Log the question structure for debugging
+                  if (index === 0) {
+                    console.log('Displaying question:', {
+                      index,
+                      question: question.question,
+                      sentence: question.sentence,
+                      text: question.text,
+                      questionTitle: question.questionTitle,
+                      statement: question.statement,
+                      problemStatement: question.problemStatement,
+                      question_type: question.question_type,
+                      module_id: question.module_id,
+                      fullQuestion: question
+                    });
+                  }
+                  
                   const isTechnicalQuestion = question.question_type === 'technical' || 
                     (testData.module === 'CRT' && testData.level === 'Technical');
+                  const isSentenceQuestion = testData.module === 'LISTENING' || testData.module === 'SPEAKING' || question.question_type === 'sentence';
                   
                   return (
                     <div
@@ -2094,7 +2610,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <h4 className="font-medium text-sm mb-2">
-                            Q{index + 1}: {question.question.substring(0, 100)}...
+                            Q{index + 1}: {(question.question || question.questionTitle || question.statement || question.problemStatement || question.text || 'Question text not available').substring(0, 100)}...
                           </h4>
                           
                           {isTechnicalQuestion ? (
@@ -2105,14 +2621,29 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
                               <pre className="text-xs bg-gray-100 p-1 rounded">{question.expectedOutput || 'N/A'}</pre>
                               <div className="font-medium">Language: {question.language || 'python'}</div>
                             </div>
+                          ) : isSentenceQuestion ? (
+                            <div className="text-xs text-gray-600 space-y-1">
+                              <div className="font-medium text-blue-600">Sentence:</div>
+                              <div className="bg-blue-50 p-2 rounded text-sm">
+                                {question.text || question.question || question.questionTitle || question.statement || question.problemStatement || 'Sentence text not available'}
+                              </div>
+                              {testData.module === 'LISTENING' && (
+                                <div className="mt-2">
+                                  <div className="font-medium text-green-600">Audio Status:</div>
+                                  <div className="text-xs text-gray-500">
+                                    🎵 Audio will be auto-generated for listening test
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           ) : (
                             <div className="text-xs text-gray-600 space-y-1">
-                              <div>A: {question.optionA}</div>
-                              <div>B: {question.optionB}</div>
-                              <div>C: {question.optionC}</div>
-                              <div>D: {question.optionD}</div>
+                              <div>A: {question.optionA || 'N/A'}</div>
+                              <div>B: {question.optionB || 'N/A'}</div>
+                              <div>C: {question.optionC || 'N/A'}</div>
+                              <div>D: {question.optionD || 'N/A'}</div>
                               <div className="font-medium text-green-600">
-                                Answer: {question.answer}
+                                Answer: {question.answer || 'N/A'}
                               </div>
                             </div>
                           )}
@@ -2134,7 +2665,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
                               Repeating Second Time
                             </span>
                           )}
-                          {question.repetitionStatus.startsWith('repeating_') && question.repetitionStatus !== 'repeating_first_time' && question.repetitionStatus !== 'repeating_second_time' && (
+                          {question.repetitionStatus && question.repetitionStatus.startsWith('repeating_') && question.repetitionStatus !== 'repeating_first_time' && question.repetitionStatus !== 'repeating_second_time' && (
                             <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
                               {question.repetitionStatus.replace('repeating_', 'Repeating ').replace('_', ' ').replace('time', 'Time')}
                             </span>
@@ -2158,18 +2689,37 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
             <h3 className="text-lg font-semibold">Random Question Configuration</h3>
           </div>
           
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center space-x-2 mb-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <span className="text-green-800 font-medium">Anti-Cheating Features</span>
-            </div>
-            <ul className="text-green-700 text-sm space-y-1">
-              <li>• Each student receives different random questions from the question bank</li>
-              <li>• MCQ options are shuffled for each student</li>
-              <li>• Questions are distributed evenly across all students</li>
-              <li>• No two students will have the same question set</li>
-            </ul>
-          </div>
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                <div className="flex items-center space-x-2 mb-2">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <span className="text-green-800 font-medium">Anti-Cheating Features</span>
+                </div>
+                <ul className="text-green-700 text-sm space-y-1">
+                  <li>• Each student receives different random questions from the question bank</li>
+                  <li>• MCQ options are shuffled for each student</li>
+                  <li>• Questions are distributed evenly across all students</li>
+                  <li>• No two students will have the same question set</li>
+                </ul>
+              </div>
+              
+              {/* Audio Generation Progress */}
+              {isGeneratingAudio && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                    <span className="text-blue-800 font-medium">Generating Audio Files</span>
+                  </div>
+                  <div className="w-full bg-blue-200 rounded-full h-2 mb-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                      style={{ width: `${audioGenerationProgress}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-blue-700 text-sm">
+                    Progress: {Math.round(audioGenerationProgress)}% - Generating audio for listening questions...
+                  </p>
+                </div>
+              )}
           
           <div className="space-y-4">
             <div>
@@ -2214,34 +2764,179 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
         </div>
       )}
 
-      {/* Manual Upload */}
+      {/* Manual Upload Section */}
       {questionSource === 'manual' && (
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold mb-4">Manual Question Upload</h3>
-          <TestQuestionUpload
-            questions={questions}
-            setQuestions={setQuestions}
-            moduleName={MODULE_CONFIG[module]?.label}
-            levelId={testData.module === 'CRT' ? 
-              (testData.level === 'Aptitude' ? 'CRT_APTITUDE' : 
-               testData.level === 'Reasoning' ? 'CRT_REASONING' : 
-               testData.level === 'Technical' ? 'CRT_TECHNICAL' : testData.level) : 
-              testData.level}
-          />
+          <h3 className="text-lg font-semibold mb-4">
+            Upload {testData.module === 'CRT_TECHNICAL' ? 
+              (testData.technical_question_type === 'compiler' ? 'Compiler-Integrated' : 'MCQ') : 
+              ''} Questions for {testData.module}
+          </h3>
+          
+          {/* Audio Generation Status for Listening Module */}
+          {testData.module === 'LISTENING' && (
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <span className="text-yellow-600">🎵</span>
+                <span className="text-sm text-yellow-800">
+                  <strong>Note:</strong> For listening tests, audio files will be automatically generated from the text. 
+                  Make sure the text is clear and properly formatted for best audio quality.
+                </span>
+              </div>
+            </div>
+          )}
+          
+          {/* Technical Test Instructions */}
+          {testData.module === 'CRT_TECHNICAL' && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center space-x-2 mb-3">
+                <AlertCircle className="h-5 w-5 text-blue-600" />
+                <h4 className="font-semibold text-blue-900">
+                  {testData.technical_question_type === 'compiler' ? 'Compiler-Integrated' : 'MCQ'} Format
+                </h4>
+              </div>
+              
+              {testData.technical_question_type === 'compiler' ? (
+                <div className="text-sm text-blue-800">
+                  <p className="mb-2"><strong>Required CSV Format for Compiler-Integrated Questions:</strong></p>
+                  <div className="space-y-1 font-mono text-xs">
+                    <div>• QuestionTitle, ProblemStatement</div>
+                    <div>• TestCaseID, Input, ExpectedOutput</div>
+                    <div>• Language (python, java, cpp, javascript)</div>
+                    <div>• Instructions (optional)</div>
+                  </div>
+                  <p className="mt-3 text-xs">
+                    <strong>Example:</strong> "Reverse String", "Write a function to reverse a string", "TC001", "hello", "olleh", "python"
+                  </p>
+                </div>
+              ) : (
+                <div className="text-sm text-blue-800">
+                  <p className="mb-2"><strong>Required CSV Format for MCQ Questions:</strong></p>
+                  <div className="space-y-1 font-mono text-xs">
+                    <div>• Question, A, B, C, D</div>
+                    <div>• Answer (A/B/C/D)</div>
+                    <div>• Instructions (optional)</div>
+                  </div>
+                  <p className="mt-3 text-xs">
+                    <strong>Example:</strong> "What is the time complexity of binary search?", "O(1)", "O(log n)", "O(n)", "O(n²)", "B"
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* File Upload Area */}
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
+            <div className="flex flex-col items-center space-y-4">
+              <Upload className="h-12 w-12 text-gray-400" />
+              <div>
+                <p className="text-lg font-medium text-gray-900">Choose a file or drag it here</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Supports CSV and Excel files
+                </p>
+              </div>
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                onChange={handleFileUpload}
+                className="hidden"
+                id="file-upload"
+              />
+              <label
+                htmlFor="file-upload"
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 cursor-pointer transition-colors"
+              >
+                Select File
+              </label>
+            </div>
+          </div>
+
+          {selectedFile && (
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <span className="text-green-800 font-medium">File selected: {selectedFile.name}</span>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <X className="h-5 w-5 text-red-600" />
+                <span className="text-red-800">{error}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={handleUpload}
+              disabled={!selectedFile || loading}
+              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {loading ? 'Uploading...' : 'Upload Questions'}
+            </button>
+          </div>
         </div>
       )}
 
       {/* Selected Questions Summary */}
-      {questions.length > 0 && (
+      {uploadedQuestions.length > 0 && (
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold mb-4">Selected Questions ({questions.length})</h3>
+          <h3 className="text-lg font-semibold mb-4">Selected Questions ({uploadedQuestions.length})</h3>
           <div className="space-y-2">
-            {questions.map((question, index) => (
+            {uploadedQuestions.map((question, index) => (
               <div key={index} className="p-3 bg-gray-50 rounded border">
-                <div className="font-medium">Q{index + 1}: {question.question}</div>
-                {question.optionA && (
-                  <div className="text-sm text-gray-600 mt-1">
-                    A: {question.optionA} | B: {question.optionB} | C: {question.optionC} | D: {question.optionD}
+                {/* Display based on question type */}
+                {question.question_type === 'compiler_integrated' ? (
+                  <div>
+                    <div className="font-medium">Q{index + 1}: {question.questionTitle || question.question}</div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      <div><strong>Problem:</strong> {question.problemStatement || question.statement}</div>
+                      <div><strong>Language:</strong> {question.language || 'python'}</div>
+                      {question.instructions && (
+                        <div><strong>Instructions:</strong> {question.instructions}</div>
+                      )}
+                      {question.testCases && question.testCases.length > 0 && (
+                        <div className="bg-gray-50 p-2 rounded">
+                          <span className="font-medium">Test Cases:</span> {question.testCases.length} case(s)
+                          <div className="mt-2 space-y-1">
+                            {Array.isArray(question.testCases) ? (
+                              question.testCases.map((testCase, idx) => (
+                                <div key={idx} className="text-xs bg-white p-1 rounded border">
+                                  <div><strong>Input:</strong> {testCase.input || testCase}</div>
+                                  <div><strong>Expected:</strong> {testCase.expectedOutput || 'N/A'}</div>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-xs bg-white p-1 rounded border">
+                                <div><strong>Test Cases:</strong> {question.testCases}</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (testData.module === 'LISTENING' || testData.module === 'SPEAKING' || question.question_type === 'sentence') ? (
+                  <div>
+                    <div className="font-medium">Q{index + 1}: {question.text || question.question || question.questionTitle || question.statement || question.problemStatement || 'Sentence text not available'}</div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      <div><strong>Type:</strong> Sentence-based Question</div>
+                      {testData.module === 'LISTENING' && (
+                        <div><strong>Audio Status:</strong> 🎵 Audio will be auto-generated for listening test</div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="font-medium">Q{index + 1}: {question.question || question.questionTitle || question.statement || question.problemStatement || 'Question text not available'}</div>
+                    {question.optionA && (
+                      <div className="text-sm text-gray-600 mt-1">
+                        A: {question.optionA} | B: {question.optionB} | C: {question.optionC} | D: {question.optionD}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -2267,7 +2962,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
         </button>
         <button
           onClick={handleNext}
-          disabled={questions.length === 0}
+          disabled={uploadedQuestions.length === 0}
           className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
           Next
@@ -2324,12 +3019,42 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
       {showQuestionPreview && (
         <Modal
           isOpen={showQuestionPreview}
-          onClose={() => setShowQuestionPreview(false)}
-          title={`Preview Questions (${previewQuestions.length} selected)`}
+          onClose={() => {
+            // Don't clear selectedBankQuestions when closing modal
+            setShowQuestionPreview(false);
+          }}
+          title={`Preview Questions (${selectedBankQuestions.length} selected)`}
           size="lg"
         >
           <div className="space-y-4 max-h-96 overflow-y-auto">
-            {previewQuestions.map((question, index) => (
+            {testData.module === 'LISTENING' && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-xs">🎵</span>
+                  </div>
+                  <span className="text-blue-800 font-medium text-sm">Audio Generation</span>
+                </div>
+                <p className="text-blue-700 text-xs mt-1">
+                  Audio files will be automatically generated from sentence text using AWS text-to-speech for listening tests.
+                </p>
+              </div>
+            )}
+            {selectedBankQuestions.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="text-gray-500 mb-4">
+                  <FileQuestion className="w-12 h-12 mx-auto mb-2" />
+                  <p className="text-lg font-medium">No questions found</p>
+                  <p className="text-sm">No questions are available in the question bank for this module.</p>
+                </div>
+                <div className="text-sm text-gray-600 space-y-2">
+                  <p>• Make sure questions have been uploaded for <strong>{testData.module}</strong></p>
+                  <p>• Check that the questions are uploaded with the correct module and level</p>
+                  <p>• Try uploading questions manually or check the question bank</p>
+                </div>
+              </div>
+            ) : (
+              selectedBankQuestions.map((question, index) => (
               <div key={index} className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-start justify-between mb-2">
                   <span className="text-sm font-medium text-gray-500">Question {index + 1}</span>
@@ -2350,37 +3075,112 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
                         Repeating Second Time
                       </span>
                     )}
-                    {question.repetitionStatus.startsWith('repeating_') && question.repetitionStatus !== 'repeating_first_time' && question.repetitionStatus !== 'repeating_second_time' && (
+                    {question.repetitionStatus && question.repetitionStatus.startsWith('repeating_') && question.repetitionStatus !== 'repeating_first_time' && question.repetitionStatus !== 'repeating_second_time' && (
                       <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
                         {question.repetitionStatus.replace('repeating_', 'Repeating ').replace('_', ' ').replace('time', 'Time')}
                       </span>
                     )}
+                    {question.question_type === 'compiler_integrated' && (
+                      <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                        Compiler
+                      </span>
+                    )}
+                    {question.question_type === 'mcq' && (
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                        MCQ
+                      </span>
+                    )}
+                    {(testData.module === 'LISTENING' || testData.module === 'SPEAKING' || question.question_type === 'sentence') && (
+                      <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                        Sentence
+                      </span>
+                    )}
                   </div>
                 </div>
-                <p className="text-gray-800 mb-3">{question.question}</p>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="bg-gray-50 p-2 rounded">
-                    <span className="font-medium">A:</span> {question.optionA}
+                
+                {/* Display based on question type */}
+                {question.question_type === 'compiler_integrated' ? (
+                  <div>
+                    <div className="mb-3">
+                      <h4 className="font-medium text-gray-800 mb-2">{question.questionTitle || question.question}</h4>
+                      <p className="text-gray-700">{question.problemStatement || question.statement}</p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 text-sm">
+                      <div className="bg-gray-50 p-2 rounded">
+                        <span className="font-medium">Language:</span> {question.language || 'python'}
+                      </div>
+                      {question.instructions && (
+                        <div className="bg-gray-50 p-2 rounded">
+                          <span className="font-medium">Instructions:</span> {question.instructions}
+                        </div>
+                      )}
+                      {question.testCases && question.testCases.length > 0 && (
+                        <div className="bg-gray-50 p-2 rounded">
+                          <span className="font-medium">Test Cases:</span> {question.testCases.length} case(s)
+                          <div className="mt-2 space-y-1">
+                            {Array.isArray(question.testCases) ? (
+                              question.testCases.map((testCase, idx) => (
+                                <div key={idx} className="text-xs bg-white p-1 rounded border">
+                                  <div><strong>Input:</strong> {testCase.input || testCase}</div>
+                                  <div><strong>Expected:</strong> {testCase.expectedOutput || 'N/A'}</div>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-xs bg-white p-1 rounded border">
+                                <div><strong>Test Cases:</strong> {question.testCases}</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="bg-gray-50 p-2 rounded">
-                    <span className="font-medium">B:</span> {question.optionB}
+                ) : (testData.module === 'LISTENING' || testData.module === 'SPEAKING' || question.question_type === 'sentence') ? (
+                  <div>
+                    <p className="text-gray-800 mb-3">{question.text || question.question || question.questionTitle || question.statement || question.problemStatement || 'Sentence text not available'}</p>
+                    <div className="bg-blue-50 p-3 rounded">
+                      <div className="text-sm text-blue-800">
+                        <strong>Type:</strong> Sentence-based Question
+                      </div>
+                      {testData.module === 'LISTENING' && (
+                        <div className="mt-2 text-sm">
+                          <strong>Audio Status:</strong> 🎵 Audio will be auto-generated for listening test
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="bg-gray-50 p-2 rounded">
-                    <span className="font-medium">C:</span> {question.optionC}
+                ) : (
+                  <div>
+                    <p className="text-gray-800 mb-3">{question.question || question.questionTitle || question.statement || question.problemStatement || 'Question text not available'}</p>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="bg-gray-50 p-2 rounded">
+                        <span className="font-medium">A:</span> {question.optionA || 'N/A'}
+                      </div>
+                      <div className="bg-gray-50 p-2 rounded">
+                        <span className="font-medium">B:</span> {question.optionB || 'N/A'}
+                      </div>
+                      <div className="bg-gray-50 p-2 rounded">
+                        <span className="font-medium">C:</span> {question.optionC || 'N/A'}
+                      </div>
+                      <div className="bg-gray-50 p-2 rounded">
+                        <span className="font-medium">D:</span> {question.optionD || 'N/A'}
+                      </div>
+                    </div>
+                    <div className="mt-2 text-sm">
+                      <span className="font-medium text-green-600">Answer:</span> {question.answer || 'N/A'}
+                    </div>
                   </div>
-                  <div className="bg-gray-50 p-2 rounded">
-                    <span className="font-medium">D:</span> {question.optionD}
-                  </div>
-                </div>
-                <div className="mt-2 text-sm">
-                  <span className="font-medium text-green-600">Answer:</span> {question.answer}
-                </div>
+                )}
               </div>
-            ))}
+            ))
+            )}
           </div>
           <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
             <button
-              onClick={() => setShowQuestionPreview(false)}
+              onClick={() => {
+                // Don't clear selectedBankQuestions when canceling
+                setShowQuestionPreview(false);
+              }}
               className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
             >
               Cancel
@@ -2398,7 +3198,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData }) =
   );
 };
 
-const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
+const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated, uploadedQuestions }) => {
   const [studentCount, setStudentCount] = useState(null);
   const [studentList, setStudentList] = useState([]);
   useEffect(() => {
@@ -2447,7 +3247,7 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
   };
 
   // Validation for online test
-  const isOnline = testData.testType?.toLowerCase() === 'online';
+      const isOnline = testData.test_type?.toLowerCase() === 'online';
   const missingDate = isOnline && (!testData.startDateTime || !testData.endDateTime);
 
   const accentOptions = [
@@ -2466,17 +3266,17 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
     setLoading(true)
     try {
       const payload = {
-        test_name: testData.testName,
-        test_type: testData.testType?.toLowerCase(),
+        test_name: testData.test_name,
+        test_type: testData.test_type?.toLowerCase(),
         module_id: testData.module,
         campus_id: testData.campus?.value,
         course_ids: testData.courses.map(c => c.value),
         batch_ids: testData.batches.map(b => b.value),
-        questions: testData.questions,
+        questions: uploadedQuestions,
         audio_config: isMcqModule ? {} : { accent: data.accent, speed: data.speed },
         assigned_student_ids: studentList && studentList.length > 0 ? studentList.map(s => s.id) : [], // Only assign to confirmed students
       };
-      if (testData.testType?.toLowerCase() === 'online') {
+      if (testData.test_type?.toLowerCase() === 'online') {
         // Always send ISO strings for startDateTime and endDateTime
         if (!testData.startDateTime || !testData.endDateTime) {
           error('Start and end date/time are required for online tests.');
@@ -2543,8 +3343,8 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
         <div className="bg-gray-50 border border-gray-200 p-6 rounded-lg space-y-4">
           <h3 className="font-semibold text-lg text-gray-800 border-b border-gray-200 pb-3 mb-4">Test Summary</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
-            <div><strong className="text-gray-500 block">Name:</strong><p className="text-gray-800">{testData.testName}</p></div>
-            <div><strong className="text-gray-500 block">Type:</strong><p className="text-gray-800">{testData.testType}</p></div>
+            <div><strong className="text-gray-500 block">Name:</strong><p className="text-gray-800">{testData.test_name}</p></div>
+            <div><strong className="text-gray-500 block">Type:</strong><p className="text-gray-800">{testData.test_type}</p></div>
             <div><strong className="text-gray-500 block">Module:</strong><p className="text-gray-800">{typeof testData.module === 'object' ? testData.module.name || testData.module.label : testData.module}</p></div>
             {testData.subcategory ? (
               <div><strong className="text-gray-500 block">Category:</strong><p className="text-gray-800">{testData.subcategory}</p></div>
@@ -2561,7 +3361,7 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
               </>
             )}
             <div><strong className="text-gray-500 block">Student Count:</strong><p className="text-gray-800">{studentCount === null ? 'Loading...' : studentCount}</p></div>
-            <div className="col-span-full"><strong className="text-gray-500 block">Total Questions:</strong><p className="text-gray-800">{testData.questions?.length}</p></div>
+            <div className="col-span-full"><strong className="text-gray-500 block">Total Questions:</strong><p className="text-gray-800">{uploadedQuestions?.length}</p></div>
           </div>
           {/* Student List Table */}
           <div className="mt-6">
@@ -2569,28 +3369,58 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
             <div className="max-h-48 overflow-y-auto border border-gray-200 rounded bg-white">
               {studentList.length === 0 ? (
                 <div className="text-gray-500 text-sm p-4 text-center">
-                  <p>No students found for the selected batch-course combinations.</p>
-                  <p className="text-xs mt-1">Please check if students have been uploaded to the selected batches and courses.</p>
+                  <div className="flex flex-col items-center space-y-2">
+                    <AlertTriangle className="h-8 w-8 text-yellow-500" />
+                    <p className="font-medium">No students found for the selected criteria</p>
+                    <p className="text-xs text-gray-600">
+                      This could be due to:
+                    </p>
+                    <ul className="text-xs text-gray-600 text-left space-y-1">
+                      <li>• Students not uploaded to the selected batches</li>
+                      <li>• Students not assigned to the selected courses</li>
+                      <li>• Incorrect batch-course combinations</li>
+                    </ul>
+                    <div className="mt-3 p-2 bg-blue-50 rounded border border-blue-200">
+                      <p className="text-xs text-blue-800">
+                        <strong>Selected:</strong> Campus: {testData.campus?.label}, 
+                        Batches: {testData.batches?.map(b => b.label).join(', ')}, 
+                        Courses: {testData.courses?.map(c => c.label).join(', ')}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               ) : (
-                <table className="min-w-full text-sm border-separate border-spacing-0">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Name</th>
-                      <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Email</th>
-                      <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">Roll Number</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {studentList.map((s, idx) => (
-                      <tr key={s.id} className={idx % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-50'}>
-                        <td className="px-4 py-2 text-gray-900 border-b align-middle">{s.name}</td>
-                        <td className="px-4 py-2 text-gray-900 border-b align-middle">{s.email}</td>
-                        <td className="px-4 py-2 text-gray-900 border-b align-middle text-center">{s.roll_number || '-'}</td>
+                <>
+                  <div className="p-3 bg-green-50 border-b border-green-200">
+                    <p className="text-sm text-green-800 font-medium">
+                      ✅ Found {studentList.length} student{studentList.length !== 1 ? 's' : ''} for this test
+                    </p>
+                  </div>
+                  <table className="min-w-full text-sm border-separate border-spacing-0">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Name</th>
+                        <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Email</th>
+                        <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">Roll Number</th>
+                        <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">Source</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {studentList.map((s, idx) => (
+                        <tr key={s.id} className={idx % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-50'}>
+                          <td className="px-4 py-2 text-gray-900 border-b align-middle">{s.name}</td>
+                          <td className="px-4 py-2 text-gray-900 border-b align-middle">{s.email}</td>
+                          <td className="px-4 py-2 text-gray-900 border-b align-middle text-center">{s.roll_number || '-'}</td>
+                          <td className="px-4 py-2 text-gray-600 border-b align-middle text-center text-xs">
+                            {s.source === 'batch_course_instance' ? 'Batch-Course' : 
+                             s.source === 'direct_batch' ? 'Direct Batch' : 
+                             s.source === 'campus_wide' ? 'Campus' : 'Unknown'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
               )}
             </div>
           </div>
@@ -2598,6 +3428,17 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
         {!isMcqModule && (
           <div>
             <h3 className="text-lg font-medium text-gray-800 mb-2">Audio Configuration</h3>
+            {testData.module === 'LISTENING' && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center space-x-2">
+                  <span className="text-blue-600">ℹ️</span>
+                  <span className="text-sm text-blue-800">
+                    <strong>Audio Generation Status:</strong> Audio files will be automatically generated for listening questions. 
+                    If audio generation fails, the test will still be created but without audio files.
+                  </span>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-800 mb-1">Voice Accent</label>
@@ -2633,7 +3474,7 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated }) => {
           </button>
           <button type="submit" disabled={loading || missingDate} className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed transition-transform transform hover:scale-105">
             <CheckCircle className="h-6 w-6 mr-2" />
-            {loading ? 'Processing...' : (isMcqModule ? 'Create MCQ Module' : 'Confirm and Generate Audio')}
+            {loading ? 'Processing...' : (isMcqModule ? 'Create MCQ Module' : (testData.module === 'LISTENING' ? 'Confirm and Create Test' : 'Confirm and Generate Audio'))}
           </button>
         </div>
       </form>
@@ -2661,7 +3502,14 @@ const ModuleQuestionUpload = ({ onBack }) => {
       try {
         const res = await api.get('/test-management/get-test-data');
         setModules(res.data.data.modules || []);
-        setLevels(res.data.data.levels || []);
+        // Convert levels object to array format
+        const levelsData = res.data.data.levels || {};
+        const levelsArray = Object.entries(levelsData).map(([id, levelData]) => ({
+          id: id,
+          name: levelData.name || levelData,
+          module_id: levelData.module_id || id.split('_')[0]
+        }));
+        setLevels(levelsArray);
       } catch (err) {
         error('Failed to fetch modules and levels');
       }
