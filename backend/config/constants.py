@@ -103,6 +103,15 @@ QUESTION_TYPES = {
     'PARAGRAPH': 'paragraph'
 }
 
+# Audio Generation Configuration
+AUDIO_GENERATION_CONFIG = {
+    'MAX_RETRIES': 3,
+    'MIN_DELAY_BETWEEN_REQUESTS': 0.5,  # seconds
+    'MAX_DELAY_BETWEEN_REQUESTS': 2.0,  # seconds
+    'RATE_LIMIT_RETRY_DELAYS': [2, 4, 8],  # seconds for each retry attempt
+    'MAX_CONCURRENT_REQUESTS': 1  # Process sequentially to avoid rate limiting
+}
+
 # Status Values
 STATUS = {
     'ACTIVE': 'active',

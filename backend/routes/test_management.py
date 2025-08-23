@@ -1188,7 +1188,11 @@ def generate_audio_for_question():
         except Exception as audio_error:
             current_app.logger.error(f"Audio generation error for text '{text}': {audio_error}")
             # Provide more specific error messages
-            if "str" in str(audio_error) and "float" in str(audio_error):
+            if "429" in str(audio_error) or "Too Many Requests" in str(audio_error):
+                error_message = "Audio generation rate limit exceeded. The system will automatically retry. Please wait a moment and try again."
+            elif "Rate limit exceeded" in str(audio_error):
+                error_message = "Audio generation rate limit exceeded after multiple attempts. Please wait a few minutes and try again."
+            elif "str" in str(audio_error) and "float" in str(audio_error):
                 error_message = f"Audio generation failed due to a type conversion error. This has been fixed. Please try again."
             elif "gTTS" in str(audio_error):
                 error_message = f"Text-to-speech conversion failed: {str(audio_error)}"

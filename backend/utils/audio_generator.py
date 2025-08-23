@@ -1,6 +1,8 @@
 import os
 import uuid
 import boto3
+import time
+import random
 from config.aws_config import s3_client, S3_BUCKET_NAME
 
 # Make audio processing packages optional
@@ -18,7 +20,7 @@ except ImportError:
     PYDUB_AVAILABLE = False
     print("Warning: pydub package not available. Audio processing will not work.")
 
-def generate_audio_from_text(text, accent='en', speed=1.0):
+def generate_audio_from_text(text, accent='en', speed=1.0, max_retries=3):
     """Generate audio from text using gTTS with custom accent and speed"""
     if not GTTS_AVAILABLE:
         raise Exception("Audio generation not available - gTTS package is missing. Please install it using: pip install gtts")
@@ -26,55 +28,71 @@ def generate_audio_from_text(text, accent='en', speed=1.0):
     if not PYDUB_AVAILABLE:
         raise Exception("Audio generation not available - pydub package is missing. Please install it using: pip install pydub")
     
-    try:
-        # Ensure speed is a float to prevent type comparison errors
+    # Rate limiting: Add delay between requests to avoid 429 errors
+    time.sleep(random.uniform(0.5, 2.0))  # Random delay between 0.5-2 seconds
+    
+    for attempt in range(max_retries):
         try:
-            speed = float(speed) if speed is not None else 1.0
-        except (ValueError, TypeError):
-            speed = 1.0
-            print(f"Warning: Invalid speed value '{speed}', using default 1.0")
-        
-        # Create gTTS object with specified accent
-        tts = gTTS(text=text, lang=accent, slow=(speed < 1.0))
-        
-        # Generate temporary file
-        temp_filename = f"temp_{uuid.uuid4()}.mp3"
-        tts.save(temp_filename)
-        
-        # Load audio and adjust speed if needed
-        audio = AudioSegment.from_mp3(temp_filename)
-        if speed != 1.0:
-            # Adjust playback speed
-            new_frame_rate = int(audio.frame_rate * speed)
-            audio = audio._spawn(audio.raw_data, overrides={'frame_rate': new_frame_rate})
-            audio = audio.set_frame_rate(audio.frame_rate)
-        
-        # Save adjusted audio
-        adjusted_filename = f"adjusted_{uuid.uuid4()}.mp3"
-        audio.export(adjusted_filename, format="mp3")
-        
-        # Upload to S3
-        s3_key = f"audio/practice_tests/{uuid.uuid4()}.mp3"
-        try:
-            s3_client.upload_file(adjusted_filename, S3_BUCKET_NAME, s3_key)
-        except Exception as s3_error:
-            raise Exception(f"Failed to upload audio to S3: {str(s3_error)}. Please check S3 configuration.")
-        
-        # Clean up temporary files
-        try:
-            os.remove(temp_filename)
-            os.remove(adjusted_filename)
-        except Exception as cleanup_error:
-            print(f"Warning: Failed to cleanup temporary files: {cleanup_error}")
-        
-        return s3_key
-    except Exception as e:
-        if "gTTS" in str(e):
-            raise Exception(f"Text-to-speech conversion failed: {str(e)}. Please check the text content and try again.")
-        elif "AudioSegment" in str(e):
-            raise Exception(f"Audio processing failed: {str(e)}. Please check if the audio file was generated correctly.")
-        else:
-            raise Exception(f"Audio generation failed: {str(e)}. Please try again or contact support.")
+            # Ensure speed is a float to prevent type comparison errors
+            try:
+                speed = float(speed) if speed is not None else 1.0
+            except (ValueError, TypeError):
+                speed = 1.0
+                print(f"Warning: Invalid speed value '{speed}', using default 1.0")
+            
+            # Create gTTS object with specified accent
+            tts = gTTS(text=text, lang=accent, slow=(speed < 1.0))
+            
+            # Generate temporary file
+            temp_filename = f"temp_{uuid.uuid4()}.mp3"
+            tts.save(temp_filename)
+            
+            # Load audio and adjust speed if needed
+            audio = AudioSegment.from_mp3(temp_filename)
+            if speed != 1.0:
+                # Adjust playback speed
+                new_frame_rate = int(audio.frame_rate * speed)
+                audio = audio._spawn(audio.raw_data, overrides={'frame_rate': new_frame_rate})
+                audio = audio.set_frame_rate(audio.frame_rate)
+            
+            # Save adjusted audio
+            adjusted_filename = f"adjusted_{uuid.uuid4()}.mp3"
+            audio.export(adjusted_filename, format="mp3")
+            
+            # Upload to S3
+            s3_key = f"audio/practice_tests/{uuid.uuid4()}.mp3"
+            try:
+                s3_client.upload_file(adjusted_filename, S3_BUCKET_NAME, s3_key)
+            except Exception as s3_error:
+                raise Exception(f"Failed to upload audio to S3: {str(s3_error)}. Please check S3 configuration.")
+            
+            # Clean up temporary files
+            try:
+                os.remove(temp_filename)
+                os.remove(adjusted_filename)
+            except Exception as cleanup_error:
+                print(f"Warning: Failed to cleanup temporary files: {cleanup_error}")
+            
+            return s3_key
+            
+        except Exception as e:
+            if "429" in str(e) or "Too Many Requests" in str(e):
+                if attempt < max_retries - 1:
+                    wait_time = (2 ** attempt) + random.uniform(1, 3)  # Exponential backoff
+                    print(f"Rate limit hit (attempt {attempt + 1}/{max_retries}). Waiting {wait_time:.1f} seconds before retry...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    raise Exception(f"Rate limit exceeded after {max_retries} attempts. Please wait a few minutes and try again.")
+            elif "gTTS" in str(e):
+                raise Exception(f"Text-to-speech conversion failed: {str(e)}. Please check the text content and try again.")
+            elif "AudioSegment" in str(e):
+                raise Exception(f"Audio processing failed: {str(e)}. Please check if the audio file was generated correctly.")
+            else:
+                raise Exception(f"Audio generation failed: {str(e)}. Please try again or contact support.")
+    
+    # If we get here, all retries failed
+    raise Exception("Audio generation failed after all retry attempts")
 
 def calculate_similarity_score(original_text, student_audio_text):
     """Calculate similarity score between original and student audio text"""

@@ -2167,6 +2167,11 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
             setUploadedQuestions(questionsWithRepeatInfo);
             setSelectedBankQuestions(questionsWithRepeatInfo);
           }
+          
+          // Show info about audio generation process
+          if (testData.module === 'LISTENING') {
+            showError(`Note: Audio generation for ${questionsNeedingAudio.length} questions will be processed sequentially to avoid rate limiting. This may take a few minutes.`);
+          }
         } else {
           setUploadedQuestions(questionsWithRepeatInfo);
           setSelectedBankQuestions(questionsWithRepeatInfo);
@@ -2213,6 +2218,16 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
     }
   };
 
+  // Function to get audio generation configuration
+  const getAudioGenerationConfig = () => {
+    return {
+      maxRetries: 3,
+      minDelay: 1000, // 1 second
+      maxDelay: 3000, // 3 seconds
+      sequentialProcessing: true // Process one at a time to avoid rate limiting
+    };
+  };
+
   // Function to generate audio for questions
   const generateAudioForQuestions = async (questions) => {
     // Check if audio generation is available first
@@ -2225,8 +2240,18 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
     setAudioGenerationProgress(0);
     
     try {
-      const audioPromises = questions.map(async (question, index) => {
+      // Process questions sequentially with delays to avoid rate limiting
+      const results = [];
+      for (let i = 0; i < questions.length; i++) {
+        const question = questions[i];
         try {
+          // Add delay between requests to avoid rate limiting
+          if (i > 0) {
+            const delay = Math.random() * 2000 + 1000; // Random delay between 1-3 seconds
+            showError(`Processing question ${i + 1}/${questions.length}... Please wait.`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+          
           // Call backend to generate audio
           const response = await api.post('/test-management/generate-audio', {
             text: question.text || question.question || question.sentence,
@@ -2240,26 +2265,24 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
           });
           
           if (response.data.success) {
-            setAudioGenerationProgress((index + 1) / questions.length * 100);
-            return {
+            setAudioGenerationProgress((i + 1) / questions.length * 100);
+            results.push({
               question_id: question._id,
               audio_url: response.data.audio_url,
               success: true
-            };
+            });
           } else {
             throw new Error(response.data.message || 'Audio generation failed');
           }
         } catch (error) {
           console.error(`Error generating audio for question ${question._id}:`, error);
-          return {
+          results.push({
             question_id: question._id,
             error: error.message,
             success: false
-          };
+          });
         }
-      });
-      
-      const results = await Promise.all(audioPromises);
+      }
       const successfulAudio = results.filter(r => r.success);
       const failedAudio = results.filter(r => !r.success);
       
@@ -2268,7 +2291,11 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
         // Show specific error messages for failed audio generation
         failedAudio.forEach(failed => {
           if (failed.error) {
-            showError(failed.error);
+            if (failed.error.includes('rate limit') || failed.error.includes('429') || failed.error.includes('Too Many Requests')) {
+              showError(`Rate limit exceeded for question. The system will retry automatically. Please wait a few minutes and try again.`);
+            } else {
+              showError(failed.error);
+            }
           }
         });
       }
