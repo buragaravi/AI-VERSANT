@@ -68,6 +68,14 @@ def create_audio_test():
                     # Generate audio from text
                     accent = audio_config.get('accent', 'en-US')
                     speed = audio_config.get('speed', 1.0)
+                    
+                    # Ensure speed is a float to prevent type comparison errors
+                    try:
+                        speed = float(speed) if speed is not None else 1.0
+                    except (ValueError, TypeError):
+                        speed = 1.0
+                        current_app.logger.warning(f"Invalid speed value '{audio_config.get('speed')}', using default 1.0")
+                    
                     audio_url = generate_audio_from_text(processed_question['question'], accent, speed)
                     if audio_url:
                         processed_question['audio_url'] = audio_url

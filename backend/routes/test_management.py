@@ -114,6 +114,13 @@ def generate_audio_from_text(text, accent='en', speed=1.0):
     current_app.logger.info(f"Initiating audio generation for text: '{text[:30]}...' with lang: {lang}, tld: {tld}, speed: {speed}")
     
     try:
+        # Ensure speed is a float to prevent type comparison errors
+        try:
+            speed = float(speed) if speed is not None else 1.0
+        except (ValueError, TypeError):
+            speed = 1.0
+            current_app.logger.warning(f"Invalid speed value '{speed}', using default 1.0")
+        
         # 1. Generate audio with gTTS
         temp_filename = f"temp_{uuid.uuid4()}.mp3"
         tts = gTTS(text=text, lang=lang, tld=tld, slow=(speed < 1.0))
@@ -170,6 +177,14 @@ def audio_generation_worker(app, test_id, questions, audio_config):
                 # Generate audio
                 accent = audio_config.get('accent', 'en-US')
                 speed = audio_config.get('speed', 1.0)
+                
+                # Ensure speed is a float to prevent type comparison errors
+                try:
+                    speed = float(speed) if speed is not None else 1.0
+                except (ValueError, TypeError):
+                    speed = 1.0
+                    current_app.logger.warning(f"Invalid speed value '{audio_config.get('speed')}', using default 1.0")
+                
                 audio_url = generate_audio_from_text(question_text, accent, speed)
                 
                 if audio_url:
@@ -1128,7 +1143,18 @@ def generate_audio_for_question():
         accent = audio_config.get('accent', 'en-US')
         speed = audio_config.get('speed', 1.0)
         
+        current_app.logger.info(f"Audio generation request - Text: '{text[:50]}...', Accent: {accent}, Speed: {speed} (type: {type(speed)})")
+        
+        # Ensure speed is a float to prevent type comparison errors
         try:
+            speed = float(speed) if speed is not None else 1.0
+            current_app.logger.info(f"Speed converted to float: {speed}")
+        except (ValueError, TypeError) as e:
+            speed = 1.0
+            current_app.logger.warning(f"Invalid speed value '{audio_config.get('speed')}' (type: {type(audio_config.get('speed'))}), using default 1.0. Error: {e}")
+        
+        try:
+            current_app.logger.info(f"Calling generate_audio_from_text with speed: {speed} (type: {type(speed)})")
             audio_url = generate_audio_from_text(text, accent, speed)
             
             if audio_url:
@@ -1161,9 +1187,21 @@ def generate_audio_for_question():
                 
         except Exception as audio_error:
             current_app.logger.error(f"Audio generation error for text '{text}': {audio_error}")
+            # Provide more specific error messages
+            if "str" in str(audio_error) and "float" in str(audio_error):
+                error_message = f"Audio generation failed due to a type conversion error. This has been fixed. Please try again."
+            elif "gTTS" in str(audio_error):
+                error_message = f"Text-to-speech conversion failed: {str(audio_error)}"
+            elif "AudioSegment" in str(audio_error):
+                error_message = f"Audio processing failed: {str(audio_error)}"
+            elif "S3" in str(audio_error) or "boto" in str(audio_error):
+                error_message = f"Failed to upload audio to storage: {str(audio_error)}"
+            else:
+                error_message = f"Audio generation failed: {str(audio_error)}"
+            
             return jsonify({
                 'success': False,
-                'message': f'Failed to generate audio for question: {text}. Error: {str(audio_error)}'
+                'message': error_message
             }), 500
             
     except Exception as e:

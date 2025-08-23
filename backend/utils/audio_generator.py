@@ -27,6 +27,13 @@ def generate_audio_from_text(text, accent='en', speed=1.0):
         raise Exception("Audio generation not available - pydub package is missing. Please install it using: pip install pydub")
     
     try:
+        # Ensure speed is a float to prevent type comparison errors
+        try:
+            speed = float(speed) if speed is not None else 1.0
+        except (ValueError, TypeError):
+            speed = 1.0
+            print(f"Warning: Invalid speed value '{speed}', using default 1.0")
+        
         # Create gTTS object with specified accent
         tts = gTTS(text=text, lang=accent, slow=(speed < 1.0))
         
