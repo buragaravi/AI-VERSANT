@@ -91,6 +91,9 @@ const TestManagement = () => {
   const [baseName, setBaseName] = useState('')
   const [sequence, setSequence] = useState(1)
   const [uploadedQuestions, setUploadedQuestions] = useState([])
+  const [notifyModalOpen, setNotifyModalOpen] = useState(false)
+  const [notifyLoading, setNotifyLoading] = useState(false)
+  const [notifyResults, setNotifyResults] = useState([])
 
   // Check if we're on the question-bank-upload route and set view accordingly
   useEffect(() => {
@@ -221,6 +224,61 @@ const TestManagement = () => {
     setView('list')
   }
 
+  // Test email service handler
+  const handleTestEmail = async () => {
+    try {
+      const testEmail = prompt('Enter test email address:', 'test@example.com');
+      if (!testEmail) return;
+      
+      success('Testing email service...');
+      const res = await api.post('/test-management/test-email', { email: testEmail });
+      if (res.data && res.data.success) {
+        success(`Test email sent successfully to ${testEmail}`);
+      } else {
+        error(res.data.message || 'Email test failed');
+      }
+    } catch (e) {
+      error('Email test failed. Please try again.');
+    }
+  }
+
+  // Fix audio URLs handler
+  const handleFixAudioUrls = async () => {
+    try {
+      success('Fixing corrupted audio URLs...');
+      const res = await api.post('/test-management/fix-audio-urls');
+      if (res.data && res.data.success) {
+        success(`Fixed ${res.data.fixed_count} tests with corrupted audio URLs`);
+        // Refresh the test data
+        fetchTests();
+      } else {
+        error(res.data.message || 'Failed to fix audio URLs');
+      }
+    } catch (e) {
+      error('Failed to fix audio URLs. Please try again.');
+    }
+  }
+
+  // Notify students handler
+  const handleNotifyStudents = async () => {
+    setNotifyModalOpen(true);
+    setNotifyLoading(true);
+    setNotifyResults([]);
+    try {
+      const res = await api.post(`/test-management/notify-students/${selectedTest._id}`);
+      if (res.data && res.data.success) {
+        setNotifyResults(res.data.results || []);
+        success('Students notified successfully!');
+      } else {
+        error(res.data.message || 'Failed to notify students');
+      }
+    } catch (e) {
+      error('Failed to notify students. Please try again.');
+    } finally {
+      setNotifyLoading(false);
+    }
+  }
+
   const renderContent = () => {
     switch (view) {
       case 'create':
@@ -229,7 +287,7 @@ const TestManagement = () => {
         if (isPreviewLoading) {
           return <div className="flex justify-center items-center h-screen"><LoadingSpinner /></div>;
         }
-        return <TestPreviewView test={selectedTest} onBack={handleBackToList} />
+        return <TestPreviewView test={selectedTest} onBack={handleBackToList} onTestEmail={handleTestEmail} onFixAudioUrls={handleFixAudioUrls} onNotifyStudents={handleNotifyStudents} />
       case 'module-upload':
         return <ModuleQuestionUpload onBack={() => setView('list')} />
       case 'list':
@@ -241,6 +299,69 @@ const TestManagement = () => {
   return (
         <main className="px-6 lg:px-10 py-12">
           {renderContent()}
+          
+          {/* Notify Students Modal */}
+          {notifyModalOpen && (
+            <Modal onClose={() => setNotifyModalOpen(false)} title="Notify Students">
+              <div className="mb-4">
+                <h3 className="font-semibold text-xl mb-4 text-center text-blue-700">Notification Status</h3>
+                {notifyLoading ? (
+                  <div className="text-blue-600 text-center py-8">Sending notifications...</div>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg shadow">
+                    <table className="min-w-full text-sm border rounded-lg bg-white">
+                      <thead className="bg-blue-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Name</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Email</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Mobile</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Test Status</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Email Notification</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-700">SMS Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {notifyResults.map((s, idx) => (
+                          <tr key={s.email} className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}>
+                            <td className="px-4 py-2 border-b">{s.name}</td>
+                            <td className="px-4 py-2 border-b">{s.email}</td>
+                            <td className="px-4 py-2 border-b">{s.mobile_number || '-'}</td>
+                            <td className="px-4 py-2 border-b">
+                              {s.test_status === 'completed' ? (
+                                <span className="text-green-600 font-semibold">Completed</span>
+                              ) : (
+                                <span className="text-green-600 font-semibold">Pending</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2 border-b">
+                              {s.notify_status === 'sent' && <span className="text-green-700 font-semibold">Sent</span>}
+                              {s.notify_status === 'skipped' && <span className="text-gray-500 font-semibold">Skipped</span>}
+                              {s.notify_status === 'pending' && <span className="text-blue-500 font-semibold">Pending</span>}
+                              {s.notify_status === 'failed' && <span className="text-red-600 font-semibold">Failed</span>}
+                            </td>
+                            <td className="px-4 py-2 border-b">
+                              {s.sms_status === 'sent' && <span className="text-green-700 font-semibold">Sent</span>}
+                              {s.sms_status === 'failed' && <span className="text-red-600 font-semibold">Failed</span>}
+                              {s.sms_status === 'no_mobile' && <span className="text-gray-500 font-semibold">No Mobile</span>}
+                              {!s.sms_status && <span className="text-gray-400 font-semibold">-</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {!notifyLoading && notifyResults.length > 0 && (
+                  <div className="mt-6 text-sm text-center bg-blue-50 rounded-lg py-3">
+                    <span className="font-semibold">Summary:</span> {notifyResults.filter(r => r.notify_status === 'sent').length} notified, {notifyResults.filter(r => r.notify_status === 'skipped').length} skipped (already completed), {notifyResults.filter(r => r.notify_status === 'failed').length} failed.
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-center mt-4">
+                <button onClick={() => setNotifyModalOpen(false)} className="px-6 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 shadow">Close</button>
+              </div>
+            </Modal>
+          )}
         </main>
   )
 }
@@ -407,12 +528,9 @@ const TestListView = ({ tests, loading, setView, onViewTest, onDeleteTest, onTes
   )
 }
 
-const TestPreviewView = ({ test, onBack }) => {
+const TestPreviewView = ({ test, onBack, onTestEmail, onFixAudioUrls, onNotifyStudents }) => {
   const { success, error } = useNotification();
-  const [notifying, setNotifying] = useState(false);
-  const [notifyModalOpen, setNotifyModalOpen] = useState(false);
-  const [notifyResults, setNotifyResults] = useState([]);
-  const [notifyLoading, setNotifyLoading] = useState(false);
+
   const navigate = useNavigate();
 
   if (!test) {
@@ -477,25 +595,7 @@ const TestPreviewView = ({ test, onBack }) => {
 
 
 
-  // Notify students handler
-  const handleNotifyStudents = async () => {
-    setNotifyModalOpen(true);
-    setNotifyLoading(true);
-    setNotifyResults([]);
-    try {
-      const res = await api.post(`/test-management/notify-students/${test._id}`);
-      if (res.data && res.data.results) {
-        setNotifyResults(res.data.results);
-        success('Notification process completed!');
-      } else {
-        error('No results returned from notification API.');
-      }
-    } catch (e) {
-      error('Failed to send notification.');
-    } finally {
-      setNotifyLoading(false);
-    }
-  };
+
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -529,17 +629,22 @@ const TestPreviewView = ({ test, onBack }) => {
             <ChevronLeft className="h-5 w-5 mr-1" /> Back to List
           </button>
           <button
-            onClick={handleFixAudioUrls}
+            onClick={onFixAudioUrls}
             className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 transition-colors"
           >
             🔧 Fix Audio URLs
           </button>
           <button
-            onClick={handleNotifyStudents}
-            disabled={notifying}
-            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
+            onClick={onTestEmail}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 transition-colors"
           >
-            {notifying ? 'Notifying...' : 'Notify Students'}
+            📧 Test Email
+          </button>
+          <button
+            onClick={onNotifyStudents}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+          >
+            Notify Students
           </button>
           <button
             onClick={() => navigate(`/superadmin/results?test_id=${test._id}`)}
@@ -597,68 +702,7 @@ const TestPreviewView = ({ test, onBack }) => {
         ))}
       </div>
 
-      {/* Notify Students Modal */}
-      {notifyModalOpen && (
-        <Modal onClose={() => setNotifyModalOpen(false)} title="Notify Students">
-          <div className="mb-4">
-            <h3 className="font-semibold text-xl mb-4 text-center text-blue-700">Notification Status</h3>
-            {notifyLoading ? (
-              <div className="text-blue-600 text-center py-8">Sending notifications...</div>
-            ) : (
-              <div className="overflow-x-auto rounded-lg shadow">
-                <table className="min-w-full text-sm border rounded-lg bg-white">
-                  <thead className="bg-blue-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Name</th>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Email</th>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Mobile</th>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Test Status</th>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Email Notification</th>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-700">SMS Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {notifyResults.map((s, idx) => (
-                      <tr key={s.email} className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}>
-                        <td className="px-4 py-2 border-b">{s.name}</td>
-                        <td className="px-4 py-2 border-b">{s.email}</td>
-                        <td className="px-4 py-2 border-b">{s.mobile_number || '-'}</td>
-                        <td className="px-4 py-2 border-b">
-                          {s.test_status === 'completed' ? (
-                            <span className="text-green-600 font-semibold">Completed</span>
-                          ) : (
-                            <span className="text-yellow-600 font-semibold">Pending</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2 border-b">
-                          {s.notify_status === 'sent' && <span className="text-green-700 font-semibold">Sent</span>}
-                          {s.notify_status === 'skipped' && <span className="text-gray-500 font-semibold">Skipped</span>}
-                          {s.notify_status === 'pending' && <span className="text-blue-500 font-semibold">Pending</span>}
-                          {s.notify_status === 'failed' && <span className="text-red-600 font-semibold">Failed</span>}
-                        </td>
-                        <td className="px-4 py-2 border-b">
-                          {s.sms_status === 'sent' && <span className="text-green-700 font-semibold">Sent</span>}
-                          {s.sms_status === 'failed' && <span className="text-red-600 font-semibold">Failed</span>}
-                          {s.sms_status === 'no_mobile' && <span className="text-gray-500 font-semibold">No Mobile</span>}
-                          {!s.sms_status && <span className="text-gray-400 font-semibold">-</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {!notifyLoading && notifyResults.length > 0 && (
-              <div className="mt-6 text-sm text-center bg-blue-50 rounded-lg py-3">
-                <span className="font-semibold">Summary:</span> {notifyResults.filter(r => r.notify_status === 'sent').length} notified, {notifyResults.filter(r => r.notify_status === 'skipped').length} skipped (already completed), {notifyResults.filter(r => r.notify_status === 'failed').length} failed.
-              </div>
-            )}
-          </div>
-          <div className="flex justify-center mt-4">
-            <button onClick={() => setNotifyModalOpen(false)} className="px-6 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 shadow">Close</button>
-          </div>
-        </Modal>
-      )}
+
     </motion.div>
   )
 }
