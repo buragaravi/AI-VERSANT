@@ -234,6 +234,10 @@ def get_single_test(test_id):
         else:
             # Fallback to original implementation for unknown modules
             current_app.logger.info(f"Test found. Processing {len(test.get('questions', []))} questions for presigned URLs.")
+            
+            # Fix corrupted audio URLs first
+            test = fix_audio_urls_in_test(test)
+            
             # Generate presigned URLs for audio files
             for question in test.get('questions', []):
                 if 'audio_url' in question and question['audio_url']:
@@ -638,21 +642,56 @@ def notify_students(test_id):
             current_app.logger.error(f"Error fetching students for test {test_id}: {e}")
             return jsonify({'success': False, 'message': f'Error fetching students: {e}'}), 500
 
+        # Check email service configuration
+        from utils.email_service import check_email_configuration
+        email_config = check_email_configuration()
+        if email_config.get('issues'):
+            current_app.logger.warning(f"Email service has configuration issues: {email_config['issues']}")
+            current_app.logger.info("Proceeding with notifications, but some may fail")
+        
         # Send notifications
         results = []
+        current_app.logger.info(f"Starting to send notifications to {len(student_list)} students")
+        
         for student in student_list:
             try:
+                current_app.logger.info(f"Processing notification for student: {student['name']} ({student['email']})")
+                
                 # Send email notification
-                html_content = render_template('test_notification.html', 
-                    student_name=student['name'],
-                    test_name=test['name'],
-                    test_type=test.get('test_type', 'Practice'),
-                    module_id=test.get('module_id', 'Unknown'),
-                    level_id=test.get('level_id', 'Unknown'),
-                    start_date=test.get('startDateTime', 'Not specified'),
-                    end_date=test.get('endDateTime', 'Not specified'),
-                    duration=test.get('duration', 'Not specified')
-                )
+                try:
+                    html_content = render_template('test_notification.html', 
+                        student_name=student['name'],
+                        test_name=test['name'],
+                        test_id=str(test['_id']),
+                        test_type=test.get('test_type', 'Practice'),
+                        module=test.get('module_id', 'Unknown'),
+                        level=test.get('level_id', 'Unknown'),
+                        module_display_name=test.get('module_id', 'Unknown'),
+                        level_display_name=test.get('level_id', 'Unknown'),
+                        question_count=len(test.get('questions', [])),
+                        is_online=test.get('test_type') == 'online',
+                        start_dt=test.get('startDateTime', 'Not specified'),
+                        end_dt=test.get('endDateTime', 'Not specified'),
+                        duration=test.get('duration', 'Not specified')
+                    )
+                    current_app.logger.info(f"Template rendered successfully for {student['email']}")
+                except Exception as template_error:
+                    current_app.logger.error(f"Template rendering failed for {student['email']}: {template_error}")
+                    # Use a simple fallback template
+                    html_content = f"""
+                    <html>
+                    <body>
+                        <h2>New Test Available: {test['name']}</h2>
+                        <p>Hello {student['name']},</p>
+                        <p>You have been assigned a new test: {test['name']}</p>
+                        <p>Module: {test.get('module_id', 'Unknown')}</p>
+                        <p>Level: {test.get('level_id', 'Unknown')}</p>
+                        <p>Type: {test.get('test_type', 'Practice')}</p>
+                        <p>Questions: {len(test.get('questions', []))}</p>
+                        <p>Please log in to your account to take the test.</p>
+                    </body>
+                    </html>
+                    """
                 
                 email_sent = send_email(
                     to_email=student['email'],
@@ -672,6 +711,8 @@ def notify_students(test_id):
                 })
             except Exception as e:
                 current_app.logger.error(f"Failed to notify student {student['student_id']}: {e}")
+                import traceback
+                current_app.logger.error(f"Full traceback: {traceback.format_exc()}")
                 results.append({
                     'student_id': student['student_id'],
                     'student_name': student['name'],
@@ -681,10 +722,21 @@ def notify_students(test_id):
                     'error': str(e)
                 })
 
+        # Calculate success/failure statistics
+        successful_notifications = sum(1 for r in results if r['status'] == 'success')
+        failed_notifications = sum(1 for r in results if r['status'] == 'failed')
+        
+        current_app.logger.info(f"Notification summary: {successful_notifications} successful, {failed_notifications} failed")
+        
         return jsonify({
             'success': True,
-            'message': f'Notification sent to {len(results)} students',
-            'results': results
+            'message': f'Notifications processed: {successful_notifications} successful, {failed_notifications} failed',
+            'results': results,
+            'summary': {
+                'total': len(results),
+                'successful': successful_notifications,
+                'failed': failed_notifications
+            }
         }), 200
 
     except Exception as e:
@@ -3783,4 +3835,134 @@ def validate_audio_result():
             'success': False,
             'message': f'Failed to validate audio result: {str(e)}'
         }), 500
+
+@test_management_bp.route('/test-email', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def test_email_service():
+    """Test endpoint to verify email service is working"""
+    try:
+        data = request.get_json()
+        test_email = data.get('email', 'test@example.com')
+        
+        # Test template rendering
+        try:
+            html_content = render_template('test_notification.html', 
+                student_name='Test Student',
+                test_name='Test Test',
+                test_id='test123',
+                test_type='Practice',
+                module='LISTENING',
+                level='BEGINNER',
+                module_display_name='LISTENING',
+                level_display_name='BEGINNER',
+                question_count=5,
+                is_online=False,
+                start_dt='Not specified',
+                end_dt='Not specified',
+                duration='Not specified'
+            )
+            current_app.logger.info("Template rendering successful")
+        except Exception as e:
+            current_app.logger.error(f"Template rendering failed: {e}")
+            return jsonify({'success': False, 'message': f'Template rendering failed: {e}'}), 500
+        
+        # Test email sending
+        try:
+            email_sent = send_email(
+                to_email=test_email,
+                to_name='Test Student',
+                subject='Test Email from VERSANT System',
+                html_content=html_content
+            )
+            
+            if email_sent:
+                return jsonify({
+                    'success': True, 
+                    'message': f'Test email sent successfully to {test_email}',
+                    'template_rendered': True
+                }), 200
+            else:
+                return jsonify({
+                    'success': False, 
+                    'message': 'Email service failed to send email',
+                    'template_rendered': True
+                }), 500
+                
+        except Exception as e:
+            current_app.logger.error(f"Email sending failed: {e}")
+            return jsonify({
+                'success': False, 
+                'message': f'Email sending failed: {e}',
+                'template_rendered': True
+            }), 500
+            
+    except Exception as e:
+        current_app.logger.error(f"Test email endpoint error: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@test_management_bp.route('/fix-audio-urls', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def fix_corrupted_audio_urls():
+    """Fix corrupted audio URLs in the database"""
+    try:
+        # Find all tests with corrupted local:// URLs
+        corrupted_tests = mongo_db.tests.find({
+            'questions.audio_url': {'$regex': '^local://'}
+        })
+        
+        fixed_count = 0
+        for test in corrupted_tests:
+            questions_updated = False
+            for question in test.get('questions', []):
+                if question.get('audio_url', '').startswith('local://'):
+                    # Extract the filename from the corrupted URL
+                    corrupted_url = question['audio_url']
+                    filename = corrupted_url.replace('local://local_audio/', '')
+                    
+                    # Generate the correct S3 key
+                    correct_s3_key = f"audio/practice_tests/{filename}"
+                    
+                    # Update the question with the correct S3 key
+                    mongo_db.tests.update_one(
+                        {'_id': test['_id'], 'questions.question_id': question['question_id']},
+                        {'$set': {'questions.$.audio_url': correct_s3_key}}
+                    )
+                    questions_updated = True
+            
+            if questions_updated:
+                fixed_count += 1
+        
+        return jsonify({
+            'success': True,
+            'message': f'Fixed {fixed_count} tests with corrupted audio URLs',
+            'fixed_count': fixed_count
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fixing corrupted audio URLs: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+def fix_audio_urls_in_test(test):
+    """Fix corrupted audio URLs in a test document"""
+    try:
+        if 'questions' in test:
+            for question in test['questions']:
+                if question.get('audio_url', '').startswith('local://'):
+                    # Extract the filename from the corrupted URL
+                    corrupted_url = question['audio_url']
+                    filename = corrupted_url.replace('local://local_audio/', '')
+                    
+                    # Generate the correct S3 key
+                    correct_s3_key = f"audio/practice_tests/{filename}"
+                    
+                    # Update the question with the correct S3 key
+                    question['audio_url'] = correct_s3_key
+                    current_app.logger.info(f"Fixed corrupted audio URL: {corrupted_url} -> {correct_s3_key}")
+        
+        return test
+    except Exception as e:
+        current_app.logger.error(f"Error fixing audio URLs in test: {e}")
+        return test
 

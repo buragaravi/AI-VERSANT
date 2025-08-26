@@ -234,7 +234,7 @@ const TestManagement = () => {
         return <ModuleQuestionUpload onBack={() => setView('list')} />
       case 'list':
       default:
-        return <TestListView tests={tests} loading={loading} setView={setView} onViewTest={handleViewTest} onDeleteTest={handleDeleteTest} />
+        return <TestListView tests={tests} loading={loading} setView={setView} onViewTest={handleViewTest} onDeleteTest={handleDeleteTest} onTestEmail={handleTestEmail} />
     }
   }
 
@@ -245,7 +245,7 @@ const TestManagement = () => {
   )
 }
 
-const TestListView = ({ tests, loading, setView, onViewTest, onDeleteTest }) => {
+const TestListView = ({ tests, loading, setView, onViewTest, onDeleteTest, onTestEmail }) => {
   const [filters, setFilters] = useState({
     module: '',
     level: '',
@@ -285,16 +285,30 @@ const TestListView = ({ tests, loading, setView, onViewTest, onDeleteTest }) => 
           <h1 className="text-3xl font-bold text-gray-800">Test Management</h1>
           <p className="mt-2 text-gray-500">Browse, manage, and create new tests.</p>
         </div>
-        <button 
-          onClick={() => {
-            setView('create');
-            setUploadedQuestions([]);
-          }}
-          className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105"
-        >
-          <Plus className="h-5 w-5 mr-2"/>
-          Create Test
-        </button>
+        <div className="flex space-x-3">
+          <button
+            onClick={handleFixAudioUrls}
+            className="inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-orange-500 hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-transform transform hover:scale-105"
+          >
+            🔧 Fix Audio URLs
+          </button>
+          <button
+            onClick={onTestEmail}
+            className="inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-500 hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-transform transform hover:scale-105"
+          >
+            📧 Test Email
+          </button>
+          <button 
+            onClick={() => {
+              setView('create');
+              setUploadedQuestions([]);
+            }}
+            className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105"
+          >
+            <Plus className="h-5 w-5 mr-2"/>
+            Create Test
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-lg">
@@ -427,6 +441,42 @@ const TestPreviewView = ({ test, onBack }) => {
     });
   };
 
+  // Fix audio URLs handler
+  const handleFixAudioUrls = async () => {
+    try {
+      success('Fixing corrupted audio URLs...');
+      const res = await api.post('/test-management/fix-audio-urls');
+      if (res.data && res.data.success) {
+        success(`Fixed ${res.data.fixed_count} tests with corrupted audio URLs`);
+        // Refresh the test data
+        onBack();
+      } else {
+        error(res.data.message || 'Failed to fix audio URLs');
+      }
+    } catch (e) {
+      error('Failed to fix audio URLs. Please try again.');
+    }
+  };
+
+  const handleTestEmail = async () => {
+    try {
+      const testEmail = prompt('Enter test email address:', 'test@example.com');
+      if (!testEmail) return;
+      
+      success('Testing email service...');
+      const res = await api.post('/test-management/test-email', { email: testEmail });
+      if (res.data && res.data.success) {
+        success(`Test email sent successfully to ${testEmail}`);
+      } else {
+        error(res.data.message || 'Email test failed');
+      }
+    } catch (e) {
+      error('Email test failed. Please try again.');
+    }
+  };
+
+
+
   // Notify students handler
   const handleNotifyStudents = async () => {
     setNotifyModalOpen(true);
@@ -479,6 +529,12 @@ const TestPreviewView = ({ test, onBack }) => {
             <ChevronLeft className="h-5 w-5 mr-1" /> Back to List
           </button>
           <button
+            onClick={handleFixAudioUrls}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 transition-colors"
+          >
+            🔧 Fix Audio URLs
+          </button>
+          <button
             onClick={handleNotifyStudents}
             disabled={notifying}
             className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
@@ -516,22 +572,12 @@ const TestPreviewView = ({ test, onBack }) => {
                   <p className="font-semibold text-gray-600">Answer: <span className="font-bold text-green-600">{q.correct_answer}</span></p>
                 </div>
               </div>
-            ) : q.audio_url ? (
-              <div>
-                <audio controls className="w-full">
-                  <source src={q.audio_url} type="audio/mpeg" />
-                  Your browser does not support the audio element.
-                </audio>
-                <div className="mt-2 text-sm text-gray-500">
-                  Audio URL: {q.audio_url}
-                </div>
-              </div>
             ) : q.audio_presigned_url ? (
               <div>
                 <audio controls className="w-full">
-                  <source src={q.audio_presigned_url} type="audio/mpeg" />
-                  Your browser does not support the audio element.
-                </audio>
+                <source src={q.audio_presigned_url} type="audio/mpeg" />
+                Your browser does not support the audio element.
+              </audio>
                 <div className="mt-2 text-sm text-gray-500">
                   Audio URL: {q.audio_presigned_url}
                 </div>
@@ -539,7 +585,12 @@ const TestPreviewView = ({ test, onBack }) => {
             ) : (
               <div className="flex items-center space-x-2 bg-yellow-100 text-yellow-800 text-sm font-medium px-4 py-3 rounded-md">
                 <AlertTriangle className="h-5 w-5" />
-                <span>Audio not available. Debug: {JSON.stringify({audio_url: q.audio_url, audio_presigned_url: q.audio_presigned_url, has_audio: q.has_audio})}</span>
+                <span>Audio not available. Check backend audio generation and S3 configuration.</span>
+                <div className="mt-2 text-xs">
+                  <div>Audio URL: {q.audio_url || 'None'}</div>
+                  <div>Presigned URL: {q.audio_presigned_url || 'None'}</div>
+                  <div>Has Audio: {q.has_audio ? 'Yes' : 'No'}</div>
+                </div>
               </div>
             )}
           </div>
@@ -2305,7 +2356,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
             question_id: question._id,
             error: error.message,
             success: false
-          });
+      });
         }
       }
       
@@ -2557,8 +2608,8 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                 {testData.module === 'LISTENING' && (
                   <div className="mt-1">
                     <p className="text-xs text-green-600">
-                      🎵 Audio will be auto-generated for listening tests
-                    </p>
+                    🎵 Audio will be auto-generated for listening tests
+                  </p>
                     <AudioGenerationStatus />
                   </div>
                 )}
@@ -2590,12 +2641,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
       {/* Question Bank Selection */}
       {questionSource === 'bank' && (
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Selected Questions from Bank</h3>
-            <div className="text-sm text-gray-600">
-              {uploadedQuestions.length} questions selected
-            </div>
-          </div>
+
 
           {uploadedQuestions.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
@@ -2610,7 +2656,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
                       <CheckCircle className="h-6 w-6 text-white" />
-                    </div>
+                </div>
                     <div>
                       <h3 className="text-lg font-semibold text-blue-900">
                         Question Selection Complete
@@ -2618,8 +2664,8 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                       <p className="text-blue-700 text-sm">
                         {uploadedQuestions.length} unique questions selected from question bank
                       </p>
+                      </div>
                     </div>
-                  </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold text-blue-600">{uploadedQuestions.length}</div>
                     <div className="text-xs text-blue-500 uppercase tracking-wide">Questions</div>
@@ -2645,11 +2691,11 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                       </div>
                       <p className="text-xs text-gray-600">
                         Audio files will be automatically generated using AWS text-to-speech for optimal listening experience.
-                      </p>
-                    </div>
-                  )}
-                </div>
-                
+                    </p>
+                  </div>
+                )}
+              </div>
+              
                 <div className="mt-4 pt-4 border-t border-blue-200">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-blue-600 font-medium">Ready to proceed?</span>
@@ -2682,16 +2728,16 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                           <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
                             <span className="text-white text-sm font-bold">Q{index + 1}</span>
                           </div>
-                          <div className="flex-1">
+                        <div className="flex-1">
                             <h4 className="font-semibold text-gray-900 text-lg leading-tight">
                               {question.question || question.questionTitle || question.statement || question.problemStatement || question.text || 'Question text not available'}
-                            </h4>
+                          </h4>
                           </div>
                         </div>
                       </div>
-                      
+                          
                       {/* Question Content */}
-                      {isTechnicalQuestion ? (
+                          {isTechnicalQuestion ? (
                         <div className="space-y-3">
                           <div className="bg-gray-50 rounded-lg p-3">
                             <div className="text-sm font-medium text-gray-700 mb-2">Problem Statement</div>
@@ -2707,8 +2753,8 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                               <div className="text-green-600 font-semibold">{Array.isArray(question.testCases) ? question.testCases.length : 'N/A'}</div>
                             </div>
                           </div>
-                        </div>
-                      ) : isSentenceQuestion ? (
+                            </div>
+                          ) : isSentenceQuestion ? (
                         <div className="space-y-4">
                           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
                             <div className="flex items-center space-x-2 mb-2">
@@ -2718,11 +2764,11 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                               <span className="text-sm font-medium text-blue-700">Sentence Text</span>
                             </div>
                             <div className="text-gray-800 text-base leading-relaxed">
-                              {question.text || question.question || question.questionTitle || question.statement || question.problemStatement || 'Sentence text not available'}
-                            </div>
+                                {question.text || question.question || question.questionTitle || question.statement || question.problemStatement || 'Sentence text not available'}
+                              </div>
                           </div>
                           
-                          {testData.module === 'LISTENING' && (
+                              {testData.module === 'LISTENING' && (
                             <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-100">
                               <div className="flex items-center space-x-2 mb-2">
                                 <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
@@ -2732,17 +2778,17 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                               </div>
                               <div className="text-gray-700 text-sm">
                                 Audio will be automatically generated using AWS text-to-speech for optimal listening experience.
-                              </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      ) : (
+                          ) : (
                         <div className="space-y-3">
                           <div className="grid grid-cols-2 gap-2">
                             <div className="bg-gray-50 rounded-lg p-2">
                               <div className="text-xs font-medium text-gray-600">A</div>
                               <div className="text-gray-800">{question.optionA || 'N/A'}</div>
-                            </div>
+                              </div>
                             <div className="bg-gray-50 rounded-lg p-2">
                               <div className="text-xs font-medium text-gray-600">B</div>
                               <div className="text-gray-800">{question.optionB || 'N/A'}</div>
@@ -2750,7 +2796,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                             <div className="bg-gray-50 rounded-lg p-2">
                               <div className="text-xs font-medium text-gray-600">C</div>
                               <div className="text-gray-800">{question.optionC || 'N/A'}</div>
-                            </div>
+                        </div>
                             <div className="bg-gray-50 rounded-lg p-2">
                               <div className="text-xs font-medium text-gray-600">D</div>
                               <div className="text-gray-800">{question.optionD || 'N/A'}</div>
