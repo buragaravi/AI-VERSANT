@@ -30,7 +30,7 @@ def generate_audio_from_text(text, accent='en', speed=1.0, max_retries=3):
     s3_available = is_aws_configured()
     
     if not s3_available:
-        raise Exception("AWS S3 is not configured. Please set AWS_ACCESS_KEY, AWS_SECRET_KEY, AWS_REGION, and AWS_S3_BUCKET environment variables.")
+        raise Exception("AWS S3 is not configured. Please set AWS_ACCESS_KEY, AWS_SECRET_KEY, AWS_REGION, and AWS_S3_BUCKET environment variables. Audio files can only be stored on AWS S3.")
     
     for attempt in range(max_retries):
         try:
@@ -42,6 +42,11 @@ def generate_audio_from_text(text, accent='en', speed=1.0, max_retries=3):
                 print(f"Warning: Invalid speed value '{speed}', using default 1.0")
             
             # Create gTTS object with specified accent
+            # Handle deprecated language codes
+            if accent == 'en-US':
+                accent = 'en'  # gTTS prefers 'en' over 'en-US'
+                print(f"⚠️  Language code 'en-US' deprecated, using 'en' instead")
+            
             tts = gTTS(text=text, lang=accent, slow=(speed < 1.0))
             
             # Generate temporary file
@@ -60,10 +65,11 @@ def generate_audio_from_text(text, accent='en', speed=1.0, max_retries=3):
             adjusted_filename = f"adjusted_{uuid.uuid4()}.mp3"
             audio.export(adjusted_filename, format="mp3")
             
-            # Upload to S3
-            s3_key = f"audio/practice_tests/{uuid.uuid4()}.mp3"
+            # Upload to AWS S3 (no fallback to local storage)
             if s3_client is None:
-                raise Exception("S3 client is not available")
+                raise Exception("S3 client is not available. Please check AWS configuration.")
+            
+            s3_key = f"audio/practice_tests/{uuid.uuid4()}.mp3"
             s3_client.upload_file(adjusted_filename, S3_BUCKET_NAME, s3_key)
             
             # Clean up temporary files
@@ -90,6 +96,8 @@ def generate_audio_from_text(text, accent='en', speed=1.0, max_retries=3):
                 raise Exception(f"Text-to-speech conversion failed: {str(e)}. Please check the text content and try again.")
             elif "AudioSegment" in str(e):
                 raise Exception(f"Audio processing failed: {str(e)}. Please check if the audio file was generated correctly.")
+            elif "S3" in str(e) or "AWS" in str(e):
+                raise Exception(f"AWS S3 error: {str(e)}. Please check AWS configuration and try again.")
             else:
                 raise Exception(f"Audio generation failed: {str(e)}. Please try again or contact support.")
     
@@ -114,9 +122,9 @@ def get_audio_generation_status():
     
     if fully_available:
         if aws_status['configured']:
-            message = 'Audio generation is ready for bulk operations with S3 storage'
+            message = 'Audio generation is ready for bulk operations with AWS S3 storage'
         else:
-            message = 'Audio generation is ready for bulk operations with local storage (S3 not configured)'
+            message = 'Audio generation requires AWS S3 configuration. Please set AWS credentials.'
     else:
         message = 'Audio generation has package issues - missing required dependencies'
     
@@ -124,10 +132,12 @@ def get_audio_generation_status():
         'gtts_available': GTTS_AVAILABLE,
         'pydub_available': PYDUB_AVAILABLE,
         'aws_configured': aws_status['configured'],
-        'fully_available': fully_available,
+        'fully_available': fully_available and aws_status['configured'],  # Only fully available if AWS is configured
         'message': message,
         'aws_status': aws_status,
-        'storage_type': 'S3' if aws_status['configured'] else 'Local'
+        'storage_type': 'S3' if aws_status['configured'] else 'Not Available',
+        'local_storage_available': False,  # Local storage is disabled
+        'recommendation': 'AWS S3 is required for audio generation. Please configure AWS credentials.'
     }
 
 def calculate_similarity_score(original_text, student_audio_text):

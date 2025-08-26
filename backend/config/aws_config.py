@@ -53,6 +53,17 @@ def init_aws():
     """Initialize AWS S3 connection"""
     global s3_client
     try:
+        # Check if environment variables are set
+        if not (AWSConfig.AWS_ACCESS_KEY and AWSConfig.AWS_SECRET_KEY and AWSConfig.AWS_REGION and AWSConfig.AWS_S3_BUCKET):
+            print("❌ AWS environment variables not set:")
+            print(f"   AWS_ACCESS_KEY: {'✅ Set' if AWSConfig.AWS_ACCESS_KEY else '❌ Missing'}")
+            print(f"   AWS_SECRET_KEY: {'✅ Set' if AWSConfig.AWS_SECRET_KEY else '❌ Missing'}")
+            print(f"   AWS_REGION: {'✅ Set' if AWSConfig.AWS_REGION else '❌ Missing'}")
+            print(f"   AWS_S3_BUCKET: {'✅ Set' if AWSConfig.AWS_S3_BUCKET else '❌ Missing'}")
+            print("   ❌ Audio generation requires AWS S3 - cannot proceed without proper configuration")
+            s3_client = None
+            return False
+        
         s3_client = AWSConfig.get_s3_client()
         
         if s3_client is None:
@@ -60,15 +71,19 @@ def init_aws():
             return False
             
         # Test S3 connection by listing buckets
-        response = s3_client.list_buckets()
-        bucket_names = [bucket['Name'] for bucket in response['Buckets']]
-        
-        if AWSConfig.AWS_S3_BUCKET in bucket_names:
-            print(f"✅ AWS S3 connection successful - Bucket '{AWSConfig.AWS_S3_BUCKET}' found")
-            return True
-        else:
-            print(f"⚠️  AWS S3 connection successful but bucket '{AWSConfig.AWS_S3_BUCKET}' not found")
-            print(f"Available buckets: {bucket_names}")
+        try:
+            response = s3_client.list_buckets()
+            bucket_names = [bucket['Name'] for bucket in response['Buckets']]
+            
+            if AWSConfig.AWS_S3_BUCKET in bucket_names:
+                print(f"✅ AWS S3 connection successful - Bucket '{AWSConfig.AWS_S3_BUCKET}' found")
+                return True
+            else:
+                print(f"⚠️  AWS S3 connection successful but bucket '{AWSConfig.AWS_S3_BUCKET}' not found")
+                print(f"Available buckets: {bucket_names}")
+                return False
+        except Exception as bucket_error:
+            print(f"❌ Error testing S3 bucket access: {bucket_error}")
             return False
             
     except Exception as e:
@@ -87,5 +102,7 @@ def get_aws_status():
         'configured': is_aws_configured(),
         's3_client_available': s3_client is not None,
         'bucket_name': S3_BUCKET_NAME,
-        'has_credentials': bool(AWSConfig.AWS_ACCESS_KEY and AWSConfig.AWS_SECRET_KEY and AWSConfig.AWS_REGION)
+        'has_credentials': bool(AWSConfig.AWS_ACCESS_KEY and AWSConfig.AWS_SECRET_KEY and AWSConfig.AWS_REGION),
+        'policy': 'S3_ONLY',  # No local storage fallback
+        'audio_storage': 'AWS_S3_REQUIRED'  # Audio files must be stored on S3
     } 
