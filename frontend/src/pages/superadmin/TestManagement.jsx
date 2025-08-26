@@ -256,17 +256,17 @@ const TestListView = ({ tests, loading, setView, onViewTest, onDeleteTest }) => 
   const filteredTests = useMemo(() => {
     return tests.filter(test => {
       return (
-        (filters.module ? test.module_name === filters.module : true) &&
-        (filters.level ? test.level_name === filters.level : true) &&
-        (filters.campus ? test.campus_name === filters.campus : true) &&
+        (filters.module ? test.module_id === filters.module : true) &&
+        (filters.level ? test.level === filters.level : true) &&
+        (filters.campus ? test.campus === filters.campus : true) &&
         (filters.status ? test.status === filters.status : true)
       );
     });
   }, [tests, filters]);
 
-  const moduleOptions = useMemo(() => [...new Set(tests.map(t => t.module_name).filter(Boolean))], [tests]);
-  const levelOptions = useMemo(() => [...new Set(tests.map(t => t.level_name).filter(Boolean))], [tests]);
-  const campusOptions = useMemo(() => [...new Set(tests.map(t => t.campus_name).filter(Boolean))], [tests]);
+  const moduleOptions = useMemo(() => [...new Set(tests.map(t => t.module_id).filter(Boolean))], [tests]);
+  const levelOptions = useMemo(() => [...new Set(tests.map(t => t.level).filter(Boolean))], [tests]);
+  const campusOptions = useMemo(() => [...new Set(tests.map(t => t.campus).filter(Boolean))], [tests]);
   const statusOptions = useMemo(() => [...new Set(tests.map(t => t.status).filter(Boolean))], [tests]);
 
   const handleFilterChange = (e) => {
@@ -349,9 +349,9 @@ const TestListView = ({ tests, loading, setView, onViewTest, onDeleteTest }) => 
                   <tr key={test._id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50 hover:bg-indigo-50'}>
                     <td className="px-6 py-4 whitespace-normal break-words text-sm font-medium text-gray-900">{test.name}</td>
                     <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500 capitalize">{test.test_type}</td>
-                    <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500 capitalize">{test.module_name}</td>
-                    <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500 capitalize">{test.level_name || 'N/A'}</td>
-                    <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500">{test.campus_name || 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500 capitalize">{test.module_id || 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500 capitalize">{test.level || 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500">{test.campus || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500">{test.batches}</td>
                     <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500">{test.courses}</td>
                     <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500 text-center">{test.question_count}</td>
@@ -364,7 +364,17 @@ const TestListView = ({ tests, loading, setView, onViewTest, onDeleteTest }) => 
                         {test.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500">{test.created_at}</td>
+                    <td className="px-6 py-4 whitespace-normal break-words text-sm text-gray-500">
+                      {test.created_at ? new Date(test.created_at).toLocaleString('en-IN', {
+                        timeZone: 'Asia/Kolkata',
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                      }) : 'N/A'}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center space-x-2">
                         <button onClick={() => onViewTest(test._id)} className="text-indigo-600 hover:text-indigo-900 p-1 rounded-full hover:bg-gray-200" title="View Test"><Eye className="h-5 w-5"/></button>
@@ -506,15 +516,30 @@ const TestPreviewView = ({ test, onBack }) => {
                   <p className="font-semibold text-gray-600">Answer: <span className="font-bold text-green-600">{q.correct_answer}</span></p>
                 </div>
               </div>
+            ) : q.audio_url ? (
+              <div>
+                <audio controls className="w-full">
+                  <source src={q.audio_url} type="audio/mpeg" />
+                  Your browser does not support the audio element.
+                </audio>
+                <div className="mt-2 text-sm text-gray-500">
+                  Audio URL: {q.audio_url}
+                </div>
+              </div>
             ) : q.audio_presigned_url ? (
-              <audio controls>
-                <source src={q.audio_presigned_url} type="audio/mpeg" />
-                Your browser does not support the audio element.
-              </audio>
+              <div>
+                <audio controls className="w-full">
+                  <source src={q.audio_presigned_url} type="audio/mpeg" />
+                  Your browser does not support the audio element.
+                </audio>
+                <div className="mt-2 text-sm text-gray-500">
+                  Audio URL: {q.audio_presigned_url}
+                </div>
+              </div>
             ) : (
               <div className="flex items-center space-x-2 bg-yellow-100 text-yellow-800 text-sm font-medium px-4 py-3 rounded-md">
                 <AlertTriangle className="h-5 w-5" />
-                <span>Audio not available.</span>
+                <span>Audio not available. Debug: {JSON.stringify({audio_url: q.audio_url, audio_presigned_url: q.audio_presigned_url, has_audio: q.has_audio})}</span>
               </div>
             )}
           </div>
@@ -2170,7 +2195,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
           
           // Show info about audio generation process
           if (testData.module === 'LISTENING') {
-            showError(`Note: Audio generation for ${questionsNeedingAudio.length} questions will be processed sequentially to avoid rate limiting. This may take a few minutes.`);
+            showError(`Note: Audio generation for ${questionsNeedingAudio.length} questions will be processed efficiently.`);
           }
         } else {
           setUploadedQuestions(questionsWithRepeatInfo);
@@ -2224,7 +2249,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
       maxRetries: 3,
       minDelay: 1000, // 1 second
       maxDelay: 3000, // 3 seconds
-      sequentialProcessing: true // Process one at a time to avoid rate limiting
+              sequentialProcessing: true // Process efficiently for better performance
     };
   };
 

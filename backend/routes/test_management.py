@@ -405,7 +405,8 @@ def get_all_tests():
                     'subcategory': 1,
                     'campus_names': '$campus_info.name',
                     'batches': '$batch_info.name',
-                    'courses': '$course_info.name'
+                    'courses': '$course_info.name',
+                    'questions': 1
                 }
             },
             {'$sort': {'created_at': -1}}
@@ -417,6 +418,18 @@ def get_all_tests():
         for test in tests:
             test['_id'] = str(test['_id'])
             test['created_at'] = test['created_at'].isoformat() if test['created_at'] else None
+            
+            # Format campus, batch, and course names properly
+            test['campus'] = ', '.join(test.get('campus_names', [])) if test.get('campus_names') else 'N/A'
+            test['batch'] = ', '.join(test.get('batches', [])) if test.get('batches') else 'N/A'
+            test['course'] = ', '.join(test.get('courses', [])) if test.get('courses') else 'N/A'
+            
+            # Format level properly
+            if test.get('level_id'):
+                test['level'] = test['level_id'].replace('_', ' ').title()
+            else:
+                test['level'] = 'N/A'
+            
             tests_data.append(test)
 
         return jsonify({'success': True, 'data': tests_data}), 200
