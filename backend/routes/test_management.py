@@ -1076,7 +1076,7 @@ def check_audio_generation_availability():
             'available': status['fully_available'],
             'gtts_available': status['gtts_available'],
             'pydub_available': status['pydub_available'],
-            'rate_limit_info': status['rate_limit_info'],
+            'aws_status': status.get('aws_status', {}),
             'message': 'Audio generation availability checked successfully'
         }), 200
         

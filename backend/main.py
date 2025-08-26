@@ -7,6 +7,7 @@ from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from dotenv import load_dotenv
 from scheduler import schedule_daily_notifications
+from config.aws_config import init_aws
 
 load_dotenv()
 
@@ -24,6 +25,14 @@ app.config['JWT_HEADER_TYPE'] = 'Bearer'
 jwt = JWTManager(app)
 bcrypt.init_app(app)
 socketio.init_app(app)
+
+# Initialize AWS S3 connection
+print("🔧 Initializing AWS S3 connection...")
+aws_initialized = init_aws()
+if aws_initialized:
+    print("✅ AWS S3 initialized successfully")
+else:
+    print("⚠️  AWS S3 initialization failed - audio uploads may not work")
 
 # CORS configuration
 default_origins = 'http://localhost:3000,http://localhost:5173,https://pydah-studyedge.vercel.app,https://versant-frontend.vercel.app,https://crt.pydahsoft.in,https://ai-versant-backend.onrender.com'
@@ -71,6 +80,8 @@ def handle_options(path):
 @app.route('/')
 def api_status():
     """API status endpoint"""
+    from config.aws_config import get_aws_status
+    
     return jsonify({
         'success': True,
         'message': 'Study Edge Backend API is running',
@@ -79,6 +90,7 @@ def api_status():
         'cors_enabled': True,
         'allowed_origins': cors_origins.split(','),
         'allow_all_origins': allow_all_origins,
+        'aws_status': get_aws_status(),
         'endpoints': {
             'auth': '/auth',
             'superadmin': '/superadmin',

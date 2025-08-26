@@ -1,7 +1,7 @@
 import os
 import uuid
 import boto3
-from config.aws_config import s3_client, S3_BUCKET_NAME
+from config.aws_config import s3_client, S3_BUCKET_NAME, is_aws_configured
 
 # Make audio processing packages optional
 try:
@@ -25,6 +25,9 @@ def generate_audio_from_text(text, accent='en', speed=1.0, max_retries=3):
     
     if not PYDUB_AVAILABLE:
         raise Exception("Audio generation not available - pydub package is missing. Please install it using: pip install pydub")
+    
+    # Check if S3 is configured
+    s3_available = is_aws_configured()
     
     for attempt in range(max_retries):
         try:
@@ -54,21 +57,47 @@ def generate_audio_from_text(text, accent='en', speed=1.0, max_retries=3):
             adjusted_filename = f"adjusted_{uuid.uuid4()}.mp3"
             audio.export(adjusted_filename, format="mp3")
             
-            # Upload to S3
-            s3_key = f"audio/practice_tests/{uuid.uuid4()}.mp3"
-            try:
-                s3_client.upload_file(adjusted_filename, S3_BUCKET_NAME, s3_key)
-            except Exception as s3_error:
-                raise Exception(f"Failed to upload audio to S3: {str(s3_error)}. Please check S3 configuration.")
+            # Try to upload to S3 first
+            if s3_available:
+                try:
+                    s3_key = f"audio/practice_tests/{uuid.uuid4()}.mp3"
+                    if s3_client is None:
+                        raise Exception("S3 client is not available")
+                    s3_client.upload_file(adjusted_filename, S3_BUCKET_NAME, s3_key)
+                    
+                    # Clean up temporary files
+                    try:
+                        os.remove(temp_filename)
+                        os.remove(adjusted_filename)
+                    except Exception as cleanup_error:
+                        print(f"Warning: Failed to cleanup temporary files: {cleanup_error}")
+                    
+                    return s3_key
+                    
+                except Exception as s3_error:
+                    print(f"Warning: S3 upload failed: {s3_error}. Falling back to local storage.")
+                    s3_available = False
             
-            # Clean up temporary files
-            try:
-                os.remove(temp_filename)
-                os.remove(adjusted_filename)
-            except Exception as cleanup_error:
-                print(f"Warning: Failed to cleanup temporary files: {cleanup_error}")
-            
-            return s3_key
+            # Fallback: Save locally if S3 is not available
+            if not s3_available:
+                # Create local audio directory if it doesn't exist
+                local_audio_dir = "local_audio"
+                if not os.path.exists(local_audio_dir):
+                    os.makedirs(local_audio_dir)
+                
+                # Save to local directory
+                local_filename = f"local_audio/audio_{uuid.uuid4()}.mp3"
+                audio.export(local_filename, format="mp3")
+                
+                # Clean up temporary files
+                try:
+                    os.remove(temp_filename)
+                    os.remove(adjusted_filename)
+                except Exception as cleanup_error:
+                    print(f"Warning: Failed to cleanup temporary files: {cleanup_error}")
+                
+                print(f"Audio saved locally: {local_filename}")
+                return f"local://{local_filename}"
             
         except Exception as e:
             if "429" in str(e) or "Too Many Requests" in str(e):
@@ -93,15 +122,36 @@ def generate_audio_from_text(text, accent='en', speed=1.0, max_retries=3):
 
 def is_audio_generation_available():
     """Check if audio generation is available"""
+    # Audio generation is available if we have the required packages
+    # S3 is optional - we can fall back to local storage
     return GTTS_AVAILABLE and PYDUB_AVAILABLE
 
 def get_audio_generation_status():
     """Get detailed status of audio generation capabilities"""
+    from config.aws_config import get_aws_status
+    
+    aws_status = get_aws_status()
+    
+    # Audio generation is available if we have the required packages
+    # S3 is optional - we can fall back to local storage
+    fully_available = GTTS_AVAILABLE and PYDUB_AVAILABLE
+    
+    if fully_available:
+        if aws_status['configured']:
+            message = 'Audio generation is ready for bulk operations with S3 storage'
+        else:
+            message = 'Audio generation is ready for bulk operations with local storage (S3 not configured)'
+    else:
+        message = 'Audio generation has package issues - missing required dependencies'
+    
     return {
         'gtts_available': GTTS_AVAILABLE,
         'pydub_available': PYDUB_AVAILABLE,
-        'fully_available': GTTS_AVAILABLE and PYDUB_AVAILABLE,
-        'message': 'Audio generation is ready for bulk operations'
+        'aws_configured': aws_status['configured'],
+        'fully_available': fully_available,
+        'message': message,
+        'aws_status': aws_status,
+        'storage_type': 'S3' if aws_status['configured'] else 'Local'
     }
 
 def calculate_similarity_score(original_text, student_audio_text):
