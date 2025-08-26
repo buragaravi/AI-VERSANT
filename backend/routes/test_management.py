@@ -95,73 +95,29 @@ def convert_objectids(obj):
     else:
         return obj
 
-def generate_audio_from_text(text, accent='en', speed=1.0):
+def generate_audio_from_text(text, accent='en-US', speed=1.0):
     """Generate audio from text using gTTS with custom accent and speed"""
-    if not GTTS_AVAILABLE or not PYDUB_AVAILABLE:
-        current_app.logger.warning("Audio generation SKIPPED: gTTS or pydub package not available.")
-        return None
-    
-    # Map the accent code from frontend to lang/tld for gTTS
-    lang = 'en'
-    tld = 'com' # Default to US accent
-    if 'en-GB' in accent:
-        tld = 'co.uk'
-    elif 'en-AU' in accent:
-        tld = 'com.au'
-    elif 'en-US' in accent:
-        tld = 'com'
-    
-    current_app.logger.info(f"Initiating audio generation for text: '{text[:30]}...' with lang: {lang}, tld: {tld}, speed: {speed}")
-    
     try:
-        # Ensure speed is a float to prevent type comparison errors
-        try:
-            speed = float(speed) if speed is not None else 1.0
-        except (ValueError, TypeError):
-            speed = 1.0
-            current_app.logger.warning(f"Invalid speed value '{speed}', using default 1.0")
+        # Import the utility function instead of duplicating code
+        from utils.audio_generator import generate_audio_from_text as generate_audio_util
         
-        # 1. Generate audio with gTTS
-        temp_filename = f"temp_{uuid.uuid4()}.mp3"
-        tts = gTTS(text=text, lang=lang, tld=tld, slow=(speed < 1.0))
-        tts.save(temp_filename)
-        current_app.logger.info(f"STEP 1 SUCCESS: gTTS saved to '{temp_filename}'")
+        # Convert accent format (en-US -> en)
+        lang = accent.split('-')[0] if '-' in accent else accent
         
-        # 2. Load audio with pydub
-        current_app.logger.info(f"STEP 2: Loading '{temp_filename}' with pydub...")
-        audio = AudioSegment.from_mp3(temp_filename)
-        current_app.logger.info("STEP 2 SUCCESS: pydub loaded the audio file.")
-
-        # 3. Adjust speed if necessary and export
-        if speed != 1.0:
-            current_app.logger.info(f"STEP 3: Adjusting speed to {speed}x...")
-            audio = audio.speedup(playback_speed=speed)
-            current_app.logger.info("STEP 3 SUCCESS: Speed adjusted.")
-
-        adjusted_filename = f"adjusted_{uuid.uuid4()}.mp3"
-        audio.export(adjusted_filename, format="mp3")
-        current_app.logger.info(f"STEP 4 SUCCESS: Exported final audio to '{adjusted_filename}'")
+        # Call the utility function with proper error handling
+        return generate_audio_util(text, lang, speed)
         
-        # 4. Upload to S3
-        s3_key = f"audio/practice_tests/{uuid.uuid4()}.mp3"
-        current_app.logger.info(f"STEP 5: Uploading '{adjusted_filename}' to S3 as '{s3_key}'...")
-        s3_client.upload_file(adjusted_filename, S3_BUCKET_NAME, s3_key)
-        current_app.logger.info("STEP 5 SUCCESS: Uploaded to S3.")
-        
-        # 5. Clean up temporary files
-        os.remove(temp_filename)
-        os.remove(adjusted_filename)
-        current_app.logger.info("STEP 6 SUCCESS: Cleaned up temporary files.")
-        
-        return s3_key
     except Exception as e:
         current_app.logger.error(f"AUDIO GENERATION FAILED: {str(e)}", exc_info=True)
-        # Clean up any partial files
-        if 'temp_filename' in locals() and os.path.exists(temp_filename):
-            os.remove(temp_filename)
-        if 'adjusted_filename' in locals() and os.path.exists(adjusted_filename):
-            os.remove(adjusted_filename)
-        return None
+        # Re-raise with more context
+        if "429" in str(e) or "Too Many Requests" in str(e):
+            raise Exception(f"Rate limit exceeded from TTS API. Please wait a few minutes and try again. Error: {str(e)}")
+        elif "gTTS" in str(e):
+            raise Exception(f"Text-to-speech conversion failed: {str(e)}. Please check the text content and try again.")
+        elif "AudioSegment" in str(e):
+            raise Exception(f"Audio processing failed: {str(e)}. Please check if the audio file was generated correctly.")
+        else:
+            raise Exception(f"Audio generation failed: {str(e)}. Please try again or contact support.")
 
 def audio_generation_worker(app, test_id, questions, audio_config):
     """Background worker for generating audio for test questions"""
@@ -185,17 +141,25 @@ def audio_generation_worker(app, test_id, questions, audio_config):
                     speed = 1.0
                     current_app.logger.warning(f"Invalid speed value '{audio_config.get('speed')}', using default 1.0")
                 
-                audio_url = generate_audio_from_text(question_text, accent, speed)
+                try:
+                    audio_url = generate_audio_from_text(question_text, accent, speed)
+                    
+                    if audio_url:
+                        # Update the question with audio URL
+                        mongo_db.tests.update_one(
+                            {'_id': ObjectId(test_id)},
+                            {'$set': {f'questions.{i}.audio_url': audio_url}}
+                        )
+                        current_app.logger.info(f"Generated audio for question {i+1}")
+                    else:
+                        current_app.logger.error(f"Failed to generate audio for question {i+1}")
+                        
+                except Exception as audio_error:
+                    current_app.logger.error(f"Failed to generate audio for question {i+1}: {str(audio_error)}")
+                    # Continue with next question instead of failing entire batch
+                    continue
                 
-                if audio_url:
-                    # Update the question with audio URL
-                    mongo_db.tests.update_one(
-                        {'_id': ObjectId(test_id)},
-                        {'$set': {f'questions.{i}.audio_url': audio_url}}
-                    )
-                    current_app.logger.info(f"Generated audio for question {i+1}")
-                else:
-                    current_app.logger.error(f"Failed to generate audio for question {i+1}")
+
             
             current_app.logger.info(f"Completed audio generation for test {test_id}")
         except Exception as e:
@@ -1103,15 +1067,16 @@ def get_bulk_questions_from_bank():
 def check_audio_generation_availability():
     """Check if audio generation packages are available"""
     try:
-        from utils.audio_generator import GTTS_AVAILABLE, PYDUB_AVAILABLE
+        from utils.audio_generator import get_audio_generation_status
         
-        available = GTTS_AVAILABLE and PYDUB_AVAILABLE
+        status = get_audio_generation_status()
         
         return jsonify({
             'success': True,
-            'available': available,
-            'gtts_available': GTTS_AVAILABLE,
-            'pydub_available': PYDUB_AVAILABLE,
+            'available': status['fully_available'],
+            'gtts_available': status['gtts_available'],
+            'pydub_available': status['pydub_available'],
+            'rate_limit_info': status['rate_limit_info'],
             'message': 'Audio generation availability checked successfully'
         }), 200
         

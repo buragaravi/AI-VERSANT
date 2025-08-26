@@ -2240,16 +2240,14 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
     setAudioGenerationProgress(0);
     
     try {
-      // Process questions sequentially with delays to avoid rate limiting
+      // Process questions efficiently for bulk audio generation
       const results = [];
       for (let i = 0; i < questions.length; i++) {
         const question = questions[i];
         try {
-          // Add delay between requests to avoid rate limiting
+          // Show progress without artificial delays
           if (i > 0) {
-            const delay = Math.random() * 2000 + 1000; // Random delay between 1-3 seconds
-            showError(`Processing question ${i + 1}/${questions.length}... Please wait.`);
-            await new Promise(resolve => setTimeout(resolve, delay));
+            showError(`Processing question ${i + 1}/${questions.length}...`);
           }
           
           // Call backend to generate audio
@@ -2276,6 +2274,8 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
           }
         } catch (error) {
           console.error(`Error generating audio for question ${question._id}:`, error);
+          
+          // Simple error handling without rate limiting delays
           results.push({
             question_id: question._id,
             error: error.message,
@@ -2283,19 +2283,17 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
           });
         }
       }
+      
       const successfulAudio = results.filter(r => r.success);
       const failedAudio = results.filter(r => !r.success);
       
       if (failedAudio.length > 0) {
         console.warn(`${failedAudio.length} audio files failed to generate:`, failedAudio);
-        // Show specific error messages for failed audio generation
+        
+        // Show error messages for failed audio generation
         failedAudio.forEach(failed => {
           if (failed.error) {
-            if (failed.error.includes('rate limit') || failed.error.includes('429') || failed.error.includes('Too Many Requests')) {
-              showError(`Rate limit exceeded for question. The system will retry automatically. Please wait a few minutes and try again.`);
-            } else {
-              showError(failed.error);
-            }
+            showError(failed.error);
           }
         });
       }

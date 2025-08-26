@@ -1,8 +1,6 @@
 import os
 import uuid
 import boto3
-import time
-import random
 from config.aws_config import s3_client, S3_BUCKET_NAME
 
 # Make audio processing packages optional
@@ -27,9 +25,6 @@ def generate_audio_from_text(text, accent='en', speed=1.0, max_retries=3):
     
     if not PYDUB_AVAILABLE:
         raise Exception("Audio generation not available - pydub package is missing. Please install it using: pip install pydub")
-    
-    # Rate limiting: Add delay between requests to avoid 429 errors
-    time.sleep(random.uniform(0.5, 2.0))  # Random delay between 0.5-2 seconds
     
     for attempt in range(max_retries):
         try:
@@ -78,12 +73,14 @@ def generate_audio_from_text(text, accent='en', speed=1.0, max_retries=3):
         except Exception as e:
             if "429" in str(e) or "Too Many Requests" in str(e):
                 if attempt < max_retries - 1:
-                    wait_time = (2 ** attempt) + random.uniform(1, 3)  # Exponential backoff
-                    print(f"Rate limit hit (attempt {attempt + 1}/{max_retries}). Waiting {wait_time:.1f} seconds before retry...")
+                    # Simple retry with short delay
+                    wait_time = 2 ** attempt  # 2, 4, 8 seconds
+                    print(f"Rate limit hit (attempt {attempt + 1}/{max_retries}). Waiting {wait_time} seconds before retry...")
+                    import time
                     time.sleep(wait_time)
                     continue
                 else:
-                    raise Exception(f"Rate limit exceeded after {max_retries} attempts. Please wait a few minutes and try again.")
+                    raise Exception(f"Google TTS API rate limit exceeded after {max_retries} attempts. Please wait a few minutes and try again.")
             elif "gTTS" in str(e):
                 raise Exception(f"Text-to-speech conversion failed: {str(e)}. Please check the text content and try again.")
             elif "AudioSegment" in str(e):
@@ -93,6 +90,19 @@ def generate_audio_from_text(text, accent='en', speed=1.0, max_retries=3):
     
     # If we get here, all retries failed
     raise Exception("Audio generation failed after all retry attempts")
+
+def is_audio_generation_available():
+    """Check if audio generation is available"""
+    return GTTS_AVAILABLE and PYDUB_AVAILABLE
+
+def get_audio_generation_status():
+    """Get detailed status of audio generation capabilities"""
+    return {
+        'gtts_available': GTTS_AVAILABLE,
+        'pydub_available': PYDUB_AVAILABLE,
+        'fully_available': GTTS_AVAILABLE and PYDUB_AVAILABLE,
+        'message': 'Audio generation is ready for bulk operations'
+    }
 
 def calculate_similarity_score(original_text, student_audio_text):
     """Calculate similarity score between original and student audio text"""
