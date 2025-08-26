@@ -624,46 +624,56 @@ def notify_students(test_id):
 
         # Fetch all assigned students
         from routes.student import get_students_for_test_ids
-        if test.get('assigned_student_ids'):
-            student_list = get_students_for_test_ids([test_id], assigned_student_ids=test['assigned_student_ids'])
-        else:
-            student_list = get_students_for_test_ids([test_id])
-        
-        if not student_list:
-            return jsonify({'success': False, 'message': 'No students found for this test.'}), 404
+        try:
+            if test.get('assigned_student_ids'):
+                student_list = get_students_for_test_ids([test_id], assigned_student_ids=test['assigned_student_ids'])
+            else:
+                student_list = get_students_for_test_ids([test_id])
+            
+            current_app.logger.info(f"Found {len(student_list)} students for test {test_id}")
+            
+            if not student_list:
+                return jsonify({'success': False, 'message': 'No students found for this test.'}), 404
+        except Exception as e:
+            current_app.logger.error(f"Error fetching students for test {test_id}: {e}")
+            return jsonify({'success': False, 'message': f'Error fetching students: {e}'}), 500
 
         # Send notifications
         results = []
         for student in student_list:
             try:
                 # Send email notification
-                email_sent = send_email(
-                    to_email=student['email'],
-                    subject=f"New Test Available: {test['name']}",
-                    template='test_notification.html',
-                    context={
-                        'student_name': student['name'],
-                        'test_name': test['name'],
-                        'test_type': test.get('test_type', 'Practice'),
-                        'module_id': test.get('module_id', 'Unknown'),
-                        'level_id': test.get('level_id', 'Unknown'),
-                        'start_date': test.get('startDateTime', 'Not specified'),
-                        'end_date': test.get('endDateTime', 'Not specified'),
-                        'duration': test.get('duration', 'Not specified')
-                    }
+                html_content = render_template('test_notification.html', 
+                    student_name=student['name'],
+                    test_name=test['name'],
+                    test_type=test.get('test_type', 'Practice'),
+                    module_id=test.get('module_id', 'Unknown'),
+                    level_id=test.get('level_id', 'Unknown'),
+                    start_date=test.get('startDateTime', 'Not specified'),
+                    end_date=test.get('endDateTime', 'Not specified'),
+                    duration=test.get('duration', 'Not specified')
                 )
                 
+                email_sent = send_email(
+                    to_email=student['email'],
+                    to_name=student['name'],
+                    subject=f"New Test Available: {test['name']}",
+                    html_content=html_content
+                )
+                
+                current_app.logger.info(f"Email sent to {student['email']}: {email_sent}")
+                
                 results.append({
-                    'student_id': student['_id'],
+                    'student_id': student['student_id'],
                     'student_name': student['name'],
                     'email': student['email'],
                     'email_sent': email_sent,
                     'status': 'success' if email_sent else 'failed'
                 })
             except Exception as e:
-                current_app.logger.error(f"Failed to notify student {student['_id']}: {e}")
+                current_app.logger.error(f"Failed to notify student {student['student_id']}: {e}")
                 results.append({
-                    'student_id': student['_id'],
+                    'student_id': student['student_id'],
                     'student_name': student['name'],
                     'email': student['email'],
                     'email_sent': False,
