@@ -406,4 +406,27 @@ export const bulkDeleteQuestions = async (questionIds) => {
   });
 };
 
+// Student API functions
+export const getStudentTests = async (params = {}) => {
+  return api.get('/student/tests', { params });
+};
+
+export const getStudentTestDetails = async (testId) => {
+  return api.get(`/student/test/${testId}`);
+};
+
+export const submitPracticeTest = async (formData) => {
+  return api.post('/test-management/submit-practice-test', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+};
+
+export const getUnlockedModules = async () => {
+  return api.get('/student/unlocked-modules');
+};
+
+export const getGrammarProgress = async () => {
+  return api.get('/student/grammar-progress');
+};
+
 export default api

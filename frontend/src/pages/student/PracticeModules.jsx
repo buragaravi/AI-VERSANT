@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
 
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import api from '../../services/api';
+import api, { getStudentTests, getStudentTestDetails, getUnlockedModules, getGrammarProgress, submitPracticeTest } from '../../services/api';
 import { BookOpen, BrainCircuit, ChevronLeft, Lock, Unlock, CheckCircle, XCircle, Ear } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { useContext } from 'react';
@@ -57,7 +57,7 @@ const PracticeModules = () => {
       // Fetch levels and scores for this module
       setLoading(true);
       try {
-        const res = await api.get('/student/unlocked-modules');
+        const res = await getUnlockedModules();
         const found = res.data.data.find(m => m.module_id === module.id);
         const levels = found ? found.levels : [];
         // Fetch scores for each level (simulate or use actual API)
@@ -112,7 +112,7 @@ const PracticeModules = () => {
   const fetchGrammarProgress = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get('/student/grammar-progress');
+      const res = await getGrammarProgress();
       setGrammarProgress(res.data.data);
     } catch (err) {
       showError('Failed to load your grammar progress. Please try again.');
@@ -125,7 +125,7 @@ const PracticeModules = () => {
     try {
       setLoading(true);
       // Use the new endpoint for per-student module access
-      const res = await api.get('/student/unlocked-modules');
+      const res = await getUnlockedModules();
       // Map backend unlocked -> frontend locked
       const modulesWithIcons = res.data.data.map(m => ({
         id: m.module_id,
@@ -159,7 +159,7 @@ const PracticeModules = () => {
              params.subcategory = currentCategory.subId;
           }
           
-          const res = await api.get('/student/tests', { params });
+          const res = await getStudentTests(params);
           setModuleList(res.data.data);
         } catch (err) {
           showError('Failed to load modules for this category.');
@@ -304,7 +304,7 @@ const MainView = ({ modules, onSelectModule }) => {
     setLevelLoading(true);
     try {
       // Fetch latest module status (including levels)
-      const res = await api.get('/student/unlocked-modules');
+      const res = await getUnlockedModules();
       const found = res.data.data.find(m => m.module_id === module.id);
       setLevels(found ? found.levels : []);
       setLevelStatus(Object.fromEntries((found ? found.levels : []).map(l => [l.level_id, l.unlocked])));
@@ -325,7 +325,7 @@ const MainView = ({ modules, onSelectModule }) => {
         await api.post(`/batch-management/student/level/unlock`, { module: moduleId, level: levelId });
       }
       // Refresh levels
-      const res = await api.get('/student/unlocked-modules');
+      const res = await getUnlockedModules();
       const found = res.data.data.find(m => m.module_id === moduleId);
       setLevels(found ? found.levels : []);
       setLevelStatus(Object.fromEntries((found ? found.levels : []).map(l => [l.level_id, l.unlocked])));
@@ -545,11 +545,20 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
         const fetchModuleDetails = async () => {
             try {
                 setLoading(true);
-                const res = await api.get(`/student/test/${module._id}`);
-                // The questions are already structured correctly by the backend
-                setQuestions(res.data.data.questions || []);
+                const res = await getStudentTestDetails(module._id);
+                
+                // Validate the response structure
+                if (res.data && res.data.data && Array.isArray(res.data.data.questions)) {
+                    setQuestions(res.data.data.questions);
+                } else {
+                    console.error('Invalid questions data structure:', res.data);
+                    setQuestions([]);
+                    showError("Invalid question data format received from server.");
+                }
             } catch (err) {
+                console.error('Error fetching module details:', err);
                 showError("Failed to load module questions.");
+                setQuestions([]);
             } finally {
                 setLoading(false);
             }
@@ -697,9 +706,7 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
             Object.entries(recordings).forEach(([qid, blob]) => {
                 formData.append(`question_${qid}`, blob, `answer_${qid}.wav`);
             });
-            const res = await api.post('/student/submit-practice-test', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
+            const res = await submitPracticeTest(formData);
             if (res.data.success) {
                 success("Module submitted successfully!");
                 onSubmit(res.data.data); // Pass result data to parent
@@ -712,9 +719,32 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
     };
 
     if (loading) return <LoadingSpinner />;
+    if (!Array.isArray(questions)) return <div className="text-center p-8">Invalid questions data format.</div>;
     if (questions.length === 0) return <div className="text-center p-8">This module has no questions.</div>;
+    if (!questions[currentQuestionIndex]) return <div className="text-center p-8">Question not found.</div>;
 
     const currentQuestion = questions[currentQuestionIndex];
+    
+    // Check if question has required properties
+    if (!currentQuestion.question_id || !currentQuestion.question_type) {
+        return (
+            <div className="text-center p-8">
+                <div className="text-red-600 font-semibold mb-2">Invalid Question Data</div>
+                <div className="text-gray-600 text-sm">
+                    This question is missing required information. Please contact your instructor.
+                </div>
+                <div className="mt-4 text-xs text-gray-500">
+                    Question ID: {currentQuestion._id || 'Missing'}<br/>
+                    Question Type: {currentQuestion.question_type || 'Missing'}<br/>
+                    Question Text: {currentQuestion.question ? 'Present' : 'Missing'}
+                </div>
+            </div>
+        );
+    }
+    
+    // Debug: Log the current question structure (remove in production)
+    // console.log('Current question:', currentQuestion);
+    // console.log('Questions array:', questions);
 
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -739,10 +769,12 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                         Your browser does not support the audio element.
                     </audio>
                 )}
-                <p className="text-lg sm:text-xl text-gray-800 mb-8 break-words">{currentQuestion.question}</p>
+                <p className="text-lg sm:text-xl text-gray-800 mb-8 break-words">
+                    {currentQuestion.question || 'Question text not available'}
+                </p>
             </div>
 
-            {currentQuestion.question_type === 'mcq' && (
+            {currentQuestion.question_type === 'mcq' && currentQuestion.options && currentQuestion.question_id && (
                 <div className="space-y-4 max-w-lg mx-auto w-full">
                     {Object.entries(currentQuestion.options).map(([key, value]) => (
                         <label 
@@ -771,7 +803,7 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
             )}
 
             {/* Speaking Module: Record answer if no audio_url */}
-            {currentQuestion.question_type === 'audio' && !currentQuestion.audio_url && (
+            {currentQuestion.question_type === 'audio' && !currentQuestion.audio_url && currentQuestion.question_id && (
                 <div className="flex flex-col items-center mb-4 space-y-4">
                     {audioURLs[currentQuestion.question_id] ? (
                         <audio controls src={audioURLs[currentQuestion.question_id]} className="mb-2" />

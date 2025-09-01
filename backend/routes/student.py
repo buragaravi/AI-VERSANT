@@ -7,6 +7,23 @@ import logging
 from datetime import datetime
 import pytz
 
+# Helper function to recursively convert ObjectId fields to strings
+def convert_objectids_to_strings(obj):
+    """Recursively convert all ObjectId fields to strings for JSON serialization"""
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            if isinstance(value, ObjectId):
+                obj[key] = str(value)
+            elif isinstance(value, (dict, list)):
+                convert_objectids_to_strings(value)
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            if isinstance(item, ObjectId):
+                obj[i] = str(item)
+            elif isinstance(item, (dict, list)):
+                convert_objectids_to_strings(item)
+    return obj
+
 student_bp = Blueprint('student', __name__)
 
 @student_bp.route('/profile', methods=['GET'])
@@ -128,13 +145,21 @@ def dashboard():
                 'message': 'Access denied'
             }), 403
         
-        # Get student progress
-        progress = list(mongo_db.db.student_progress.find({'student_id': current_user_id}))
+        # Check if student_progress collection exists
+        if not hasattr(mongo_db, 'student_progress'):
+            current_app.logger.warning("student_progress collection not found, using empty progress")
+            progress = []
+        else:
+            # Get student progress
+            progress = list(mongo_db.student_progress.find({'student_id': current_user_id}))
         
         dashboard_data = {
             'user_id': str(current_user_id),
             'progress': progress
         }
+        
+        # Convert any ObjectId fields to strings for JSON serialization
+        convert_objectids_to_strings(dashboard_data)
         
         return jsonify({
             'success': True,
@@ -243,7 +268,7 @@ def get_student_tests():
             highest_score = 0
             # Try both possible collections for historical results
             try:
-                attempts_primary = list(mongo_db.db.test_results.find({
+                attempts_primary = list(mongo_db.test_results.find({
                     'test_id': test['_id'],
                     'student_id': ObjectId(current_user_id)
                 }))
@@ -273,6 +298,9 @@ def get_student_tests():
                 'attempt_id': str(existing_attempt['_id']) if existing_attempt else None,
                 'highest_score': highest_score
             })
+        
+        # Convert any remaining ObjectId fields to strings for JSON serialization
+        convert_objectids_to_strings(test_list)
         
         return jsonify({'success': True, 'data': test_list}), 200
     except Exception as e:
@@ -436,10 +464,15 @@ def get_grammar_progress():
         scores_by_subcategory = {}
         
         try:
-            results = list(mongo_db.db.test_results.find({
-                'student_id': ObjectId(current_user_id),
-                'module_id': 'GRAMMAR'
-            }))
+            # Check if test_results collection exists
+            if not hasattr(mongo_db, 'test_results'):
+                current_app.logger.warning("test_results collection not found, using empty results")
+                results = []
+            else:
+                results = list(mongo_db.test_results.find({
+                    'student_id': ObjectId(current_user_id),
+                    'module_id': 'GRAMMAR'
+                }))
 
             for result in results:
                 if not isinstance(result, dict):
@@ -460,8 +493,9 @@ def get_grammar_progress():
                     logging.warning(f"Skipping malformed test result for user {current_user_id}. Error: {e}. Result: {result}")
                     continue
         except Exception as db_error:
-             logging.error(f"Database error fetching grammar progress for user {current_user_id}: {db_error}", exc_info=True)
-             return jsonify({'success': False, 'message': 'An internal error occurred while fetching your progress.'}), 500
+             current_app.logger.error(f"Database error fetching grammar progress for user {current_user_id}: {db_error}", exc_info=True)
+             # Return empty progress instead of error
+             return jsonify({'success': True, 'data': []}), 200
 
         progress_data = []
         unlocked = True
@@ -672,7 +706,7 @@ def get_online_exams():
     """Get available online exams for a student."""
     try:
         current_user_id = get_jwt_identity()
-        user = mongo_db.db.users.find_one({'_id': ObjectId(current_user_id)})
+        user = mongo_db.users.find_one({'_id': ObjectId(current_user_id)})
         
         if not user or user.get('role') != 'student':
             return jsonify({'success': False, 'message': 'Access denied'}), 403
@@ -687,7 +721,11 @@ def get_online_exams():
         
         projection = { "questions": 0, "audio_config": 0 }
         
-        exams = list(mongo_db.db.tests.find(query, projection))
+        try:
+            exams = list(mongo_db.tests.find(query, projection))
+        except Exception as e:
+            current_app.logger.warning(f"Error fetching online exams: {e}, using empty list")
+            exams = []
 
         # Prepare data for frontend
         exams_data = []
@@ -713,6 +751,9 @@ def get_online_exams():
                 'endDateTime': end_dt
             })
         
+        # Convert any remaining ObjectId fields to strings for JSON serialization
+        convert_objectids_to_strings(exams_data)
+        
         return jsonify({
             'success': True,
             'message': 'Online exams retrieved successfully',
@@ -732,12 +773,12 @@ def get_single_test(test_id):
     """Get full details for a single test for a student to take."""
     try:
         current_user_id = get_jwt_identity()
-        user = mongo_db.db.users.find_one({'_id': ObjectId(current_user_id)})
+        user = mongo_db.users.find_one({'_id': ObjectId(current_user_id)})
         
         if not user or user.get('role') != 'student':
             return jsonify({'success': False, 'message': 'Access denied'}), 403
 
-        test = mongo_db.db.tests.find_one({'_id': ObjectId(test_id)})
+        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
         if not test:
             return jsonify({'success': False, 'message': 'Test not found'}), 404
 
@@ -746,16 +787,10 @@ def get_single_test(test_id):
 
         # We don't want to send the correct answers to the student before they take the test.
         projection = { 'questions.correct_answer': 0 }
-        test_details = mongo_db.db.tests.find_one({'_id': ObjectId(test_id)}, projection)
+        test_details = mongo_db.tests.find_one({'_id': ObjectId(test_id)}, projection)
         
-        # Manually serialize and clean data
-        test_details['_id'] = str(test_details['_id'])
-        if 'created_by' in test_details:
-             test_details['created_by'] = str(test_details['created_by'])
-        
-        for key in ['campus_ids', 'course_ids', 'batch_ids']:
-            if key in test_details:
-                test_details[key] = [str(item) for item in test_details[key]]
+        # Convert all ObjectId fields to strings for JSON serialization
+        convert_objectids_to_strings(test_details)
         # --- SHUFFLE MCQ QUESTIONS AND OPTIONS ---
         import random
         if 'questions' in test_details and isinstance(test_details['questions'], list):
@@ -790,6 +825,11 @@ def get_test_history():
     """Get student's test history with detailed results"""
     try:
         current_user_id = get_jwt_identity()
+        
+        # Check if test_results collection exists
+        if not hasattr(mongo_db, 'test_results'):
+            current_app.logger.warning("test_results collection not found, returning empty test history")
+            return jsonify({'success': True, 'data': []}), 200
         
         pipeline = [
             {
@@ -826,7 +866,11 @@ def get_test_history():
             { '$sort': { 'submitted_at': -1 } }
         ]
         
-        results = list(mongo_db.db.test_results.aggregate(pipeline))
+        try:
+            results = list(mongo_db.test_results.aggregate(pipeline))
+        except Exception as e:
+            current_app.logger.warning(f"Error aggregating test history: {e}, using empty results")
+            results = []
         
         # Convert ObjectIds to strings and add module names
         for result in results:
@@ -835,6 +879,9 @@ def get_test_history():
             result['level_name'] = LEVELS.get(result.get('level_id'), {}).get('name', 'Unknown')
             if 'submitted_at' in result:
                 result['submitted_at'] = result['submitted_at'].isoformat()
+        
+        # Convert any remaining ObjectId fields to strings for JSON serialization
+        convert_objectids_to_strings(results)
         
         return jsonify({
             'success': True,
@@ -851,6 +898,11 @@ def get_practice_results():
     """Get detailed practice module results for student"""
     try:
         current_user_id = get_jwt_identity()
+        
+        # Check if test_results collection exists
+        if not hasattr(mongo_db, 'test_results'):
+            current_app.logger.warning("test_results collection not found, returning empty practice results")
+            return jsonify({'success': True, 'data': []}), 200
         
         # Get all practice test results
         pipeline = [
@@ -893,13 +945,20 @@ def get_practice_results():
             }
         ]
         
-        results = list(mongo_db.db.test_results.aggregate(pipeline))
+        try:
+            results = list(mongo_db.test_results.aggregate(pipeline))
+        except Exception as e:
+            current_app.logger.warning(f"Error aggregating practice results: {e}, using empty results")
+            results = []
         
         # Process results
         for result in results:
             result['module_name'] = MODULES.get(result['module_name'], 'Unknown')
             result['accuracy'] = (result['total_correct_answers'] / result['total_questions_attempted'] * 100) if result['total_questions_attempted'] > 0 else 0
             result['last_attempt'] = result['last_attempt'].isoformat() if result['last_attempt'] else None
+        
+        # Convert any ObjectId fields to strings for JSON serialization
+        convert_objectids_to_strings(results)
         
         return jsonify({
             'success': True,
@@ -916,6 +975,11 @@ def get_grammar_detailed_results():
     """Get detailed grammar practice results by subcategory"""
     try:
         current_user_id = get_jwt_identity()
+        
+        # Check if test_results collection exists
+        if not hasattr(mongo_db, 'test_results'):
+            current_app.logger.warning("test_results collection not found, returning empty grammar results")
+            return jsonify({'success': True, 'data': []}), 200
         
         pipeline = [
             {
@@ -963,7 +1027,11 @@ def get_grammar_detailed_results():
             }
         ]
         
-        results = list(mongo_db.db.test_results.aggregate(pipeline))
+        try:
+            results = list(mongo_db.test_results.aggregate(pipeline))
+        except Exception as e:
+            current_app.logger.warning(f"Error aggregating grammar results: {e}, using empty results")
+            results = []
         
         # Process results
         for result in results:
@@ -980,6 +1048,9 @@ def get_grammar_detailed_results():
                 attempt['result_id'] = str(attempt['result_id'])
                 attempt['submitted_at'] = attempt['submitted_at'].isoformat()
         
+        # Convert any remaining ObjectId fields to strings for JSON serialization
+        convert_objectids_to_strings(results)
+        
         return jsonify({
             'success': True,
             'data': results
@@ -995,6 +1066,11 @@ def get_vocabulary_detailed_results():
     """Get detailed vocabulary practice results"""
     try:
         current_user_id = get_jwt_identity()
+        
+        # Check if test_results collection exists
+        if not hasattr(mongo_db, 'test_results'):
+            current_app.logger.warning("test_results collection not found, returning empty vocabulary results")
+            return jsonify({'success': True, 'data': []}), 200
         
         pipeline = [
             {
@@ -1042,7 +1118,11 @@ def get_vocabulary_detailed_results():
             }
         ]
         
-        results = list(mongo_db.db.test_results.aggregate(pipeline))
+        try:
+            results = list(mongo_db.test_results.aggregate(pipeline))
+        except Exception as e:
+            current_app.logger.warning(f"Error aggregating vocabulary results: {e}, using empty results")
+            results = []
         
         # Process results
         for result in results:
@@ -1058,6 +1138,9 @@ def get_vocabulary_detailed_results():
             for attempt in result['attempts']:
                 attempt['result_id'] = str(attempt['result_id'])
                 attempt['submitted_at'] = attempt['submitted_at'].isoformat()
+        
+        # Convert any remaining ObjectId fields to strings for JSON serialization
+        convert_objectids_to_strings(results)
         
         return jsonify({
             'success': True,
@@ -1075,8 +1158,20 @@ def get_progress_summary():
     try:
         current_user_id = get_jwt_identity()
         
+        # Check if test_results collection exists
+        if not hasattr(mongo_db, 'test_results'):
+            current_app.logger.warning("test_results collection not found, returning empty progress")
+            return jsonify({
+                'success': True,
+                'data': {
+                    'total_practice_tests': 0,
+                    'modules': [],
+                    'recent_activity': []
+                }
+            }), 200
+        
         # Get overall statistics
-        total_results = mongo_db.db.test_results.count_documents({
+        total_results = mongo_db.test_results.count_documents({
             'student_id': ObjectId(current_user_id),
             'test_type': 'practice'
         })
@@ -1112,7 +1207,11 @@ def get_progress_summary():
             }
         ]
         
-        module_stats = list(mongo_db.db.test_results.aggregate(pipeline))
+        try:
+            module_stats = list(mongo_db.test_results.aggregate(pipeline))
+        except Exception as e:
+            current_app.logger.warning(f"Error aggregating module stats: {e}, using empty stats")
+            module_stats = []
         
         # Process module statistics
         for stat in module_stats:
@@ -1125,9 +1224,13 @@ def get_progress_summary():
                 stat['_id'] = str(stat['_id'])
         
         # Get recent activity
-        recent_activity = list(mongo_db.db.test_results.find({
-            'student_id': ObjectId(current_user_id)
-        }).sort('submitted_at', -1).limit(10))
+        try:
+            recent_activity = list(mongo_db.test_results.find({
+                'student_id': ObjectId(current_user_id)
+            }).sort('submitted_at', -1).limit(10))
+        except Exception as e:
+            current_app.logger.warning(f"Error fetching recent activity: {e}, using empty activity")
+            recent_activity = []
         
         for activity in recent_activity:
             activity['_id'] = str(activity['_id'])
@@ -1142,6 +1245,9 @@ def get_progress_summary():
             'modules': module_stats,
             'recent_activity': recent_activity
         }
+        
+        # Convert any ObjectId fields to strings for JSON serialization
+        convert_objectids_to_strings(summary)
         
         return jsonify({
             'success': True,
