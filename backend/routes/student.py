@@ -164,32 +164,69 @@ def get_student_tests():
         category = request.args.get('category')
         subcategory = request.args.get('subcategory')
 
-        # Get student's batch-course instance
+        # Get student's record (may or may not have batch_course_instance_id yet)
         student = mongo_db.students.find_one({'user_id': ObjectId(current_user_id)})
-        if not student or not student.get('batch_course_instance_id'):
-            return jsonify({'success': False, 'message': 'Student not assigned to any batch-course instance'}), 404
+        # If no student profile, return empty list gracefully
+        if not student:
+            return jsonify({'success': True, 'data': []}), 200
+        instance_id = student.get('batch_course_instance_id')
         
-        instance_id = student['batch_course_instance_id']
-        
-        # Build query filter
+        # Build base query filter
+        # Prefer explicit practice tests and handle different active flags
+        active_clause = {
+            '$or': [
+                { 'status': 'active' },
+                { 'is_active': True },
+                { 'status': { '$exists': False }, 'is_active': { '$exists': False } }
+            ]
+        }
         query_filter = {
-            'batch_course_instance_ids': instance_id,
-            'is_active': True
+            '$and': [
+                { 'test_type': 'practice' },
+                active_clause
+            ]
         }
         
         # Add module filter if provided
         if module:
-            query_filter['module_id'] = module
+            query_filter['$and'].append({ 'module_id': module })
             
         # Add category filter if provided
         if category:
-            query_filter['test_category'] = category
+            query_filter['$and'].append({ 'test_category': category })
             
         # Add subcategory filter if provided
         if subcategory:
-            query_filter['subcategory'] = subcategory
-        
-        # Get tests assigned to this instance
+            query_filter['$and'].append({ 'subcategory': subcategory })
+
+        # Audience filter: match by instance OR student's campus/course/batch OR explicit assignment
+        audience_or = []
+        if instance_id:
+            audience_or.append({ 'batch_course_instance_ids': { '$in': [instance_id] } })
+        if student:
+            campus_id = student.get('campus_id')
+            course_id = student.get('course_id')
+            batch_id = student.get('batch_id')
+            if campus_id:
+                audience_or.append({ 'campus_ids': { '$in': [campus_id] } })
+            if course_id:
+                audience_or.append({ 'course_ids': { '$in': [course_id] } })
+            if batch_id:
+                audience_or.append({ 'batch_ids': { '$in': [batch_id] } })
+            # Some tests may use explicit assigned_student_ids with either student _id or user _id
+            if student.get('_id'):
+                audience_or.append({ 'assigned_student_ids': { '$in': [student['_id']] } })
+            audience_or.append({ 'assigned_student_ids': { '$in': [ObjectId(current_user_id)] } })
+
+        # If we have any audience filters, require at least one to match; otherwise, keep base filter
+        if audience_or:
+            query_filter['$and'].append({ '$or': audience_or })
+        else:
+            # No audience context available (e.g., student not assigned yet and no campus/course/batch)
+            # Return empty list instead of 404
+            return jsonify({'success': True, 'data': []}), 200
+
+        # Get tests according to filters
         tests = list(mongo_db.tests.find(query_filter))
         
         test_list = []
@@ -198,26 +235,37 @@ def get_student_tests():
             existing_attempt = mongo_db.student_test_attempts.find_one({
                 'test_id': test['_id'],
                 'student_id': ObjectId(current_user_id),
-                'batch_course_instance_id': instance_id
+                # instance may be missing; include it only if present to avoid over-filtering
+                **({ 'batch_course_instance_id': instance_id } if instance_id else {})
             })
             
             # Get highest score for this test
             highest_score = 0
-            if existing_attempt:
-                # Get all attempts for this test by this student
-                all_attempts = list(mongo_db.test_results.find({
+            # Try both possible collections for historical results
+            try:
+                attempts_primary = list(mongo_db.db.test_results.find({
                     'test_id': test['_id'],
                     'student_id': ObjectId(current_user_id)
                 }))
-                if all_attempts:
-                    highest_score = max(attempt.get('average_score', 0) for attempt in all_attempts)
+            except Exception:
+                attempts_primary = []
+            try:
+                attempts_alt = list(mongo_db.test_results.find({
+                    'test_id': test['_id'],
+                    'student_id': ObjectId(current_user_id)
+                }))
+            except Exception:
+                attempts_alt = []
+            all_attempts = (attempts_primary or []) + (attempts_alt or [])
+            if all_attempts:
+                highest_score = max(attempt.get('average_score', 0) for attempt in all_attempts)
             
             test_list.append({
                 '_id': str(test['_id']),
                 'name': test['name'],
-                'type': test['type'],
-                'duration': test['duration'],
-                'total_marks': test['total_marks'],
+                'type': test.get('type') or test.get('test_type'),
+                'duration': test.get('duration'),
+                'total_marks': test.get('total_marks'),
                 'instructions': test.get('instructions', ''),
                 'start_date': test.get('start_date', '').isoformat() if test.get('start_date') else None,
                 'end_date': test.get('end_date', '').isoformat() if test.get('end_date') else None,
