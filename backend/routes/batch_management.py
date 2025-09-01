@@ -2128,13 +2128,22 @@ def send_student_credentials(student_id):
         # Get student profile for roll number
         student_profile = mongo_db.students.find_one({'user_id': ObjectId(student_id)})
         
-        # Generate temporary password
-        import secrets
-        import string
-        temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
+        # Generate password using consistent pattern: first 4 letters of name + last 4 digits of roll number
+        student_name = student.get('name', '')
+        roll_number = student_profile.get('roll_number', '') if student_profile else ''
+        
+        if student_name and roll_number:
+            # Extract first 4 letters of first name and last 4 digits of roll number
+            first_name = student_name.split()[0] if student_name.split() else student_name
+            password = f"{first_name[:4].lower()}{roll_number[-4:]}"
+        else:
+            # Fallback to random password if name or roll number is missing
+            import secrets
+            import string
+            password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
         
         # Update password
-        password_hash = bcrypt.generate_password_hash(temp_password).decode('utf-8')
+        password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
         mongo_db.users.update_one(
             {'_id': ObjectId(student_id)},
             {'$set': {'password_hash': password_hash}}
@@ -2148,7 +2157,7 @@ def send_student_credentials(student_id):
                 'name': student.get('name', ''),
                 'email': student.get('email', ''),
                 'username': student.get('username', ''),
-                'password': temp_password,
+                'password': password,
                 'roll_number': student_profile.get('roll_number', '') if student_profile else '',
                 'login_url': "https://pydah-studyedge.vercel.app/login"
             }
@@ -2179,13 +2188,22 @@ def download_student_credentials(student_id):
         
         student_profile = mongo_db.students.find_one({'user_id': ObjectId(student_id)})
         
-        # Generate temporary password
-        import secrets
-        import string
-        temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
+        # Generate password using consistent pattern: first 4 letters of name + last 4 digits of roll number
+        student_name = student.get('name', '')
+        roll_number = student_profile.get('roll_number', '') if student_profile else ''
+        
+        if student_name and roll_number:
+            # Extract first 4 letters of first name and last 4 digits of roll number
+            first_name = student_name.split()[0] if student_name.split() else student_name
+            password = f"{first_name[:4].lower()}{roll_number[-4:]}"
+        else:
+            # Fallback to random password if name or roll number is missing
+            import secrets
+            import string
+            password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
         
         # Update password
-        password_hash = bcrypt.generate_password_hash(temp_password).decode('utf-8')
+        password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
         mongo_db.users.update_one(
             {'_id': ObjectId(student_id)},
             {'$set': {'password_hash': password_hash}}
@@ -2203,7 +2221,7 @@ def download_student_credentials(student_id):
             student.get('email', ''),
             student_profile.get('roll_number', '') if student_profile else '',
             student.get('username', ''),
-            temp_password
+            password
         ])
         
         output.seek(0)
