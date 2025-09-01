@@ -942,6 +942,8 @@ const ResultView = ({ result, onBack }) => {
     
     // Helper for word diff display
     const renderWordDiff = (expected, got) => {
+        if (!expected || !got) return <div className="text-gray-500">No text available for comparison</div>;
+        
         const expectedWords = expected.split(' ');
         const gotWords = got.split(' ');
         return (
@@ -980,54 +982,68 @@ const ResultView = ({ result, onBack }) => {
                     <p className="text-4xl font-bold text-green-600 mt-2">{scorePercentage.toFixed(0)}%</p>
                 </div>
                 <div className="mt-8 text-left">
-                    {results && results.map((q, idx) => (
-                        <div key={idx} className="mb-8 p-6 rounded-xl shadow border bg-white">
-                            <div className="mb-2 font-semibold text-indigo-700">Question {idx + 1}</div>
-                            {q.question_type === 'audio' ? (
-                                <>
-                                    {/* Listening: Play question audio if available */}
-                                    {q.audio_url && (
-                                        <audio controls className="mb-2">
-                                            <source src={q.audio_url} type="audio/mpeg" />
-                                            Your browser does not support the audio element.
-                                        </audio>
-                                    )}
-                                    <div className="mb-2"><span className="font-semibold">Prompt:</span> {q.original_text || q.question}</div>
-                                    <div className="mb-2 text-green-700 font-semibold">Result: Similarity Score: {q.similarity_score}</div>
-                                    <div className="mb-2">
-                                        <span className="font-semibold">Detailed Diff:</span>
-                                        <div className="border rounded p-2 mt-1 bg-gray-50">
-                                            {renderWordDiff(q.original_text || q.question, q.student_text || '')}
-                                        </div>
-                                    </div>
-                                    {/* Missing/Extra words */}
-                                    {(q.missing_words && q.missing_words.length > 0) && (
-                                        <div className="text-sm text-yellow-700 mt-1">Missing: {q.missing_words.join(', ')}</div>
-                                    )}
-                                    {(q.extra_words && q.extra_words.length > 0) && (
-                                        <div className="text-sm text-blue-700 mt-1">Extra: {q.extra_words.join(', ')}</div>
-                                    )}
-                                    {/* Student's submitted audio */}
-                                    {q.student_audio_url && (
-                                        <div className="mt-2">
-                                            <span className="font-semibold">Your Submitted Audio:</span>
-                                            <audio controls className="mt-1">
-                                                <source src={q.student_audio_url} type="audio/wav" />
+                    {results && Array.isArray(results) && results.length > 0 ? (
+                        results.map((q, idx) => (
+                            <div key={idx} className="mb-8 p-6 rounded-xl shadow border bg-white">
+                                <div className="mb-2 font-semibold text-indigo-700">Question {idx + 1}</div>
+                                {q.question_type === 'audio' ? (
+                                    <>
+                                        {/* Listening: Play question audio if available */}
+                                        {q.audio_url && (
+                                            <audio controls className="mb-2">
+                                                <source src={q.audio_url} type="audio/mpeg" />
                                                 Your browser does not support the audio element.
                                             </audio>
+                                        )}
+                                        <div className="mb-2"><span className="font-semibold">Prompt:</span> {q.original_text || q.question || 'No question text available'}</div>
+                                        <div className="mb-2 text-green-700 font-semibold">Result: Similarity Score: {q.similarity_score ? (q.similarity_score * 100).toFixed(1) + '%' : 'N/A'}</div>
+                                        <div className="mb-2">
+                                            <span className="font-semibold">Detailed Diff:</span>
+                                            <div className="border rounded p-2 mt-1 bg-gray-50">
+                                                {renderWordDiff(q.original_text || q.question, q.student_text || '')}
+                                            </div>
                                         </div>
-                                    )}
-                                </>
-                            ) : (
-                                // MCQ
-                                <>
-                                    <div className="mb-2 font-semibold">{q.question}</div>
-                                    <div className="mb-2">Your Answer: <span className={q.is_correct ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>{q.student_answer}</span></div>
-                                    <div className="mb-2">Correct Answer: <span className="font-semibold">{q.correct_answer}</span></div>
-                                </>
-                            )}
+                                        {/* Missing/Extra words */}
+                                        {(q.missing_words && q.missing_words.length > 0) && (
+                                            <div className="text-sm text-yellow-700 mt-1">Missing: {q.missing_words.join(', ')}</div>
+                                        )}
+                                        {(q.extra_words && q.extra_words.length > 0) && (
+                                            <div className="text-sm text-blue-700 mt-1">Extra: {q.extra_words.join(', ')}</div>
+                                        )}
+                                        {/* Student's submitted audio */}
+                                        {q.student_audio_url && (
+                                            <div className="mt-2">
+                                                <span className="font-semibold">Your Submitted Audio:</span>
+                                                <audio controls className="mt-1">
+                                                    <source src={q.student_audio_url} type="audio/wav" />
+                                                    Your browser does not support the audio element.
+                                                </audio>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    // MCQ
+                                    <>
+                                        <div className="mb-2 font-semibold">{q.question || 'Question text not available'}</div>
+                                        <div className="mb-2">Your Answer: <span className={q.is_correct ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>{q.student_answer || 'N/A'}</span></div>
+                                        <div className="mb-2">Correct Answer: <span className="font-semibold">{q.correct_answer || 'N/A'}</span></div>
+                                        <div className="mb-2">
+                                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                                q.is_correct ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                            }`}>
+                                                {q.is_correct ? '✓ Correct' : '✗ Incorrect'}
+                                            </span>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        ))
+                    ) : (
+                        <div className="text-center py-8 text-gray-500">
+                            <p>Detailed question results are not available.</p>
+                            <p className="text-sm mt-2">Your overall score has been recorded successfully.</p>
                         </div>
-                    ))}
+                    )}
                 </div>
                 <button onClick={onBack} className="mt-8 px-8 py-3 rounded-lg bg-orange-500 text-white font-semibold hover:bg-orange-600 transition">
                     Retry Practice Test

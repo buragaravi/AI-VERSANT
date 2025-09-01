@@ -1391,8 +1391,11 @@ def sentence_upload():
                 audio_filename = f"listening_audio/{uuid.uuid4()}_{audio_file.filename}"
                 
                 # Upload to S3
-                from config.aws_config import s3_client, S3_BUCKET_NAME
-                s3_client.upload_fileobj(
+                current_s3_client = get_s3_client_safe()
+                if current_s3_client is None:
+                    return jsonify({'success': False, 'message': 'S3 client not available for audio upload. Please check AWS configuration.'}), 500
+                
+                current_s3_client.upload_fileobj(
                     audio_file,
                     S3_BUCKET_NAME,
                     audio_filename,

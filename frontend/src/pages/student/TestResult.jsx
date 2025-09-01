@@ -5,7 +5,7 @@ import { useNotification } from '../../contexts/NotificationContext'
 import Header from '../../components/common/Header'
 import Sidebar from '../../components/common/Sidebar'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
-import api from '../../services/api'
+import api, { getTestResultById } from '../../services/api'
 import { 
   Volume2, 
   AudioLines, 
@@ -54,7 +54,7 @@ const TestResult = () => {
   const fetchResult = async () => {
     try {
       setLoading(true)
-      const response = await api.get(`/test-management/get-test-result/${resultId}`)
+      const response = await getTestResultById(resultId)
       setResult(response.data.data)
     } catch (err) {
       error('Failed to load test result')
@@ -83,7 +83,7 @@ const TestResult = () => {
     if (navigator.share) {
       navigator.share({
         title: 'My Test Result',
-        text: `I scored ${result.average_score}% on ${result.test_name}`,
+        text: `I scored ${result.score_percentage || (result.average_score * 100)}% on ${result.test_name}`,
         url: window.location.href
       })
     } else {
@@ -209,16 +209,16 @@ const TestResult = () => {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Your Score</p>
-                      <p className={`text-3xl font-bold ${getScoreColor(result.average_score)}`}>
-                        {result.average_score}%
+                      <p className={`text-3xl font-bold ${getScoreColor(result.score_percentage || (result.average_score * 100))}`}>
+                        {result.score_percentage || (result.average_score * 100)}%
                       </p>
                     </div>
-                    <div className={`p-3 rounded-lg ${getScoreColor(result.average_score)}`}>
-                      {getScoreIcon(result.average_score)}
+                    <div className={`p-3 rounded-lg ${getScoreColor(result.score_percentage || (result.average_score * 100))}`}>
+                      {getScoreIcon(result.score_percentage || (result.average_score * 100))}
                     </div>
                   </div>
                   <p className="text-sm text-gray-600">
-                    {getPerformanceMessage(result.average_score)}
+                    {getPerformanceMessage(result.score_percentage || (result.average_score * 100))}
                   </p>
                 </motion.div>
 

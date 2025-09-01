@@ -34,7 +34,7 @@ from difflib import SequenceMatcher
 import json
 from mongo import mongo_db
 from config.constants import ROLES, MODULES, LEVELS, TEST_TYPES, GRAMMAR_CATEGORIES, CRT_CATEGORIES, QUESTION_TYPES, TEST_CATEGORIES, MODULE_CATEGORIES
-from config.aws_config import s3_client, S3_BUCKET_NAME
+from config.aws_config import s3_client, S3_BUCKET_NAME, get_s3_client_safe
 from utils.audio_generator import generate_audio_from_text, calculate_similarity_score, transcribe_audio
 import functools
 import string
@@ -248,7 +248,13 @@ def get_single_test(test_id):
             for question in test.get('questions', []):
                 if 'audio_url' in question and question['audio_url']:
                     try:
-                        url = s3_client.generate_presigned_url(
+                        current_s3_client = get_s3_client_safe()
+                        if current_s3_client is None:
+                            current_app.logger.error("S3 client not available for presigned URL generation")
+                            question['audio_presigned_url'] = None
+                            continue
+                        
+                        url = current_s3_client.generate_presigned_url(
                             'get_object',
                             Params={'Bucket': S3_BUCKET_NAME, 'Key': question['audio_url']},
                             ExpiresIn=3600  # URL expires in 1 hour
@@ -464,16 +470,20 @@ def delete_test(test_id):
         if module_id not in mcq_modules:
             questions = test_to_delete.get('questions', [])
             objects_to_delete = [{'Key': q['audio_url']} for q in questions if 'audio_url' in q and q['audio_url']]
-            if objects_to_delete and s3_client:
-                try:
-                    s3_client.delete_objects(
-                        Bucket=S3_BUCKET_NAME,
-                        Delete={'Objects': objects_to_delete}
-                    )
-                    current_app.logger.info(f"Deleted {len(objects_to_delete)} audio files for test {test_id}")
-                except Exception as e:
-                    current_app.logger.error(f"Error deleting audio files for test {test_id}: {e}")
-                    # Continue with test deletion even if audio deletion fails
+            if objects_to_delete:
+                current_s3_client = get_s3_client_safe()
+                if current_s3_client:
+                    try:
+                        current_s3_client.delete_objects(
+                            Bucket=S3_BUCKET_NAME,
+                            Delete={'Objects': objects_to_delete}
+                        )
+                        current_app.logger.info(f"Deleted {len(objects_to_delete)} audio files for test {test_id}")
+                    except Exception as e:
+                        current_app.logger.error(f"Error deleting audio files for test {test_id}: {e}")
+                        # Continue with test deletion even if audio deletion fails
+                else:
+                    current_app.logger.warning("S3 client not available for audio file deletion")
 
         # Delete the test from the database
         mongo_db.tests.delete_one({'_id': ObjectId(test_id)})
@@ -1865,12 +1875,19 @@ def submit_practice_test():
                 audio_file = files[audio_key]
                 
                 # Save student audio to S3
+                current_s3_client = get_s3_client_safe()
+                if current_s3_client is None:
+                    return jsonify({
+                        'success': False,
+                        'message': 'S3 client not available for audio upload. Please check AWS configuration.'
+                    }), 500
+                
                 student_audio_key = f"student_audio/{current_user_id}/{test_id}/{uuid.uuid4()}.wav"
-                s3_client.upload_fileobj(audio_file, S3_BUCKET_NAME, student_audio_key)
+                current_s3_client.upload_fileobj(audio_file, S3_BUCKET_NAME, student_audio_key)
                 
                 # Download for transcription
                 temp_audio_path = f"temp_student_{uuid.uuid4()}.wav"
-                s3_client.download_file(S3_BUCKET_NAME, student_audio_key, temp_audio_path)
+                current_s3_client.download_file(S3_BUCKET_NAME, student_audio_key, temp_audio_path)
                 
                 # Transcribe student audio
                 student_text = transcribe_audio(temp_audio_path)
@@ -1973,7 +1990,8 @@ def submit_practice_test():
                 'average_score': average_score,
                 'score_percentage': score_percentage,
                 'correct_answers': correct_answers,
-                'total_questions': len(test['questions'])
+                'total_questions': len(test['questions']),
+                'results': results  # Include the detailed results array
             }
         }), 200
         
@@ -3263,11 +3281,18 @@ def upload_sentences():
         
         if audio_file and module_type == 'LISTENING':
             # Upload audio to S3
+            current_s3_client = get_s3_client_safe()
+            if current_s3_client is None:
+                return jsonify({
+                    'success': False,
+                    'message': 'S3 client not available for audio upload. Please check AWS configuration.'
+                }), 500
+            
             audio_filename = f"audio_{uuid.uuid4()}.{audio_file.filename.split('.')[-1]}"
             s3_key = f"audio/{module_id}/{level_id}/{audio_filename}"
             
             try:
-                s3_client.upload_fileobj(audio_file, S3_BUCKET_NAME, s3_key)
+                current_s3_client.upload_fileobj(audio_file, S3_BUCKET_NAME, s3_key)
                 audio_url = f"https://{S3_BUCKET_NAME}.s3.amazonaws.com/{s3_key}"
             except Exception as e:
                 current_app.logger.error(f"Error uploading audio: {e}")

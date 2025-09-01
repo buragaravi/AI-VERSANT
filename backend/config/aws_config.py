@@ -18,14 +18,23 @@ class AWSConfig:
             print("   Audio file uploads will not work without proper AWS configuration.")
             return None
         try:
-            return boto3.client(
+            print(f"🔍 Creating S3 client with:")
+            print(f"   Region: {AWSConfig.AWS_REGION}")
+            print(f"   Access Key: {'✅ Set' if AWSConfig.AWS_ACCESS_KEY else '❌ Missing'}")
+            print(f"   Secret Key: {'✅ Set' if AWSConfig.AWS_SECRET_KEY else '❌ Missing'}")
+            
+            client = boto3.client(
                 's3',
                 aws_access_key_id=AWSConfig.AWS_ACCESS_KEY,
                 aws_secret_access_key=AWSConfig.AWS_SECRET_KEY,
                 region_name=AWSConfig.AWS_REGION
             )
+            print("✅ S3 client created successfully")
+            return client
         except Exception as e:
             print(f"❌ Error creating S3 client: {e}")
+            print(f"❌ Error type: {type(e)}")
+            print(f"❌ Error details: {str(e)}")
             return None
     
     @staticmethod
@@ -49,6 +58,9 @@ class AWSConfig:
 s3_client = None
 S3_BUCKET_NAME = AWSConfig.AWS_S3_BUCKET
 
+# Create a module-level instance that can be shared
+_aws_instance = None
+
 def init_aws():
     """Initialize AWS S3 connection"""
     global s3_client
@@ -64,6 +76,12 @@ def init_aws():
             s3_client = None
             return False
         
+        print(f"🔍 AWS Config Debug:")
+        print(f"   AWS_ACCESS_KEY: {'✅ Set' if AWSConfig.AWS_ACCESS_KEY else '❌ Missing'}")
+        print(f"   AWS_SECRET_KEY: {'✅ Set' if AWSConfig.AWS_SECRET_KEY else '❌ Missing'}")
+        print(f"   AWS_REGION: {'✅ Set' if AWSConfig.AWS_REGION else '❌ Missing'}")
+        print(f"   AWS_S3_BUCKET: {'✅ Set' if AWSConfig.AWS_S3_BUCKET else '❌ Missing'}")
+        
         s3_client = AWSConfig.get_s3_client()
         
         if s3_client is None:
@@ -72,8 +90,10 @@ def init_aws():
             
         # Test S3 connection by listing buckets
         try:
+            print("🔍 Testing S3 connection...")
             response = s3_client.list_buckets()
             bucket_names = [bucket['Name'] for bucket in response['Buckets']]
+            print(f"✅ S3 connection successful. Available buckets: {bucket_names}")
             
             if AWSConfig.AWS_S3_BUCKET in bucket_names:
                 print(f"✅ AWS S3 connection successful - Bucket '{AWSConfig.AWS_S3_BUCKET}' found")
@@ -84,10 +104,13 @@ def init_aws():
                 return False
         except Exception as bucket_error:
             print(f"❌ Error testing S3 bucket access: {bucket_error}")
+            print(f"❌ Error type: {type(bucket_error)}")
+            print(f"❌ Error details: {str(bucket_error)}")
             return False
             
     except Exception as e:
         print(f"❌ AWS S3 initialization error: {e}")
+        print(f"❌ Error type: {type(e)}")
         print("⚠️  Audio file uploads may not work properly")
         s3_client = None
         return False
@@ -105,4 +128,24 @@ def get_aws_status():
         'has_credentials': bool(AWSConfig.AWS_ACCESS_KEY and AWSConfig.AWS_SECRET_KEY and AWSConfig.AWS_REGION),
         'policy': 'S3_ONLY',  # No local storage fallback
         'audio_storage': 'AWS_S3_REQUIRED'  # Audio files must be stored on S3
-    } 
+    }
+
+def get_s3_client_safe():
+    """Get S3 client safely, reinitializing if needed"""
+    global s3_client
+    
+    # If s3_client is None but we have credentials, try to reinitialize
+    if s3_client is None and (AWSConfig.AWS_ACCESS_KEY and AWSConfig.AWS_SECRET_KEY and AWSConfig.AWS_REGION):
+        print("🔄 S3 client is None, attempting to reinitialize...")
+        init_aws()
+    
+    return s3_client
+
+def ensure_aws_initialized():
+    """Ensure AWS is initialized, reinitializing if needed"""
+    global s3_client
+    
+    if s3_client is None:
+        print("🔄 AWS not initialized, attempting to initialize...")
+        return init_aws()
+    return True 

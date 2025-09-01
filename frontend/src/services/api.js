@@ -426,7 +426,11 @@ export const getUnlockedModules = async () => {
 };
 
 export const getGrammarProgress = async () => {
-  return api.get('/student/grammar-progress');
+    return api.get('/student/grammar-progress');
+};
+
+export const getTestResultById = async (testId) => {
+    return api.get(`/student/test-result/${testId}`);
 };
 
 export default api

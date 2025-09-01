@@ -1,7 +1,7 @@
 import os
 import uuid
 import boto3
-from config.aws_config import s3_client, S3_BUCKET_NAME, is_aws_configured
+from config.aws_config import s3_client, S3_BUCKET_NAME, is_aws_configured, get_s3_client_safe
 
 # Make audio processing packages optional
 try:
@@ -66,11 +66,12 @@ def generate_audio_from_text(text, accent='en', speed=1.0, max_retries=3):
             audio.export(adjusted_filename, format="mp3")
             
             # Upload to AWS S3 (no fallback to local storage)
-            if s3_client is None:
+            current_s3_client = get_s3_client_safe()
+            if current_s3_client is None:
                 raise Exception("S3 client is not available. Please check AWS configuration.")
             
             s3_key = f"audio/practice_tests/{uuid.uuid4()}.mp3"
-            s3_client.upload_file(adjusted_filename, S3_BUCKET_NAME, s3_key)
+            current_s3_client.upload_file(adjusted_filename, S3_BUCKET_NAME, s3_key)
             
             # Clean up temporary files
             try:

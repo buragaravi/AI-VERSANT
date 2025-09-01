@@ -1683,7 +1683,78 @@ def get_progress_summary():
         
     except Exception as e:
         logging.error(f"Error fetching progress summary for student {get_jwt_identity()}: {e}", exc_info=True)
-        return jsonify({'success': False, 'message': 'Failed to fetch progress summary.'}), 500 
+        return jsonify({'success': False, 'message': 'Failed to fetch progress summary.'}), 500
+
+@student_bp.route('/test-result/<test_id>', methods=['GET'])
+@jwt_required()
+def get_test_result_by_id(test_id):
+    """Get detailed test result by test ID for the logged-in student"""
+    try:
+        current_user_id = get_jwt_identity()
+        
+        # Try to get from student_test_attempts collection first
+        result = None
+        try:
+            if hasattr(mongo_db, 'student_test_attempts'):
+                result = mongo_db.student_test_attempts.find_one({
+                    'test_id': ObjectId(test_id),
+                    'student_id': current_user_id
+                })
+                if result:
+                    current_app.logger.info(f"Found result in student_test_attempts collection")
+        except Exception as e:
+            current_app.logger.warning(f"Error reading from student_test_attempts: {e}")
+        
+        # If not found, try test_results collection
+        if not result:
+            try:
+                if hasattr(mongo_db, 'test_results'):
+                    result = mongo_db.test_results.find_one({
+                        'test_id': ObjectId(test_id),
+                        'student_id': ObjectId(current_user_id)
+                    })
+                    if result:
+                        current_app.logger.info(f"Found result in test_results collection")
+            except Exception as e:
+                current_app.logger.warning(f"Error reading from test_results: {e}")
+        
+        if not result:
+            return jsonify({
+                'success': False,
+                'message': 'Test result not found'
+            }), 404
+        
+        # Get test details
+        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
+        if test:
+            result['test_name'] = test.get('name', 'Unknown Test')
+            result['module_id'] = test.get('module_id', 'Unknown')
+            result['subcategory'] = test.get('subcategory', 'Unknown')
+        else:
+            result['test_name'] = 'Unknown Test'
+            result['module_id'] = 'Unknown'
+            result['subcategory'] = 'Unknown'
+        
+        # Convert ObjectIds to strings
+        result['_id'] = str(result['_id'])
+        result['test_id'] = str(result['test_id'])
+        result['student_id'] = str(result['student_id'])
+        
+        # Convert datetime to ISO format
+        if result.get('submitted_at'):
+            result['submitted_at'] = result['submitted_at'].isoformat()
+        
+        # Convert any remaining ObjectId fields to strings for JSON serialization
+        convert_objectids_to_strings(result)
+        
+        return jsonify({
+            'success': True,
+            'data': result
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error fetching test result {test_id} for student {get_jwt_identity()}: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Failed to fetch test result.'}), 500 
 
 def get_students_for_test_ids(test_ids, assigned_student_ids=None):
     """
