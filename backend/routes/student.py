@@ -782,91 +782,72 @@ def get_single_test(test_id):
         if not test:
             return jsonify({'success': False, 'message': 'Test not found'}), 404
 
-        # Debug: Log the raw test data
-        current_app.logger.info(f"Raw test data for {test_id}: {test.keys()}")
-        if 'questions' in test:
-            current_app.logger.info(f"Raw questions count: {len(test['questions']) if isinstance(test['questions'], list) else 'not a list'}")
-            if isinstance(test['questions'], list) and len(test['questions']) > 0:
-                current_app.logger.info(f"First question structure: {test['questions'][0]}")
+        convert_objectids_to_strings(test)
 
-        # You might want to add an access check here to ensure the student
-        # is actually assigned to this test, similar to the /tests endpoint.
-
-        # We don't want to send the correct answers to the student before they take the test.
-        projection = { 'questions.correct_answer': 0 }
-        test_details = mongo_db.tests.find_one({'_id': ObjectId(test_id)}, projection)
-        
-        # Convert all ObjectId fields to strings for JSON serialization
-        convert_objectids_to_strings(test_details)
-        
-        # Debug: Log question structure for troubleshooting
-        if 'questions' in test_details and isinstance(test_details['questions'], list):
-            current_app.logger.info(f"Test {test_id} has {len(test_details['questions'])} questions")
-            for i, q in enumerate(test_details['questions']):
-                current_app.logger.info(f"Question {i+1}: type={q.get('question_type')}, has_options={'options' in q}, options_type={type(q.get('options'))}")
-                if q.get('question_type') == 'mcq' and not q.get('options'):
-                    current_app.logger.warning(f"MCQ question {i+1} is missing options field: {q}")
-        
-        # --- SHUFFLE MCQ QUESTIONS AND OPTIONS ---
+        # --- PROCESS QUESTIONS ---
         import random
-        if 'questions' in test_details and isinstance(test_details['questions'], list):
+        if 'questions' in test and isinstance(test['questions'], list):
             # Shuffle questions
-            random.shuffle(test_details['questions'])
-            for q in test_details['questions']:
-                if q.get('question_type') == 'mcq' and 'options' in q and isinstance(q['options'], dict):
+            random.shuffle(test['questions'])
+
+            processed_questions = []
+            for idx, q in enumerate(test['questions']):
+                if q.get('question_type') == 'mcq':
+                    # Build options dict from optionA...optionD
+                    options = {}
+                    answer_letter = q.get('answer')  # e.g. "C"
+
+                    for opt_key in ['A', 'B', 'C', 'D']:
+                        opt_field = f"option{opt_key}"
+                        if q.get(opt_field) is not None:
+                            options[opt_key] = q[opt_field]
+
                     # Shuffle options
-                    items = list(q['options'].items())
+                    items = list(options.items())
                     random.shuffle(items)
+
                     new_options = {}
                     answer_map = {}
-                    for idx, (old_key, value) in enumerate(items):
-                        new_key = chr(ord('A') + idx)
-                        new_options[new_key] = str(value)
+                    for new_idx, (old_key, value) in enumerate(items):
+                        new_key = chr(ord('A') + new_idx)
+                        new_options[new_key] = value
                         answer_map[old_key] = new_key
-                    # Update options
-                    q['options'] = new_options
-                    # Update correct_answer to new key
-                    if 'correct_answer' in q and q['correct_answer'] in answer_map:
-                        q['correct_answer'] = answer_map[q['correct_answer']]
-                elif q.get('question_type') == 'mcq' and not q.get('options'):
-                    # Fix MCQ questions that are missing options
-                    current_app.logger.warning(f"Fixing MCQ question without options: {q.get('_id', 'no_id')}")
-                    q['options'] = {'A': 'Option A', 'B': 'Option B', 'C': 'Option C', 'D': 'Option D'}
-                    q['correct_answer'] = 'A'  # Default answer
-                
-                # Ensure all questions have a question_id field
-                if not q.get('question_id'):
-                    if q.get('_id'):
-                        q['question_id'] = str(q['_id'])
-                    else:
-                        q['question_id'] = f"q_{i+1}"
-                        current_app.logger.warning(f"Question {i+1} has no _id, assigned question_id: {q['question_id']}")
-        # --- END SHUFFLE ---
-        
-        # Final validation: Ensure all questions have required fields
-        if 'questions' in test_details and isinstance(test_details['questions'], list):
-            valid_questions = []
-            for q in test_details['questions']:
-                if q.get('question_type') == 'mcq':
-                    if q.get('options') and q.get('question_id'):
-                        valid_questions.append(q)
-                    else:
-                        current_app.logger.error(f"Skipping invalid MCQ question: {q}")
+
+                    # Build clean question dict for frontend
+                    clean_q = {
+                        "question_id": str(q.get('_id', f"q_{idx+1}")),
+                        "question": q.get('question'),
+                        "question_type": q.get('question_type'),
+                        "instructions": q.get('instructions', ''),
+                        "options": new_options,
+                        # keep correct_answer internally for validation, but don't expose to student
+                        "correct_answer": answer_map.get(answer_letter)
+                    }
+
+                    processed_questions.append(clean_q)
+
                 else:
-                    # Non-MCQ questions just need basic fields
-                    if q.get('question') and q.get('question_id'):
-                        valid_questions.append(q)
-                    else:
-                        current_app.logger.error(f"Skipping invalid question: {q}")
-            
-            test_details['questions'] = valid_questions
-            current_app.logger.info(f"Returning {len(valid_questions)} valid questions out of {len(test_details['questions'])} total")
-        
-        return jsonify({'success': True, 'data': test_details})
+                    # Non-MCQ questions
+                    processed_questions.append({
+                        "question_id": str(q.get('_id', f"q_{idx+1}")),
+                        "question": q.get('question'),
+                        "question_type": q.get('question_type'),
+                        "instructions": q.get('instructions', '')
+                    })
+
+            test['questions'] = processed_questions
+
+            # Remove correct_answer before sending response
+            for q in test['questions']:
+                if 'correct_answer' in q:
+                    del q['correct_answer']
+
+        return jsonify({'success': True, 'data': test})
 
     except Exception as e:
         logging.error(f"Error fetching single test {test_id} for student {current_user_id}: {e}", exc_info=True)
         return jsonify({'success': False, 'message': 'Could not load test details.'}), 500
+
 
 @student_bp.route('/test-history', methods=['GET'])
 @jwt_required()
