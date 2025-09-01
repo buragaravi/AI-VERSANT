@@ -55,8 +55,26 @@ const PracticeModules = () => {
     if (module.id === 'GRAMMAR') {
       console.log('GRAMMAR module selected, going to grammar_categories');
       setView('grammar_categories');
+    } else if (module.id === 'LISTENING') {
+      // For LISTENING module, fetch levels and go to module_levels view
+      console.log('LISTENING module selected, fetching levels...');
+      setLoading(true);
+      try {
+        const res = await getUnlockedModules();
+        const found = res.data.data.find(m => m.module_id === module.id);
+        const levels = found ? found.levels : [];
+        const scores = {};
+        levels.forEach(lvl => { scores[lvl.level_id] = { score: lvl.score || 0, unlocked: lvl.unlocked }; });
+        setCurrentCategory({ id: module.id, name: module.name, levels, scores });
+        setView('module_levels');
+      } catch {
+        setCurrentCategory({ id: module.id, name: module.name, levels: [], scores: {} });
+        setView('module_levels');
+      } finally {
+        setLoading(false);
+      }
     } else {
-      // For non-GRAMMAR modules (LISTENING, SPEAKING, READING, WRITING, VOCABULARY)
+      // For other non-GRAMMAR modules (SPEAKING, READING, WRITING, VOCABULARY)
       // Set the category and go directly to module_list to fetch practice tests
       console.log(`${module.id} module selected, going to module_list`);
       setCurrentCategory({ id: module.id, name: module.name });
@@ -75,15 +93,49 @@ const PracticeModules = () => {
     }
   };
 
-  const handleSelectPracticeModule = (module, idx = null) => {
-    setCurrentModule(module);
-    setView('taking_module');
-    // Remove the automatic popup trigger - it should only show when actually unlocking levels
-    // The popup will be shown in handleModuleSubmit when result.nextLevelUnlocked is true
+      const handleSelectPracticeModule = (module, idx = null) => {
+    if (currentCategory && currentCategory.id === 'LISTENING') {
+          // Check if we're already in module_list view (showing test list)
+          if (view === 'module_list') {
+            // We're selecting a test from the test list, go to the test
+            setCurrentModule(module);
+            setView('taking_module');
+          } else {
+            // We're selecting a level, fetch tests for that level
+            const fetchListeningTests = async () => {
+              try {
+                setLoading(true);
+                const params = { 
+                  module: 'LISTENING',
+                  level: module.level_id || 'beginner'
+                };
+                
+                const res = await getStudentTests(params);
+                
+                if (res.data.data && res.data.data.length > 0) {
+                  // Show test list for this level
+                  setModuleList(res.data.data);
+                  setView('module_list');
+                } else {
+                  showError('No tests available for this level. Please try another level.');
+                }
+              } catch (err) {
+                showError('Failed to load tests for this level.');
+              } finally {
+                setLoading(false);
+              }
+            };
+            
+            fetchListeningTests();
+          }
+        } else {
+      // For other modules, proceed as usual
+      setCurrentModule(module);
+      setView('taking_module');
+    }
   };
 
   const handleModuleSubmit = (result) => {
-    console.log('handleModuleSubmit received result:', result);
     setModuleResult(result);
     // After submitting, fetch the latest grammar progress if it was a grammar module
     if (currentCategory?.id === 'GRAMMAR') {
@@ -123,7 +175,6 @@ const PracticeModules = () => {
       }));
       setModules(modulesWithIcons);
     } catch (err) {
-      console.error('Error fetching modules:', err);
       showError('Failed to load practice modules. Please try refreshing the page.');
       setModules([]);
     } finally {
@@ -138,7 +189,6 @@ const PracticeModules = () => {
     } else if (view === 'grammar_categories') {
       fetchGrammarProgress();
     } else if (view === 'module_list' && currentCategory) {
-      console.log('View changed to module_list, currentCategory:', currentCategory);
       const fetchModules = async () => {
         try {
           setLoading(true);
@@ -148,19 +198,18 @@ const PracticeModules = () => {
              params.subcategory = currentCategory.subId;
           }
           
-          console.log('Fetching modules with params:', params);
           const res = await getStudentTests(params);
-          console.log('API response:', res);
-          console.log('Module list data:', res.data.data);
           setModuleList(res.data.data);
         } catch (err) {
-          console.error('Error fetching modules:', err);
           showError('Failed to load modules for this category.');
         } finally {
           setLoading(false);
         }
       };
       fetchModules();
+    } else if (view === 'module_levels' && currentCategory && currentCategory.id === 'LISTENING') {
+      // For listening module levels, we need to handle level selection differently
+      // This will be handled when a level is selected
     }
   }, [view, currentCategory, fetchGrammarProgress, showError, fetchModules]);
 
@@ -198,7 +247,15 @@ const PracticeModules = () => {
       case 'grammar_categories':
         return <GrammarCategoryView categories={grammarProgress} onSelectCategory={handleSelectCategory} onBack={resetToMain} />;
       case 'module_list':
-        return <ModuleListView category={currentCategory} modules={moduleList} onSelectModule={handleSelectPracticeModule} onBack={() => setView(currentCategory.id === 'GRAMMAR' ? 'grammar_categories' : 'main')} />;
+        return <ModuleListView category={currentCategory} modules={moduleList} onSelectModule={handleSelectPracticeModule} onBack={() => {
+          if (currentCategory.id === 'GRAMMAR') {
+            setView('grammar_categories');
+          } else if (currentCategory.id === 'LISTENING') {
+            setView('module_levels');
+          } else {
+            setView('main');
+          }
+        }} />;
       case 'taking_module':
         return <ModuleTakingView module={currentModule} onSubmit={handleModuleSubmit} onBack={() => setView('module_list')}/>;
       case 'result':
@@ -421,21 +478,22 @@ const GrammarCategoryView = ({ categories, onSelectCategory, onBack }) => (
   </motion.div>
 );
 
-const ModuleListView = ({ category, modules, onSelectModule, onBack }) => (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-        <div className="flex items-center mb-8">
-            <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-200 mr-2 sm:mr-4"><ChevronLeft /></button>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">{category.name} Modules</h1>
-        </div>
-        {modules.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                {modules.map(module => (
-                    <motion.div
-                        key={module._id}
-                        whileHover={{ scale: 1.05 }}
-                        className="bg-white p-6 rounded-xl shadow-lg cursor-pointer flex flex-col justify-between"
-                        onClick={() => onSelectModule(module)}
-                    >
+const ModuleListView = ({ category, modules, onSelectModule, onBack }) => {
+    return (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="flex items-center mb-8">
+                <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-200 mr-2 sm:mr-4"><ChevronLeft /></button>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">{category.name} Modules</h1>
+            </div>
+            {modules.length > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                    {modules.map(module => (
+                        <motion.div
+                            key={module._id}
+                            whileHover={{ scale: 1.05 }}
+                            className="bg-white p-6 rounded-xl shadow-lg cursor-pointer flex flex-col justify-between"
+                                                    onClick={() => onSelectModule(module)}
+                        >
                         <div>
                             <h3 className="text-lg sm:text-xl font-bold text-gray-800">{module.name}</h3>
                             <p className="text-gray-500 mt-2 text-xs sm:text-sm">A practice module to test your skills.</p>
@@ -455,24 +513,44 @@ const ModuleListView = ({ category, modules, onSelectModule, onBack }) => (
                 <p className="text-gray-500 mt-2">Check back later for new practice modules in this category.</p>
             </div>
         )}
-  </motion.div>
-);
+        </motion.div>
+    );
+};
 
 const ModuleLevelsView = ({ moduleId, levels, scores, onSelectLevel, onBack }) => {
-  // Only for non-grammar modules
-  // levels: [{level_id, level_name}], scores: {level_id: {score, unlocked}}
-  let canUnlock = true;
+  // Handle different module types
+  const isListeningModule = moduleId === 'LISTENING';
+  
+  // For listening module, create default levels if none exist
+  const defaultListeningLevels = [
+    { level_id: 'beginner', level_name: 'Beginner' },
+    { level_id: 'intermediate', level_name: 'Intermediate' },
+    { level_id: 'advanced', level_name: 'Advanced' }
+  ];
+  
+  const displayLevels = isListeningModule && (!levels || levels.length === 0) ? defaultListeningLevels : levels;
+  
   return (
     <div>
       <button onClick={onBack} className="mb-6 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 font-semibold">← Back to Modules</button>
+      
+      {isListeningModule && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h2 className="text-lg font-semibold text-blue-800 mb-2">Listening Practice</h2>
+          <p className="text-blue-700 text-sm">
+            Practice your listening skills with audio questions. Each question includes an audio file and requires a 10-second voice recording response.
+          </p>
+        </div>
+      )}
+      
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {levels.map((level, idx) => {
+        {displayLevels.map((level, idx) => {
           let unlocked = false;
           if (idx === 0) {
             unlocked = true;
           } else {
             // Previous level must be completed with >= 60%
-            const prev = levels[idx - 1];
+            const prev = displayLevels[idx - 1];
             unlocked = scores[prev.level_id]?.score >= 60;
           }
           return (
@@ -487,8 +565,6 @@ const ModuleLevelsView = ({ moduleId, levels, scores, onSelectLevel, onBack }) =
                 if (unlocked) {
                   onSelectLevel(level, idx);
                 }
-                // Remove the unlock popup logic since it's not available in this component scope
-                // The unlock message is already displayed in the UI below
               }}
             >
               <div className="flex justify-between items-center">
@@ -502,6 +578,14 @@ const ModuleLevelsView = ({ moduleId, levels, scores, onSelectLevel, onBack }) =
                 <p className="text-right text-sm text-gray-600 mt-1">Highest Score: {scores[level.level_id]?.score?.toFixed(0) ?? 0}%</p>
               </div>
               {!unlocked && <p className="text-xs text-center text-yellow-800 bg-yellow-100 p-2 rounded-md mt-4">Complete the previous level with 60% or more to unlock.</p>}
+              {/* Show test count for listening module */}
+              {isListeningModule && unlocked && (
+                <div className="mt-4 text-center">
+                  <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded-md">
+                    🎯 Click to view available tests for this level
+                  </div>
+                </div>
+              )}
             </motion.div>
           );
         })}
@@ -525,6 +609,10 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
     const [isRecording, setIsRecording] = useState(false);
     const [recordingQuestionId, setRecordingQuestionId] = useState(null);
     const [audioURLs, setAudioURLs] = useState({});
+    const [recordingTime, setRecordingTime] = useState(0);
+    
+    // Ref to track if questions have been set to prevent re-shuffling
+    const questionsInitialized = useRef(false);
 
     useEffect(() => {
         const fetchModuleDetails = async () => {
@@ -546,10 +634,20 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                 // Validate the response structure
                 if (res.data && res.data.data && Array.isArray(res.data.data.questions)) {
                     console.log('Questions loaded successfully:', res.data.data.questions.length);
-                    setQuestions(res.data.data.questions);
+                    
+                    // Only set questions if they haven't been initialized yet to prevent re-shuffling
+                    if (!questionsInitialized.current) {
+                        setQuestions(res.data.data.questions);
+                        questionsInitialized.current = true;
+                        console.log('Questions initialized with order:', res.data.data.questions.map(q => q.question_id));
+                    } else {
+                        console.log('Questions already initialized, maintaining current order');
+                    }
                 } else {
                     console.error('Invalid questions data structure:', res.data);
-                    setQuestions([]);
+                    if (!questionsInitialized.current) {
+                        setQuestions([]);
+                    }
                     showError("Invalid question data format received from server.");
                 }
             } catch (err) {
@@ -638,7 +736,7 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
         }
     };
 
-    // Audio recording logic for Speaking module
+    // Audio recording logic for Speaking and Listening modules
     const startRecording = async (questionId) => {
         setRecordingQuestionId(questionId);
         setIsRecording(true);
@@ -647,19 +745,73 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
             const mediaRecorder = new window.MediaRecorder(stream);
             mediaRecorderRef.current = mediaRecorder;
             let chunks = [];
+            
+            // Set up 10-second timer for listening questions
+            let recordingTimer;
+            let timeInterval;
+            if (currentQuestion && currentQuestion.question_type === 'listening') {
+                setRecordingTime(10);
+                timeInterval = setInterval(() => {
+                    setRecordingTime(prev => {
+                        if (prev <= 1) {
+                            if (mediaRecorder.state === 'recording') {
+                                stopRecording();
+                                showError('Recording time limit reached (10 seconds). Your response has been saved.');
+                            }
+                            return 0;
+                        }
+                        return prev - 1;
+                    });
+                }, 1000);
+                
+                recordingTimer = setTimeout(() => {
+                    if (mediaRecorder.state === 'recording') {
+                        stopRecording();
+                        showError('Recording time limit reached (10 seconds). Your response has been saved.');
+                    }
+                }, 10000); // 10 seconds
+            }
+            
             mediaRecorder.ondataavailable = (e) => {
                 if (e.data.size > 0) chunks.push(e.data);
             };
             mediaRecorder.onstop = () => {
-                const blob = new Blob(chunks, { type: 'audio/wav' });
+                // Clear the timers
+                if (recordingTimer) {
+                    clearTimeout(recordingTimer);
+                }
+                if (timeInterval) {
+                    clearInterval(timeInterval);
+                }
+                
+                // Use WebM format for better browser compatibility and transcription support
+                const blob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
+                
+                // Store recording with unique identifier
+                const recordingKey = `${questionId}_${Date.now()}`;
                 setRecordings(prev => ({ ...prev, [questionId]: blob }));
                 setAudioURLs(prev => ({ ...prev, [questionId]: URL.createObjectURL(blob) }));
+                
+                // Log recording details for debugging
+                console.log(`Recording saved for question ${questionId}:`, {
+                    size: blob.size,
+                    type: blob.type,
+                    recordingKey: recordingKey,
+                    timestamp: new Date().toISOString()
+                });
+                
                 setIsRecording(false);
                 setRecordingQuestionId(null);
+                setRecordingTime(0);
                 
                 // For speaking modules, transcribe the audio for validation
                 if (currentQuestion && currentQuestion.module_id === 'SPEAKING') {
                     transcribeAudio(blob, questionId);
+                }
+                
+                // For listening modules, show success message
+                if (currentQuestion && currentQuestion.question_type === 'listening') {
+                    success('Recording saved successfully! You can play it back to review.');
                 }
             };
             mediaRecorder.start();
@@ -722,6 +874,24 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
         if (mediaRecorderRef.current) {
             mediaRecorderRef.current.stop();
         }
+        setRecordingTime(0);
+    };
+
+    // Check if all questions have been answered
+    const canSubmit = () => {
+        return questions.every((question, index) => {
+            const questionId = question.question_id || question._id;
+            
+            if (question.question_type === 'mcq') {
+                // For MCQ questions, check if answer exists
+                return answers[questionId];
+            } else if (question.question_type === 'listening' || question.question_type === 'speaking') {
+                // For audio questions, check if recording exists
+                return recordings[questionId];
+            }
+            
+            return false;
+        });
     };
 
     const handleSubmit = async () => {
@@ -741,16 +911,14 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
             questions.forEach((question, index) => {
                 const questionId = question.question_id || question._id;
                 if (recordings[questionId]) {
-                    formData.append(`question_${index}`, recordings[questionId], `answer_${index}.wav`);
+                    // Use the correct file extension from the recording
+                    const fileExtension = recordings[questionId].type.includes('webm') ? 'webm' : 'mp3';
+                    const fileName = `answer_${index}_${questionId}.${fileExtension}`;
+                    formData.append(`question_${index}`, recordings[questionId], fileName);
+                    console.log(`Attaching audio for question ${index}: ${questionId} -> ${recordings[questionId].size} bytes -> ${fileName}`);
+                } else {
+                    console.log(`No recording found for question ${index}: ${questionId}`);
                 }
-            });
-            
-            // Debug: Log what we're sending
-            console.log('Submitting form data:', {
-                test_id: module._id,
-                answers: answers,
-                recordings: Object.keys(recordings),
-                formDataEntries: Array.from(formData.entries())
             });
             
             const res = await submitPracticeTest(formData);
@@ -899,13 +1067,127 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
           </div>
         )}
         <div ref={examRef} className="bg-white rounded-2xl shadow-lg mx-auto p-4 sm:p-8 max-w-md w-full min-h-[350px] flex flex-col justify-center select-none">
-            <div className="text-center mb-6 text-sm font-semibold text-gray-500">
-                Question {currentQuestionIndex + 1} of {questions.length}
+            <div className="text-center mb-4">
+                <div className="text-sm font-semibold text-gray-500 mb-2">
+                    Question {currentQuestionIndex + 1} of {questions.length}
+                </div>
+                {/* Progress indicator */}
+                <div className="flex justify-center space-x-1 mb-4">
+                    {questions.map((_, index) => {
+                        const questionId = questions[index]?.question_id || questions[index]?._id;
+                        const isAnswered = questions[index]?.question_type === 'mcq' 
+                            ? answers[questionId] 
+                            : recordings[questionId];
+                        const isCurrent = index === currentQuestionIndex;
+                        
+                        return (
+                            <div
+                                key={index}
+                                className={`w-3 h-3 rounded-full transition-all duration-200 ${
+                                    isCurrent ? 'bg-blue-500 scale-125' :
+                                    isAnswered ? 'bg-green-500' : 'bg-gray-300'
+                                }`}
+                                title={`Question ${index + 1}${isAnswered ? ' - Answered' : ' - Not answered'}`}
+                            />
+                        );
+                    })}
+                </div>
             </div>
 
             <div className="text-center">
-                {/* Audio Module: Play audio if available */}
-                {currentQuestion.question_type === 'audio' && currentQuestion.audio_url && (
+                {/* Listening Module: Audio Question */}
+                {currentQuestion.question_type === 'listening' && currentQuestion.audio_url && (
+                    <div className="mb-6">
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 mb-4 shadow-sm">
+                            <div className="flex items-center space-x-2 mb-2">
+                                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                    <span className="text-blue-600 text-lg">🎧</span>
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-semibold text-blue-800">Listening Question</h3>
+                                    <p className="text-xs text-blue-600">Question {currentQuestionIndex + 1} of {questions.length}</p>
+                                </div>
+                            </div>
+                            <p className="text-sm text-blue-700">
+                                Listen to the audio carefully. You will need to record your response after listening.
+                            </p>
+                        </div>
+                        
+                        <audio 
+                            key={`audio-${currentQuestion.audio_id || currentQuestion.question_id}-${currentQuestionIndex}`}
+                            controls 
+                            className="mx-auto mb-4 w-full max-w-md"
+                            onError={(e) => {
+                                const error = e.target.error;
+                                let errorMessage = 'Failed to load audio file.';
+                                
+                                if (error) {
+                                    switch (error.code) {
+                                        case MediaError.MEDIA_ERR_NETWORK:
+                                            errorMessage = 'Network error loading audio. Please check your connection.';
+                                            break;
+                                        case MediaError.MEDIA_ERR_DECODE:
+                                            errorMessage = 'Audio format not supported. Please try a different browser.';
+                                            break;
+                                        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                                            errorMessage = 'Audio source not supported. Please contact support.';
+                                            break;
+                                        default:
+                                            errorMessage = 'Audio loading failed. Please refresh and try again.';
+                                    }
+                                }
+                                
+                                showError(errorMessage);
+                            }}
+                            onLoadStart={() => {}}
+                            onCanPlay={() => {}}
+                            onLoad={() => {}}
+                            preload="auto"
+                        >
+                            <source src={currentQuestion.audio_url} type="audio/mpeg" />
+                            <source src={currentQuestion.audio_url} type="audio/wav" />
+                            <source src={currentQuestion.audio_url} type="audio/ogg" />
+                            Your browser does not support the audio element.
+                        </audio>
+                        
+                        {/* Debug info - remove in production */}
+                        <div className="text-xs text-gray-500 text-center mb-2">
+                            Audio ID: {currentQuestion.audio_id || 'N/A'} | 
+                            Question ID: {currentQuestion.question_id || 'N/A'}
+                        </div>
+                        
+                        {/* Audio loading status */}
+                        <div className="text-center mb-3">
+                            {currentQuestion.audio_url ? (
+                                <div className="inline-flex items-center space-x-2 bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
+                                    <span>🎵</span>
+                                    <span>Audio Ready</span>
+                                </div>
+                            ) : (
+                                <div className="inline-flex items-center space-x-2 bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-medium">
+                                    <span>❌</span>
+                                    <span>Audio Not Available</span>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="bg-gray-50 rounded-lg p-3 mb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-gray-700">
+                                <div className="flex items-center space-x-2">
+                                    <span className="text-blue-600">🎯</span>
+                                    <span><strong>Instructions:</strong> Listen to the audio and then record your response.</span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <span className="text-orange-600">⏱️</span>
+                                    <span><strong>Recording Time:</strong> 10 seconds maximum</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
+                {/* Audio Module: Play audio if available (for other audio types) */}
+                {currentQuestion.question_type === 'audio' && currentQuestion.audio_url && currentQuestion.question_type !== 'listening' && (
                     <audio controls className="mx-auto mb-4">
                         <source src={currentQuestion.audio_url} type="audio/mpeg" />
                         Your browser does not support the audio element.
@@ -916,19 +1198,24 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                 {currentQuestion.question_type === 'text_fallback' && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
                         <div className="flex items-center space-x-2 mb-2">
-                            <span className="text-yellow-600">⚠️</span>
-                            <span className="text-sm font-medium text-yellow-800">Audio Mode Unavailable</span>
+                            <span className="text-blue-600">⚠️</span>
+                            <span className="text-sm font-medium text-blue-800">Audio Mode Unavailable</span>
                         </div>
-                        <p className="text-sm text-yellow-700">
+                        <p className="text-sm text-blue-700">
                             This question is currently in text mode because audio is not available. 
                             Please read the text carefully and answer accordingly.
                         </p>
                     </div>
                 )}
                 
-                <p className="text-lg sm:text-xl text-gray-800 mb-8 break-words">
-                    {currentQuestion.question || 'Question text not available'}
-                </p>
+
+                
+                {/* For listening questions, don't show the sentence text */}
+                {currentQuestion.question_type !== 'listening' && (
+                    <p className="text-lg sm:text-xl text-gray-800 mb-8 break-words">
+                        {currentQuestion.question || 'Question text not available'}
+                    </p>
+                )}
             </div>
 
             {currentQuestion.question_type === 'mcq' && currentQuestion.options && currentQuestion.question_id && (
@@ -959,6 +1246,92 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                 </div>
             )}
 
+            {/* Listening Module: Voice Recording Interface */}
+            {currentQuestion.question_type === 'listening' && currentQuestion.question_id && (
+                <div className="flex flex-col items-center mb-4">
+                    <div className="w-full max-w-2xl">
+                        <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                            <div className="text-center mb-4">
+                                <p className="text-sm text-gray-600">Speak clearly after listening to the audio</p>
+                                
+                                {/* Recording Status Indicator */}
+                                {recordings[currentQuestion.question_id] ? (
+                                    <div className="mt-2 inline-flex items-center space-x-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs">
+                                        <span>✅</span>
+                                        <span>Recording Saved!</span>
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 inline-flex items-center space-x-2 bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs">
+                                        <span>🎤</span>
+                                        <span>Ready to Record</span>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* Show recorded audio if available */}
+                            {audioURLs[currentQuestion.question_id] ? (
+                                <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                                    <div className="flex items-center space-x-2 mb-2">
+                                        <span className="text-green-600">✅</span>
+                                        <span className="font-medium text-green-800 text-sm">Your Recording</span>
+                                    </div>
+                                    <audio controls src={audioURLs[currentQuestion.question_id]} className="w-full" />
+                                </div>
+                            ) : null}
+                            
+                            {/* Recording Controls */}
+                            <div className="flex flex-col items-center space-y-3">
+                                {isRecording && recordingQuestionId === currentQuestion.question_id ? (
+                                    <div className="text-center">
+                                        <div className="flex items-center justify-center space-x-2 mb-3">
+                                            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                                            <span className="text-red-600 font-semibold text-base">Recording...</span>
+                                        </div>
+                                        <div className="mb-3">
+                                            <div className="text-3xl font-bold text-red-600 mb-1">
+                                                {recordingTime}s
+                                            </div>
+                                            <div className="text-xs text-gray-600">Time remaining</div>
+                                        </div>
+                                        <button 
+                                            onClick={stopRecording} 
+                                            className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-all duration-200 shadow-md"
+                                        >
+                                            ⏹️ Stop Recording
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button 
+                                        onClick={() => startRecording(currentQuestion.question_id)} 
+                                        className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition-all duration-200 shadow-md text-base"
+                                    >
+                                        🎤 Start Recording
+                                    </button>
+                                )}
+                                
+                                {/* Recording Instructions */}
+                                <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-blue-800">
+                                        <div className="flex items-center space-x-2">
+                                            <span className="text-orange-600">⏱️</span>
+                                            <span><strong>Max time:</strong> 10 seconds</span>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <span className="text-blue-600">🎯</span>
+                                            <span><strong>Speak clearly</strong></span>
+                                        </div>
+                                        <div className="flex items-center space-x-2 md:col-span-2">
+                                            <span className="text-purple-600">🔒</span>
+                                            <span><strong>Note:</strong> Text hidden - listen and respond!</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
             {/* Speaking Module: Record answer if no audio_url */}
             {currentQuestion.question_type === 'audio' && !currentQuestion.audio_url && currentQuestion.question_id && (
                 <div className="flex flex-col items-center mb-4 space-y-4">
@@ -993,7 +1366,7 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                                 {answers[`${currentQuestion.question_id}_validation`].mismatched_words && (
                                     <div className="mt-2">
                                         <p className="text-xs text-gray-600 mb-1">Mismatched Words:</p>
-                                        {answers[`${currentQuestion.question_id}_validation`].mismatched_words.missing.length > 0 && (
+                                        {answers[`${currentQuestion.question_id}_validation`]?.mismatched_words?.missing?.length > 0 && (
                                             <div className="mb-1">
                                                 <span className="text-xs text-red-600">Missing: </span>
                                                 <span className="text-xs text-gray-700">
@@ -1001,7 +1374,7 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                                                 </span>
                                             </div>
                                         )}
-                                        {answers[`${currentQuestion.question_id}_validation`].mismatched_words.extra.length > 0 && (
+                                        {answers[`${currentQuestion.question_id}_validation`]?.mismatched_words?.extra?.length > 0 && (
                                             <div>
                                                 <span className="text-xs text-orange-600">Extra: </span>
                                                 <span className="text-xs text-gray-700">
@@ -1027,7 +1400,7 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                 </div>
             )}
 
-            <div className="mt-10 flex justify-between items-center">
+            <div className="mt-6 flex justify-between items-center">
                 <button
                     onClick={() => setCurrentQuestionIndex(prev => prev - 1)}
                     disabled={currentQuestionIndex === 0}
@@ -1036,13 +1409,20 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                     Previous
                 </button>
                 {currentQuestionIndex === questions.length - 1 ? (
-                    <button
-                        onClick={handleSubmit}
-                        disabled={Object.keys(answers).length !== questions.length}
-                        className="px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-400"
-                    >
-                        Submit
-                    </button>
+                    <div className="text-center">
+                        <button
+                            onClick={handleSubmit}
+                            disabled={!canSubmit()}
+                            className="px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-400"
+                        >
+                            Submit
+                        </button>
+                        {!canSubmit() && (
+                            <p className="text-xs text-gray-500 mt-2">
+                                Please answer all questions before submitting
+                            </p>
+                        )}
+                    </div>
                 ) : (
                     <button
                         onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
@@ -1071,13 +1451,8 @@ const ResultView = ({ result, onBack }) => {
         )
     }
     
-    // Debug: Log the result data
-    console.log('ResultView received result:', result);
-    
     const { correct_answers, total_questions, average_score, score_percentage, results } = result;
     const scorePercentage = score_percentage || (average_score * 100) || 0;
-    
-    console.log('Extracted values:', { correct_answers, total_questions, average_score, score_percentage, scorePercentage });
     
     // Helper for word diff display
     const renderWordDiff = (expected, got) => {
@@ -1108,23 +1483,25 @@ const ResultView = ({ result, onBack }) => {
     };
 
     return (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-2xl mx-auto">
-            <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
-                <h1 className="text-3xl font-bold text-gray-800">Module Complete!</h1>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto">
+            <div className="bg-white p-6 rounded-2xl shadow-lg text-center">
+                <h1 className="text-2xl font-bold text-gray-800">Module Complete!</h1>
                 <p className="text-gray-600 mt-2">Here's how you did:</p>
-                <div className="my-8">
-                    <p className="text-6xl font-bold text-indigo-600">{correct_answers}<span className="text-4xl text-gray-500">/{total_questions}</span></p>
-                    <p className="text-xl font-semibold text-gray-700">Questions Correct</p>
+                <div className="my-6">
+                    <p className="text-4xl font-bold text-indigo-600">{correct_answers}<span className="text-2xl text-gray-500">/{total_questions}</span></p>
+                    <p className="text-lg font-semibold text-gray-700">Questions Correct</p>
                 </div>
-                <div className="bg-gray-100 p-6 rounded-lg mb-8">
-                    <h3 className="text-lg font-semibold">Your Score</h3>
-                    <p className="text-4xl font-bold text-green-600 mt-2">{scorePercentage.toFixed(0)}%</p>
+                <div className="bg-gray-100 p-4 rounded-lg mb-6">
+                    <h3 className="text-base font-semibold">Your Score</h3>
+                    <p className="text-3xl font-bold text-green-600 mt-2">{scorePercentage.toFixed(0)}%</p>
                 </div>
-                <div className="mt-8 text-left">
+                
+                {/* Compact Results Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {results && Array.isArray(results) && results.length > 0 ? (
                         results.map((q, idx) => (
-                            <div key={idx} className="mb-8 p-6 rounded-xl shadow border bg-white">
-                                <div className="mb-2 font-semibold text-indigo-700">Question {idx + 1}</div>
+                            <div key={idx} className="p-4 rounded-lg border bg-gray-50 text-left">
+                                <div className="mb-2 font-semibold text-indigo-700 text-sm">Question {idx + 1}</div>
                                 {q.question_type === 'audio' ? (
                                     <>
                                         {/* Listening: Play question audio if available */}
@@ -1134,27 +1511,71 @@ const ResultView = ({ result, onBack }) => {
                                                 Your browser does not support the audio element.
                                             </audio>
                                         )}
-                                        <div className="mb-2"><span className="font-semibold">Prompt:</span> {q.original_text || q.question || 'No question text available'}</div>
-                                        <div className="mb-2 text-green-700 font-semibold">Result: Similarity Score: {q.similarity_score ? (q.similarity_score * 100).toFixed(1) + '%' : 'N/A'}</div>
-                                        <div className="mb-2">
-                                            <span className="font-semibold">Detailed Diff:</span>
-                                            <div className="border rounded p-2 mt-1 bg-gray-50">
-                                                {renderWordDiff(q.original_text || q.question, q.student_text || '')}
+                                        <div className="mb-2 text-sm"><span className="font-semibold">Prompt:</span> {q.original_text || q.question || 'No question text available'}</div>
+                                        
+                                        {/* Compact Performance Display */}
+                                        <div className="mb-3">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="font-semibold text-gray-700 text-xs">Performance:</span>
+                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                    q.similarity_score >= 0.8 ? 'bg-green-100 text-green-800' :
+                                                    q.similarity_score >= 0.6 ? 'bg-yellow-100 text-yellow-800' :
+                                                    'bg-red-100 text-red-800'
+                                                }`}>
+                                                    {q.similarity_score ? (q.similarity_score * 100).toFixed(1) + '%' : 'N/A'} Accuracy
+                                                </span>
+                                            </div>
+                                            
+                                            {/* Compact Performance indicator */}
+                                            <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2">
+                                                <div 
+                                                    className={`h-1.5 rounded-full transition-all duration-500 ${
+                                                        q.similarity_score >= 0.8 ? 'bg-green-500' :
+                                                        q.similarity_score >= 0.6 ? 'bg-yellow-500' :
+                                                        'bg-red-500'
+                                                    }`}
+                                                    style={{ width: `${(q.similarity_score || 0) * 100}%` }}
+                                                ></div>
+                                            </div>
+                                            
+                                            {/* Compact Performance message */}
+                                            <div className={`text-xs font-medium ${
+                                                q.similarity_score >= 0.8 ? 'text-green-700' :
+                                                q.similarity_score >= 0.6 ? 'text-yellow-700' :
+                                                'text-red-700'
+                                            }`}>
+                                                {q.similarity_score >= 0.8 ? '🎉 Excellent!' :
+                                                 q.similarity_score >= 0.6 ? '👍 Good effort!' :
+                                                 '💪 Keep practicing!'}
                                             </div>
                                         </div>
-                                        {/* Missing/Extra words */}
-                                        {(q.missing_words && q.missing_words.length > 0) && (
-                                            <div className="text-sm text-yellow-700 mt-1">Missing: {q.missing_words.join(', ')}</div>
-                                        )}
-                                        {(q.extra_words && q.extra_words.length > 0) && (
-                                            <div className="text-sm text-blue-700 mt-1">Extra: {q.extra_words.join(', ')}</div>
-                                        )}
+                                        
+                                        {/* Compact Analysis */}
+                                        <div className="bg-white rounded p-2 mb-3 text-xs">
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <span className="font-medium text-gray-600">Expected:</span>
+                                                    <div className="mt-1 p-1 bg-gray-50 rounded text-xs">
+                                                        {q.original_text || q.question || 'No text'}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium text-gray-600">Your Response:</span>
+                                                    <div className="mt-1 p-1 bg-gray-50 rounded text-xs">
+                                                        {q.student_text || 'No transcript'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                         {/* Student's submitted audio */}
                                         {q.student_audio_url && (
-                                            <div className="mt-2">
-                                                <span className="font-semibold">Your Submitted Audio:</span>
-                                                <audio controls className="mt-1">
-                                                    <source src={q.student_audio_url} type="audio/wav" />
+                                            <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+                                                <div className="flex items-center space-x-2 mb-2">
+                                                    <span className="text-blue-600 text-sm">🎤</span>
+                                                    <span className="font-semibold text-blue-800 text-xs">Your Recording</span>
+                                                </div>
+                                                <audio controls className="w-full h-8">
+                                                    <source src={q.student_audio_url} type="audio/mp3" />
                                                     Your browser does not support the audio element.
                                                 </audio>
                                             </div>
@@ -1163,9 +1584,9 @@ const ResultView = ({ result, onBack }) => {
                                 ) : (
                                     // MCQ
                                     <>
-                                        <div className="mb-2 font-semibold">{q.question || 'Question text not available'}</div>
-                                        <div className="mb-2">Your Answer: <span className={q.is_correct ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>{q.student_answer || 'N/A'}</span></div>
-                                        <div className="mb-2">Correct Answer: <span className="font-semibold">{q.correct_answer || 'N/A'}</span></div>
+                                        <div className="mb-2 font-semibold text-sm">{q.question || 'Question text not available'}</div>
+                                        <div className="text-xs mb-2">Your Answer: <span className={q.is_correct ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>{q.student_answer || 'N/A'}</span></div>
+                                        <div className="text-xs mb-2">Correct: <span className="font-semibold">{q.correct_answer || 'N/A'}</span></div>
                                         <div className="mb-2">
                                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                                                 q.is_correct ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
@@ -1178,13 +1599,13 @@ const ResultView = ({ result, onBack }) => {
                             </div>
                         ))
                     ) : (
-                        <div className="text-center py-8 text-gray-500">
+                        <div className="text-center py-4 text-gray-500 text-sm">
                             <p>Detailed question results are not available.</p>
-                            <p className="text-sm mt-2">Your overall score has been recorded successfully.</p>
+                            <p className="text-xs mt-1">Your overall score has been recorded successfully.</p>
                         </div>
                     )}
                 </div>
-                <button onClick={onBack} className="mt-8 px-8 py-3 rounded-lg bg-orange-500 text-white font-semibold hover:bg-orange-600 transition">
+                <button onClick={onBack} className="mt-6 px-6 py-2 rounded-lg bg-orange-500 text-white font-semibold hover:bg-orange-600 transition text-sm">
                     Retry Practice Test
                 </button>
             </div>

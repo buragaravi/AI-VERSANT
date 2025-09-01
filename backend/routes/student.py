@@ -296,7 +296,12 @@ def get_student_tests():
         if module == 'LISTENING':
             current_app.logger.info("LISTENING MODULE: Fetching tests independently...")
             
+            # Get level parameter for listening module
+            level = request.args.get('level', 'beginner').lower()
+            current_app.logger.info(f"LISTENING MODULE: Requested level: {level}")
+            
             # For listening module, use a direct approach without audience filters to ensure access
+            # First try to find tests with the specific level
             listening_query = {
                 'test_type': 'practice',
                 'module_id': 'LISTENING',
@@ -307,18 +312,52 @@ def get_student_tests():
                 ]
             }
             
-            # Get all listening tests directly
+            # Add level filter if level is specified
+            if level and level != 'beginner':  # 'beginner' is default, so don't filter for it
+                listening_query['level'] = level
+            
+            # Get listening tests for the specific level
             listening_tests = list(mongo_db.tests.find(listening_query))
-            current_app.logger.info(f"Found {len(listening_tests)} listening tests directly")
+            current_app.logger.info(f"Found {len(listening_tests)} listening tests for level '{level}'")
+            
+            # If no tests found for specific level, try to find any listening tests
+            if not listening_tests:
+                current_app.logger.info(f"No tests found for level '{level}', trying broader search...")
+                broader_query = {
+                    'test_type': 'practice',
+                    'module_id': 'LISTENING',
+                    '$or': [
+                        { 'status': 'active' },
+                        { 'is_active': True },
+                        { 'status': { '$exists': False }, 'is_active': { '$exists': False } }
+                    ]
+                }
+                listening_tests = list(mongo_db.tests.find(broader_query))
+                current_app.logger.info(f"Found {len(listening_tests)} listening tests with broader search")
+                
+                # If still no tests, try to find tests without level specification
+                if not listening_tests:
+                    current_app.logger.info("No tests found with broader search, trying without level filter...")
+                    no_level_query = {
+                        'test_type': 'practice',
+                        'module_id': 'LISTENING',
+                        '$or': [
+                            { 'status': 'active' },
+                            { 'is_active': True },
+                            { 'status': { '$exists': False }, 'is_active': { '$exists': False } }
+                        ]
+                    }
+                    listening_tests = list(mongo_db.tests.find(no_level_query))
+                    current_app.logger.info(f"Found {len(listening_tests)} listening tests without level filter")
             
             # Replace the tests list with only listening tests
             tests = listening_tests
             
             # Log details of found tests
             for t in listening_tests:
-                current_app.logger.info(f"  Listening test: {t.get('name')} - Status: {t.get('status', 'unknown')} - Active: {t.get('is_active', 'unknown')} - Questions: {len(t.get('questions', []))}")
+                current_app.logger.info(f"  Listening test: {t.get('name')} - Level: {t.get('level', 'unknown')} - Status: {t.get('status', 'unknown')} - Active: {t.get('is_active', 'unknown')} - Questions: {len(t.get('questions', []))}")
             
-            current_app.logger.info(f"LISTENING MODULE: Using {len(tests)} tests directly")
+            current_app.logger.info(f"LISTENING MODULE: Using {len(tests)} tests for level '{level}'")
         
         # For other modules, ensure they only get their specific tests
         elif module and module != 'LISTENING':
@@ -918,8 +957,17 @@ def get_single_test(test_id):
         # --- PROCESS QUESTIONS ---
         import random
         if 'questions' in test and isinstance(test['questions'], list):
-            # Shuffle questions
-            random.shuffle(test['questions'])
+            # For listening modules, maintain consistent question order to prevent audio mismatch
+            if test.get('module_id') == 'LISTENING':
+                # Use a deterministic shuffle based on test_id to maintain consistency
+                test_id_str = str(test['_id'])
+                random.seed(hash(test_id_str) % 1000000)  # Use test ID as seed for consistent order
+                random.shuffle(test['questions'])
+                random.seed()  # Reset seed to prevent affecting other operations
+                current_app.logger.info(f"Questions shuffled with consistent seed for listening test: {test_id_str}")
+            else:
+                # For other modules, shuffle normally
+                random.shuffle(test['questions'])
 
             processed_questions = []
             for idx, q in enumerate(test['questions']):
@@ -960,32 +1008,105 @@ def get_single_test(test_id):
                     processed_questions.append(clean_q)
 
                 elif q.get('question_type') in ['sentence', 'listening', 'speaking']:
-                    # Handle listening/speaking questions - FALLBACK MODE
-                    # If audio is missing, convert to text-based question temporarily
+                    # Handle listening/speaking questions with proper audio support
                     has_audio = q.get('has_audio', False) or bool(q.get('audio_url'))
                     
                     if has_audio:
-                        # Full audio question
-                        clean_q = {
-                            "question_id": str(q.get('_id', f"q_{idx+1}")),
-                            "question": q.get('question') or q.get('sentence', ''),
-                            "question_type": q.get('question_type'),
-                            "instructions": q.get('instructions', ''),
-                            "audio_url": q.get('audio_url'),
-                            "has_audio": True,
-                            "audio_config": q.get('audio_config', {})
-                        }
+                        # For listening module, hide the sentence text from students
+                        if test.get('module_id') == 'LISTENING':
+                            # Convert S3 key to full URL if it's not already a full URL
+                            audio_url = q.get('audio_url')
+                            if audio_url and audio_url.startswith('audio/') and not audio_url.startswith('http'):
+                                from config.aws_config import S3_BUCKET_NAME
+                                audio_url = f"https://{S3_BUCKET_NAME}.s3.amazonaws.com/{audio_url}"
+                                current_app.logger.info(f"Converted S3 key to full URL for listening: {audio_url}")
+                            
+                            clean_q = {
+                                "question_id": str(q.get('_id', f"q_{idx+1}")),
+                                "question": "Listen to the audio and record your response",  # Hide actual sentence
+                                "question_type": "listening",
+                                "instructions": q.get('instructions', ''),
+                                "audio_url": audio_url,
+                                "has_audio": True,
+                                "audio_config": q.get('audio_config', {}),
+                                "module_id": "LISTENING",
+                                "sentence": q.get('sentence', ''),  # Keep for backend reference
+                                "hidden_sentence": q.get('sentence', '')  # Store original sentence
+                            }
+                            current_app.logger.info(f"Listening question processed with hidden sentence: {q.get('sentence', '')[:50]}...")
+                        else:
+                            # For other modules, show the sentence normally
+                            # Convert S3 key to full URL if it's not already a full URL
+                            audio_url = q.get('audio_url')
+                            if audio_url and audio_url.startswith('audio/') and not audio_url.startswith('http'):
+                                from config.aws_config import S3_BUCKET_NAME
+                                audio_url = f"https://{S3_BUCKET_NAME}.s3.amazonaws.com/{audio_url}"
+                                current_app.logger.info(f"Converted S3 key to full URL for other module: {audio_url}")
+                            
+                            clean_q = {
+                                "question_id": str(q.get('_id', f"q_{idx+1}")),
+                                "question": q.get('question') or q.get('sentence', ''),
+                                "question_type": q.get('question_type'),
+                                "instructions": q.get('instructions', ''),
+                                "audio_url": audio_url,
+                                "has_audio": True,
+                                "audio_config": q.get('audio_config', {}),
+                                "module_id": test.get('module_id'),
+                                "sentence": q.get('sentence', '')
+                            }
+                            current_app.logger.info(f"Audio question processed: {q.get('question_type')} with audio_url: {audio_url}")
                     else:
-                        # Fallback: Convert to text-based question for now
-                        clean_q = {
-                            "question_id": str(q.get('_id', f"q_{idx+1}")),
-                            "question": q.get('question') or q.get('sentence', ''),
-                            "question_type": "text_fallback",  # Special type for fallback
-                            "instructions": q.get('instructions', '') + " (Audio not available - text mode)",
-                            "original_type": q.get('question_type'),
-                            "audio_status": "missing"
-                        }
-                        current_app.logger.warning(f"Audio missing for {q.get('question_type')} question - using text fallback")
+                        # For listening module, try to find audio in alternative fields
+                        if test.get('module_id') == 'LISTENING':
+                            # Check for audio in different possible field names
+                            audio_url = (q.get('audio_url') or q.get('audio') or 
+                                       q.get('audio_file') or q.get('file_url') or 
+                                       q.get('question_audio'))
+                            
+                            if audio_url:
+                                # Convert S3 key to full URL if it's not already a full URL
+                                if audio_url.startswith('audio/') and not audio_url.startswith('http'):
+                                    from config.aws_config import S3_BUCKET_NAME
+                                    audio_url = f"https://{S3_BUCKET_NAME}.s3.amazonaws.com/{audio_url}"
+                                    current_app.logger.info(f"Converted S3 key to full URL: {audio_url}")
+                                
+                                clean_q = {
+                                    "question_id": str(q.get('_id', f"q_{idx+1}")),
+                                    "question": "Listen to the audio and record your response",  # Hide actual sentence
+                                    "question_type": "listening",
+                                    "instructions": q.get('instructions', ''),
+                                    "audio_url": audio_url,
+                                    "has_audio": True,
+                                    "audio_config": q.get('audio_config', {}),
+                                    "module_id": "LISTENING",
+                                    "sentence": q.get('sentence', ''),
+                                    "hidden_sentence": q.get('sentence', ''),
+                                    "audio_id": f"audio_{q.get('_id', idx)}_{hash(audio_url)}"  # Unique audio ID
+                                }
+                                current_app.logger.info(f"Listening question with audio found: {audio_url}")
+                            else:
+                                # Fallback for listening questions without audio
+                                clean_q = {
+                                    "question_id": str(q.get('_id', f"q_{idx+1}")),
+                                    "question": q.get('question') or q.get('sentence', ''),
+                                    "question_type": "text_fallback",
+                                    "instructions": q.get('instructions', '') + " (Audio not available - text mode)",
+                                    "original_type": q.get('question_type'),
+                                    "audio_status": "missing",
+                                    "module_id": "LISTENING"
+                                }
+                                current_app.logger.warning(f"Listening question missing audio - using text fallback")
+                        else:
+                            # For other modules, use text fallback
+                            clean_q = {
+                                "question_id": str(q.get('_id', f"q_{idx+1}")),
+                                "question": q.get('question') or q.get('sentence', ''),
+                                "question_type": "text_fallback",
+                                "instructions": q.get('instructions', '') + " (Audio not available - text mode)",
+                                "original_type": q.get('question_type'),
+                                "audio_status": "missing"
+                            }
+                            current_app.logger.warning(f"Audio missing for {q.get('question_type')} question - using text fallback")
                     
                     processed_questions.append(clean_q)
                     current_app.logger.info(f"Processed {q.get('question_type')} question: {clean_q['question'][:50]}...")
