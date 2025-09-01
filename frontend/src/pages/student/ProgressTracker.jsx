@@ -241,7 +241,7 @@ const ProgressTracker = () => {
                       <div key={attemptIndex} className="flex items-center justify-between text-sm">
                         <span className="text-gray-600">{attempt.test_name}</span>
                         <div className="flex items-center space-x-4">
-                          <span className="font-medium">{attempt.score.toFixed(1)}%</span>
+                          <span className="font-medium">{attempt?.score?.toFixed(1)}%</span>
                           <span className="text-gray-500">
                             {new Date(attempt.submitted_at).toLocaleDateString()}
                           </span>
