@@ -47,31 +47,20 @@ const PracticeModules = () => {
   };
   
   const handleSelectModule = async (module) => {
+    console.log('handleSelectModule called with:', module);
     if (module.locked) {
       setIsPopupVisible(true);
       return;
     }
     if (module.id === 'GRAMMAR') {
+      console.log('GRAMMAR module selected, going to grammar_categories');
       setView('grammar_categories');
     } else {
-      // Fetch levels and scores for this module
-      setLoading(true);
-      try {
-        const res = await getUnlockedModules();
-        const found = res.data.data.find(m => m.module_id === module.id);
-        const levels = found ? found.levels : [];
-        // Fetch scores for each level (simulate or use actual API)
-        // For now, assume scores are in found.levels as {level_id, unlocked, score}
-        const scores = {};
-        levels.forEach(lvl => { scores[lvl.level_id] = { score: lvl.score || 0, unlocked: lvl.unlocked }; });
-        setCurrentCategory({ id: module.id, name: module.name, levels, scores });
-        setView('module_levels');
-      } catch {
-        setCurrentCategory({ id: module.id, name: module.name, levels: [], scores: {} });
-        setView('module_levels');
-      } finally {
-        setLoading(false);
-      }
+      // For non-GRAMMAR modules (LISTENING, SPEAKING, READING, WRITING, VOCABULARY)
+      // Set the category and go directly to module_list to fetch practice tests
+      console.log(`${module.id} module selected, going to module_list`);
+      setCurrentCategory({ id: module.id, name: module.name });
+      setView('module_list');
     }
     setScrollToLevelId(null);
   };
@@ -89,10 +78,8 @@ const PracticeModules = () => {
   const handleSelectPracticeModule = (module, idx = null) => {
     setCurrentModule(module);
     setView('taking_module');
-    if (idx !== null) {
-      setNextLevelInfo({ levelName: module.level_name, idx: idx });
-      setShowNextLevelPopup(true);
-    }
+    // Remove the automatic popup trigger - it should only show when actually unlocking levels
+    // The popup will be shown in handleModuleSubmit when result.nextLevelUnlocked is true
   };
 
   const handleModuleSubmit = (result) => {
@@ -151,6 +138,7 @@ const PracticeModules = () => {
     } else if (view === 'grammar_categories') {
       fetchGrammarProgress();
     } else if (view === 'module_list' && currentCategory) {
+      console.log('View changed to module_list, currentCategory:', currentCategory);
       const fetchModules = async () => {
         try {
           setLoading(true);
@@ -160,9 +148,13 @@ const PracticeModules = () => {
              params.subcategory = currentCategory.subId;
           }
           
+          console.log('Fetching modules with params:', params);
           const res = await getStudentTests(params);
+          console.log('API response:', res);
+          console.log('Module list data:', res.data.data);
           setModuleList(res.data.data);
         } catch (err) {
+          console.error('Error fetching modules:', err);
           showError('Failed to load modules for this category.');
         } finally {
           setLoading(false);
@@ -202,14 +194,6 @@ const PracticeModules = () => {
   }, [scrollToLevelId]);
 
   const renderContent = () => {
-    if (loading) {
-      return (
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <LoadingSpinner />
-        </div>
-      );
-    }
-
     switch (view) {
       case 'grammar_categories':
         return <GrammarCategoryView categories={grammarProgress} onSelectCategory={handleSelectCategory} onBack={resetToMain} />;
@@ -502,10 +486,9 @@ const ModuleLevelsView = ({ moduleId, levels, scores, onSelectLevel, onBack }) =
               onClick={() => {
                 if (unlocked) {
                   onSelectLevel(level, idx);
-                } else {
-                  setUnlockPopupMessage('Complete the previous level with 60% or more to unlock this! You are just one step away from progressing! Give it your best shot!');
-                  setShowUnlockPopup(true);
                 }
+                // Remove the unlock popup logic since it's not available in this component scope
+                // The unlock message is already displayed in the UI below
               }}
             >
               <div className="flex justify-between items-center">
@@ -532,6 +515,7 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
     const [answers, setAnswers] = useState({});
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState(null);
     const { error: showError, success } = useNotification();
     const [cheatWarning, setCheatWarning] = useState(false);
     const [cheatCount, setCheatCount] = useState(0);
@@ -546,10 +530,22 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
         const fetchModuleDetails = async () => {
             try {
                 setLoading(true);
-                const res = await getStudentTestDetails(module._id);
+                console.log('Fetching module details for:', module);
+                console.log('Module ID:', module._id);
+                
+                // Add timeout to prevent infinite loading
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Request timeout')), 30000)
+                );
+                
+                const fetchPromise = getStudentTestDetails(module._id);
+                const res = await Promise.race([fetchPromise, timeoutPromise]);
+                
+                console.log('Response received:', res);
                 
                 // Validate the response structure
                 if (res.data && res.data.data && Array.isArray(res.data.data.questions)) {
+                    console.log('Questions loaded successfully:', res.data.data.questions.length);
                     setQuestions(res.data.data.questions);
                 } else {
                     console.error('Invalid questions data structure:', res.data);
@@ -558,7 +554,17 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                 }
             } catch (err) {
                 console.error('Error fetching module details:', err);
-                showError("Failed to load module questions.");
+                console.error('Error response:', err.response);
+                
+                let errorMessage = "Failed to load module questions.";
+                if (err.message === 'Request timeout') {
+                    errorMessage = "Request timed out. Please try again.";
+                } else if (err.response?.data?.message) {
+                    errorMessage = err.response.data.message;
+                }
+                
+                setFetchError(errorMessage);
+                showError(errorMessage);
                 setQuestions([]);
             } finally {
                 setLoading(false);
@@ -607,6 +613,29 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
 
     const handleAnswerChange = (questionId, answer) => {
         setAnswers(prev => ({ ...prev, [questionId]: answer }));
+    };
+
+    const retryFetch = async () => {
+        setFetchError(null);
+        setLoading(true);
+        try {
+            const res = await getStudentTestDetails(module._id);
+            if (res.data && res.data.data && Array.isArray(res.data.data.questions)) {
+                setQuestions(res.data.data.questions);
+            } else {
+                setFetchError("Invalid question data format received from server.");
+            }
+        } catch (err) {
+            let errorMessage = "Failed to load module questions.";
+            if (err.message === 'Request timeout') {
+                errorMessage = "Request timed out. Please try again.";
+            } else if (err.response?.data?.message) {
+                errorMessage = err.response.data.message;
+            }
+            setFetchError(errorMessage);
+        } finally {
+            setLoading(false);
+        }
     };
 
     // Audio recording logic for Speaking module
@@ -736,10 +765,105 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
         }
     };
 
-    if (loading) return <LoadingSpinner />;
-    if (!Array.isArray(questions)) return <div className="text-center p-8">Invalid questions data format.</div>;
-    if (questions.length === 0) return <div className="text-center p-8">This module has no questions.</div>;
-    if (!questions[currentQuestionIndex]) return <div className="text-center p-8">Question not found.</div>;
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="text-center">
+                    <LoadingSpinner />
+                    <p className="mt-4 text-gray-600">Loading module questions...</p>
+                    <p className="text-sm text-gray-500">This may take a few moments for listening modules</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (fetchError) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="text-center">
+                    <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <XCircle className="h-12 w-12 text-red-500" />
+                    </div>
+                    <h2 className="text-2xl font-semibold text-red-700 mb-2">Failed to Load Module</h2>
+                    <p className="text-gray-500 mb-4">{fetchError}</p>
+                    <div className="flex gap-3 justify-center">
+                        <button 
+                            onClick={retryFetch}
+                            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                            Retry
+                        </button>
+                        <button 
+                            onClick={onBack}
+                            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                        >
+                            Go Back
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!Array.isArray(questions)) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="text-center">
+                    <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <XCircle className="h-12 w-12 text-red-500" />
+                    </div>
+                    <h2 className="text-2xl font-semibold text-red-700 mb-2">Invalid Data Format</h2>
+                    <p className="text-gray-500 mb-4">The module data is not in the expected format.</p>
+                    <button 
+                        onClick={onBack}
+                        className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                    >
+                        Go Back
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (questions.length === 0) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="text-center">
+                    <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <BookOpen className="h-12 w-12 text-gray-400" />
+                    </div>
+                    <h2 className="text-2xl font-semibold text-gray-700 mb-2">No Questions Available</h2>
+                    <p className="text-gray-500 mb-4">This module doesn't have any questions yet or there was an error loading them.</p>
+                    <button 
+                        onClick={onBack}
+                        className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                    >
+                        Go Back
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (!questions[currentQuestionIndex]) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="text-center">
+                    <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <XCircle className="h-12 w-12 text-red-500" />
+                    </div>
+                    <h2 className="text-2xl font-semibold text-red-700 mb-2">Question Not Found</h2>
+                    <p className="text-gray-500 mb-4">The requested question could not be found.</p>
+                    <button 
+                        onClick={onBack}
+                        className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                    >
+                        Go Back
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     const currentQuestion = questions[currentQuestionIndex];
     
@@ -780,13 +904,28 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
             </div>
 
             <div className="text-center">
-                {/* Listening Module: Play audio if available */}
+                {/* Audio Module: Play audio if available */}
                 {currentQuestion.question_type === 'audio' && currentQuestion.audio_url && (
                     <audio controls className="mx-auto mb-4">
                         <source src={currentQuestion.audio_url} type="audio/mpeg" />
                         Your browser does not support the audio element.
                     </audio>
                 )}
+                
+                {/* Text Fallback Mode for Missing Audio */}
+                {currentQuestion.question_type === 'text_fallback' && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                        <div className="flex items-center space-x-2 mb-2">
+                            <span className="text-yellow-600">⚠️</span>
+                            <span className="text-sm font-medium text-yellow-800">Audio Mode Unavailable</span>
+                        </div>
+                        <p className="text-sm text-yellow-700">
+                            This question is currently in text mode because audio is not available. 
+                            Please read the text carefully and answer accordingly.
+                        </p>
+                    </div>
+                )}
+                
                 <p className="text-lg sm:text-xl text-gray-800 mb-8 break-words">
                     {currentQuestion.question || 'Question text not available'}
                 </p>
