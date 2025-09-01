@@ -856,51 +856,114 @@ def get_test_history():
     try:
         current_user_id = get_jwt_identity()
         
-        # Check if test_results collection exists
-        if not hasattr(mongo_db, 'test_results'):
-            current_app.logger.warning("test_results collection not found, returning empty test history")
-            return jsonify({'success': True, 'data': []}), 200
+        # Get results from both test_results and student_test_attempts collections
+        all_results = []
         
-        pipeline = [
-            {
-                '$match': {
-                    'student_id': ObjectId(current_user_id)
-                }
-            },
-            {
-                '$lookup': {
-                    'from': 'tests',
-                    'localField': 'test_id',
-                    'foreignField': '_id',
-                    'as': 'test_details'
-                }
-            },
-            {
-                '$unwind': '$test_details'
-            },
-            {
-                '$project': {
-                    '_id': 1,
-                    'test_name': '$test_details.name',
-                    'module_id': '$test_details.module_id',
-                    'subcategory': 1,
-                    'level_id': '$test_details.level_id',
-                    'average_score': 1,
-                    'correct_answers': 1,
-                    'total_questions': 1,
-                    'time_taken': 1,
-                    'submitted_at': 1,
-                    'test_type': 1
-                }
-            },
-            { '$sort': { 'submitted_at': -1 } }
-        ]
-        
+        # Try to get from test_results collection
         try:
-            results = list(mongo_db.test_results.aggregate(pipeline))
+            if hasattr(mongo_db, 'test_results'):
+                pipeline = [
+                    {
+                        '$match': {
+                            'student_id': ObjectId(current_user_id)
+                        }
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'tests',
+                            'localField': 'test_id',
+                            'foreignField': '_id',
+                            'as': 'test_details'
+                        }
+                    },
+                    {
+                        '$unwind': '$test_details'
+                    },
+                    {
+                        '$project': {
+                            '_id': 1,
+                            'test_name': '$test_details.name',
+                            'module_id': '$test_details.module_id',
+                            'subcategory': 1,
+                            'level_id': '$test_details.level_id',
+                            'average_score': 1,
+                            'score_percentage': 1,
+                            'correct_answers': 1,
+                            'total_questions': 1,
+                            'time_taken': 1,
+                            'submitted_at': 1,
+                            'test_type': 1
+                        }
+                    },
+                    { '$sort': { 'submitted_at': -1 } }
+                ]
+                
+                test_results = list(mongo_db.test_results.aggregate(pipeline))
+                all_results.extend(test_results)
+                current_app.logger.info(f"Found {len(test_results)} results in test_results collection")
+            else:
+                current_app.logger.warning("test_results collection not found")
         except Exception as e:
-            current_app.logger.warning(f"Error aggregating test history: {e}, using empty results")
-            results = []
+            current_app.logger.warning(f"Error aggregating from test_results: {e}")
+        
+        # Also get from student_test_attempts collection
+        try:
+            if hasattr(mongo_db, 'student_test_attempts'):
+                pipeline = [
+                    {
+                        '$match': {
+                            'student_id': current_user_id
+                        }
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'tests',
+                            'localField': 'test_id',
+                            'foreignField': '_id',
+                            'as': 'test_details'
+                        }
+                    },
+                    {
+                        '$unwind': '$test_details'
+                    },
+                    {
+                        '$project': {
+                            '_id': 1,
+                            'test_name': '$test_details.name',
+                            'module_id': '$test_details.module_id',
+                            'subcategory': '$test_details.subcategory',
+                            'level_id': '$test_details.level_id',
+                            'average_score': 1,
+                            'score_percentage': 1,
+                            'correct_answers': 1,
+                            'total_questions': 1,
+                            'time_taken': 1,
+                            'submitted_at': 1,
+                            'test_type': 1
+                        }
+                    },
+                    { '$sort': { 'submitted_at': -1 } }
+                ]
+                
+                attempt_results = list(mongo_db.student_test_attempts.aggregate(pipeline))
+                all_results.extend(attempt_results)
+                current_app.logger.info(f"Found {len(attempt_results)} results in student_test_attempts collection")
+            else:
+                current_app.logger.warning("student_test_attempts collection not found")
+        except Exception as e:
+            current_app.logger.warning(f"Error aggregating from student_test_attempts: {e}")
+        
+        # Remove duplicates based on test_id and submitted_at
+        seen = set()
+        unique_results = []
+        for result in all_results:
+            key = (str(result.get('test_id')), str(result.get('submitted_at')))
+            if key not in seen:
+                seen.add(key)
+                unique_results.append(result)
+        
+        results = unique_results
+        current_app.logger.info(f"Total unique results: {len(results)}")
         
         # Convert ObjectIds to strings and add module names
         for result in results:
@@ -929,57 +992,135 @@ def get_practice_results():
     try:
         current_user_id = get_jwt_identity()
         
-        # Check if test_results collection exists
-        if not hasattr(mongo_db, 'test_results'):
-            current_app.logger.warning("test_results collection not found, returning empty practice results")
-            return jsonify({'success': True, 'data': []}), 200
+        # Get practice results from both collections
+        all_results = []
         
-        # Get all practice test results
-        pipeline = [
-            {
-                '$match': {
-                    'student_id': ObjectId(current_user_id),
-                    'test_type': 'practice'
-                }
-            },
-            {
-                '$lookup': {
-                    'from': 'tests',
-                    'localField': 'test_id',
-                    'foreignField': '_id',
-                    'as': 'test_details'
-                }
-            },
-            {
-                '$unwind': '$test_details'
-            },
-            {
-                '$group': {
-                    '_id': {
-                        'module_id': '$test_details.module_id',
-                        'subcategory': '$subcategory'
-                    },
-                    'module_name': { '$first': '$test_details.module_id' },
-                    'subcategory_name': { '$first': '$subcategory' },
-                    'total_attempts': { '$sum': 1 },
-                    'highest_score': { '$max': '$average_score' },
-                    'average_score': { '$avg': '$average_score' },
-                    'total_questions_attempted': { '$sum': '$total_questions' },
-                    'total_correct_answers': { '$sum': '$correct_answers' },
-                    'last_attempt': { '$max': '$submitted_at' },
-                    'results': { '$push': '$$ROOT' }
-                }
-            },
-            {
-                '$sort': { 'module_name': 1, 'subcategory_name': 1 }
-            }
-        ]
-        
+        # Try to get from test_results collection
         try:
-            results = list(mongo_db.test_results.aggregate(pipeline))
+            if hasattr(mongo_db, 'test_results'):
+                pipeline = [
+                    {
+                        '$match': {
+                            'student_id': ObjectId(current_user_id),
+                            'test_type': 'practice'
+                        }
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'tests',
+                            'localField': 'test_id',
+                            'foreignField': '_id',
+                            'as': 'test_details'
+                        }
+                    },
+                    {
+                        '$unwind': '$test_details'
+                    },
+                    {
+                        '$group': {
+                            '_id': {
+                                'module_id': '$test_details.module_id',
+                                'subcategory': '$subcategory'
+                            },
+                            'module_name': { '$first': '$test_details.module_id' },
+                            'subcategory_name': { '$first': '$subcategory' },
+                            'total_attempts': { '$sum': 1 },
+                            'highest_score': { '$max': '$score_percentage' },  # Use score_percentage for highest score
+                            'average_score': { '$avg': '$score_percentage' },  # Use score_percentage for average
+                            'total_questions_attempted': { '$sum': '$total_questions' },
+                            'total_correct_answers': { '$sum': '$correct_answers' },
+                            'last_attempt': { '$max': '$submitted_at' },
+                            'results': { '$push': '$$ROOT' }
+                        }
+                    },
+                    {
+                        '$sort': { 'module_name': 1, 'subcategory_name': 1 }
+                    }
+                ]
+                
+                test_results = list(mongo_db.test_results.aggregate(pipeline))
+                all_results.extend(test_results)
+                current_app.logger.info(f"Found {len(test_results)} practice results in test_results collection")
+            else:
+                current_app.logger.warning("test_results collection not found")
         except Exception as e:
-            current_app.logger.warning(f"Error aggregating practice results: {e}, using empty results")
-            results = []
+            current_app.logger.warning(f"Error aggregating practice results from test_results: {e}")
+        
+        # Also get from student_test_attempts collection
+        try:
+            if hasattr(mongo_db, 'student_test_attempts'):
+                pipeline = [
+                    {
+                        '$match': {
+                            'student_id': current_user_id,
+                            'test_type': 'practice'
+                        }
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'tests',
+                            'localField': 'test_id',
+                            'foreignField': '_id',
+                            'as': 'test_details'
+                        }
+                    },
+                    {
+                        '$unwind': '$test_details'
+                    },
+                    {
+                        '$group': {
+                            '_id': {
+                                'module_id': '$test_details.module_id',
+                                'subcategory': '$test_details.subcategory'
+                            },
+                            'module_name': { '$first': '$test_details.module_id' },
+                            'subcategory_name': { '$first': '$test_details.subcategory' },
+                            'total_attempts': { '$sum': 1 },
+                            'highest_score': { '$max': '$score_percentage' },  # Use score_percentage for highest score
+                            'average_score': { '$avg': '$score_percentage' },  # Use score_percentage for average
+                            'total_questions_attempted': { '$sum': '$total_questions' },
+                            'total_correct_answers': { '$sum': '$correct_answers' },
+                            'last_attempt': { '$max': '$submitted_at' },
+                            'results': { '$push': '$$ROOT' }
+                        }
+                    },
+                    {
+                        '$sort': { 'module_name': 1, 'subcategory_name': 1 }
+                    }
+                ]
+                
+                attempt_results = list(mongo_db.student_test_attempts.aggregate(pipeline))
+                all_results.extend(attempt_results)
+                current_app.logger.info(f"Found {len(attempt_results)} practice results in student_test_attempts collection")
+            else:
+                current_app.logger.warning("student_test_attempts collection not found")
+        except Exception as e:
+            current_app.logger.warning(f"Error aggregating practice results from student_test_attempts: {e}")
+        
+        # Merge results from both collections
+        merged_results = {}
+        for result in all_results:
+            key = f"{result['_id']['module_id']}_{result['_id']['subcategory']}"
+            if key not in merged_results:
+                merged_results[key] = result
+            else:
+                # Merge the results, taking the better scores
+                existing = merged_results[key]
+                merged_results[key] = {
+                    '_id': result['_id'],
+                    'module_name': result['module_name'],
+                    'subcategory_name': result['subcategory_name'],
+                    'total_attempts': existing['total_attempts'] + result['total_attempts'],
+                    'highest_score': max(existing['highest_score'], result['highest_score']),
+                    'average_score': (existing['average_score'] + result['average_score']) / 2,
+                    'total_questions_attempted': existing['total_questions_attempted'] + result['total_questions_attempted'],
+                    'total_correct_answers': existing['total_correct_answers'] + result['total_correct_answers'],
+                    'last_attempt': max(existing['last_attempt'], result['last_attempt']),
+                    'results': existing['results'] + result['results']
+                }
+        
+        results = list(merged_results.values())
+        current_app.logger.info(f"Total merged practice results: {len(results)}")
         
         # Process results
         for result in results:
@@ -1006,62 +1147,150 @@ def get_grammar_detailed_results():
     try:
         current_user_id = get_jwt_identity()
         
-        # Check if test_results collection exists
-        if not hasattr(mongo_db, 'test_results'):
-            current_app.logger.warning("test_results collection not found, returning empty grammar results")
-            return jsonify({'success': True, 'data': []}), 200
+        # Get grammar results from both collections
+        all_results = []
         
-        pipeline = [
-            {
-                '$match': {
-                    'student_id': ObjectId(current_user_id),
-                    'module_id': 'GRAMMAR',
-                    'test_type': 'practice'
-                }
-            },
-            {
-                '$lookup': {
-                    'from': 'tests',
-                    'localField': 'test_id',
-                    'foreignField': '_id',
-                    'as': 'test_details'
-                }
-            },
-            {
-                '$unwind': '$test_details'
-            },
-            {
-                '$group': {
-                    '_id': '$subcategory',
-                    'subcategory_name': { '$first': '$subcategory' },
-                    'total_attempts': { '$sum': 1 },
-                    'highest_score': { '$max': '$average_score' },
-                    'average_score': { '$avg': '$average_score' },
-                    'total_questions': { '$sum': '$total_questions' },
-                    'total_correct': { '$sum': '$correct_answers' },
-                    'last_attempt': { '$max': '$submitted_at' },
-                    'attempts': {
-                        '$push': {
-                            'test_name': '$test_details.name',
-                            'score': '$average_score',
-                            'correct_answers': '$correct_answers',
-                            'total_questions': '$total_questions',
-                            'submitted_at': '$submitted_at',
-                            'result_id': '$_id'
-                        }
-                    }
-                }
-            },
-            {
-                '$sort': { 'subcategory_name': 1 }
-            }
-        ]
-        
+        # Try to get from test_results collection
         try:
-            results = list(mongo_db.test_results.aggregate(pipeline))
+            if hasattr(mongo_db, 'test_results'):
+                pipeline = [
+                    {
+                        '$match': {
+                            'student_id': ObjectId(current_user_id),
+                            'module_id': 'GRAMMAR',
+                            'test_type': 'practice'
+                        }
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'tests',
+                            'localField': 'test_id',
+                            'foreignField': '_id',
+                            'as': 'test_details'
+                        }
+                    },
+                    {
+                        '$unwind': '$test_details'
+                    },
+                    {
+                        '$group': {
+                            '_id': '$subcategory',
+                            'subcategory_name': { '$first': '$subcategory' },
+                            'total_attempts': { '$sum': 1 },
+                            'highest_score': { '$max': '$score_percentage' },  # Use score_percentage for highest score
+                            'average_score': { '$avg': '$score_percentage' },  # Use score_percentage for average
+                            'total_questions': { '$sum': '$total_questions' },
+                            'total_correct': { '$sum': '$correct_answers' },
+                            'last_attempt': { '$max': '$submitted_at' },
+                            'attempts': {
+                                '$push': {
+                                    'test_name': '$test_details.name',
+                                    'score': '$score_percentage',  # Use score_percentage for individual scores
+                                    'correct_answers': '$correct_answers',
+                                    'total_questions': '$total_questions',
+                                    'submitted_at': '$submitted_at',
+                                    'result_id': '$_id'
+                                }
+                            }
+                        }
+                    },
+                    {
+                        '$sort': { 'subcategory_name': 1 }
+                    }
+                ]
+                
+                test_results = list(mongo_db.test_results.aggregate(pipeline))
+                all_results.extend(test_results)
+                current_app.logger.info(f"Found {len(test_results)} grammar results in test_results collection")
+            else:
+                current_app.logger.warning("test_results collection not found")
         except Exception as e:
-            current_app.logger.warning(f"Error aggregating grammar results: {e}, using empty results")
-            results = []
+            current_app.logger.warning(f"Error aggregating grammar results from test_results: {e}")
+        
+        # Also get from student_test_attempts collection
+        try:
+            if hasattr(mongo_db, 'student_test_attempts'):
+                pipeline = [
+                    {
+                        '$match': {
+                            'student_id': current_user_id,
+                            'test_type': 'practice'
+                        }
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'tests',
+                            'localField': 'test_id',
+                            'foreignField': '_id',
+                            'as': 'test_details'
+                        }
+                    },
+                    {
+                        '$unwind': '$test_details'
+                    },
+                    {
+                        '$match': {
+                            'test_details.module_id': 'GRAMMAR'
+                        }
+                    },
+                    {
+                        '$group': {
+                            '_id': '$test_details.subcategory',
+                            'subcategory_name': { '$first': '$test_details.subcategory' },
+                            'total_attempts': { '$sum': 1 },
+                            'highest_score': { '$max': '$score_percentage' },  # Use score_percentage for highest score
+                            'average_score': { '$avg': '$score_percentage' },  # Use score_percentage for average
+                            'total_questions': { '$sum': '$total_questions' },
+                            'total_correct': { '$sum': '$correct_answers' },
+                            'last_attempt': { '$max': '$submitted_at' },
+                            'attempts': {
+                                '$push': {
+                                    'test_name': '$test_details.name',
+                                    'score': '$score_percentage',  # Use score_percentage for individual scores
+                                    'correct_answers': '$correct_answers',
+                                    'total_questions': '$total_questions',
+                                    'submitted_at': '$submitted_at',
+                                    'result_id': '$_id'
+                                }
+                            }
+                        }
+                    },
+                    {
+                        '$sort': { 'subcategory_name': 1 }
+                    }
+                ]
+                
+                attempt_results = list(mongo_db.student_test_attempts.aggregate(pipeline))
+                all_results.extend(attempt_results)
+                current_app.logger.info(f"Found {len(attempt_results)} grammar results in student_test_attempts collection")
+            else:
+                current_app.logger.warning("student_test_attempts collection not found")
+        except Exception as e:
+            current_app.logger.warning(f"Error aggregating grammar results from student_test_attempts: {e}")
+        
+        # Merge results from both collections
+        merged_results = {}
+        for result in all_results:
+            subcategory = result['_id']
+            if subcategory not in merged_results:
+                merged_results[subcategory] = result
+            else:
+                # Merge the results, taking the better scores
+                existing = merged_results[subcategory]
+                merged_results[subcategory] = {
+                    '_id': subcategory,
+                    'subcategory_name': result['subcategory_name'],
+                    'total_attempts': existing['total_attempts'] + result['total_attempts'],
+                    'highest_score': max(existing['highest_score'], result['highest_score']),
+                    'average_score': (existing['average_score'] + result['average_score']) / 2,
+                    'total_questions': existing['total_questions'] + result['total_questions'],
+                    'total_correct': existing['total_correct'] + result['total_correct'],
+                    'last_attempt': max(existing['last_attempt'], result['last_attempt']),
+                    'attempts': existing['attempts'] + result['attempts']
+                }
+        
+        results = list(merged_results.values())
+        current_app.logger.info(f"Total merged grammar results: {len(results)}")
         
         # Process results
         for result in results:
@@ -1097,62 +1326,150 @@ def get_vocabulary_detailed_results():
     try:
         current_user_id = get_jwt_identity()
         
-        # Check if test_results collection exists
-        if not hasattr(mongo_db, 'test_results'):
-            current_app.logger.warning("test_results collection not found, returning empty vocabulary results")
-            return jsonify({'success': True, 'data': []}), 200
+        # Get vocabulary results from both collections
+        all_results = []
         
-        pipeline = [
-            {
-                '$match': {
-                    'student_id': ObjectId(current_user_id),
-                    'module_id': 'VOCABULARY',
-                    'test_type': 'practice'
-                }
-            },
-            {
-                '$lookup': {
-                    'from': 'tests',
-                    'localField': 'test_id',
-                    'foreignField': '_id',
-                    'as': 'test_details'
-                }
-            },
-            {
-                '$unwind': '$test_details'
-            },
-            {
-                '$group': {
-                    '_id': '$test_details.level_id',
-                    'level_name': { '$first': '$test_details.level_id' },
-                    'total_attempts': { '$sum': 1 },
-                    'highest_score': { '$max': '$average_score' },
-                    'average_score': { '$avg': '$average_score' },
-                    'total_questions': { '$sum': '$total_questions' },
-                    'total_correct': { '$sum': '$correct_answers' },
-                    'last_attempt': { '$max': '$submitted_at' },
-                    'attempts': {
-                        '$push': {
-                            'test_name': '$test_details.name',
-                            'score': '$average_score',
-                            'correct_answers': '$correct_answers',
-                            'total_questions': '$total_questions',
-                            'submitted_at': '$submitted_at',
-                            'result_id': '$_id'
-                        }
-                    }
-                }
-            },
-            {
-                '$sort': { 'level_name': 1 }
-            }
-        ]
-        
+        # Try to get from test_results collection
         try:
-            results = list(mongo_db.test_results.aggregate(pipeline))
+            if hasattr(mongo_db, 'test_results'):
+                pipeline = [
+                    {
+                        '$match': {
+                            'student_id': ObjectId(current_user_id),
+                            'module_id': 'VOCABULARY',
+                            'test_type': 'practice'
+                        }
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'tests',
+                            'localField': 'test_id',
+                            'foreignField': '_id',
+                            'as': 'test_details'
+                        }
+                    },
+                    {
+                        '$unwind': '$test_details'
+                    },
+                    {
+                        '$group': {
+                            '_id': '$test_details.level_id',
+                            'level_name': { '$first': '$test_details.level_id' },
+                            'total_attempts': { '$sum': 1 },
+                            'highest_score': { '$max': '$score_percentage' },  # Use score_percentage for highest score
+                            'average_score': { '$avg': '$score_percentage' },  # Use score_percentage for average
+                            'total_questions': { '$sum': '$total_questions' },
+                            'total_correct': { '$sum': '$correct_answers' },
+                            'last_attempt': { '$max': '$submitted_at' },
+                            'attempts': {
+                                '$push': {
+                                    'test_name': '$test_details.name',
+                                    'score': '$score_percentage',  # Use score_percentage for individual scores
+                                    'correct_answers': '$correct_answers',
+                                    'total_questions': '$total_questions',
+                                    'submitted_at': '$submitted_at',
+                                    'result_id': '$_id'
+                                }
+                            }
+                        }
+                    },
+                    {
+                        '$sort': { 'level_name': 1 }
+                    }
+                ]
+                
+                test_results = list(mongo_db.test_results.aggregate(pipeline))
+                all_results.extend(test_results)
+                current_app.logger.info(f"Found {len(test_results)} vocabulary results in test_results collection")
+            else:
+                current_app.logger.warning("test_results collection not found")
         except Exception as e:
-            current_app.logger.warning(f"Error aggregating vocabulary results: {e}, using empty results")
-            results = []
+            current_app.logger.warning(f"Error aggregating vocabulary results from test_results: {e}")
+        
+        # Also get from student_test_attempts collection
+        try:
+            if hasattr(mongo_db, 'student_test_attempts'):
+                pipeline = [
+                    {
+                        '$match': {
+                            'student_id': current_user_id,
+                            'test_type': 'practice'
+                        }
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'tests',
+                            'localField': 'test_id',
+                            'foreignField': '_id',
+                            'as': 'test_details'
+                        }
+                    },
+                    {
+                        '$unwind': '$test_details'
+                    },
+                    {
+                        '$match': {
+                            'test_details.module_id': 'VOCABULARY'
+                        }
+                    },
+                    {
+                        '$group': {
+                            '_id': '$test_details.level_id',
+                            'level_name': { '$first': '$test_details.level_id' },
+                            'total_attempts': { '$sum': 1 },
+                            'highest_score': { '$max': '$score_percentage' },  # Use score_percentage for highest score
+                            'average_score': { '$avg': '$score_percentage' },  # Use score_percentage for average
+                            'total_questions': { '$sum': '$total_questions' },
+                            'total_correct': { '$sum': '$correct_answers' },
+                            'last_attempt': { '$max': '$submitted_at' },
+                            'attempts': {
+                                '$push': {
+                                    'test_name': '$test_details.name',
+                                    'score': '$score_percentage',  # Use score_percentage for individual scores
+                                    'correct_answers': '$correct_answers',
+                                    'total_questions': '$total_questions',
+                                    'submitted_at': '$submitted_at',
+                                    'result_id': '$_id'
+                                }
+                            }
+                        }
+                    },
+                    {
+                        '$sort': { 'level_name': 1 }
+                    }
+                ]
+                
+                attempt_results = list(mongo_db.student_test_attempts.aggregate(pipeline))
+                all_results.extend(attempt_results)
+                current_app.logger.info(f"Found {len(attempt_results)} vocabulary results in student_test_attempts collection")
+            else:
+                current_app.logger.warning("student_test_attempts collection not found")
+        except Exception as e:
+            current_app.logger.warning(f"Error aggregating vocabulary results from student_test_attempts: {e}")
+        
+        # Merge results from both collections
+        merged_results = {}
+        for result in all_results:
+            level_id = result['_id']
+            if level_id not in merged_results:
+                merged_results[level_id] = result
+            else:
+                # Merge the results, taking the better scores
+                existing = merged_results[level_id]
+                merged_results[level_id] = {
+                    '_id': level_id,
+                    'level_name': result['level_name'],
+                    'total_attempts': existing['total_attempts'] + result['total_attempts'],
+                    'highest_score': max(existing['highest_score'], result['highest_score']),
+                    'average_score': (existing['average_score'] + result['average_score']) / 2,
+                    'total_questions': existing['total_questions'] + result['total_questions'],
+                    'total_correct': existing['total_correct'] + result['total_correct'],
+                    'last_attempt': max(existing['last_attempt'], result['last_attempt']),
+                    'attempts': existing['attempts'] + result['attempts']
+                }
+        
+        results = list(merged_results.values())
+        current_app.logger.info(f"Total merged vocabulary results: {len(results)}")
         
         # Process results
         for result in results:
@@ -1188,60 +1505,124 @@ def get_progress_summary():
     try:
         current_user_id = get_jwt_identity()
         
-        # Check if test_results collection exists
-        if not hasattr(mongo_db, 'test_results'):
-            current_app.logger.warning("test_results collection not found, returning empty progress")
-            return jsonify({
-                'success': True,
-                'data': {
-                    'total_practice_tests': 0,
-                    'modules': [],
-                    'recent_activity': []
-                }
-            }), 200
+        # Get progress from both collections
+        total_results = 0
+        all_modules = []
         
-        # Get overall statistics
-        total_results = mongo_db.test_results.count_documents({
-            'student_id': ObjectId(current_user_id),
-            'test_type': 'practice'
-        })
-        
-        # Get module-wise statistics
-        pipeline = [
-            {
-                '$match': {
+        # Try to get from test_results collection
+        try:
+            if hasattr(mongo_db, 'test_results'):
+                total_results += mongo_db.test_results.count_documents({
                     'student_id': ObjectId(current_user_id),
                     'test_type': 'practice'
-                }
-            },
-            {
-                '$lookup': {
-                    'from': 'tests',
-                    'localField': 'test_id',
-                    'foreignField': '_id',
-                    'as': 'test_details'
-                }
-            },
-            {'$unwind': '$test_details'},
-            {
-                '$group': {
-                    '_id': '$test_details.module_id',
-                    'module_name': { '$first': '$test_details.module_id' },
-                    'total_attempts': { '$sum': 1 },
-                    'highest_score': { '$max': '$average_score' },
-                    'average_score': { '$avg': '$average_score' },
-                    'total_questions': { '$sum': '$total_questions' },
-                    'total_correct': { '$sum': '$correct_answers' },
-                    'last_attempt': { '$max': '$submitted_at' }
-                }
-            }
-        ]
-        
-        try:
-            module_stats = list(mongo_db.test_results.aggregate(pipeline))
+                })
+                
+                pipeline = [
+                    {
+                        '$match': {
+                            'student_id': ObjectId(current_user_id),
+                            'test_type': 'practice'
+                        }
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'tests',
+                            'localField': 'test_id',
+                            'foreignField': '_id',
+                            'as': 'test_details'
+                        }
+                    },
+                    {'$unwind': '$test_details'},
+                    {
+                        '$group': {
+                            '_id': '$test_details.module_id',
+                            'module_name': { '$first': '$test_details.module_id' },
+                            'total_attempts': { '$sum': 1 },
+                            'highest_score': { '$max': '$score_percentage' },  # Use score_percentage for highest score
+                            'average_score': { '$avg': '$score_percentage' },  # Use score_percentage for average
+                            'total_questions': { '$sum': '$total_questions' },
+                            'total_correct': { '$sum': '$correct_answers' },
+                            'last_attempt': { '$max': '$submitted_at' }
+                        }
+                    }
+                ]
+                
+                module_stats = list(mongo_db.test_results.aggregate(pipeline))
+                all_modules.extend(module_stats)
+                current_app.logger.info(f"Found {len(module_stats)} modules in test_results collection")
+            else:
+                current_app.logger.warning("test_results collection not found")
         except Exception as e:
-            current_app.logger.warning(f"Error aggregating module stats: {e}, using empty stats")
-            module_stats = []
+            current_app.logger.warning(f"Error aggregating from test_results: {e}")
+        
+        # Also get from student_test_attempts collection
+        try:
+            if hasattr(mongo_db, 'student_test_attempts'):
+                total_results += mongo_db.student_test_attempts.count_documents({
+                    'student_id': current_user_id,
+                    'test_type': 'practice'
+                })
+                
+                pipeline = [
+                    {
+                        '$match': {
+                            'student_id': current_user_id,
+                            'test_type': 'practice'
+                        }
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'tests',
+                            'localField': 'test_id',
+                            'foreignField': '_id',
+                            'as': 'test_details'
+                        }
+                    },
+                    {'$unwind': '$test_details'},
+                    {
+                        '$group': {
+                            '_id': '$test_details.module_id',
+                            'module_name': { '$first': '$test_details.module_id' },
+                            'total_attempts': { '$sum': 1 },
+                            'highest_score': { '$max': '$score_percentage' },  # Use score_percentage for highest score
+                            'average_score': { '$avg': '$score_percentage' },  # Use score_percentage for average
+                            'total_questions': { '$sum': '$total_questions' },
+                            'total_correct': { '$sum': '$correct_answers' },
+                            'last_attempt': { '$max': '$submitted_at' }
+                        }
+                    }
+                ]
+                
+                attempt_module_stats = list(mongo_db.student_test_attempts.aggregate(pipeline))
+                all_modules.extend(attempt_module_stats)
+                current_app.logger.info(f"Found {len(attempt_module_stats)} modules in student_test_attempts collection")
+            else:
+                current_app.logger.warning("student_test_attempts collection not found")
+        except Exception as e:
+            current_app.logger.warning(f"Error aggregating from student_test_attempts: {e}")
+        
+        # Merge module results from both collections
+        merged_modules = {}
+        for module in all_modules:
+            module_id = module['_id']
+            if module_id not in merged_modules:
+                merged_modules[module_id] = module
+            else:
+                # Merge the results, taking the better scores
+                existing = merged_modules[module_id]
+                merged_modules[module_id] = {
+                    '_id': module_id,
+                    'module_name': module['module_name'],
+                    'total_attempts': existing['total_attempts'] + module['total_attempts'],
+                    'highest_score': max(existing['highest_score'], module['highest_score']),
+                    'average_score': (existing['average_score'] + module['average_score']) / 2,
+                    'total_questions': existing['total_questions'] + module['total_questions'],
+                    'total_correct': existing['total_correct'] + module['total_correct'],
+                    'last_attempt': max(existing['last_attempt'], module['last_attempt'])
+                }
+        
+        module_stats = list(merged_modules.values())
+        current_app.logger.info(f"Total merged modules: {len(module_stats)}")
         
         # Process module statistics
         for stat in module_stats:
@@ -1253,14 +1634,30 @@ def get_progress_summary():
             if isinstance(stat.get('_id'), ObjectId):
                 stat['_id'] = str(stat['_id'])
         
-        # Get recent activity
+        # Get recent activity from both collections
+        recent_activity = []
+        
         try:
-            recent_activity = list(mongo_db.test_results.find({
-                'student_id': ObjectId(current_user_id)
-            }).sort('submitted_at', -1).limit(10))
+            if hasattr(mongo_db, 'test_results'):
+                test_recent = list(mongo_db.test_results.find({
+                    'student_id': ObjectId(current_user_id)
+                }).sort('submitted_at', -1).limit(5))
+                recent_activity.extend(test_recent)
         except Exception as e:
-            current_app.logger.warning(f"Error fetching recent activity: {e}, using empty activity")
-            recent_activity = []
+            current_app.logger.warning(f"Error fetching recent activity from test_results: {e}")
+        
+        try:
+            if hasattr(mongo_db, 'student_test_attempts'):
+                attempt_recent = list(mongo_db.student_test_attempts.find({
+                    'student_id': current_user_id
+                }).sort('submitted_at', -1).limit(5))
+                recent_activity.extend(attempt_recent)
+        except Exception as e:
+            current_app.logger.warning(f"Error fetching recent activity from student_test_attempts: {e}")
+        
+        # Sort by date and take top 10
+        recent_activity.sort(key=lambda x: x.get('submitted_at', datetime.min), reverse=True)
+        recent_activity = recent_activity[:10]
         
         for activity in recent_activity:
             activity['_id'] = str(activity['_id'])

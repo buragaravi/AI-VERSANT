@@ -96,6 +96,7 @@ const PracticeModules = () => {
   };
 
   const handleModuleSubmit = (result) => {
+    console.log('handleModuleSubmit received result:', result);
     setModuleResult(result);
     // After submitting, fetch the latest grammar progress if it was a grammar module
     if (currentCategory?.id === 'GRAMMAR') {
@@ -698,14 +699,31 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
         try {
             const formData = new FormData();
             formData.append('test_id', module._id);
-            // Attach MCQ answers
-            Object.entries(answers).forEach(([qid, ans]) => {
-                formData.append(`answer_${qid}`, ans);
+            
+            // Attach MCQ answers - use question index, not question ID
+            questions.forEach((question, index) => {
+                const questionId = question.question_id || question._id;
+                if (answers[questionId]) {
+                    formData.append(`answer_${index}`, answers[questionId]);
+                }
             });
-            // Attach audio answers
-            Object.entries(recordings).forEach(([qid, blob]) => {
-                formData.append(`question_${qid}`, blob, `answer_${qid}.wav`);
+            
+            // Attach audio answers - use question index, not question ID
+            questions.forEach((question, index) => {
+                const questionId = question.question_id || question._id;
+                if (recordings[questionId]) {
+                    formData.append(`question_${index}`, recordings[questionId], `answer_${index}.wav`);
+                }
             });
+            
+            // Debug: Log what we're sending
+            console.log('Submitting form data:', {
+                test_id: module._id,
+                answers: answers,
+                recordings: Object.keys(recordings),
+                formDataEntries: Array.from(formData.entries())
+            });
+            
             const res = await submitPracticeTest(formData);
             if (res.data.success) {
                 success("Module submitted successfully!");
@@ -914,8 +932,13 @@ const ResultView = ({ result, onBack }) => {
         )
     }
     
-    const { correct_answers, total_questions, average_score, results } = result;
-    const scorePercentage = average_score || 0;
+    // Debug: Log the result data
+    console.log('ResultView received result:', result);
+    
+    const { correct_answers, total_questions, average_score, score_percentage, results } = result;
+    const scorePercentage = score_percentage || (average_score * 100) || 0;
+    
+    console.log('Extracted values:', { correct_answers, total_questions, average_score, score_percentage, scorePercentage });
     
     // Helper for word diff display
     const renderWordDiff = (expected, got) => {

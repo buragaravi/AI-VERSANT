@@ -167,7 +167,27 @@ app.register_blueprint(technical_test_bp, url_prefix='/test-management/technical
 
 print("=== Registered Routes ===")
 for rule in app.url_map.iter_rules():
-    print(rule)
+    print(f"{rule.methods} {rule.rule} -> {rule.endpoint}")
+print("=========================")
+
+# Test route registration
+print("\n=== Testing Route Registration ===")
+try:
+    with app.test_client() as client:
+        # Test test_management root
+        response = client.get('/test-management/')
+        print(f"Test management root: {response.status_code} - {response.get_data(as_text=True)}")
+        
+        # Test test_management health
+        response = client.get('/test-management/health')
+        print(f"Test management health: {response.status_code} - {response.get_data(as_text=True)}")
+        
+        # Test test_management test-endpoint
+        response = client.get('/test-management/test-endpoint')
+        print(f"Test management test-endpoint: {response.status_code} - {response.get_data(as_text=True)}")
+        
+except Exception as e:
+    print(f"Route testing failed: {e}")
 print("=========================")
 
 # Initialize the scheduler for daily notifications

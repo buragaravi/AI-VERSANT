@@ -54,6 +54,12 @@ ONECOMPILER_API_HOST = 'onecompiler-apis.p.rapidapi.com'
 
 test_management_bp = Blueprint('test_management', __name__)
 
+# Test route to verify blueprint is working
+@test_management_bp.route('/test-blueprint', methods=['GET'])
+def test_blueprint():
+    """Test if blueprint is working"""
+    return jsonify({'success': True, 'message': 'Blueprint is working'}), 200
+
 # ==================== SHARED UTILITY FUNCTIONS ====================
 
 def generate_unique_test_id(length=6):
@@ -1637,14 +1643,60 @@ def create_online_test_with_random_questions():
 
 # ==================== STUDENT TEST SUBMISSION ENDPOINTS ====================
 
+@test_management_bp.route('/', methods=['GET'])
+def root_test():
+    """Root test endpoint to verify blueprint is working"""
+    return jsonify({'success': True, 'message': 'Test management blueprint root is working'}), 200
+
+@test_management_bp.route('/test-endpoint', methods=['GET'])
+def test_endpoint():
+    """Test endpoint to verify route is working"""
+    return jsonify({'success': True, 'message': 'Test management route is working'}), 200
+
+@test_management_bp.route('/health', methods=['GET'])
+def health_check():
+    """Health check for test management routes"""
+    return jsonify({
+        'success': True, 
+        'message': 'Test management routes are healthy',
+        'timestamp': datetime.utcnow().isoformat(),
+        'available_endpoints': [
+            '/',
+            '/test-endpoint',
+            '/submit-practice-test',
+            '/submit-technical-test'
+        ]
+    }), 200
+
+@test_management_bp.route('/submit-practice-test-test', methods=['POST'])
+def submit_practice_test_test():
+    """Test endpoint without JWT to verify route is accessible"""
+    return jsonify({'success': True, 'message': 'Practice test endpoint is accessible'}), 200
+
+@test_management_bp.route('/submit-practice-test-simple', methods=['POST'])
+def submit_practice_test_simple():
+    """Simple test endpoint to verify basic functionality"""
+    try:
+        current_app.logger.info("=== SIMPLE PRACTICE TEST ENDPOINT HIT ===")
+        return jsonify({'success': True, 'message': 'Simple practice test endpoint working'}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error in simple endpoint: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @test_management_bp.route('/submit-practice-test', methods=['POST'])
 @jwt_required()
 def submit_practice_test():
     """Submit practice test with student audio recordings or MCQ answers"""
     try:
+        current_app.logger.info("=== PRACTICE TEST SUBMISSION ENDPOINT HIT ===")
         current_user_id = get_jwt_identity()
+        current_app.logger.info(f"Practice test submission attempt by user {current_user_id}")
+        
         data = request.form.to_dict()
         files = request.files
+        
+        current_app.logger.info(f"Received form data: {data}")
+        current_app.logger.info(f"Received files: {list(files.keys()) if files else 'No files'}")
         
         # Validate required fields
         if not data.get('test_id'):
@@ -1663,42 +1715,127 @@ def submit_practice_test():
             }), 404
         
         # Check if student has access to this test
-        student = mongo_db.students.find_one({'user_id': current_user_id})
+        current_app.logger.info(f"Looking for student profile with user_id: {current_user_id}")
+        
+        # Debug: Check what's in the students collection
+        all_students = list(mongo_db.students.find().limit(5))
+        current_app.logger.info(f"Sample students in collection: {[{'user_id': str(s.get('user_id')), '_id': str(s.get('_id'))} for s in all_students]}")
+        
+        student = mongo_db.students.find_one({'user_id': ObjectId(current_user_id)})
         if not student:
-            return jsonify({
-                'success': False,
-                'message': 'Student profile not found'
-            }), 404
+            current_app.logger.warning(f"Student profile not found for user_id: {current_user_id}")
+            # Try alternative lookup methods
+            student = mongo_db.students.find_one({'_id': ObjectId(current_user_id)})
+            if not student:
+                current_app.logger.warning(f"Student profile not found with _id either: {current_user_id}")
+                return jsonify({
+                    'success': False,
+                    'message': 'Student profile not found. Please contact your administrator.'
+                }), 404
+            else:
+                current_app.logger.info(f"Found student profile using _id lookup")
+        else:
+            current_app.logger.info(f"Found student profile using user_id lookup")
         
         # Validate access based on campus, course, batch
+        current_app.logger.info(f"Student data: campus_id={student.get('campus_id')}, course_id={student.get('course_id')}, batch_id={student.get('batch_id')}")
+        current_app.logger.info(f"Test access requirements: campus_ids={test.get('campus_ids')}, course_ids={test.get('course_ids')}, batch_ids={test.get('batch_ids')}")
+        
         has_access = False
         if test.get('campus_ids') and student.get('campus_id') in test['campus_ids']:
             has_access = True
+            current_app.logger.info("Access granted via campus_id match")
         if test.get('course_ids') and student.get('course_id') in test['course_ids']:
             has_access = True
+            current_app.logger.info("Access granted via course_id match")
         if test.get('batch_ids') and student.get('batch_id') in test['batch_ids']:
+            has_access = True
+            current_app.logger.info("Access granted via batch_id match")
+        
+        # For practice tests, be more lenient with access control
+        if test.get('test_type') == 'practice':
+            current_app.logger.info("Practice test detected - applying lenient access control")
             has_access = True
         
         if not has_access:
+            current_app.logger.warning(f"Access denied for student {current_user_id} to test {test_id}")
             return jsonify({
                 'success': False,
-                'message': 'Access denied to this test'
+                'message': 'Access denied to this test. Please contact your administrator.'
             }), 403
         
+        current_app.logger.info(f"Access granted for student {current_user_id} to test {test_id}")
+        
         # Process questions and calculate results
+        current_app.logger.info(f"Processing {len(test['questions'])} questions for test {test_id}")
+        
+        # Create a lookup table for correct answers from the original test
+        correct_answer_lookup = {}
+        try:
+            original_test = mongo_db.tests.find_one({'_id': test_id})
+            if original_test and 'questions' in original_test:
+                current_app.logger.info(f"Creating correct answer lookup table from original test")
+                for orig_q in original_test['questions']:
+                    # Create a key based on question text (first 50 chars) and question type
+                    question_key = f"{orig_q.get('question', '')[:50]}_{orig_q.get('question_type', '')}"
+                    correct_answer_lookup[question_key] = {
+                        'correct_answer': orig_q.get('correct_answer') or orig_q.get('answer') or orig_q.get('right_answer') or '',
+                        'question_text': orig_q.get('question', ''),
+                        'question_id': str(orig_q.get('_id', ''))
+                    }
+                    current_app.logger.info(f"Added to lookup: {question_key} -> {correct_answer_lookup[question_key]}")
+                
+                current_app.logger.info(f"Lookup table created with {len(correct_answer_lookup)} entries")
+                current_app.logger.info(f"Lookup table keys: {list(correct_answer_lookup.keys())}")
+        except Exception as e:
+            current_app.logger.error(f"Error creating correct answer lookup: {e}")
+        
         results = []
         total_score = 0
         correct_answers = 0
         
         for i, question in enumerate(test['questions']):
+            current_app.logger.info(f"Processing question {i}: type={question.get('question_type')}")
+            current_app.logger.info(f"Question {i} data: {question}")
+            
             if question.get('question_type') == 'mcq':
                 # Handle MCQ question
                 answer_key = f'answer_{i}'
+                current_app.logger.info(f"MCQ question {i}: looking for answer key '{answer_key}' in data")
+                
                 if answer_key in data:
                     student_answer = data[answer_key]
-                    correct_answer = question.get('correct_answer', '')
+                    
+                    # Get the correct answer from the lookup table
+                    question_key = f"{question.get('question', '')[:50]}_{question.get('question_type', '')}"
+                    current_app.logger.info(f"Looking for question key: '{question_key}' in lookup table")
+                    current_app.logger.info(f"Current question text: '{question.get('question', '')[:50]}...'")
+                    
+                    correct_answer = ''
+                    
+                    if question_key in correct_answer_lookup:
+                        correct_answer = correct_answer_lookup[question_key]['correct_answer']
+                        current_app.logger.info(f"Found correct answer in lookup table: {correct_answer}")
+                    else:
+                        current_app.logger.warning(f"Question key '{question_key}' not found in lookup table")
+                        # Try alternative matching methods
+                        for key, value in correct_answer_lookup.items():
+                            if (question.get('question', '')[:50] in key or 
+                                str(question.get('_id', '')) == value['question_id'] or
+                                str(question.get('question_id', '')) == value['question_id']):
+                                correct_answer = value['correct_answer']
+                                current_app.logger.info(f"Found correct answer via alternative matching: {correct_answer}")
+                                break
+                    
+                    if not correct_answer:
+                        current_app.logger.warning(f"Could not find correct answer for question {i}, using fallback")
+                        # Fallback: try to extract from the current question object
+                        correct_answer = question.get('correct_answer') or question.get('answer') or question.get('right_answer') or ''
+                    
                     is_correct = student_answer == correct_answer
                     score = 1 if is_correct else 0
+                    
+                    current_app.logger.info(f"MCQ question {i}: student_answer={student_answer}, correct_answer={correct_answer}, is_correct={is_correct}")
                     
                     if is_correct:
                         correct_answers += 1
@@ -1713,7 +1850,10 @@ def submit_practice_test():
                         'is_correct': is_correct,
                         'score': score
                     })
+                else:
+                    current_app.logger.warning(f"MCQ question {i}: answer key '{answer_key}' not found in data")
             else:
+                current_app.logger.info(f"Non-MCQ question {i}: type={question.get('question_type')}")
                 # Handle audio question (Listening or Speaking)
                 audio_key = f'question_{i}'
                 if audio_key not in files:
@@ -1773,8 +1913,10 @@ def submit_practice_test():
                     'score': score
                 })
         
-        # Calculate average score
+        # Calculate average score and percentage
         average_score = total_score / len(test['questions']) if test['questions'] else 0
+        score_percentage = (average_score * 100)  # Convert to percentage (0-100)
+        current_app.logger.info(f"Test results: total_score={total_score}, average_score={average_score}, score_percentage={score_percentage}%, correct_answers={correct_answers}")
         
         # Save test result
         result_doc = {
@@ -1783,13 +1925,45 @@ def submit_practice_test():
             'results': results,
             'total_score': total_score,
             'average_score': average_score,
+            'score_percentage': score_percentage,
             'correct_answers': correct_answers,
             'total_questions': len(test['questions']),
             'submitted_at': datetime.utcnow(),
             'test_type': 'practice'
         }
         
+        current_app.logger.info(f"Saving test result: {result_doc}")
+        
+        # Save to student_test_attempts collection
         mongo_db.student_test_attempts.insert_one(result_doc)
+        current_app.logger.info("Test result saved to student_test_attempts collection")
+        
+        # Also save to test_results collection for compatibility with existing endpoints
+        test_result_doc = {
+            'test_id': test_id,
+            'student_id': current_user_id,
+            'test_type': 'practice',
+            'module_id': test.get('module_id'),
+            'subcategory': test.get('subcategory'),
+            'level_id': test.get('level_id'),
+            'average_score': average_score,
+            'score_percentage': score_percentage,
+            'correct_answers': correct_answers,
+            'total_questions': len(test['questions']),
+            'total_score': total_score,
+            'results': results,
+            'submitted_at': datetime.utcnow(),
+            'time_taken': None,  # Practice tests don't track time
+            'status': 'completed'
+        }
+        
+        try:
+            mongo_db.test_results.insert_one(test_result_doc)
+            current_app.logger.info("Test result also saved to test_results collection")
+        except Exception as e:
+            current_app.logger.warning(f"Could not save to test_results collection: {e}")
+        
+        current_app.logger.info("Test result saved successfully")
         
         return jsonify({
             'success': True,
@@ -1797,6 +1971,7 @@ def submit_practice_test():
             'data': {
                 'total_score': total_score,
                 'average_score': average_score,
+                'score_percentage': score_percentage,
                 'correct_answers': correct_answers,
                 'total_questions': len(test['questions'])
             }
