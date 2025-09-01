@@ -207,7 +207,7 @@ const TestManagement = () => {
       setIsPreviewLoading(false);
     }
   }
-  
+
   const handleDeleteTest = async (testId) => {
     if (window.confirm('Are you sure you want to delete this test? This action cannot be undone.')) {
       try {
@@ -229,7 +229,7 @@ const TestManagement = () => {
     try {
       const testEmail = prompt('Enter test email address:', 'test@example.com');
       if (!testEmail) return;
-      
+
       success('Testing email service...');
       const res = await api.post('/test-management/test-email', { email: testEmail });
       if (res.data && res.data.success) {
@@ -297,72 +297,72 @@ const TestManagement = () => {
   }
 
   return (
-        <main className="px-6 lg:px-10 py-12">
-          {renderContent()}
-          
-          {/* Notify Students Modal */}
-          {notifyModalOpen && (
-            <Modal onClose={() => setNotifyModalOpen(false)} title="Notify Students">
-              <div className="mb-4">
-                <h3 className="font-semibold text-xl mb-4 text-center text-blue-700">Notification Status</h3>
-                {notifyLoading ? (
-                  <div className="text-blue-600 text-center py-8">Sending notifications...</div>
-                ) : (
-                  <div className="overflow-x-auto rounded-lg shadow">
-                    <table className="min-w-full text-sm border rounded-lg bg-white">
-                      <thead className="bg-blue-50">
-                        <tr>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Name</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Email</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Mobile</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Test Status</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Email Notification</th>
-                          <th className="px-4 py-3 text-left font-semibold text-gray-700">SMS Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {notifyResults.map((s, idx) => (
-                          <tr key={s.email} className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}>
-                            <td className="px-4 py-2 border-b">{s.name}</td>
-                            <td className="px-4 py-2 border-b">{s.email}</td>
-                            <td className="px-4 py-2 border-b">{s.mobile_number || '-'}</td>
-                            <td className="px-4 py-2 border-b">
-                              {s.test_status === 'completed' ? (
-                                <span className="text-green-600 font-semibold">Completed</span>
-                              ) : (
-                                <span className="text-green-600 font-semibold">Pending</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-2 border-b">
-                              {s.notify_status === 'sent' && <span className="text-green-700 font-semibold">Sent</span>}
-                              {s.notify_status === 'skipped' && <span className="text-gray-500 font-semibold">Skipped</span>}
-                              {s.notify_status === 'pending' && <span className="text-blue-500 font-semibold">Pending</span>}
-                              {s.notify_status === 'failed' && <span className="text-red-600 font-semibold">Failed</span>}
-                            </td>
-                            <td className="px-4 py-2 border-b">
-                              {s.sms_status === 'sent' && <span className="text-green-700 font-semibold">Sent</span>}
-                              {s.sms_status === 'failed' && <span className="text-red-600 font-semibold">Failed</span>}
-                              {s.sms_status === 'no_mobile' && <span className="text-gray-500 font-semibold">No Mobile</span>}
-                              {!s.sms_status && <span className="text-gray-400 font-semibold">-</span>}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                {!notifyLoading && notifyResults.length > 0 && (
-                  <div className="mt-6 text-sm text-center bg-blue-50 rounded-lg py-3">
-                    <span className="font-semibold">Summary:</span> {notifyResults.filter(r => r.notify_status === 'sent').length} notified, {notifyResults.filter(r => r.notify_status === 'skipped').length} skipped (already completed), {notifyResults.filter(r => r.notify_status === 'failed').length} failed.
-                  </div>
-                )}
+    <main className="px-6 lg:px-10 py-12">
+      {renderContent()}
+
+      {/* Notify Students Modal */}
+      {notifyModalOpen && (
+        <Modal onClose={() => setNotifyModalOpen(false)} title="Notify Students">
+          <div className="mb-4">
+            <h3 className="font-semibold text-xl mb-4 text-center text-blue-700">Notification Status</h3>
+            {notifyLoading ? (
+              <div className="text-blue-600 text-center py-8">Sending notifications...</div>
+            ) : (
+              <div className="overflow-x-auto rounded-lg shadow">
+                <table className="min-w-full text-sm border rounded-lg bg-white">
+                  <thead className="bg-blue-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Name</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Email</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Mobile</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Test Status</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Email Notification</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">SMS Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {notifyResults.map((s, idx) => (
+                      <tr key={s.email} className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}>
+                        <td className="px-4 py-2 border-b">{s.name}</td>
+                        <td className="px-4 py-2 border-b">{s.email}</td>
+                        <td className="px-4 py-2 border-b">{s.mobile_number || '-'}</td>
+                        <td className="px-4 py-2 border-b">
+                          {s.test_status === 'completed' ? (
+                            <span className="text-green-600 font-semibold">Completed</span>
+                          ) : (
+                            <span className="text-green-600 font-semibold">Pending</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 border-b">
+                          {s.notify_status === 'sent' && <span className="text-green-700 font-semibold">Sent</span>}
+                          {s.notify_status === 'skipped' && <span className="text-gray-500 font-semibold">Skipped</span>}
+                          {s.notify_status === 'pending' && <span className="text-blue-500 font-semibold">Pending</span>}
+                          {s.notify_status === 'failed' && <span className="text-red-600 font-semibold">Failed</span>}
+                        </td>
+                        <td className="px-4 py-2 border-b">
+                          {s.sms_status === 'sent' && <span className="text-green-700 font-semibold">Sent</span>}
+                          {s.sms_status === 'failed' && <span className="text-red-600 font-semibold">Failed</span>}
+                          {s.sms_status === 'no_mobile' && <span className="text-gray-500 font-semibold">No Mobile</span>}
+                          {!s.sms_status && <span className="text-gray-400 font-semibold">-</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <div className="flex justify-center mt-4">
-                <button onClick={() => setNotifyModalOpen(false)} className="px-6 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 shadow">Close</button>
+            )}
+            {!notifyLoading && notifyResults.length > 0 && (
+              <div className="mt-6 text-sm text-center bg-blue-50 rounded-lg py-3">
+                <span className="font-semibold">Summary:</span> {notifyResults.filter(r => r.notify_status === 'sent').length} notified, {notifyResults.filter(r => r.notify_status === 'skipped').length} skipped (already completed), {notifyResults.filter(r => r.notify_status === 'failed').length} failed.
               </div>
-            </Modal>
-          )}
-        </main>
+            )}
+          </div>
+          <div className="flex justify-center mt-4">
+            <button onClick={() => setNotifyModalOpen(false)} className="px-6 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 shadow">Close</button>
+          </div>
+        </Modal>
+      )}
+    </main>
   )
 }
 
@@ -408,7 +408,7 @@ const TestListView = ({ tests, loading, setView, onViewTest, onDeleteTest, onTes
         </div>
         <div className="flex space-x-3">
           <button
-            onClick={handleFixAudioUrls}
+            onClick={"testing just"}
             className="inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-orange-500 hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-transform transform hover:scale-105"
           >
             🔧 Fix Audio URLs
@@ -419,14 +419,14 @@ const TestListView = ({ tests, loading, setView, onViewTest, onDeleteTest, onTes
           >
             📧 Test Email
           </button>
-          <button 
+          <button
             onClick={() => {
               setView('create');
               setUploadedQuestions([]);
             }}
             className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105"
           >
-            <Plus className="h-5 w-5 mr-2"/>
+            <Plus className="h-5 w-5 mr-2" />
             Create Test
           </button>
         </div>
@@ -512,9 +512,9 @@ const TestListView = ({ tests, loading, setView, onViewTest, onDeleteTest, onTes
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center space-x-2">
-                        <button onClick={() => onViewTest(test._id)} className="text-indigo-600 hover:text-indigo-900 p-1 rounded-full hover:bg-gray-200" title="View Test"><Eye className="h-5 w-5"/></button>
-                        <button className="text-gray-400 cursor-not-allowed p-1 rounded-full" title="Edit Test (soon)"><Edit className="h-5 w-5"/></button>
-                        <button onClick={() => onDeleteTest(test._id)} className="text-red-600 hover:text-red-800 p-1 rounded-full hover:bg-gray-200" title="Delete Test"><Trash2 className="h-5 w-5"/></button>
+                        <button onClick={() => onViewTest(test._id)} className="text-indigo-600 hover:text-indigo-900 p-1 rounded-full hover:bg-gray-200" title="View Test"><Eye className="h-5 w-5" /></button>
+                        <button className="text-gray-400 cursor-not-allowed p-1 rounded-full" title="Edit Test (soon)"><Edit className="h-5 w-5" /></button>
+                        <button onClick={() => onDeleteTest(test._id)} className="text-red-600 hover:text-red-800 p-1 rounded-full hover:bg-gray-200" title="Delete Test"><Trash2 className="h-5 w-5" /></button>
                       </div>
                     </td>
                   </tr>
@@ -580,7 +580,7 @@ const TestPreviewView = ({ test, onBack, onTestEmail, onFixAudioUrls, onNotifySt
     try {
       const testEmail = prompt('Enter test email address:', 'test@example.com');
       if (!testEmail) return;
-      
+
       success('Testing email service...');
       const res = await api.post('/test-management/test-email', { email: testEmail });
       if (res.data && res.data.success) {
@@ -656,50 +656,76 @@ const TestPreviewView = ({ test, onBack, onTestEmail, onFixAudioUrls, onNotifySt
       </div>
 
       <div className="space-y-8">
-        {test.questions && test.questions.map((q, index) => (
-          <div key={q.question_id || index} className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm">
-            <h3 className="font-semibold text-lg text-gray-800 mb-4">Question {index + 1}</h3>
-            <p className="text-gray-700 mb-4 whitespace-pre-line">{q.question}</p>
-            {q.question_type === 'mcq' ? (
-              <div className="space-y-2 text-base">
-                <h4 className="font-semibold text-gray-600 mb-1">Options:</h4>
-                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 list-none pl-0">
-                  {Object.entries(q.options).map(([key, value]) => (
-                    <li key={key} className={clsx('rounded border px-4 py-2', {
-                      'bg-green-50 border-green-400 font-bold text-green-700': q.correct_answer === key,
-                      'bg-gray-50 border-gray-200': q.correct_answer !== key
-                    })}>
-                      <span className="font-semibold">{key}:</span> {value}
-                    </li>
-                  ))}
-                </ul>
-                <div className="pt-2">
-                  <p className="font-semibold text-gray-600">Answer: <span className="font-bold text-green-600">{q.correct_answer}</span></p>
+        {test.questions && test.questions.map((q, index) => {
+          // ✅ Transform flat fields into options object
+          const options = {
+            A: q.optionA,
+            B: q.optionB,
+            C: q.optionC,
+            D: q.optionD,
+          };
+
+          return (
+            <div
+              key={q._id || index}
+              className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm"
+            >
+              <h3 className="font-semibold text-lg text-gray-800 mb-4">
+                Question {index + 1}
+              </h3>
+              <p className="text-gray-700 mb-4 whitespace-pre-line">{q.question}</p>
+
+              {q.question_type === "mcq" ? (
+                <div className="space-y-2 text-base">
+                  <h4 className="font-semibold text-gray-600 mb-1">Options:</h4>
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 list-none pl-0">
+                    {Object.entries(options).map(([key, value]) => (
+                      <li
+                        key={key}
+                        className={clsx("rounded border px-4 py-2", {
+                          "bg-green-50 border-green-400 font-bold text-green-700":
+                            q.answer === key,
+                          "bg-gray-50 border-gray-200": q.answer !== key,
+                        })}
+                      >
+                        <span className="font-semibold">{key}:</span> {value}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="pt-2">
+                    <p className="font-semibold text-gray-600">
+                      Answer:{" "}
+                      <span className="font-bold text-green-600">{q.answer}</span>
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ) : q.audio_presigned_url ? (
-              <div>
-                <audio controls className="w-full">
-                <source src={q.audio_presigned_url} type="audio/mpeg" />
-                Your browser does not support the audio element.
-              </audio>
-                <div className="mt-2 text-sm text-gray-500">
-                  Audio URL: {q.audio_presigned_url}
+              ) : q.audio_presigned_url ? (
+                <div>
+                  <audio controls className="w-full">
+                    <source src={q.audio_presigned_url} type="audio/mpeg" />
+                    Your browser does not support the audio element.
+                  </audio>
+                  <div className="mt-2 text-sm text-gray-500">
+                    Audio URL: {q.audio_presigned_url}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-2 bg-yellow-100 text-yellow-800 text-sm font-medium px-4 py-3 rounded-md">
-                <AlertTriangle className="h-5 w-5" />
-                <span>Audio not available. Check backend audio generation and S3 configuration.</span>
-                <div className="mt-2 text-xs">
-                  <div>Audio URL: {q.audio_url || 'None'}</div>
-                  <div>Presigned URL: {q.audio_presigned_url || 'None'}</div>
-                  <div>Has Audio: {q.has_audio ? 'Yes' : 'No'}</div>
+              ) : (
+                <div className="flex items-center space-x-2 bg-yellow-100 text-yellow-800 text-sm font-medium px-4 py-3 rounded-md">
+                  <AlertTriangle className="h-5 w-5" />
+                  <span>
+                    Audio not available. Check backend audio generation and S3
+                    configuration.
+                  </span>
+                  <div className="mt-2 text-xs">
+                    <div>Audio URL: {q.audio_url || "None"}</div>
+                    <div>Presigned URL: {q.audio_presigned_url || "None"}</div>
+                    <div>Has Audio: {q.has_audio ? "Yes" : "No"}</div>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        ))}
+              )}
+            </div>
+          );
+        })}
       </div>
 
 
@@ -739,7 +765,7 @@ const TestCreationWizard = ({ onTestCreated, setView, uploadedQuestions, setUplo
       setStep(prev => prev < 7 ? prev + 1 : prev);
     }
   }
-  
+
   const prevStep = () => {
     // For CRT_TECHNICAL module, handle the extra step
     if (testData.module === 'CRT_TECHNICAL' && step === 6) {
@@ -805,8 +831,8 @@ const TestCreationWizard = ({ onTestCreated, setView, uploadedQuestions, setUplo
       <div className="bg-gradient-to-br from-white to-blue-50 rounded-3xl shadow-2xl border border-blue-100 p-8 sm:p-10">
         <div className="mb-10">
           <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-            <motion.div 
-              className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full shadow-lg" 
+            <motion.div
+              className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full shadow-lg"
               animate={{ width: `${((step - 1) / (totalSteps - 1)) * 100}%` }}
               transition={{ duration: 0.8, ease: "easeOut" }}
             />
@@ -814,12 +840,12 @@ const TestCreationWizard = ({ onTestCreated, setView, uploadedQuestions, setUplo
           <p className="text-right text-sm font-medium text-gray-600 mt-3">
             Step {step} of {totalSteps}: {
               step === 1 ? 'Select Test Category' :
-              step === 2 ? 'Select Test Type' :
-              step === 3 ? 'Select Module and Level' :
-              step === 4 ? 'Select Audience' :
-              step === 5 ? (testData.module === 'CRT_TECHNICAL' ? 'Select Question Type' : 'Upload Questions') :
-              step === 6 ? (testData.module === 'CRT_TECHNICAL' ? 'Upload Questions' : 'Final Confirmation') :
-              step === 7 ? 'Final Confirmation' : ''
+                step === 2 ? 'Select Test Type' :
+                  step === 3 ? 'Select Module and Level' :
+                    step === 4 ? 'Select Audience' :
+                      step === 5 ? (testData.module === 'CRT_TECHNICAL' ? 'Select Question Type' : 'Upload Questions') :
+                        step === 6 ? (testData.module === 'CRT_TECHNICAL' ? 'Upload Questions' : 'Final Confirmation') :
+                          step === 7 ? 'Final Confirmation' : ''
             }
           </p>
         </div>
@@ -842,14 +868,14 @@ const Step1TestCategory = ({ nextStep, prevStep, updateTestData, testData }) => 
       <div className="space-y-10">
         <div className="flex items-center space-x-4 border-b border-gray-100 pb-6">
           <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-3 rounded-xl text-white shadow-lg">
-            <Briefcase className="h-7 w-7"/>
+            <Briefcase className="h-7 w-7" />
           </div>
           <div>
             <h2 className="text-2xl font-bold text-gray-800">Select Test Category</h2>
             <p className="text-gray-600 mt-1">Choose the category of test you want to create</p>
           </div>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* CRT Option */}
           <button
@@ -947,12 +973,12 @@ const Step1TestCategory = ({ nextStep, prevStep, updateTestData, testData }) => 
         </div>
 
         <div className="flex justify-between items-center pt-8 border-t border-gray-100 mt-10">
-          <button 
-            type="button" 
-            onClick={() => setView('list')} 
+          <button
+            type="button"
+            onClick={() => setView('list')}
             className="inline-flex items-center justify-center px-6 py-3 text-sm font-medium rounded-xl text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all duration-200 hover:shadow-md transform hover:scale-105"
           >
-            <ChevronLeft className="h-5 w-5 mr-2" /> 
+            <ChevronLeft className="h-5 w-5 mr-2" />
             Back to Test List
           </button>
         </div>
@@ -1009,7 +1035,7 @@ const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }
   useEffect(() => {
     if (selectedModule && allLevels.length > 0) {
       let filtered = [];
-      
+
       if (selectedModule === 'GRAMMAR') {
         // For Grammar, use grammar categories instead of levels
         setFilteredLevels([]);
@@ -1023,10 +1049,10 @@ const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }
         ];
       } else {
         // For other modules, filter levels that start with the module name
-        filtered = allLevels.filter(level => 
+        filtered = allLevels.filter(level =>
           level.id && level.id.startsWith(selectedModule)
         );
-        
+
         // If no levels found, create default levels
         if (filtered.length === 0) {
           filtered = [
@@ -1036,9 +1062,9 @@ const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }
           ];
         }
       }
-      
+
       setFilteredLevels(filtered);
-      
+
       // Reset level selection when module changes
       setValue('level', '');
       setValue('subcategory', '');
@@ -1062,7 +1088,7 @@ const Step1TestDetails = ({ nextStep, prevStep, updateTestData, testData, step }
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <div className="flex items-center space-x-3">
           <div className="bg-blue-500 p-2 rounded-full text-white">
-            <Briefcase className="h-6 w-6"/>
+            <Briefcase className="h-6 w-6" />
           </div>
           <h2 className="text-2xl font-bold mb-4">Select Module and Level</h2>
         </div>
@@ -1162,14 +1188,14 @@ const Step2TestType = ({ nextStep, prevStep, updateTestData, testData }) => {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-10">
         <div className="flex items-center space-x-4 border-b border-gray-100 pb-6">
           <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-3 rounded-xl text-white shadow-lg">
-            <Briefcase className="h-7 w-7"/>
+            <Briefcase className="h-7 w-7" />
           </div>
           <div>
             <h2 className="text-2xl font-bold text-gray-800">Select Test Type</h2>
             <p className="text-gray-600 mt-1">Choose the type of test you want to create</p>
           </div>
         </div>
-        
+
         <div className="space-y-6">
           <label className="block text-lg font-semibold text-gray-800 mb-4">Test Type</label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1182,10 +1208,10 @@ const Step2TestType = ({ nextStep, prevStep, updateTestData, testData }) => {
                 'border-gray-200': testType !== 'Practice'
               }
             )}>
-              <input 
-                type="radio" 
-                {...register('testType', { required: 'Please select a test type' })} 
-                value="Practice" 
+              <input
+                type="radio"
+                {...register('testType', { required: 'Please select a test type' })}
+                value="Practice"
                 className="sr-only"
               />
               <div className="flex items-start space-x-4">
@@ -1218,7 +1244,7 @@ const Step2TestType = ({ nextStep, prevStep, updateTestData, testData }) => {
                 )}
               </div>
             </label>
-            
+
             <label className={clsx(
               'relative group cursor-pointer transition-all duration-300 transform hover:scale-105',
               'bg-white border-2 rounded-2xl p-6 shadow-lg hover:shadow-xl',
@@ -1228,10 +1254,10 @@ const Step2TestType = ({ nextStep, prevStep, updateTestData, testData }) => {
                 'border-gray-200': testType !== 'Online'
               }
             )}>
-              <input 
-                type="radio" 
-                {...register('testType', { required: 'Please select a test type' })} 
-                value="Online" 
+              <input
+                type="radio"
+                {...register('testType', { required: 'Please select a test type' })}
+                value="Online"
                 className="sr-only"
               />
               <div className="flex items-start space-x-4">
@@ -1266,21 +1292,21 @@ const Step2TestType = ({ nextStep, prevStep, updateTestData, testData }) => {
             </label>
           </div>
         </div>
-        
+
         <div className="flex justify-between items-center pt-8 border-t border-gray-100 mt-10">
-          <button 
-            type="button" 
-            onClick={prevStep} 
+          <button
+            type="button"
+            onClick={prevStep}
             className="inline-flex items-center justify-center px-6 py-3 text-sm font-medium rounded-xl text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all duration-200 hover:shadow-md transform hover:scale-105"
           >
-            <ChevronLeft className="h-5 w-5 mr-2" /> 
+            <ChevronLeft className="h-5 w-5 mr-2" />
             Back
           </button>
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             className="inline-flex items-center justify-center px-8 py-3 text-sm font-medium rounded-xl shadow-lg text-white bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 focus:outline-none focus:ring-4 focus:ring-blue-200 transition-all duration-200 transform hover:scale-105 hover:shadow-xl"
           >
-            Next: Select Module and Level 
+            Next: Select Module and Level
             <ChevronRight className="h-5 w-5 ml-2" />
           </button>
         </div>
@@ -1337,20 +1363,20 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
   const getModulesForCategory = () => {
     if (testData.testCategory === 'CRT') {
       return [
-        { 
-          id: 'CRT_APTITUDE', 
+        {
+          id: 'CRT_APTITUDE',
           name: 'Aptitude',
           description: 'Mathematical and logical reasoning questions',
           icon: '🧮'
         },
-        { 
-          id: 'CRT_REASONING', 
+        {
+          id: 'CRT_REASONING',
           name: 'Reasoning',
           description: 'Logical and analytical reasoning questions',
           icon: '🧠'
         },
-        { 
-          id: 'CRT_TECHNICAL', 
+        {
+          id: 'CRT_TECHNICAL',
           name: 'Technical',
           description: 'Technical and domain-specific questions',
           icon: '💻'
@@ -1465,7 +1491,7 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
       setError('Please select a module.');
       return;
     }
-    
+
     if (module === 'GRAMMAR' && !subcategory) {
       setError('Please select a grammar category.');
       return;
@@ -1473,7 +1499,7 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
       setError('Please select a level.');
       return;
     }
-    
+
     if (!testName.trim()) {
       setError('Please enter a test name.');
       return;
@@ -1488,14 +1514,14 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
       setError('Please wait while we check the test name availability.');
       return;
     }
-    
+
     setError('');
-    const updateData = { 
-      module, 
-      level: module === 'GRAMMAR' ? subcategory : (module.startsWith('CRT_') ? module : level), 
+    const updateData = {
+      module,
+      level: module === 'GRAMMAR' ? subcategory : (module.startsWith('CRT_') ? module : level),
       subcategory: module === 'GRAMMAR' ? subcategory : null,
       topic_id: module.startsWith('CRT_') ? selectedTopic : null,
-      test_name: testName 
+      test_name: testName
     };
     updateTestData(updateData);
     nextStep();
@@ -1506,7 +1532,7 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
       <div className="space-y-10">
         <div className="flex items-center space-x-4 border-b border-gray-100 pb-6">
           <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-3 rounded-xl text-white shadow-lg">
-            <FileQuestion className="h-7 w-7"/>
+            <FileQuestion className="h-7 w-7" />
           </div>
           <div>
             <h2 className="text-2xl font-bold text-gray-800">Select Module, Level, and Enter Test Name</h2>
@@ -1515,173 +1541,174 @@ const Step3TestName = ({ nextStep, prevStep, updateTestData, testData }) => {
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 space-y-8">
-        <div>
-          <label className="block text-base font-semibold text-gray-800 mb-2">Module</label>
-          {testData.testCategory === 'CRT' ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {getModulesForCategory().map(mod => (
-                <div
-                  key={mod.id}
-                  onClick={() => setModule(mod.id)}
-                  className={`p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 ${
-                    module === mod.id
+          <div>
+            <label className="block text-base font-semibold text-gray-800 mb-2">Module</label>
+            {testData.testCategory === 'CRT' ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {getModulesForCategory().map(mod => (
+                  <div
+                    key={mod.id}
+                    onClick={() => setModule(mod.id)}
+                    className={`p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 ${module === mod.id
                       ? 'border-blue-500 bg-blue-50 ring-4 ring-blue-200'
                       : 'border-gray-200 hover:border-blue-300 bg-white'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <span className="text-2xl">{mod.icon}</span>
-                    <div>
-                      <h3 className="font-semibold text-gray-800">{mod.name}</h3>
-                      <p className="text-sm text-gray-600">{mod.description}</p>
+                      }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <span className="text-2xl">{mod.icon}</span>
+                      <div>
+                        <h3 className="font-semibold text-gray-800">{mod.name}</h3>
+                        <p className="text-sm text-gray-600">{mod.description}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            ) : (
+              <select
+                value={module}
+                onChange={handleModuleChange}
+                className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 bg-white hover:border-blue-300"
+              >
+                <option value="">Select Module</option>
+                {getModulesForCategory().map(mod => (
+                  <option key={mod.id} value={mod.id}>{mod.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {module && module === 'GRAMMAR' && (
+            <div>
+              <label className="block text-base font-semibold text-gray-800 mb-2">Grammar Category</label>
+              <select
+                value={subcategory}
+                onChange={handleSubcategoryChange}
+                className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 bg-white hover:border-blue-300"
+                disabled={loading}
+              >
+                <option value="">Select Grammar Category</option>
+                {Object.entries(grammarCategories).map(([key, value]) => (
+                  <option key={key} value={key}>
+                    {value}
+                  </option>
+                ))}
+
+              </select>
             </div>
-          ) : (
-            <select 
-              value={module} 
-              onChange={handleModuleChange} 
-              className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 bg-white hover:border-blue-300"
-            >
-              <option value="">Select Module</option>
-              {getModulesForCategory().map(mod => (
-                <option key={mod.id} value={mod.id}>{mod.name}</option>
-              ))}
-            </select>
           )}
-        </div>
 
-        {module && module === 'GRAMMAR' && (
+          {module && module !== 'GRAMMAR' && !module.startsWith('CRT_') && (
+            <div>
+              <label className="block text-base font-semibold text-gray-800 mb-2">Level</label>
+              <select
+                value={level}
+                onChange={handleLevelChange}
+                className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 bg-white hover:border-blue-300"
+                disabled={loading}
+              >
+                <option value="">Select Level</option>
+                {getFilteredLevels().map(lvl => (
+                  <option key={lvl.id} value={lvl.id}>{lvl.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {module && module.startsWith('CRT_') && (
+            <div>
+              <label className="block text-base font-semibold text-gray-800 mb-2">Topic (Optional)</label>
+              <select
+                value={selectedTopic}
+                onChange={handleTopicChange}
+                className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 bg-white hover:border-blue-300"
+                disabled={loading}
+              >
+                <option value="">Select Topic (Optional)</option>
+                {getTopicsForModule().map(topic => (
+                  <option key={topic._id} value={topic._id}>
+                    {topic.topic_name} ({topic.total_questions || 0} questions, {topic.completion_percentage}% completed)
+                  </option>
+                ))}
+              </select>
+              {getTopicsForModule().length === 0 && (
+                <p className="text-sm text-gray-500 mt-1">No topics available for this module. Questions will be selected from all available questions.</p>
+              )}
+              {selectedTopic && (
+                <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm text-blue-800">
+                    <strong>Selected Topic:</strong> {getTopicsForModule().find(t => t._id === selectedTopic)?.topic_name}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Total Questions: {getTopicsForModule().find(t => t._id === selectedTopic)?.total_questions || 0} |
+                    Available: {getTopicsForModule().find(t => t._id === selectedTopic)?.total_questions - getTopicsForModule().find(t => t._id === selectedTopic)?.used_questions || 0}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
-            <label className="block text-base font-semibold text-gray-800 mb-2">Grammar Category</label>
-            <select 
-              value={subcategory} 
-              onChange={handleSubcategoryChange} 
-              className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 bg-white hover:border-blue-300"
-              disabled={loading}
-            >
-              <option value="">Select Grammar Category</option>
-              {grammarCategories.map(category => (
-                <option key={category.id} value={category.id}>{category.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {module && module !== 'GRAMMAR' && !module.startsWith('CRT_') && (
-          <div>
-            <label className="block text-base font-semibold text-gray-800 mb-2">Level</label>
-            <select 
-              value={level} 
-              onChange={handleLevelChange} 
-              className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 bg-white hover:border-blue-300"
-              disabled={loading}
-            >
-              <option value="">Select Level</option>
-              {getFilteredLevels().map(lvl => (
-                <option key={lvl.id} value={lvl.id}>{lvl.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {module && module.startsWith('CRT_') && (
-          <div>
-            <label className="block text-base font-semibold text-gray-800 mb-2">Topic (Optional)</label>
-            <select 
-              value={selectedTopic} 
-              onChange={handleTopicChange} 
-              className="w-full p-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 bg-white hover:border-blue-300"
-              disabled={loading}
-            >
-              <option value="">Select Topic (Optional)</option>
-              {getTopicsForModule().map(topic => (
-                <option key={topic._id} value={topic._id}>
-                  {topic.topic_name} ({topic.total_questions || 0} questions, {topic.completion_percentage}% completed)
-                </option>
-              ))}
-            </select>
-            {getTopicsForModule().length === 0 && (
-              <p className="text-sm text-gray-500 mt-1">No topics available for this module. Questions will be selected from all available questions.</p>
-            )}
-            {selectedTopic && (
-              <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <p className="text-sm text-blue-800">
-                  <strong>Selected Topic:</strong> {getTopicsForModule().find(t => t._id === selectedTopic)?.topic_name}
-                </p>
-                <p className="text-xs text-blue-600 mt-1">
-                  Total Questions: {getTopicsForModule().find(t => t._id === selectedTopic)?.total_questions || 0} | 
-                  Available: {getTopicsForModule().find(t => t._id === selectedTopic)?.total_questions - getTopicsForModule().find(t => t._id === selectedTopic)?.used_questions || 0}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div>
-          <label className="block text-base font-semibold text-gray-800 mb-2">Test Name</label>
-          <div className="relative">
-            <input 
-              value={testName} 
-              onChange={e => setTestName(e.target.value)} 
-              className={`w-full p-4 border-2 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 ${
-                nameExists ? 'border-red-500 bg-red-50' : 
-                nameAvailable ? 'border-green-500 bg-green-50' : 
-                'border-gray-200 hover:border-blue-300'
-              }`}
-              placeholder="Enter test name" 
-            />
-            {isCheckingName && (
-              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
-              </div>
+            <label className="block text-base font-semibold text-gray-800 mb-2">Test Name</label>
+            <div className="relative">
+              <input
+                value={testName}
+                onChange={e => setTestName(e.target.value)}
+                className={`w-full p-4 border-2 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 ${nameExists ? 'border-red-500 bg-red-50' :
+                  nameAvailable ? 'border-green-500 bg-green-50' :
+                    'border-gray-200 hover:border-blue-300'
+                  }`}
+                placeholder="Enter test name"
+              />
+              {isCheckingName && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                </div>
+              )}
+              {nameAvailable && !isCheckingName && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <svg className="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              )}
+              {nameExists && !isCheckingName && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <svg className="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </div>
+              )}
+            </div>
+            {nameExists && !isCheckingName && (
+              <p className="text-red-600 text-sm mt-1">This test name already exists. Please choose a different name.</p>
             )}
             {nameAvailable && !isCheckingName && (
-              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <svg className="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-            )}
-            {nameExists && !isCheckingName && (
-              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <svg className="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </div>
+              <p className="text-green-600 text-sm mt-1">Test name is available!</p>
             )}
           </div>
-          {nameExists && !isCheckingName && (
-            <p className="text-red-600 text-sm mt-1">This test name already exists. Please choose a different name.</p>
-          )}
-          {nameAvailable && !isCheckingName && (
-            <p className="text-green-600 text-sm mt-1">Test name is available!</p>
-          )}
-        </div>
 
-        {error && <div className="text-red-600 p-4 bg-red-50 border-2 border-red-200 rounded-xl">{error}</div>}
+          {error && <div className="text-red-600 p-4 bg-red-50 border-2 border-red-200 rounded-xl">{error}</div>}
 
-        <div className="flex justify-between items-center pt-8 border-t border-gray-100 mt-10">
-          <button 
-            onClick={prevStep} 
-            className="inline-flex items-center justify-center px-6 py-3 text-sm font-medium rounded-xl text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all duration-200 hover:shadow-md transform hover:scale-105"
-          >
-            <ChevronLeft className="h-5 w-5 mr-2" /> 
-            Back
-          </button>
-          <button 
-            onClick={handleNext} 
-            className="inline-flex items-center justify-center px-8 py-3 text-sm font-medium rounded-xl shadow-lg text-white bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 focus:outline-none focus:ring-4 focus:ring-blue-200 transition-all duration-200 transform hover:scale-105 hover:shadow-xl"
-          >
-            Next: Select Audience 
-            <ChevronRight className="h-5 w-5 ml-2" />
-          </button>
+          <div className="flex justify-between items-center pt-8 border-t border-gray-100 mt-10">
+            <button
+              onClick={prevStep}
+              className="inline-flex items-center justify-center px-6 py-3 text-sm font-medium rounded-xl text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all duration-200 hover:shadow-md transform hover:scale-105"
+            >
+              <ChevronLeft className="h-5 w-5 mr-2" />
+              Back
+            </button>
+            <button
+              onClick={handleNext}
+              className="inline-flex items-center justify-center px-8 py-3 text-sm font-medium rounded-xl shadow-lg text-white bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 focus:outline-none focus:ring-4 focus:ring-blue-200 transition-all duration-200 transform hover:scale-105 hover:shadow-xl"
+            >
+              Next: Select Audience
+              <ChevronRight className="h-5 w-5 ml-2" />
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  </motion.div>
+    </motion.div>
   );
 };
 
@@ -1698,7 +1725,7 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
   const [campuses, setCampuses] = useState([])
   const [batches, setBatches] = useState([])
   const [courses, setCourses] = useState([])
-  
+
   const [loadingStates, setLoadingStates] = useState({
     campuses: true,
     batches: false,
@@ -1786,27 +1813,27 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
       error("Please select a campus");
       return;
     }
-    
+
     if (!data.batch_ids || data.batch_ids.length === 0) {
       error("Please select at least one batch");
       return;
     }
-    
+
     if (!data.course_ids || data.course_ids.length === 0) {
       error("Please select at least one course");
       return;
     }
-    
+
     const selectedCampus = campuses.find(c => c.value === data.campus_id);
     const selectedBatches = batches.filter(b => data.batch_ids.includes(b.value));
     const selectedCourses = courses.filter(c => data.course_ids.includes(c.value));
-    
+
     console.log('Step4AudienceSelection - Selected data:', {
       campus: selectedCampus,
       batches: selectedBatches,
       courses: selectedCourses,
     });
-    
+
     updateTestData({
       campus: selectedCampus,
       batches: selectedBatches,
@@ -1820,18 +1847,18 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         <div className="flex items-center space-x-3 border-b pb-4 border-gray-200">
           <div className="bg-blue-500 p-2 rounded-full text-white">
-            <Briefcase className="h-6 w-6"/>
+            <Briefcase className="h-6 w-6" />
           </div>
           <h2 className="text-2xl font-bold mb-4">Select Audience</h2>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Column 1: Campus */}
           <div className="space-y-4">
             <h3 className="font-semibold text-lg text-gray-800">1. Select Campus</h3>
-            {loadingStates.campuses ? <LoadingSpinner/> : (
+            {loadingStates.campuses ? <LoadingSpinner /> : (
               <>
-                <select 
+                <select
                   {...register('campus_id', { required: 'Please select a campus' })}
                   className="w-full p-2 border border-gray-200 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 transition"
                 >
@@ -1846,7 +1873,7 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
           {/* Column 2: Batches */}
           <div className={clsx("space-y-4", { 'opacity-50': !selectedCampusId })}>
             <h3 className="font-semibold text-lg text-gray-800">2. Select Batches</h3>
-            {loadingStates.batches ? <LoadingSpinner/> : (
+            {loadingStates.batches ? <LoadingSpinner /> : (
               batches.length > 0 ? (
                 <Controller
                   name="batch_ids"
@@ -1879,7 +1906,7 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
           {/* Column 3: Courses */}
           <div className={clsx("space-y-4", { 'opacity-50': !selectedBatchIds || selectedBatchIds.length === 0 })}>
             <h3 className="font-semibold text-lg text-gray-800">3. Select Courses</h3>
-            {loadingStates.courses ? <LoadingSpinner/> : (
+            {loadingStates.courses ? <LoadingSpinner /> : (
               courses.length > 0 ? (
                 <Controller
                   name="course_ids"
@@ -1909,7 +1936,7 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
             {errors.course_ids && <p className="text-red-500 text-xs mt-1">{errors.course_ids.message}</p>}
           </div>
         </div>
-        
+
         <div className="flex justify-between items-center pt-8 border-t mt-8 border-gray-200">
           <button type="button" onClick={prevStep} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors">
             <ChevronLeft className="h-5 w-5 mr-1" /> Back
@@ -1942,7 +1969,7 @@ const CheckboxCard = ({ id, label, checked, onChange }) => {
         onChange={(e) => onChange(e.target.checked)}
         className="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
       />
-      <span className={clsx('ml-3 text-sm font-medium', {'text-blue-900': checked, 'text-gray-800': !checked})}>
+      <span className={clsx('ml-3 text-sm font-medium', { 'text-blue-900': checked, 'text-gray-800': !checked })}>
         {label}
       </span>
     </label>
@@ -2026,11 +2053,11 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
   const [hasMoreQuestions, setHasMoreQuestions] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState('');
-  
+
   // New state for technical test question type
   const [technicalQuestionType, setTechnicalQuestionType] = useState('compiler'); // 'compiler' or 'mcq'
   const [showQuestionTypeModal, setShowQuestionTypeModal] = useState(false);
-  
+
   // Audio generation state
   const [generatedAudioFiles, setGeneratedAudioFiles] = useState([]);
   const [audioGenerationProgress, setAudioGenerationProgress] = useState(0);
@@ -2056,13 +2083,13 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
     } else {
       setLoadingMore(true);
     }
-    
+
     try {
       // Determine the correct level_id based on module type
       let levelId = testData.level;
       let subcategory = testData.subcategory;
       let topicId = testData.topic_id || selectedTopic;
-      
+
       if (testData.module.startsWith('CRT_')) {
         // For CRT modules, use the module_id directly as level_id
         levelId = testData.module;
@@ -2076,7 +2103,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
         levelId = testData.level;
         subcategory = null;
       }
-      
+
       console.log('Fetching questions for:', {
         module_id: testData.module,
         level_id: levelId,
@@ -2087,7 +2114,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
         original_level: testData.level,
         original_subcategory: testData.subcategory
       });
-      
+
       // Use the new bulk selection endpoint
       const payload = {
         module_id: testData.module,
@@ -2098,9 +2125,9 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
         page: page,
         limit: count
       };
-      
+
       let response = await api.post('/test-management/question-bank/bulk-selection', payload);
-      
+
       // If no questions found and it's Grammar, try with subcategory as level_id
       if (testData.module === 'GRAMMAR' && (!response.data.success || !response.data.questions || response.data.questions.length === 0)) {
         console.log('No questions found with level, trying with subcategory as level_id');
@@ -2108,19 +2135,19 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
         payload.subcategory = null;
         response = await api.post('/test-management/question-bank/bulk-selection', payload);
       }
-      
+
       // If no questions found for CRT_TECHNICAL, try without level_id
       if (testData.module === 'CRT_TECHNICAL' && (!response.data.success || !response.data.questions || response.data.questions.length === 0)) {
         console.log('No questions found for CRT_TECHNICAL with level_id, trying without level_id');
         delete payload.level_id;
         response = await api.post('/test-management/question-bank/bulk-selection', payload);
       }
-      
+
       if (response.data.success) {
         const questions = response.data.questions || [];
         const totalQuestions = response.data.total_count || 0;
         const hasMore = response.data.has_more || false;
-        
+
         console.log('Successfully fetched questions:', {
           questionsCount: questions.length,
           totalQuestions: totalQuestions,
@@ -2130,13 +2157,13 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
           level: testData.level,
           topic_id: testData.topic_id
         });
-        
+
         if (append) {
           setBankQuestions(prev => [...prev, ...questions]);
         } else {
           setBankQuestions(questions);
         }
-        
+
         setHasMoreQuestions(hasMore);
         setCurrentPage(page);
         console.log('Fetched questions:', questions.length, 'Total:', totalQuestions, 'Has more:', hasMore);
@@ -2159,7 +2186,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
 
   const loadMoreQuestions = async () => {
     if (loadingMore || !hasMoreQuestions) return;
-    
+
     const nextPage = currentPage + 1;
     await fetchQuestionsFromBank(50, nextPage, true);
   };
@@ -2171,7 +2198,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
   const handleQuestionCountConfirm = async () => {
     setShowQuestionCountModal(false);
     setLoadingBankQuestions(true);
-    
+
     try {
       console.log('Starting question selection with:', {
         module: testData.module,
@@ -2180,7 +2207,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
         selectedTopic: selectedTopic,
         questionCount: questionCount
       });
-      
+
       // Debug: Log the test data to understand the configuration
       console.log('Test data configuration:', {
         module: testData.module,
@@ -2188,16 +2215,16 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
         moduleType: typeof testData.module,
         levelType: typeof testData.level
       });
-      
+
       // For CRT modules, try to get more questions to ensure variety
       const fetchCount = testData.module?.startsWith('CRT_') ? questionCount * 2 : questionCount * 3;
       const fetchedQuestions = await fetchQuestionsFromBank(fetchCount);
-      
+
       console.log('Fetched questions result:', {
         count: fetchedQuestions.length,
         questions: fetchedQuestions.slice(0, 2) // Log first 2 questions for debugging
       });
-      
+
       // Debug: Log the structure of the first question to understand the data format
       if (fetchedQuestions.length > 0) {
         console.log('First question structure:', {
@@ -2211,23 +2238,23 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
           fullQuestion: fetchedQuestions[0]
         });
       }
-      
+
       if (fetchedQuestions.length > 0) {
         // Sample WITHOUT replacement to avoid repeats within the same test
         const shuffledQuestions = shuffleArray([...fetchedQuestions]);
         const selectedQuestions = shuffledQuestions.slice(0, Math.min(questionCount, fetchedQuestions.length));
-        
+
         if (selectedQuestions.length < questionCount) {
           const moduleName = testData.module?.startsWith('CRT_') ? testData.module.replace('CRT_', '') : testData.module;
           showError(`Only ${selectedQuestions.length} unique questions available in the ${moduleName} bank. Please reduce the count or add more questions.`);
           return;
         }
-        
+
         // Add repeat count information to each question
         const questionsWithRepeatInfo = selectedQuestions.map(question => {
           const historicalUsage = question.used_count || 0;
           const currentUsage = historicalUsage + 1; // This will be the current usage count
-          
+
           // Determine repetition status
           let repetitionStatus = '';
           if (currentUsage === 1) {
@@ -2239,7 +2266,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
           } else {
             repetitionStatus = `repeating_${currentUsage - 1}_time`; // Nth time total ((N-1)th repeat)
           }
-          
+
           return {
             ...question,
             repeatCount: historicalUsage, // Keep original for display
@@ -2247,13 +2274,13 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
             repetitionStatus: repetitionStatus // Status for display
           };
         });
-        
+
         // For LISTENING module, check and generate audio files if needed
         if (testData.module === 'LISTENING') {
           const questionsNeedingAudio = questionsWithRepeatInfo.filter(q => !q.audio_url && !q.has_audio);
           if (questionsNeedingAudio.length > 0) {
             success(`Selected ${selectedQuestions.length} questions. ${questionsNeedingAudio.length} questions need audio generation. Audio will be generated automatically.`);
-            
+
             // Generate audio for questions that don't have it
             try {
               await generateAudioForQuestions(questionsNeedingAudio);
@@ -2272,10 +2299,10 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
               setSelectedBankQuestions(updatedQuestions);
             } catch (error) {
               console.error('Error generating audio:', error);
-              const errorMessage = error.message.includes('packages') 
+              const errorMessage = error.message.includes('packages')
                 ? `Audio generation is not available on the server. Required packages (gtts, pydub) are not installed. You can continue without audio or contact your administrator to install the required packages.`
                 : `Audio generation failed for ${questionsNeedingAudio.length} questions: ${error.message}. You can continue without audio or try again later.`;
-              
+
               // Show warning instead of error, since user can continue
               showError(errorMessage);
               // Still show questions but without audio
@@ -2287,7 +2314,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
             setUploadedQuestions(questionsWithRepeatInfo);
             setSelectedBankQuestions(questionsWithRepeatInfo);
           }
-          
+
           // Show info about audio generation process
           if (testData.module === 'LISTENING') {
             showError(`Note: Audio generation for ${questionsNeedingAudio.length} questions will be processed efficiently.`);
@@ -2296,7 +2323,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
           setUploadedQuestions(questionsWithRepeatInfo);
           setSelectedBankQuestions(questionsWithRepeatInfo);
         }
-        
+
         setShowQuestionPreview(true);
       } else {
         const moduleName = testData.module?.startsWith('CRT_') ? testData.module.replace('CRT_', '') : testData.module;
@@ -2344,7 +2371,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
       maxRetries: 3,
       minDelay: 1000, // 1 second
       maxDelay: 3000, // 3 seconds
-              sequentialProcessing: true // Process efficiently for better performance
+      sequentialProcessing: true // Process efficiently for better performance
     };
   };
 
@@ -2355,10 +2382,10 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
     if (!isAvailable) {
       throw new Error('Audio generation is not available on the server. Required packages (gtts, pydub) are not installed.');
     }
-    
+
     setIsGeneratingAudio(true);
     setAudioGenerationProgress(0);
-    
+
     try {
       // Process questions efficiently for bulk audio generation
       const results = [];
@@ -2369,7 +2396,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
           if (i > 0) {
             showError(`Processing question ${i + 1}/${questions.length}...`);
           }
-          
+
           // Call backend to generate audio
           const response = await api.post('/test-management/generate-audio', {
             text: question.text || question.question || question.sentence,
@@ -2381,7 +2408,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
               speed: 1.0
             }
           });
-          
+
           if (response.data.success) {
             setAudioGenerationProgress((i + 1) / questions.length * 100);
             results.push({
@@ -2394,22 +2421,22 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
           }
         } catch (error) {
           console.error(`Error generating audio for question ${question._id}:`, error);
-          
+
           // Simple error handling without rate limiting delays
           results.push({
             question_id: question._id,
             error: error.message,
             success: false
-      });
+          });
         }
       }
-      
+
       const successfulAudio = results.filter(r => r.success);
       const failedAudio = results.filter(r => !r.success);
-      
+
       if (failedAudio.length > 0) {
         console.warn(`${failedAudio.length} audio files failed to generate:`, failedAudio);
-        
+
         // Show error messages for failed audio generation
         failedAudio.forEach(failed => {
           if (failed.error) {
@@ -2417,10 +2444,10 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
           }
         });
       }
-      
+
       setGeneratedAudioFiles(successfulAudio);
       return successfulAudio;
-      
+
     } catch (error) {
       console.error('Error in audio generation:', error);
       throw error;
@@ -2479,17 +2506,17 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
       formData.append('file', selectedFile);
       formData.append('module_id', testData.module);
       formData.append('level_id', testData.level);
-      
+
       if (testData.subcategory) {
         formData.append('subcategory', testData.subcategory);
       }
-      
+
       if (testData.topic_id) {
         formData.append('topic_id', testData.topic_id);
       }
 
       const response = await api.post('/test-management/upload-questions', formData);
-      
+
       if (response.data.success) {
         setUploadedQuestions(response.data.questions);
         toast.success('Questions uploaded successfully!');
@@ -2518,7 +2545,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
   const getModuleDisplayName = () => {
     const moduleNames = {
       'GRAMMAR': 'Grammar',
-      'VOCABULARY': 'Vocabulary', 
+      'VOCABULARY': 'Vocabulary',
       'READING': 'Reading',
       'LISTENING': 'Listening',
       'SPEAKING': 'Speaking',
@@ -2540,7 +2567,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
 
   // Get question count for the current module/topic
   const [localQuestionCount, setLocalQuestionCount] = useState(null);
-  
+
   const getQuestionCount = () => {
     return localQuestionCount;
   };
@@ -2549,24 +2576,24 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
   useEffect(() => {
     const fetchQuestionCount = async () => {
       if (!testData.module) return;
-      
+
       try {
         // Determine the correct level_id based on module type
         let levelId = testData.level;
-        
+
         if (testData.module.startsWith('CRT_')) {
           // For CRT modules, use the module_id directly as level_id
           levelId = testData.module;
         }
-        
+
         const payload = {
           module_id: testData.module,
           level_id: levelId,
           topic_id: testData.topic_id || selectedTopic
         };
-        
+
         console.log('Fetching question count with payload:', payload);
-        
+
         const response = await api.post('/test-management/question-bank/count', payload);
         if (response.data.success) {
           setLocalQuestionCount(response.data.available_count);
@@ -2585,7 +2612,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
     <div className="space-y-6">
       <div className="flex items-center space-x-3">
         <div className="bg-blue-500 p-2 rounded-full text-white">
-          <FileQuestion className="h-6 w-6"/>
+          <FileQuestion className="h-6 w-6" />
         </div>
         <h2 className="text-2xl font-bold">Question Upload</h2>
       </div>
@@ -2616,11 +2643,10 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <button
             onClick={() => handleQuestionSourceChange('manual')}
-            className={`p-4 border-2 rounded-lg text-left transition-colors ${
-              questionSource === 'manual'
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-200 hover:border-gray-300'
-            }`}
+            className={`p-4 border-2 rounded-lg text-left transition-colors ${questionSource === 'manual'
+              ? 'border-blue-500 bg-blue-50'
+              : 'border-gray-200 hover:border-gray-300'
+              }`}
           >
             <div className="flex items-center space-x-3">
               <Upload className="h-6 w-6 text-blue-500" />
@@ -2633,11 +2659,10 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
 
           <button
             onClick={handleQuestionBankSelect}
-            className={`p-4 border-2 rounded-lg text-left transition-colors ${
-              questionSource === 'bank'
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-200 hover:border-gray-300'
-            }`}
+            className={`p-4 border-2 rounded-lg text-left transition-colors ${questionSource === 'bank'
+              ? 'border-blue-500 bg-blue-50'
+              : 'border-gray-200 hover:border-gray-300'
+              }`}
           >
             <div className="flex items-center space-x-3">
               <Briefcase className="h-6 w-6 text-blue-500" />
@@ -2652,8 +2677,8 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                 {testData.module === 'LISTENING' && (
                   <div className="mt-1">
                     <p className="text-xs text-green-600">
-                    🎵 Audio will be auto-generated for listening tests
-                  </p>
+                      🎵 Audio will be auto-generated for listening tests
+                    </p>
                     <AudioGenerationStatus />
                   </div>
                 )}
@@ -2664,11 +2689,10 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
           {testData.test_type?.toLowerCase() === 'online' && (
             <button
               onClick={() => handleQuestionSourceChange('random')}
-              className={`p-4 border-2 rounded-lg text-left transition-colors ${
-                questionSource === 'random'
-                  ? 'border-green-500 bg-green-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
+              className={`p-4 border-2 rounded-lg text-left transition-colors ${questionSource === 'random'
+                ? 'border-green-500 bg-green-50'
+                : 'border-gray-200 hover:border-gray-300'
+                }`}
             >
               <div className="flex items-center space-x-3">
                 <Shuffle className="h-6 w-6 text-green-500" />
@@ -2700,7 +2724,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
                       <CheckCircle className="h-6 w-6 text-white" />
-                </div>
+                    </div>
                     <div>
                       <h3 className="text-lg font-semibold text-blue-900">
                         Question Selection Complete
@@ -2708,14 +2732,14 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                       <p className="text-blue-700 text-sm">
                         {uploadedQuestions.length} unique questions selected from question bank
                       </p>
-                      </div>
                     </div>
+                  </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold text-blue-600">{uploadedQuestions.length}</div>
                     <div className="text-xs text-blue-500 uppercase tracking-wide">Questions</div>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-white rounded-lg p-4 border border-blue-100">
                     <div className="flex items-center space-x-2 mb-2">
@@ -2726,7 +2750,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                       Questions have been shuffled with no duplicates within this test. Repetition status shows usage across all tests.
                     </p>
                   </div>
-                  
+
                   {testData.module === 'LISTENING' && (
                     <div className="bg-white rounded-lg p-4 border border-blue-100">
                       <div className="flex items-center space-x-2 mb-2">
@@ -2735,11 +2759,11 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                       </div>
                       <p className="text-xs text-gray-600">
                         Audio files will be automatically generated using AWS text-to-speech for optimal listening experience.
-                    </p>
-                  </div>
-                )}
-              </div>
-              
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 <div className="mt-4 pt-4 border-t border-blue-200">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-blue-600 font-medium">Ready to proceed?</span>
@@ -2753,14 +2777,14 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                   </div>
                 </div>
               </div>
-              
+
               {/* Professional Question Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {uploadedQuestions.map((question, index) => {
-                  const isTechnicalQuestion = question.question_type === 'technical' || 
+                  const isTechnicalQuestion = question.question_type === 'technical' ||
                     (testData.module === 'CRT' && testData.level === 'Technical');
                   const isSentenceQuestion = testData.module === 'LISTENING' || testData.module === 'SPEAKING' || question.question_type === 'sentence';
-                  
+
                   return (
                     <div
                       key={index}
@@ -2772,16 +2796,16 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                           <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
                             <span className="text-white text-sm font-bold">Q{index + 1}</span>
                           </div>
-                        <div className="flex-1">
+                          <div className="flex-1">
                             <h4 className="font-semibold text-gray-900 text-lg leading-tight">
                               {question.question || question.questionTitle || question.statement || question.problemStatement || question.text || 'Question text not available'}
-                          </h4>
+                            </h4>
                           </div>
                         </div>
                       </div>
-                          
+
                       {/* Question Content */}
-                          {isTechnicalQuestion ? (
+                      {isTechnicalQuestion ? (
                         <div className="space-y-3">
                           <div className="bg-gray-50 rounded-lg p-3">
                             <div className="text-sm font-medium text-gray-700 mb-2">Problem Statement</div>
@@ -2797,8 +2821,8 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                               <div className="text-green-600 font-semibold">{Array.isArray(question.testCases) ? question.testCases.length : 'N/A'}</div>
                             </div>
                           </div>
-                            </div>
-                          ) : isSentenceQuestion ? (
+                        </div>
+                      ) : isSentenceQuestion ? (
                         <div className="space-y-4">
                           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
                             <div className="flex items-center space-x-2 mb-2">
@@ -2808,11 +2832,11 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                               <span className="text-sm font-medium text-blue-700">Sentence Text</span>
                             </div>
                             <div className="text-gray-800 text-base leading-relaxed">
-                                {question.text || question.question || question.questionTitle || question.statement || question.problemStatement || 'Sentence text not available'}
-                              </div>
+                              {question.text || question.question || question.questionTitle || question.statement || question.problemStatement || 'Sentence text not available'}
+                            </div>
                           </div>
-                          
-                              {testData.module === 'LISTENING' && (
+
+                          {testData.module === 'LISTENING' && (
                             <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-100">
                               <div className="flex items-center space-x-2 mb-2">
                                 <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
@@ -2822,17 +2846,17 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                               </div>
                               <div className="text-gray-700 text-sm">
                                 Audio will be automatically generated using AWS text-to-speech for optimal listening experience.
-                                  </div>
-                                </div>
-                              )}
+                              </div>
                             </div>
-                          ) : (
+                          )}
+                        </div>
+                      ) : (
                         <div className="space-y-3">
                           <div className="grid grid-cols-2 gap-2">
                             <div className="bg-gray-50 rounded-lg p-2">
                               <div className="text-xs font-medium text-gray-600">A</div>
                               <div className="text-gray-800">{question.optionA || 'N/A'}</div>
-                              </div>
+                            </div>
                             <div className="bg-gray-50 rounded-lg p-2">
                               <div className="text-xs font-medium text-gray-600">B</div>
                               <div className="text-gray-800">{question.optionB || 'N/A'}</div>
@@ -2840,7 +2864,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                             <div className="bg-gray-50 rounded-lg p-2">
                               <div className="text-xs font-medium text-gray-600">C</div>
                               <div className="text-gray-800">{question.optionC || 'N/A'}</div>
-                        </div>
+                            </div>
                             <div className="bg-gray-50 rounded-lg p-2">
                               <div className="text-xs font-medium text-gray-600">D</div>
                               <div className="text-gray-800">{question.optionD || 'N/A'}</div>
@@ -2852,7 +2876,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                           </div>
                         </div>
                       )}
-                      
+
                       {/* Question Tags */}
                       <div className="mt-4 pt-3 border-t border-gray-100">
                         <div className="flex flex-wrap gap-2">
@@ -2909,39 +2933,39 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
             <Shuffle className="h-5 w-5 text-green-600" />
             <h3 className="text-lg font-semibold">Random Question Configuration</h3>
           </div>
-          
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-                <div className="flex items-center space-x-2 mb-2">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                  <span className="text-green-800 font-medium">Anti-Cheating Features</span>
-                </div>
-                <ul className="text-green-700 text-sm space-y-1">
-                  <li>• Each student receives different random questions from the question bank</li>
-                  <li>• MCQ options are shuffled for each student</li>
-                  <li>• Questions are distributed evenly across all students</li>
-                  <li>• No two students will have the same question set</li>
-                </ul>
+
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center space-x-2 mb-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <span className="text-green-800 font-medium">Anti-Cheating Features</span>
+            </div>
+            <ul className="text-green-700 text-sm space-y-1">
+              <li>• Each student receives different random questions from the question bank</li>
+              <li>• MCQ options are shuffled for each student</li>
+              <li>• Questions are distributed evenly across all students</li>
+              <li>• No two students will have the same question set</li>
+            </ul>
+          </div>
+
+          {/* Audio Generation Progress */}
+          {isGeneratingAudio && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center space-x-2 mb-2">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                <span className="text-blue-800 font-medium">Generating Audio Files</span>
               </div>
-              
-              {/* Audio Generation Progress */}
-              {isGeneratingAudio && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                    <span className="text-blue-800 font-medium">Generating Audio Files</span>
-                  </div>
-                  <div className="w-full bg-blue-200 rounded-full h-2 mb-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                      style={{ width: `${audioGenerationProgress}%` }}
-                    ></div>
-                  </div>
-                  <p className="text-blue-700 text-sm">
-                    Progress: {Math.round(audioGenerationProgress)}% - Generating audio for listening questions...
-                  </p>
-                </div>
-              )}
-          
+              <div className="w-full bg-blue-200 rounded-full h-2 mb-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${audioGenerationProgress}%` }}
+                ></div>
+              </div>
+              <p className="text-blue-700 text-sm">
+                Progress: {Math.round(audioGenerationProgress)}% - Generating audio for listening questions...
+              </p>
+            </div>
+          )}
+
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2960,7 +2984,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                 Each student will receive this many random questions from the question bank
               </p>
             </div>
-            
+
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-center space-x-2 mb-2">
                 <Info className="h-4 w-4 text-blue-600" />
@@ -2989,24 +3013,24 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
       {questionSource === 'manual' && (
         <div className="bg-white rounded-lg shadow-md p-6">
           <h3 className="text-lg font-semibold mb-4">
-            Upload {testData.module === 'CRT_TECHNICAL' ? 
-              (testData.technical_question_type === 'compiler' ? 'Compiler-Integrated' : 'MCQ') : 
+            Upload {testData.module === 'CRT_TECHNICAL' ?
+              (testData.technical_question_type === 'compiler' ? 'Compiler-Integrated' : 'MCQ') :
               ''} Questions for {testData.module}
           </h3>
-          
+
           {/* Audio Generation Status for Listening Module */}
           {testData.module === 'LISTENING' && (
             <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
               <div className="flex items-center space-x-2">
                 <span className="text-yellow-600">🎵</span>
                 <span className="text-sm text-yellow-800">
-                  <strong>Note:</strong> For listening tests, audio files will be automatically generated from the text. 
+                  <strong>Note:</strong> For listening tests, audio files will be automatically generated from the text.
                   Make sure the text is clear and properly formatted for best audio quality.
                 </span>
               </div>
             </div>
           )}
-          
+
           {/* Technical Test Instructions */}
           {testData.module === 'CRT_TECHNICAL' && (
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -3016,7 +3040,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                   {testData.technical_question_type === 'compiler' ? 'Compiler-Integrated' : 'MCQ'} Format
                 </h4>
               </div>
-              
+
               {testData.technical_question_type === 'compiler' ? (
                 <div className="text-sm text-blue-800">
                   <p className="mb-2"><strong>Required CSV Format for Compiler-Integrated Questions:</strong></p>
@@ -3199,124 +3223,124 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
               </div>
             ) : (
               selectedBankQuestions.map((question, index) => (
-              <div key={index} className="border border-gray-200 rounded-lg p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-500">Question {index + 1}</span>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Randomly Selected</span>
-                    {question.repetitionStatus === 'first_time' && (
-                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                        First Time
-                      </span>
-                    )}
-                    {question.repetitionStatus === 'repeating_first_time' && (
-                      <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
-                        Repeating First Time
-                      </span>
-                    )}
-                    {question.repetitionStatus === 'repeating_second_time' && (
-                      <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
-                        Repeating Second Time
-                      </span>
-                    )}
-                    {question.repetitionStatus && question.repetitionStatus.startsWith('repeating_') && question.repetitionStatus !== 'repeating_first_time' && question.repetitionStatus !== 'repeating_second_time' && (
-                      <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
-                        {question.repetitionStatus.replace('repeating_', 'Repeating ').replace('_', ' ').replace('time', 'Time')}
-                      </span>
-                    )}
-                    {question.question_type === 'compiler_integrated' && (
-                      <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
-                        Compiler
-                      </span>
-                    )}
-                    {question.question_type === 'mcq' && (
-                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                        MCQ
-                      </span>
-                    )}
-                    {(testData.module === 'LISTENING' || testData.module === 'SPEAKING' || question.question_type === 'sentence') && (
-                      <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                        Sentence
-                      </span>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Display based on question type */}
-                {question.question_type === 'compiler_integrated' ? (
-                  <div>
-                    <div className="mb-3">
-                      <h4 className="font-medium text-gray-800 mb-2">{question.questionTitle || question.question}</h4>
-                      <p className="text-gray-700">{question.problemStatement || question.statement}</p>
-                    </div>
-                    <div className="grid grid-cols-1 gap-2 text-sm">
-                      <div className="bg-gray-50 p-2 rounded">
-                        <span className="font-medium">Language:</span> {question.language || 'python'}
-                      </div>
-                      {question.instructions && (
-                        <div className="bg-gray-50 p-2 rounded">
-                          <span className="font-medium">Instructions:</span> {question.instructions}
-                        </div>
+                <div key={index} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-500">Question {index + 1}</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Randomly Selected</span>
+                      {question.repetitionStatus === 'first_time' && (
+                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                          First Time
+                        </span>
                       )}
-                      {question.testCases && question.testCases.length > 0 && (
+                      {question.repetitionStatus === 'repeating_first_time' && (
+                        <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                          Repeating First Time
+                        </span>
+                      )}
+                      {question.repetitionStatus === 'repeating_second_time' && (
+                        <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                          Repeating Second Time
+                        </span>
+                      )}
+                      {question.repetitionStatus && question.repetitionStatus.startsWith('repeating_') && question.repetitionStatus !== 'repeating_first_time' && question.repetitionStatus !== 'repeating_second_time' && (
+                        <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                          {question.repetitionStatus.replace('repeating_', 'Repeating ').replace('_', ' ').replace('time', 'Time')}
+                        </span>
+                      )}
+                      {question.question_type === 'compiler_integrated' && (
+                        <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                          Compiler
+                        </span>
+                      )}
+                      {question.question_type === 'mcq' && (
+                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                          MCQ
+                        </span>
+                      )}
+                      {(testData.module === 'LISTENING' || testData.module === 'SPEAKING' || question.question_type === 'sentence') && (
+                        <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                          Sentence
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Display based on question type */}
+                  {question.question_type === 'compiler_integrated' ? (
+                    <div>
+                      <div className="mb-3">
+                        <h4 className="font-medium text-gray-800 mb-2">{question.questionTitle || question.question}</h4>
+                        <p className="text-gray-700">{question.problemStatement || question.statement}</p>
+                      </div>
+                      <div className="grid grid-cols-1 gap-2 text-sm">
                         <div className="bg-gray-50 p-2 rounded">
-                          <span className="font-medium">Test Cases:</span> {question.testCases.length} case(s)
-                          <div className="mt-2 space-y-1">
-                            {Array.isArray(question.testCases) ? (
-                              question.testCases.map((testCase, idx) => (
-                                <div key={idx} className="text-xs bg-white p-1 rounded border">
-                                  <div><strong>Input:</strong> {testCase.input || testCase}</div>
-                                  <div><strong>Expected:</strong> {testCase.expectedOutput || 'N/A'}</div>
-                                </div>
-                              ))
-                            ) : (
-                              <div className="text-xs bg-white p-1 rounded border">
-                                <div><strong>Test Cases:</strong> {question.testCases}</div>
-                              </div>
-                            )}
+                          <span className="font-medium">Language:</span> {question.language || 'python'}
+                        </div>
+                        {question.instructions && (
+                          <div className="bg-gray-50 p-2 rounded">
+                            <span className="font-medium">Instructions:</span> {question.instructions}
                           </div>
+                        )}
+                        {question.testCases && question.testCases.length > 0 && (
+                          <div className="bg-gray-50 p-2 rounded">
+                            <span className="font-medium">Test Cases:</span> {question.testCases.length} case(s)
+                            <div className="mt-2 space-y-1">
+                              {Array.isArray(question.testCases) ? (
+                                question.testCases.map((testCase, idx) => (
+                                  <div key={idx} className="text-xs bg-white p-1 rounded border">
+                                    <div><strong>Input:</strong> {testCase.input || testCase}</div>
+                                    <div><strong>Expected:</strong> {testCase.expectedOutput || 'N/A'}</div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-xs bg-white p-1 rounded border">
+                                  <div><strong>Test Cases:</strong> {question.testCases}</div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (testData.module === 'LISTENING' || testData.module === 'SPEAKING' || question.question_type === 'sentence') ? (
+                    <div>
+                      <p className="text-gray-800 mb-3">{question.text || question.question || question.questionTitle || question.statement || question.problemStatement || 'Sentence text not available'}</p>
+                      <div className="bg-blue-50 p-3 rounded">
+                        <div className="text-sm text-blue-800">
+                          <strong>Type:</strong> Sentence-based Question
                         </div>
-                      )}
-                    </div>
-                  </div>
-                ) : (testData.module === 'LISTENING' || testData.module === 'SPEAKING' || question.question_type === 'sentence') ? (
-                  <div>
-                    <p className="text-gray-800 mb-3">{question.text || question.question || question.questionTitle || question.statement || question.problemStatement || 'Sentence text not available'}</p>
-                    <div className="bg-blue-50 p-3 rounded">
-                      <div className="text-sm text-blue-800">
-                        <strong>Type:</strong> Sentence-based Question
+                        {testData.module === 'LISTENING' && (
+                          <div className="mt-2 text-sm">
+                            <strong>Audio Status:</strong> 🎵 Audio will be auto-generated for listening test
+                          </div>
+                        )}
                       </div>
-                      {testData.module === 'LISTENING' && (
-                        <div className="mt-2 text-sm">
-                          <strong>Audio Status:</strong> 🎵 Audio will be auto-generated for listening test
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-gray-800 mb-3">{question.question || question.questionTitle || question.statement || question.problemStatement || 'Question text not available'}</p>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="bg-gray-50 p-2 rounded">
+                          <span className="font-medium">A:</span> {question.optionA || 'N/A'}
                         </div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-gray-800 mb-3">{question.question || question.questionTitle || question.statement || question.problemStatement || 'Question text not available'}</p>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div className="bg-gray-50 p-2 rounded">
-                        <span className="font-medium">A:</span> {question.optionA || 'N/A'}
+                        <div className="bg-gray-50 p-2 rounded">
+                          <span className="font-medium">B:</span> {question.optionB || 'N/A'}
+                        </div>
+                        <div className="bg-gray-50 p-2 rounded">
+                          <span className="font-medium">C:</span> {question.optionC || 'N/A'}
+                        </div>
+                        <div className="bg-gray-50 p-2 rounded">
+                          <span className="font-medium">D:</span> {question.optionD || 'N/A'}
+                        </div>
                       </div>
-                      <div className="bg-gray-50 p-2 rounded">
-                        <span className="font-medium">B:</span> {question.optionB || 'N/A'}
-                      </div>
-                      <div className="bg-gray-50 p-2 rounded">
-                        <span className="font-medium">C:</span> {question.optionC || 'N/A'}
-                      </div>
-                      <div className="bg-gray-50 p-2 rounded">
-                        <span className="font-medium">D:</span> {question.optionD || 'N/A'}
+                      <div className="mt-2 text-sm">
+                        <span className="font-medium text-green-600">Answer:</span> {question.answer || 'N/A'}
                       </div>
                     </div>
-                    <div className="mt-2 text-sm">
-                      <span className="font-medium text-green-600">Answer:</span> {question.answer || 'N/A'}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))
+                  )}
+                </div>
+              ))
             )}
           </div>
           <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
@@ -3391,7 +3415,7 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated, uploadedQu
   };
 
   // Validation for online test
-      const isOnline = testData.test_type?.toLowerCase() === 'online';
+  const isOnline = testData.test_type?.toLowerCase() === 'online';
   const missingDate = isOnline && (!testData.startDateTime || !testData.endDateTime);
 
   const accentOptions = [
@@ -3455,7 +3479,7 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated, uploadedQu
         success("Test creation started! Audio generation is in progress.")
       }
       if (onTestCreated) onTestCreated(newTestId)
-    } catch(err) {
+    } catch (err) {
       const errorMessage = err.response?.data?.message || "An unexpected error occurred while creating the test."
       if (err.response?.status === 409) {
         error(errorMessage);
@@ -3475,7 +3499,7 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated, uploadedQu
         {loading && <LoadingSpinner message={isMcqModule ? "Creating MCQ module..." : "Generating audio and creating test..."} />}
         <div className="flex items-center space-x-3">
           <div className="bg-blue-500 p-2 rounded-full text-white">
-            <Sparkles className="h-6 w-6"/>
+            <Sparkles className="h-6 w-6" />
           </div>
           <h2 className="text-2xl font-bold mb-4">Final Confirmation</h2>
         </div>
@@ -3526,8 +3550,8 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated, uploadedQu
                     </ul>
                     <div className="mt-3 p-2 bg-blue-50 rounded border border-blue-200">
                       <p className="text-xs text-blue-800">
-                        <strong>Selected:</strong> Campus: {testData.campus?.label}, 
-                        Batches: {testData.batches?.map(b => b.label).join(', ')}, 
+                        <strong>Selected:</strong> Campus: {testData.campus?.label},
+                        Batches: {testData.batches?.map(b => b.label).join(', ')},
                         Courses: {testData.courses?.map(c => c.label).join(', ')}
                       </p>
                     </div>
@@ -3556,9 +3580,9 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated, uploadedQu
                           <td className="px-4 py-2 text-gray-900 border-b align-middle">{s.email}</td>
                           <td className="px-4 py-2 text-gray-900 border-b align-middle text-center">{s.roll_number || '-'}</td>
                           <td className="px-4 py-2 text-gray-600 border-b align-middle text-center text-xs">
-                            {s.source === 'batch_course_instance' ? 'Batch-Course' : 
-                             s.source === 'direct_batch' ? 'Direct Batch' : 
-                             s.source === 'campus_wide' ? 'Campus' : 'Unknown'}
+                            {s.source === 'batch_course_instance' ? 'Batch-Course' :
+                              s.source === 'direct_batch' ? 'Direct Batch' :
+                                s.source === 'campus_wide' ? 'Campus' : 'Unknown'}
                           </td>
                         </tr>
                       ))}
@@ -3577,7 +3601,7 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated, uploadedQu
                 <div className="flex items-center space-x-2">
                   <span className="text-blue-600">ℹ️</span>
                   <span className="text-sm text-blue-800">
-                    <strong>Audio Generation Status:</strong> Audio files will be automatically generated for listening questions. 
+                    <strong>Audio Generation Status:</strong> Audio files will be automatically generated for listening questions.
                     If audio generation fails, the test will still be created but without audio files.
                   </span>
                 </div>
@@ -3611,7 +3635,7 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated, uploadedQu
             </div>
           </div>
         )}
-        
+
         <div className="flex justify-between items-center pt-4">
           <button type="button" onClick={prevStep} className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-gray-800 bg-gray-100 hover:bg-gray-200 transition-colors">
             <ChevronLeft className="h-5 w-5 mr-1" /> Back
@@ -3770,19 +3794,19 @@ const ModuleQuestionUpload = ({ onBack }) => {
         .filter(Boolean),
       ...modules.filter(m => !moduleOrder.map(n => n.toLowerCase()).includes(m.name.toLowerCase())),
     ];
-  return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-      <div className="flex justify-between items-center mb-8">
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+        <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800">Select Module for Question Upload</h1>
           <button onClick={onBack} className="text-sm font-medium text-gray-500 hover:text-green-600">&larr; Back</button>
-      </div>
-        
-      <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8">
           <div className="mb-6">
             <h2 className="text-xl font-semibold text-gray-800 mb-4">Available Modules</h2>
             <p className="text-gray-600 mb-6">Click on a module to proceed with question upload for that module.</p>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {sortedModules.map((module) => (
               <motion.div
@@ -3803,7 +3827,7 @@ const ModuleQuestionUpload = ({ onBack }) => {
               </motion.div>
             ))}
           </div>
-          
+
           {modules.length === 0 && (
             <div className="text-center py-12">
               <FileQuestion className="h-16 w-16 text-gray-300 mx-auto mb-4" />
@@ -3836,15 +3860,15 @@ const ModuleQuestionUpload = ({ onBack }) => {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
       <div className="flex justify-between items-center mb-8">
-          <div>
+        <div>
           <h1 className="text-3xl font-bold text-gray-800">Upload Questions</h1>
           <p className="text-gray-600 mt-2">Module: <span className="font-semibold text-green-700">{selectedModule?.name}</span></p>
-          </div>
-        <button onClick={handleBackToModules} className="text-sm font-medium text-gray-500 hover:text-green-600 transition-colors">&larr; Back to Modules</button>
         </div>
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.98 }} 
-        animate={{ opacity: 1, scale: 1 }} 
+        <button onClick={handleBackToModules} className="text-sm font-medium text-gray-500 hover:text-green-600 transition-colors">&larr; Back to Modules</button>
+      </div>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.4 }}
         className="bg-gradient-to-br from-green-50 to-white rounded-2xl shadow-xl border border-green-200 p-8 max-w-3xl mx-auto"
       >
@@ -3881,8 +3905,8 @@ const ModuleQuestionUpload = ({ onBack }) => {
                   ))}
                 </motion.ul>
               )}
-        </div>
-        </div>
+            </div>
+          </div>
           {/* File Upload */}
           <div className="w-full md:w-1/2">
             <label className="block text-sm font-semibold text-gray-800 mb-2">Upload Questions (CSV/XLSX)</label>
@@ -3918,7 +3942,7 @@ const ModuleQuestionUpload = ({ onBack }) => {
           >
             {loading ? 'Uploading...' : 'Upload to Module Bank'}
           </motion.button>
-      </div>
+        </div>
       </motion.div>
     </motion.div>
   );
