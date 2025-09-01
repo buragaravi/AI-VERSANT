@@ -782,6 +782,13 @@ def get_single_test(test_id):
         if not test:
             return jsonify({'success': False, 'message': 'Test not found'}), 404
 
+        # Debug: Log the raw test data
+        current_app.logger.info(f"Raw test data for {test_id}: {test.keys()}")
+        if 'questions' in test:
+            current_app.logger.info(f"Raw questions count: {len(test['questions']) if isinstance(test['questions'], list) else 'not a list'}")
+            if isinstance(test['questions'], list) and len(test['questions']) > 0:
+                current_app.logger.info(f"First question structure: {test['questions'][0]}")
+
         # You might want to add an access check here to ensure the student
         # is actually assigned to this test, similar to the /tests endpoint.
 
@@ -791,6 +798,15 @@ def get_single_test(test_id):
         
         # Convert all ObjectId fields to strings for JSON serialization
         convert_objectids_to_strings(test_details)
+        
+        # Debug: Log question structure for troubleshooting
+        if 'questions' in test_details and isinstance(test_details['questions'], list):
+            current_app.logger.info(f"Test {test_id} has {len(test_details['questions'])} questions")
+            for i, q in enumerate(test_details['questions']):
+                current_app.logger.info(f"Question {i+1}: type={q.get('question_type')}, has_options={'options' in q}, options_type={type(q.get('options'))}")
+                if q.get('question_type') == 'mcq' and not q.get('options'):
+                    current_app.logger.warning(f"MCQ question {i+1} is missing options field: {q}")
+        
         # --- SHUFFLE MCQ QUESTIONS AND OPTIONS ---
         import random
         if 'questions' in test_details and isinstance(test_details['questions'], list):
@@ -805,14 +821,47 @@ def get_single_test(test_id):
                     answer_map = {}
                     for idx, (old_key, value) in enumerate(items):
                         new_key = chr(ord('A') + idx)
-                        new_options[new_key] = value
+                        new_options[new_key] = str(value)
                         answer_map[old_key] = new_key
                     # Update options
                     q['options'] = new_options
                     # Update correct_answer to new key
                     if 'correct_answer' in q and q['correct_answer'] in answer_map:
                         q['correct_answer'] = answer_map[q['correct_answer']]
+                elif q.get('question_type') == 'mcq' and not q.get('options'):
+                    # Fix MCQ questions that are missing options
+                    current_app.logger.warning(f"Fixing MCQ question without options: {q.get('_id', 'no_id')}")
+                    q['options'] = {'A': 'Option A', 'B': 'Option B', 'C': 'Option C', 'D': 'Option D'}
+                    q['correct_answer'] = 'A'  # Default answer
+                
+                # Ensure all questions have a question_id field
+                if not q.get('question_id'):
+                    if q.get('_id'):
+                        q['question_id'] = str(q['_id'])
+                    else:
+                        q['question_id'] = f"q_{i+1}"
+                        current_app.logger.warning(f"Question {i+1} has no _id, assigned question_id: {q['question_id']}")
         # --- END SHUFFLE ---
+        
+        # Final validation: Ensure all questions have required fields
+        if 'questions' in test_details and isinstance(test_details['questions'], list):
+            valid_questions = []
+            for q in test_details['questions']:
+                if q.get('question_type') == 'mcq':
+                    if q.get('options') and q.get('question_id'):
+                        valid_questions.append(q)
+                    else:
+                        current_app.logger.error(f"Skipping invalid MCQ question: {q}")
+                else:
+                    # Non-MCQ questions just need basic fields
+                    if q.get('question') and q.get('question_id'):
+                        valid_questions.append(q)
+                    else:
+                        current_app.logger.error(f"Skipping invalid question: {q}")
+            
+            test_details['questions'] = valid_questions
+            current_app.logger.info(f"Returning {len(valid_questions)} valid questions out of {len(test_details['questions'])} total")
+        
         return jsonify({'success': True, 'data': test_details})
 
     except Exception as e:
