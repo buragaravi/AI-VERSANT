@@ -40,10 +40,15 @@ cors_origins = os.getenv('CORS_ORIGINS', default_origins)
 
 # Enhanced CORS configuration to handle all possible origins
 # Check if we should allow all origins (for development/testing)
-allow_all_origins = os.getenv('ALLOW_ALL_CORS', 'false').lower() == 'true'
+allow_all_origins = os.getenv('ALLOW_ALL_CORS', 'true').lower() == 'true'  # Changed default to true for production
+
+print(f"🔧 CORS Configuration:")
+print(f"   Allow all origins: {allow_all_origins}")
+print(f"   CORS origins: {cors_origins}")
 
 if allow_all_origins:
     # Allow all origins for development/testing
+    print("   Using wildcard CORS (*)")
     CORS(app, 
          origins="*", 
          supports_credentials=False,  # Must be False when origins="*"
@@ -53,8 +58,10 @@ if allow_all_origins:
          max_age=3600)
 else:
     # Production CORS with specific origins
+    origins_list = [origin.strip() for origin in cors_origins.split(',')]
+    print(f"   Using specific origins: {origins_list}")
     CORS(app, 
-         origins=cors_origins.split(','), 
+         origins=origins_list, 
          supports_credentials=True, 
          allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"],
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
@@ -63,18 +70,47 @@ else:
 
 
 
+# CORS after_request handler
+@app.after_request
+def after_request(response):
+    """Add CORS headers to all responses"""
+    from flask import request
+    
+    # Get the origin from the request
+    origin = request.headers.get('Origin')
+    
+    # Check if origin is allowed
+    if allow_all_origins or (origin and origin in cors_origins.split(',')):
+        response.headers.add('Access-Control-Allow-Origin', origin if origin else '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin,Access-Control-Request-Method,Access-Control-Request-Headers')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        response.headers.add('Access-Control-Max-Age', '3600')
+    
+    return response
+
 # CORS preflight handler
 @app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
 @app.route('/<path:path>', methods=['OPTIONS'])
 def handle_options(path):
     """Handle CORS preflight requests"""
-    response = jsonify({'message': 'CORS preflight handled'})
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin,Access-Control-Request-Method,Access-Control-Request-Headers')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    response.headers.add('Access-Control-Max-Age', '3600')
-    return response
+    from flask import request
+    
+    # Get the origin from the request
+    origin = request.headers.get('Origin')
+    
+    # Check if origin is allowed
+    if allow_all_origins or (origin and origin in cors_origins.split(',')):
+        response = jsonify({'message': 'CORS preflight handled'})
+        response.headers.add('Access-Control-Allow-Origin', origin if origin else '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin,Access-Control-Request-Method,Access-Control-Request-Headers')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        response.headers.add('Access-Control-Max-Age', '3600')
+        return response
+    else:
+        # Return 403 for disallowed origins
+        return jsonify({'error': 'CORS policy violation'}), 403
 
 # Root route for API status
 @app.route('/')
@@ -118,6 +154,22 @@ def health_check():
         'success': True,
         'status': 'healthy',
         'timestamp': '2024-01-01T00:00:00Z'
+    }), 200
+
+# CORS test endpoint
+@app.route('/cors-test')
+def cors_test():
+    """Test endpoint to verify CORS is working"""
+    from flask import request
+    
+    origin = request.headers.get('Origin')
+    return jsonify({
+        'success': True,
+        'message': 'CORS test successful',
+        'origin': origin,
+        'cors_enabled': True,
+        'allow_all_origins': allow_all_origins,
+        'allowed_origins': cors_origins.split(',')
     }), 200
 
 # Register blueprints
