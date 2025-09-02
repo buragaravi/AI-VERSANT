@@ -407,7 +407,12 @@ def get_student_practice_results():
         
         # Try to get from test_results collection
         try:
-            if hasattr(mongo_db, 'test_results'):
+            current_app.logger.info(f"Checking test_results collection...")
+            if hasattr(mongo_db, 'db') and hasattr(mongo_db.db, 'test_results'):
+                current_app.logger.info(f"test_results collection exists")
+                # Check if there are any practice results
+                practice_count = mongo_db.db.test_results.count_documents({'test_type': 'practice'})
+                current_app.logger.info(f"Found {practice_count} practice results in test_results")
                 pipeline = [
                     {'$match': match_conditions},
                     {
@@ -499,7 +504,7 @@ def get_student_practice_results():
                         {'student_email': {'$regex': student_filter, '$options': 'i'}}
                     ]}})
                 
-                results = list(mongo_db.test_results.aggregate(pipeline))
+                results = list(mongo_db.db.test_results.aggregate(pipeline))
                 all_results.extend(results)
                 current_app.logger.info(f"Found {len(results)} practice results in test_results collection")
             else:
@@ -509,7 +514,12 @@ def get_student_practice_results():
         
         # Also get from student_test_attempts collection
         try:
+            current_app.logger.info(f"Checking student_test_attempts collection...")
             if hasattr(mongo_db, 'student_test_attempts'):
+                current_app.logger.info(f"student_test_attempts collection exists")
+                # Check if there are any practice results
+                practice_attempts_count = mongo_db.student_test_attempts.count_documents({'test_type': 'practice'})
+                current_app.logger.info(f"Found {practice_attempts_count} practice results in student_test_attempts")
                 pipeline = [
                     {'$match': match_conditions},
                     {
@@ -755,15 +765,142 @@ def get_student_online_results():
                 {'student_email': {'$regex': student_filter, '$options': 'i'}}
             ]}})
         
-        # Try both collections
-        results = []
+        # Try all collections for online results
+        all_results = []
+        
+        # Try student_test_attempts collection
         try:
-            results = list(mongo_db.student_test_attempts.aggregate(pipeline))
-        except:
-            try:
-                results = list(mongo_db.db.test_results.aggregate(pipeline))
-            except:
-                results = []
+            if hasattr(mongo_db, 'student_test_attempts'):
+                attempt_results = list(mongo_db.student_test_attempts.aggregate(pipeline))
+                all_results.extend(attempt_results)
+                current_app.logger.info(f"Found {len(attempt_results)} online results in student_test_attempts")
+        except Exception as e:
+            current_app.logger.warning(f"Error aggregating from student_test_attempts: {e}")
+        
+        # Try test_results collection
+        try:
+            if hasattr(mongo_db, 'db') and hasattr(mongo_db.db, 'test_results'):
+                test_results = list(mongo_db.db.test_results.aggregate(pipeline))
+                all_results.extend(test_results)
+                current_app.logger.info(f"Found {len(test_results)} online results in test_results")
+        except Exception as e:
+            current_app.logger.warning(f"Error aggregating from test_results: {e}")
+        
+        # Try student_test_assignments collection (where online exam results are stored)
+        try:
+            current_app.logger.info(f"Checking student_test_assignments collection...")
+            if hasattr(mongo_db, 'student_test_assignments'):
+                current_app.logger.info(f"student_test_assignments collection exists")
+                # Check if there are any attempted assignments
+                attempted_count = mongo_db.student_test_assignments.count_documents({'attempted': True})
+                current_app.logger.info(f"Found {attempted_count} attempted assignments")
+                # Create a different pipeline for student_test_assignments
+                assignment_pipeline = [
+                    {'$match': {'attempted': True}},  # Only get attempted assignments
+                    {
+                        '$lookup': {
+                            'from': 'tests',
+                            'localField': 'test_id',
+                            'foreignField': '_id',
+                            'as': 'test_details'
+                        }
+                    },
+                    {'$unwind': '$test_details'},
+                    {
+                        '$lookup': {
+                            'from': 'users',
+                            'localField': 'student_id',
+                            'foreignField': '_id',
+                            'as': 'student_details'
+                        }
+                    },
+                    {'$unwind': '$student_details'},
+                    {
+                        '$lookup': {
+                            'from': 'students',
+                            'localField': 'student_id',
+                            'foreignField': 'user_id',
+                            'as': 'student_profile'
+                        }
+                    },
+                    {'$unwind': '$student_profile'},
+                    {
+                        '$lookup': {
+                            'from': 'campuses',
+                            'localField': 'student_profile.campus_id',
+                            'foreignField': '_id',
+                            'as': 'campus_details'
+                        }
+                    },
+                    {'$unwind': '$campus_details'},
+                    {
+                        '$lookup': {
+                            'from': 'courses',
+                            'localField': 'student_profile.course_id',
+                            'foreignField': '_id',
+                            'as': 'course_details'
+                        }
+                    },
+                    {'$unwind': '$course_details'},
+                    {
+                        '$lookup': {
+                            'from': 'batches',
+                            'localField': 'student_profile.batch_id',
+                            'foreignField': '_id',
+                            'as': 'batch_details'
+                        }
+                    },
+                    {'$unwind': '$batch_details'},
+                    {
+                        '$project': {
+                            '_id': 1,
+                            'student_id': 1,
+                            'student_name': '$student_details.name',
+                            'student_email': '$student_details.email',
+                            'campus_name': '$campus_details.name',
+                            'course_name': '$course_details.name',
+                            'batch_name': '$batch_details.name',
+                            'test_name': '$test_details.name',
+                            'module_name': '$test_details.module_id',
+                            'test_type': '$test_details.test_type',
+                            'average_score': '$percentage',
+                            'total_questions': {'$size': '$questions'},
+                            'correct_answers': '$score',
+                            'submitted_at': '$completed_at',
+                            'duration': '$test_details.duration',
+                            'time_taken': 0,
+                            'auto_submitted': False,
+                            'cheat_detected': False
+                        }
+                    },
+                    {'$sort': {'submitted_at': -1}}
+                ]
+                
+                # Apply additional filters to assignment pipeline
+                if campus_filter:
+                    assignment_pipeline.insert(0, {'$match': {'campus_name': campus_filter}})
+                if student_filter:
+                    assignment_pipeline.insert(0, {'$match': {'$or': [
+                        {'student_name': {'$regex': student_filter, '$options': 'i'}},
+                        {'student_email': {'$regex': student_filter, '$options': 'i'}}
+                    ]}})
+                if module_filter:
+                    assignment_pipeline.insert(0, {'$match': {'module_name': module_filter}})
+                
+                assignment_results = list(mongo_db.student_test_assignments.aggregate(assignment_pipeline))
+                all_results.extend(assignment_results)
+                current_app.logger.info(f"Found {len(assignment_results)} online results in student_test_assignments")
+        except Exception as e:
+            current_app.logger.warning(f"Error aggregating from student_test_assignments: {e}")
+        
+        # Remove duplicates based on test_id, student_id, and submitted_at
+        seen = set()
+        results = []
+        for result in all_results:
+            key = (str(result.get('test_id')), str(result.get('student_id')), str(result.get('submitted_at')))
+            if key not in seen:
+                seen.add(key)
+                results.append(result)
         
         # Process results
         for result in results:
@@ -1859,6 +1996,82 @@ def debug_test_results():
             'success': False,
             'message': f'Debug endpoint error: {str(e)}'
         }), 500 
+
+@superadmin_bp.route('/debug-collections', methods=['GET'])
+@jwt_required()
+def debug_collections():
+    """Debug endpoint to check what collections exist and what data they contain"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
+        debug_info = {
+            'collections': {},
+            'sample_data': {}
+        }
+        
+        # Check student_test_attempts
+        try:
+            if hasattr(mongo_db, 'student_test_attempts'):
+                count = mongo_db.student_test_attempts.count_documents({})
+                debug_info['collections']['student_test_attempts'] = count
+                if count > 0:
+                    sample = list(mongo_db.student_test_attempts.find().limit(1))
+                    debug_info['sample_data']['student_test_attempts'] = sample
+        except Exception as e:
+            debug_info['collections']['student_test_attempts'] = f"Error: {str(e)}"
+        
+        # Check test_results
+        try:
+            if hasattr(mongo_db, 'db') and hasattr(mongo_db.db, 'test_results'):
+                count = mongo_db.db.test_results.count_documents({})
+                debug_info['collections']['test_results'] = count
+                if count > 0:
+                    sample = list(mongo_db.db.test_results.find().limit(1))
+                    debug_info['sample_data']['test_results'] = sample
+        except Exception as e:
+            debug_info['collections']['test_results'] = f"Error: {str(e)}"
+        
+        # Check student_test_assignments
+        try:
+            if hasattr(mongo_db, 'student_test_assignments'):
+                count = mongo_db.student_test_assignments.count_documents({})
+                attempted_count = mongo_db.student_test_assignments.count_documents({'attempted': True})
+                debug_info['collections']['student_test_assignments'] = {
+                    'total': count,
+                    'attempted': attempted_count
+                }
+                if attempted_count > 0:
+                    sample = list(mongo_db.student_test_assignments.find({'attempted': True}).limit(1))
+                    debug_info['sample_data']['student_test_assignments'] = sample
+        except Exception as e:
+            debug_info['collections']['student_test_assignments'] = f"Error: {str(e)}"
+        
+        # Check tests collection
+        try:
+            if hasattr(mongo_db, 'tests'):
+                count = mongo_db.tests.count_documents({})
+                debug_info['collections']['tests'] = count
+        except Exception as e:
+            debug_info['collections']['tests'] = f"Error: {str(e)}"
+        
+        return jsonify({
+            'success': True,
+            'data': debug_info
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in debug endpoint: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Debug failed: {str(e)}'
+        }), 500
 
 @superadmin_bp.route('/filter-options', methods=['GET'])
 @jwt_required()

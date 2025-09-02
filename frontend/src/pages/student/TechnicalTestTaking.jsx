@@ -3,8 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import api from '../../services/api';
-import Header from '../../components/common/Header';
-import Sidebar from '../../components/common/Sidebar';
+
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
 const TechnicalTestTaking = () => {
@@ -197,11 +196,7 @@ const TechnicalTestTaking = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
-      <Sidebar />
-      
-      <div className="lg:pl-64">
-        <main className="py-6">
+      <main className="py-6">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Header */}
             <motion.div
@@ -400,8 +395,7 @@ const TechnicalTestTaking = () => {
               </motion.div>
             )}
           </div>
-        </main>
-      </div>
+      </main>
     </div>
   );
 };

@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useNotification } from '../../contexts/NotificationContext'
-import Header from '../../components/common/Header'
-import Sidebar from '../../components/common/Sidebar'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import api, { getTestResultById } from '../../services/api'
 import { 
@@ -121,25 +119,18 @@ const TestResult = () => {
   if (!result) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header />
-        <Sidebar />
-        <div className="lg:pl-64">
-          <main className="py-6">
-            <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
-              <p className="text-gray-600">Result not found.</p>
-            </div>
-          </main>
-        </div>
+        <main className="py-6">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+            <p className="text-gray-600">Result not found.</p>
+          </div>
+        </main>
       </div>
     )
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
-      <Sidebar />
-      <div className="lg:pl-64">
-        <main className="py-6">
+      <main className="py-6">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -367,10 +358,9 @@ const TestResult = () => {
             </motion.div>
           </div>
         </main>
-      </div>
 
-      {/* Question Detail Modal */}
-      {showQuestionModal && selectedQuestion && (
+        {/* Question Detail Modal */}
+        {showQuestionModal && selectedQuestion && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
@@ -457,7 +447,7 @@ const TestResult = () => {
             </div>
           </div>
         </div>
-      )}
+        )}
     </div>
   )
 }

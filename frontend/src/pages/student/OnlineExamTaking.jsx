@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import Header from '../../components/common/Header';
-import Sidebar from '../../components/common/Sidebar';
 import api from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 
@@ -21,14 +19,26 @@ const OnlineExamTaking = () => {
   const examRef = useRef(null);
   const navigate = useNavigate();
   const [startTime, setStartTime] = useState(null);
+  const [assignmentId, setAssignmentId] = useState(null);
 
   useEffect(() => {
     const fetchExam = async () => {
       try {
         setLoading(true);
-        const res = await api.get(`/student/test/${examId}`);
-        setExam(res.data.data);
-        setQuestions(res.data.data.questions || []);
+        // Try to get the random assignment first (for online exams with random questions)
+        try {
+          const res = await api.get(`/student/test/${examId}/random-assignment`);
+          setExam(res.data.data);
+          setQuestions(res.data.data.questions || []);
+          setAssignmentId(res.data.data.assignment_id);
+        } catch (randomErr) {
+          // If random assignment fails, try the regular test endpoint
+          console.log('Random assignment failed, trying regular test endpoint:', randomErr);
+          const res = await api.get(`/student/test/${examId}`);
+          setExam(res.data.data);
+          setQuestions(res.data.data.questions || []);
+          setAssignmentId(null); // No assignment ID for regular tests
+        }
       } catch (err) {
         showError('Failed to load exam.');
         setExam(null);
@@ -93,17 +103,43 @@ const OnlineExamTaking = () => {
     try {
       const endTime = Date.now();
       const timeTakenMs = startTime ? endTime - startTime : null;
-      const payload = {
-        test_id: examId,
-        answers: answers,
-        time_taken_ms: timeTakenMs
-      };
-      const res = await api.post('/student/submit-test', payload);
-      if (res.data.success) {
-        success('Exam submitted successfully!');
-        navigate('/student/history');
+
+      if (assignmentId) {
+        // Submit using random assignment endpoint
+        const payload = {
+          assignment_id: assignmentId,
+          answers: answers,
+          time_taken_ms: timeTakenMs
+        };
+        const res = await api.post(`/student/test/${examId}/submit-random`, payload);
+        if (res.data.success) {
+          success('Exam submitted successfully!');
+          navigate('/student/history');
+        } else {
+          showError(res.data.message || 'Failed to submit your answers.');
+        }
       } else {
-        showError(res.data.message || 'Failed to submit your answers.');
+        // Submit using regular test endpoint (for tests without random questions)
+        // First, we need to start the test to get an attempt_id
+        try {
+          const startRes = await api.post(`/student/tests/${examId}/start`);
+          const attemptId = startRes.data.data.attempt_id;
+          
+          const payload = {
+            attempt_id: attemptId,
+            answers: answers,
+            time_taken_ms: timeTakenMs
+          };
+          const res = await api.post(`/student/tests/${examId}/submit`, payload);
+          if (res.data.success) {
+            success('Exam submitted successfully!');
+            navigate('/student/history');
+          } else {
+            showError(res.data.message || 'Failed to submit your answers.');
+          }
+        } catch (startErr) {
+          showError('Failed to start test. Please try again.');
+        }
       }
     } catch (err) {
       showError(err.response?.data?.message || 'Failed to submit your answers. Please try again.');
@@ -117,14 +153,11 @@ const OnlineExamTaking = () => {
   const currentQuestion = questions[currentQuestionIndex];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar />
-      <div className="flex-1 lg:pl-64">
-        <Header />
-        <main className="px-6 lg:px-10 py-12">
+    <div className="min-h-screen bg-gray-50">
+      <main className="px-6 lg:px-10 py-8">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div className="flex justify-between items-center mb-4">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 truncate">{exam.name}</h1>
+            <div className="mb-6">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 text-center">{exam.name}</h1>
             </div>
             {cheatWarning && (
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-4 text-center">
@@ -195,8 +228,7 @@ const OnlineExamTaking = () => {
               </fieldset>
             </div>
           </motion.div>
-        </main>
-      </div>
+      </main>
     </div>
   );
 };
