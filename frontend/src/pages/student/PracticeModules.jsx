@@ -637,9 +637,31 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                     
                     // Only set questions if they haven't been initialized yet to prevent re-shuffling
                     if (!questionsInitialized.current) {
-                        setQuestions(res.data.data.questions);
+                        // Check if we have stored question order in session storage
+                        const storedOrder = sessionStorage.getItem(`test_${module._id}_question_order`);
+                        let finalQuestions = res.data.data.questions;
+                        
+                        if (storedOrder) {
+                            try {
+                                const orderMap = JSON.parse(storedOrder);
+                                // Reorder questions based on stored order
+                                finalQuestions = orderMap.map(id => 
+                                    res.data.data.questions.find(q => q.question_id === id)
+                                ).filter(Boolean);
+                                console.log('Restored question order from session storage');
+                            } catch (e) {
+                                console.error('Error parsing stored question order:', e);
+                            }
+                        } else {
+                            // Store the initial order
+                            const orderMap = res.data.data.questions.map(q => q.question_id);
+                            sessionStorage.setItem(`test_${module._id}_question_order`, JSON.stringify(orderMap));
+                            console.log('Stored initial question order in session storage');
+                        }
+                        
+                        setQuestions(finalQuestions);
                         questionsInitialized.current = true;
-                        console.log('Questions initialized with order:', res.data.data.questions.map(q => q.question_id));
+                        console.log('Questions initialized with order:', finalQuestions.map(q => q.question_id));
                     } else {
                         console.log('Questions already initialized, maintaining current order');
                     }
@@ -896,6 +918,12 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
 
     const handleSubmit = async () => {
         try {
+            // Clear session storage for this test
+            if (module?._id) {
+                sessionStorage.removeItem(`test_${module._id}_question_order`);
+                console.log('Cleared question order from session storage');
+            }
+            
             const formData = new FormData();
             formData.append('test_id', module._id);
             
@@ -1562,7 +1590,15 @@ const ResultView = ({ result, onBack }) => {
                                                 <div>
                                                     <span className="font-medium text-gray-600">Your Response:</span>
                                                     <div className="mt-1 p-1 bg-gray-50 rounded text-xs">
-                                                        {q.student_text || 'No transcript'}
+                                                        {q.student_text ? (
+                                                            <span className="text-green-700 font-medium">
+                                                                "{q.student_text}"
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-red-500 italic">
+                                                                No transcript available
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>

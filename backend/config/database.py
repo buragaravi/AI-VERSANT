@@ -45,7 +45,6 @@ class DatabaseConfig:
                 'tls': True,
                 'tlsAllowInvalidCertificates': False,
                 'tlsAllowInvalidHostnames': False,
-                'tlsInsecure': False,
                 # Additional connection options for better stability
                 'heartbeatFrequencyMS': 10000,
                 'maxConnecting': 2,
@@ -98,13 +97,19 @@ def init_db():
         users_collection.create_index([("email", 1)], unique=True)
         users_collection.create_index([("username", 1)], unique=True)
         
-        tests_collection = db['tests']
-        tests_collection.create_index([("test_id", 1)], unique=True)
-        tests_collection.create_index([("module", 1), ("difficulty", 1)])
+        # Create test_results collection if it doesn't exist
+        test_results_collection = db['test_results']
+        test_results_collection.create_index([("test_id", 1)])
+        test_results_collection.create_index([("student_id", 1)])
+        test_results_collection.create_index([("module_id", 1)])
+        test_results_collection.create_index([("submitted_at", -1)])
         
-        results_collection = db['test_results']
-        results_collection.create_index([("user_id", 1), ("test_id", 1)])
-        results_collection.create_index([("submitted_at", -1)])
+        # Create student_test_attempts collection if it doesn't exist
+        student_test_attempts_collection = db['student_test_attempts']
+        student_test_attempts_collection.create_index([("test_id", 1)])
+        student_test_attempts_collection.create_index([("student_id", 1)])
+        student_test_attempts_collection.create_index([("module_id", 1)])
+        student_test_attempts_collection.create_index([("submitted_at", -1)])
         
         print("✅ Database indexes created successfully")
         

@@ -1902,6 +1902,9 @@ def submit_practice_test():
                 current_app.logger.info(f"Uploading audio for question {i}: {student_audio_key}")
                 current_s3_client.upload_fileobj(audio_file, S3_BUCKET_NAME, student_audio_key)
                 
+                # Create full S3 URL for frontend access
+                student_audio_url = f"https://{S3_BUCKET_NAME}.s3.amazonaws.com/{student_audio_key}"
+                
                 # Download for transcription
                 temp_audio_path = f"temp_student_{question_identifier}_{uuid.uuid4()}.{file_extension}"
                 current_s3_client.download_file(S3_BUCKET_NAME, student_audio_key, temp_audio_path)
@@ -1936,13 +1939,22 @@ def submit_practice_test():
                     current_app.logger.error(f"File exists: {os.path.exists(temp_audio_path) if 'temp_audio_path' in locals() else 'N/A'}")
                     student_text = ""
                 finally:
-                    # Clean up temporary file
-                    if 'temp_audio_path' in locals() and os.path.exists(temp_audio_path):
+                    # Clean up temporary files
+                    for temp_file in [temp_audio_path]:
+                        if 'temp_file' in locals() and os.path.exists(temp_file):
+                            try:
+                                os.remove(temp_file)
+                                current_app.logger.info(f"Cleaned up temporary file: {temp_file}")
+                            except Exception as cleanup_error:
+                                current_app.logger.error(f"Error cleaning up temporary file: {cleanup_error}")
+                    
+                    # Also clean up converted wav file if it exists
+                    if 'transcription_path' in locals() and transcription_path != temp_audio_path and os.path.exists(transcription_path):
                         try:
-                            os.remove(temp_audio_path)
-                            current_app.logger.info(f"Cleaned up temporary file: {temp_audio_path}")
+                            os.remove(transcription_path)
+                            current_app.logger.info(f"Cleaned up converted file: {transcription_path}")
                         except Exception as cleanup_error:
-                            current_app.logger.error(f"Error cleaning up temporary file: {cleanup_error}")
+                            current_app.logger.error(f"Error cleaning up converted file: {cleanup_error}")
                 
                 # Get the original text to compare against
                 original_text = question.get('question') or question.get('sentence', '')
@@ -1981,7 +1993,7 @@ def submit_practice_test():
                     'question_index': i,
                     'question': question['question'],
                     'question_type': 'audio',
-                    'student_audio_url': student_audio_key,
+                    'student_audio_url': student_audio_url,
                     'student_text': student_text,
                     'original_text': original_text,
                     'similarity_score': similarity_score,
