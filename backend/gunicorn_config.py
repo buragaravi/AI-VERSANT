@@ -12,7 +12,7 @@ backlog = 2048
 
 # Worker processes
 workers = multiprocessing.cpu_count() * 2 + 1
-worker_class = "sync"
+worker_class = "eventlet"
 max_requests = 1000
 max_requests_jitter = 50
 
@@ -60,4 +60,4 @@ def post_worker_init(worker):
     print(f"🔧 Worker {worker.pid} initialized")
 
 def worker_abort(worker):
-    print(f"❌ Worker {worker.pid} aborted") 
+    print(f"❌ Worker {worker.pid} aborted")
