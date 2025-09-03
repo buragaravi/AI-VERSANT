@@ -141,7 +141,8 @@ const OnlineExamTaking = () => {
         try {
           const startRes = await api.post(`/student/tests/${examId}/start`);
           const attemptId = startRes.data.data.attempt_id;
-          console.log('Got attempt_id:', attemptId);
+          const isResumed = startRes.data.data.resumed;
+          console.log('Got attempt_id:', attemptId, isResumed ? '(resumed)' : '(new)');
           
           const payload = {
             attempt_id: attemptId,

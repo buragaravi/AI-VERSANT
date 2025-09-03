@@ -138,8 +138,8 @@ const TestHistory = () => {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`text-lg font-bold ${getScoreColor(result.average_score)}`}>
-                      {result.average_score.toFixed(1)}%
+                    <span className={`text-lg font-bold ${getScoreColor(result.average_score || result.score_percentage || 0)}`}>
+                      {(result.average_score || result.score_percentage || 0).toFixed(1)}%
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -147,15 +147,15 @@ const TestHistory = () => {
                       <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
                         <div
                           className={`h-2 rounded-full ${
-                            result.average_score >= 80 ? 'bg-green-500' :
-                            result.average_score >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                            (result.average_score || result.score_percentage || 0) >= 80 ? 'bg-green-500' :
+                            (result.average_score || result.score_percentage || 0) >= 60 ? 'bg-yellow-500' : 'bg-red-500'
                           }`}
-                          style={{ width: `${result.average_score}%` }}
+                          style={{ width: `${result.average_score || result.score_percentage || 0}%` }}
                         />
                       </div>
                       <span className="text-sm text-gray-500">
-                        {result.average_score >= 80 ? 'Excellent' :
-                         result.average_score >= 60 ? 'Good' : 'Needs Improvement'}
+                        {(result.average_score || result.score_percentage || 0) >= 80 ? 'Excellent' :
+                         (result.average_score || result.score_percentage || 0) >= 60 ? 'Good' : 'Needs Improvement'}
                       </span>
                     </div>
                   </td>
@@ -208,13 +208,7 @@ const TestHistory = () => {
                   Performance
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Time Taken
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
                 </th>
               </tr>
             </thead>
@@ -239,8 +233,8 @@ const TestHistory = () => {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`text-lg font-bold ${getScoreColor(result.average_score)}`}>
-                      {result.average_score.toFixed(1)}%
+                    <span className={`text-lg font-bold ${getScoreColor(result.average_score || result.score_percentage || 0)}`}>
+                      {(result.average_score || result.score_percentage || 0).toFixed(1)}%
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -248,40 +242,23 @@ const TestHistory = () => {
                       <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
                         <div
                           className={`h-2 rounded-full ${
-                            result.average_score >= 80 ? 'bg-green-500' :
-                            result.average_score >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                            (result.average_score || result.score_percentage || 0) >= 80 ? 'bg-green-500' :
+                            (result.average_score || result.score_percentage || 0) >= 60 ? 'bg-yellow-500' : 'bg-red-500'
                           }`}
-                          style={{ width: `${result.average_score}%` }}
+                          style={{ width: `${result.average_score || result.score_percentage || 0}%` }}
                         />
                       </div>
                       <span className="text-sm text-gray-500">
-                        {result.average_score >= 80 ? 'Excellent' :
-                         result.average_score >= 60 ? 'Good' : 'Needs Improvement'}
+                        {(result.average_score || result.score_percentage || 0) >= 80 ? 'Excellent' :
+                         (result.average_score || result.score_percentage || 0) >= 60 ? 'Good' : 'Needs Improvement'}
                       </span>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {result.time_taken ? (
-                      <span>
-                        {Math.floor(result.time_taken / 60)}m {result.time_taken % 60}s
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">N/A</span>
-                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div className="flex items-center">
                       <Calendar className="h-4 w-4 mr-1" />
                       {formatDateTimeIST(result.submitted_at)}
                     </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <Link
-                      to={`/student/test-result/${result._id}`}
-                      className="text-indigo-600 hover:text-indigo-900 font-medium"
-                    >
-                      View Details
-                    </Link>
                   </td>
                 </tr>
               ))}

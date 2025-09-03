@@ -460,46 +460,124 @@ def start_test(test_id):
         if not user or user.get('role') != 'student':
             return jsonify({'success': False, 'message': 'Access denied'}), 403
         
-        # Get student's batch-course instance
+        # Get student profile
         student = mongo_db.students.find_one({'user_id': ObjectId(current_user_id)})
-        if not student or not student.get('batch_course_instance_id'):
-            return jsonify({'success': False, 'message': 'Student not assigned to any batch-course instance'}), 404
+        if not student:
+            return jsonify({'success': False, 'message': 'Student profile not found'}), 404
         
-        instance_id = student['batch_course_instance_id']
-        
-        # Get test and verify it's assigned to this instance
-        test = mongo_db.tests.find_one({
+        # Get test and verify it's available for this student
+        # For online exams, check campus_ids and course_ids
+        # For regular tests, check batch_course_instance_ids
+        test_query = {
             '_id': ObjectId(test_id),
-            'batch_course_instance_ids': instance_id,
-            'is_active': True
-        })
+            'status': 'active'
+        }
         
+        # Check if it's an online exam
+        test = mongo_db.tests.find_one(test_query)
         if not test:
-            return jsonify({'success': False, 'message': 'Test not found or not available'}), 404
+            return jsonify({'success': False, 'message': 'Test not found or not active'}), 404
+        
+        # For online exams, check campus and course assignment
+        if test.get('test_type') == 'online':
+            current_app.logger.info(f"Online exam validation - Student campus_id: {student.get('campus_id')}, course_id: {student.get('course_id')}")
+            current_app.logger.info(f"Test campus_ids: {test.get('campus_ids')}, course_ids: {test.get('course_ids')}")
+            
+            # Check campus assignment
+            student_campus = student.get('campus_id')
+            test_campuses = test.get('campus_ids', [])
+            if not test_campuses or not student_campus:
+                current_app.logger.warning(f"Missing campus data - student: {student_campus}, test: {test_campuses}")
+                return jsonify({'success': False, 'message': 'Campus assignment not configured properly'}), 403
+            
+            # Convert to strings for comparison
+            student_campus_str = str(student_campus)
+            test_campuses_str = [str(c) for c in test_campuses]
+            
+            if student_campus_str not in test_campuses_str:
+                current_app.logger.warning(f"Campus mismatch - student: {student_campus_str}, test: {test_campuses_str}")
+                return jsonify({'success': False, 'message': 'Test not assigned to your campus'}), 403
+            
+            # Check course assignment
+            student_course = student.get('course_id')
+            test_courses = test.get('course_ids', [])
+            if not test_courses or not student_course:
+                current_app.logger.warning(f"Missing course data - student: {student_course}, test: {test_courses}")
+                return jsonify({'success': False, 'message': 'Course assignment not configured properly'}), 403
+            
+            # Convert to strings for comparison
+            student_course_str = str(student_course)
+            test_courses_str = [str(c) for c in test_courses]
+            
+            if student_course_str not in test_courses_str:
+                current_app.logger.warning(f"Course mismatch - student: {student_course_str}, test: {test_courses_str}")
+                return jsonify({'success': False, 'message': 'Test not assigned to your course'}), 403
+        else:
+            # For regular tests, check batch_course_instance_ids
+            instance_id = student.get('batch_course_instance_id')
+            if not instance_id:
+                return jsonify({'success': False, 'message': 'Student not assigned to any batch-course instance'}), 404
+            if instance_id not in test.get('batch_course_instance_ids', []):
+                return jsonify({'success': False, 'message': 'Test not assigned to your batch-course instance'}), 403
         
         # Check if student has already attempted this test
-        existing_attempt = mongo_db.student_test_attempts.find_one({
+        attempt_query = {
             'test_id': ObjectId(test_id),
-            'student_id': ObjectId(current_user_id),
-            'batch_course_instance_id': instance_id
-        })
+            'student_id': ObjectId(current_user_id)
+        }
+        
+        # Add instance_id for regular tests
+        if test.get('test_type') != 'online':
+            attempt_query['batch_course_instance_id'] = student.get('batch_course_instance_id')
+        
+        current_app.logger.info(f"Checking for existing attempts with query: {attempt_query}")
+        existing_attempt = mongo_db.student_test_attempts.find_one(attempt_query)
         
         if existing_attempt:
-            return jsonify({'success': False, 'message': 'Test already attempted'}), 409
+            current_app.logger.info(f"Found existing attempt: {existing_attempt.get('_id')} with status: {existing_attempt.get('status')}")
+            
+            # If the attempt is in_progress, allow resuming
+            if existing_attempt.get('status') == 'in_progress':
+                current_app.logger.info(f"Resuming in-progress attempt: {existing_attempt.get('_id')}")
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'attempt_id': str(existing_attempt['_id']),
+                        'test': {
+                            'id': str(test['_id']),
+                            'name': test['name'],
+                            'duration': test.get('duration', 0),
+                            'total_marks': test.get('total_marks', 0),
+                            'instructions': test.get('instructions', '')
+                        },
+                        'resumed': True
+                    }
+                }), 200
+            else:
+                # If completed or any other status, prevent new attempt
+                status = existing_attempt.get('status', 'unknown')
+                current_app.logger.info(f"Found existing attempt with status '{status}', preventing new attempt")
+                return jsonify({'success': False, 'message': f'Test already attempted (status: {status})'}), 409
         
         # Create test attempt
         attempt_doc = {
             'test_id': ObjectId(test_id),
             'student_id': ObjectId(current_user_id),
-            'batch_course_instance_id': instance_id,
             'start_time': datetime.now(pytz.utc),
             'status': 'in_progress',
             'answers': [],
             'score': 0,
-            'total_marks': test['total_marks']
+            'total_marks': test.get('total_marks', 0),
+            'test_type': test.get('test_type', 'regular')
         }
         
+        # Add instance_id for regular tests only
+        if test.get('test_type') != 'online':
+            attempt_doc['batch_course_instance_id'] = student.get('batch_course_instance_id')
+        
+        current_app.logger.info(f"Creating test attempt with document: {attempt_doc}")
         attempt_id = mongo_db.student_test_attempts.insert_one(attempt_doc).inserted_id
+        current_app.logger.info(f"Successfully created attempt with ID: {attempt_id}")
         
         return jsonify({
             'success': True,
@@ -508,15 +586,15 @@ def start_test(test_id):
                 'test': {
                     'id': str(test['_id']),
                     'name': test['name'],
-                    'duration': test['duration'],
-                    'total_marks': test['total_marks'],
+                    'duration': test.get('duration', 0),
+                    'total_marks': test.get('total_marks', 0),
                     'instructions': test.get('instructions', '')
                 }
             }
         }), 200
     except Exception as e:
-        current_app.logger.error(f"Error starting test: {e}")
-        return jsonify({'success': False, 'message': str(e)}), 500
+        current_app.logger.error(f"Error starting test: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'Failed to start test: {str(e)}'}), 500
 
 @student_bp.route('/tests/<test_id>/submit', methods=['POST'])
 @jwt_required()
@@ -532,24 +610,37 @@ def submit_test(test_id):
         data = request.get_json()
         attempt_id = data.get('attempt_id')
         answers = data.get('answers', [])
+        time_taken_ms = data.get('time_taken_ms')  # Duration in milliseconds
         
         if not attempt_id:
             return jsonify({'success': False, 'message': 'Attempt ID is required'}), 400
         
-        # Get student's batch-course instance
+        # Get student profile
         student = mongo_db.students.find_one({'user_id': ObjectId(current_user_id)})
-        if not student or not student.get('batch_course_instance_id'):
-            return jsonify({'success': False, 'message': 'Student not assigned to any batch-course instance'}), 404
+        if not student:
+            return jsonify({'success': False, 'message': 'Student profile not found'}), 404
         
-        instance_id = student['batch_course_instance_id']
+        # Get test details first to determine test type
+        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
+        if not test:
+            return jsonify({'success': False, 'message': 'Test not found'}), 404
         
-        # Get test attempt
-        attempt = mongo_db.student_test_attempts.find_one({
+        # Build attempt query based on test type
+        attempt_query = {
             '_id': ObjectId(attempt_id),
             'test_id': ObjectId(test_id),
-            'student_id': ObjectId(current_user_id),
-            'batch_course_instance_id': instance_id
-        })
+            'student_id': ObjectId(current_user_id)
+        }
+        
+        # Add instance_id for regular tests only
+        if test.get('test_type') != 'online':
+            instance_id = student.get('batch_course_instance_id')
+            if not instance_id:
+                return jsonify({'success': False, 'message': 'Student not assigned to any batch-course instance'}), 404
+            attempt_query['batch_course_instance_id'] = instance_id
+        
+        # Get test attempt
+        attempt = mongo_db.student_test_attempts.find_one(attempt_query)
         
         if not attempt:
             return jsonify({'success': False, 'message': 'Test attempt not found'}), 404
@@ -557,26 +648,46 @@ def submit_test(test_id):
         if attempt['status'] == 'completed':
             return jsonify({'success': False, 'message': 'Test already submitted'}), 409
         
-        # Get test details
-        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
-        if not test:
-            return jsonify({'success': False, 'message': 'Test not found'}), 404
-        
         # Calculate score (simplified - you can implement more complex scoring logic)
         score = 0
         total_questions = len(answers)
         
-        # Update attempt with answers and score
+        # Calculate duration
+        end_time = datetime.now(pytz.utc)
+        start_time = attempt.get('start_time', end_time)
+        
+        current_app.logger.info(f"Duration calculation - start_time: {start_time} (tzinfo: {start_time.tzinfo if start_time else 'None'})")
+        current_app.logger.info(f"Duration calculation - end_time: {end_time} (tzinfo: {end_time.tzinfo})")
+        
+        # Ensure both datetimes are timezone-aware for proper calculation
+        if start_time and start_time.tzinfo is None:
+            # If start_time is naive, assume it's UTC
+            start_time = pytz.utc.localize(start_time)
+            current_app.logger.info(f"Localized start_time to UTC: {start_time}")
+        elif start_time and start_time.tzinfo is not None:
+            # If start_time is timezone-aware, convert to UTC
+            start_time = start_time.astimezone(pytz.utc)
+            current_app.logger.info(f"Converted start_time to UTC: {start_time}")
+        
+        duration_seconds = (end_time - start_time).total_seconds()
+        current_app.logger.info(f"Calculated duration: {duration_seconds} seconds")
+        
+        # Update attempt with answers, score, and duration
+        update_data = {
+            'answers': answers,
+            'score': score,
+            'end_time': end_time,
+            'status': 'completed',
+            'duration_seconds': duration_seconds
+        }
+        
+        # Add time_taken_ms if provided by frontend
+        if time_taken_ms is not None:
+            update_data['time_taken_ms'] = time_taken_ms
+        
         mongo_db.student_test_attempts.update_one(
             {'_id': ObjectId(attempt_id)},
-            {
-                '$set': {
-                    'answers': answers,
-                    'score': score,
-                    'end_time': datetime.now(pytz.utc),
-                    'status': 'completed'
-                }
-            }
+            {'$set': update_data}
         )
         
         return jsonify({
@@ -584,13 +695,15 @@ def submit_test(test_id):
             'message': 'Test submitted successfully',
             'data': {
                 'score': score,
-                'total_marks': test['total_marks'],
-                'total_questions': total_questions
+                'total_marks': test.get('total_marks', 0),
+                'total_questions': total_questions,
+                'duration_seconds': duration_seconds,
+                'time_taken_ms': time_taken_ms
             }
         }), 200
     except Exception as e:
-        current_app.logger.error(f"Error submitting test: {e}")
-        return jsonify({'success': False, 'message': str(e)}), 500
+        current_app.logger.error(f"Error submitting test: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'Failed to submit test: {str(e)}'}), 500
 
 @student_bp.route('/grammar-progress', methods=['GET'])
 @jwt_required()
@@ -884,7 +997,8 @@ def get_online_exams():
             'course_ids': user.get('course_id')
         }
         
-        projection = { "questions": 0, "audio_config": 0 }
+        # Don't exclude questions field - we need it to count questions
+        projection = { "audio_config": 0 }
         
         try:
             exams = list(mongo_db.tests.find(query, projection))
@@ -912,7 +1026,7 @@ def get_online_exams():
                 'name': exam.get('name'),
                 'module_name': module_name,
                 'level_name': level_name,
-                'question_count': len(exam.get('questions', [])) if 'questions' in exam else 'N/A',
+                'question_count': len(exam.get('questions', [])) if exam.get('questions') else 0,
                 'startDateTime': start_dt,
                 'endDateTime': end_dt
             })
@@ -1174,6 +1288,58 @@ def get_test_history():
         # Try to get from test_results collection
         try:
             if hasattr(mongo_db, 'test_results'):
+                # Debug: Check what's in test_results collection
+                total_test_results = mongo_db.test_results.count_documents({})
+                current_app.logger.info(f"Total documents in test_results collection: {total_test_results}")
+                
+                # Check if there are any results for this student (try both ObjectId and string)
+                student_results_count = mongo_db.test_results.count_documents({'student_id': ObjectId(current_user_id)})
+                student_results_count_str = mongo_db.test_results.count_documents({'student_id': current_user_id})
+                current_app.logger.info(f"Results for student {current_user_id} (ObjectId): {student_results_count}")
+                current_app.logger.info(f"Results for student {current_user_id} (string): {student_results_count_str}")
+                
+                # Check for practice tests in student_test_attempts collection (any status)
+                # Try both ObjectId and string formats for student_id
+                practice_attempts_count_objid = mongo_db.student_test_attempts.count_documents({
+                    'student_id': ObjectId(current_user_id),
+                    'test_type': 'practice'
+                })
+                practice_attempts_count_str = mongo_db.student_test_attempts.count_documents({
+                    'student_id': current_user_id,
+                    'test_type': 'practice'
+                })
+                practice_attempts_count = practice_attempts_count_objid + practice_attempts_count_str
+                
+                practice_completed_count_objid = mongo_db.student_test_attempts.count_documents({
+                    'student_id': ObjectId(current_user_id),
+                    'test_type': 'practice',
+                    'status': 'completed'
+                })
+                practice_completed_count_str = mongo_db.student_test_attempts.count_documents({
+                    'student_id': current_user_id,
+                    'test_type': 'practice',
+                    'status': 'completed'
+                })
+                practice_completed_count = practice_completed_count_objid + practice_completed_count_str
+                current_app.logger.info(f"Practice test attempts for student {current_user_id}: {practice_attempts_count} (completed: {practice_completed_count})")
+                current_app.logger.info(f"Practice attempts breakdown - ObjectId: {practice_attempts_count_objid}, String: {practice_attempts_count_str}")
+                current_app.logger.info(f"Practice completed breakdown - ObjectId: {practice_completed_count_objid}, String: {practice_completed_count_str}")
+                
+                # Check if there are any practice tests available for this student
+                available_practice_tests = mongo_db.tests.count_documents({
+                    'test_type': 'practice',
+                    'status': 'active'
+                })
+                current_app.logger.info(f"Available practice tests in system: {available_practice_tests}")
+                
+                # Sample a few documents to see the structure
+                sample_docs = list(mongo_db.test_results.find({}).limit(3))
+                current_app.logger.info(f"Sample test_results documents: {sample_docs}")
+                
+                # Sample practice test attempts to see the structure
+                sample_practice_attempts = list(mongo_db.student_test_attempts.find({'test_type': 'practice'}).limit(3))
+                current_app.logger.info(f"Sample practice test attempts: {sample_practice_attempts}")
+                
                 pipeline = [
                     {
                         '$match': {
@@ -1220,13 +1386,17 @@ def get_test_history():
         except Exception as e:
             current_app.logger.warning(f"Error aggregating from test_results: {e}")
         
-        # Also get from student_test_attempts collection
+        # Also get from student_test_attempts collection (for both online and practice tests)
         try:
             if hasattr(mongo_db, 'student_test_attempts'):
                 pipeline = [
                     {
                         '$match': {
-                            'student_id': current_user_id
+                            '$or': [
+                                {'student_id': ObjectId(current_user_id)},
+                                {'student_id': current_user_id}
+                            ]
+                            # Removed status filter to get all attempts, including practice tests
                         }
                     },
                     {
@@ -1250,15 +1420,22 @@ def get_test_history():
                             'level_id': '$test_details.level_id',
                             'average_score': 1,
                             'score_percentage': 1,
+                            'score': 1,
                             'correct_answers': 1,
                             'total_questions': 1,
                             'time_taken': 1,
+                            'duration_seconds': 1,
+                            'time_taken_ms': 1,
                             'submitted_at': 1,
+                            'end_time': 1,
                             'test_type': 1,
-                            'detailed_results': 1
+                            'detailed_results': 1,
+                            'answers': 1,
+                            'total_marks': 1,
+                            'results': 1
                         }
                     },
-                    { '$sort': { 'submitted_at': -1 } }
+                    { '$sort': { 'end_time': -1, 'submitted_at': -1 } }
                 ]
                 
                 attempt_results = list(mongo_db.student_test_attempts.aggregate(pipeline))
@@ -1287,15 +1464,165 @@ def get_test_history():
             from config.constants import MODULES, LEVELS
             result['module_name'] = MODULES.get(result.get('module_id'), 'Unknown')
             result['level_name'] = LEVELS.get(result.get('level_id'), {}).get('name', 'Unknown')
-            if 'submitted_at' in result:
+            
+            # Handle different timestamp fields
+            if 'submitted_at' in result and result['submitted_at']:
                 result['submitted_at'] = result['submitted_at'].isoformat()
+            elif 'end_time' in result and result['end_time']:
+                result['submitted_at'] = result['end_time'].isoformat()
+            
+            # Calculate proper percentage for different test types
+            if result.get('test_type') == 'online':
+                # For online exams, use score field and calculate percentage
+                score = result.get('score', 0)
+                total_marks = result.get('total_marks', 0)
+                
+                if total_marks > 0:
+                    calculated_percentage = (score / total_marks) * 100
+                    result['score_percentage'] = calculated_percentage
+                    result['average_score'] = calculated_percentage  # For frontend compatibility
+                else:
+                    result['score_percentage'] = 0
+                    result['average_score'] = 0
+            elif result.get('test_type') == 'practice':
+                # For practice tests, use existing average_score or calculate from score
+                current_app.logger.info(f"Processing practice test: {result.get('test_id')}")
+                current_app.logger.info(f"Practice test data: average_score={result.get('average_score')}, score={result.get('score')}, results={len(result.get('results', []))}")
+                current_app.logger.info(f"Practice test results sample: {result.get('results', [])[:2] if result.get('results') else 'No results'}")
+                
+                if 'average_score' not in result or result.get('average_score') is None or result.get('average_score') == 0:
+                    # Try to calculate from score and total_marks
+                    score = result.get('score', 0)
+                    total_marks = result.get('total_marks', 0)
+                    if total_marks > 0:
+                        result['average_score'] = (score / total_marks) * 100
+                        result['score_percentage'] = (score / total_marks) * 100
+                        # Also set correct_answers and total_questions from results array if available
+                        results_array = result.get('results', [])
+                        if results_array and len(results_array) > 0 and isinstance(results_array[0], dict):
+                            correct_count = sum(1 for r in results_array if r.get('is_correct', False))
+                            result['correct_answers'] = correct_count
+                            result['total_questions'] = len(results_array)
+                        else:
+                            result['correct_answers'] = 0
+                            result['total_questions'] = 0
+                    else:
+                        # If no score data, try to calculate from results array
+                        results_array = result.get('results', [])
+                        current_app.logger.info(f"Practice test results array: {results_array}")
+                        
+                        if results_array and len(results_array) > 0:
+                            # Check if results is a list of objects or just a list
+                            if isinstance(results_array[0], dict):
+                                correct_count = sum(1 for r in results_array if r.get('is_correct', False))
+                                total_count = len(results_array)
+                            else:
+                                # If results is not a list of dicts, try to get from other fields
+                                correct_count = 0
+                                total_count = len(results_array)
+                            
+                            if total_count > 0:
+                                percentage = (correct_count / total_count) * 100
+                                result['average_score'] = percentage
+                                result['score_percentage'] = percentage
+                                result['correct_answers'] = correct_count
+                                result['total_questions'] = total_count
+                                current_app.logger.info(f"Practice test calculated: {correct_count}/{total_count} = {percentage}%")
+                            else:
+                                result['average_score'] = 0
+                                result['score_percentage'] = 0
+                                result['correct_answers'] = 0
+                                result['total_questions'] = 0
+                        else:
+                            result['average_score'] = 0
+                            result['score_percentage'] = 0
+                            result['correct_answers'] = 0
+                            result['total_questions'] = 0
+                else:
+                    result['score_percentage'] = result.get('average_score', 0)
+                    # Still need to set correct_answers and total_questions even if average_score exists
+                    results_array = result.get('results', [])
+                    if results_array and len(results_array) > 0 and isinstance(results_array[0], dict):
+                        correct_count = sum(1 for r in results_array if r.get('is_correct', False))
+                        result['correct_answers'] = correct_count
+                        result['total_questions'] = len(results_array)
+                    else:
+                        result['correct_answers'] = 0
+                        result['total_questions'] = 0
+                
+            # Handle answers processing for both online and practice tests
+            if result.get('test_type') in ['online', 'practice']:
+                # Set correct answers and total questions from answers
+                answers = result.get('answers', [])
+                
+                # Debug: Log the answers structure
+                current_app.logger.info(f"Answers structure for test {result.get('test_id')}: {type(answers)}, length: {len(answers) if answers else 0}")
+                
+                # For practice tests, only use answers if we don't already have correct_answers and total_questions from results
+                if result.get('test_type') == 'practice' and 'correct_answers' in result and 'total_questions' in result:
+                    current_app.logger.info(f"Practice test already has correct_answers={result.get('correct_answers')} and total_questions={result.get('total_questions')} from results array")
+                else:
+                    # Handle different answer formats
+                    if isinstance(answers, dict):
+                        # If answers is a dictionary, count the keys as total questions
+                        result['total_questions'] = len(answers)
+                        # For dictionary format, we can't easily determine correct answers without more info
+                        result['correct_answers'] = 0
+                        current_app.logger.info(f"Answers is a dictionary with {len(answers)} keys")
+                    elif isinstance(answers, list) and len(answers) > 0:
+                        result['total_questions'] = len(answers)
+                        if isinstance(answers[0], dict):
+                            result['correct_answers'] = sum(1 for answer in answers if answer.get('is_correct', False))
+                        else:
+                            result['correct_answers'] = 0
+                        current_app.logger.info(f"Answers is a list with {len(answers)} items")
+                    else:
+                        result['total_questions'] = 0
+                        result['correct_answers'] = 0
+                        current_app.logger.info("Answers is empty or unknown format")
+                
+                # For online tests, ensure we have detailed answer information
+                if result.get('test_type') == 'online':
+                    # Include detailed results for online tests
+                    result['detailed_answers'] = answers
+                    result['has_detailed_results'] = True
+                else:
+                    # For practice tests, don't include detailed results
+                    result['has_detailed_results'] = False
+                
+                # Format duration for both online and practice tests
+                if result.get('test_type') == 'online':
+                    # Only format duration for online tests
+                    duration_seconds = result.get('duration_seconds', 0)
+                    time_taken = result.get('time_taken', 0)
+                    
+                    if duration_seconds > 0:
+                        minutes = int(duration_seconds // 60)
+                        seconds = int(duration_seconds % 60)
+                        result['time_taken'] = f"{minutes}m {seconds}s"
+                    elif time_taken > 0:
+                        result['time_taken'] = f"{time_taken}s"
+                    else:
+                        result['time_taken'] = "N/A"
+                else:
+                    # For practice tests, don't show time taken
+                    result['time_taken'] = None
         
         # Convert any remaining ObjectId fields to strings for JSON serialization
         convert_objectids_to_strings(results)
         
+        # Add debug information about practice tests
+        practice_info = {
+            'has_practice_results': len([r for r in results if r.get('test_type') == 'practice']) > 0,
+            'total_results': len(results),
+            'online_results': len([r for r in results if r.get('test_type') == 'online']),
+            'practice_results': len([r for r in results if r.get('test_type') == 'practice'])
+        }
+        
         return jsonify({
             'success': True,
-            'data': results
+            'data': results,
+            'debug_info': practice_info
         }), 200
         
     except Exception as e:
@@ -2134,6 +2461,37 @@ def assign_student_to_instance():
         return jsonify({'success': True, 'message': 'Student assigned to batch-course instance'}), 200
     else:
         return jsonify({'success': False, 'message': 'Student not found or not updated'}), 404 
+
+@student_bp.route('/completed-exams', methods=['GET'])
+@jwt_required()
+def get_completed_exams():
+    """Get list of completed exam IDs for the student"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.users.find_one({'_id': ObjectId(current_user_id)})
+        
+        if not user or user.get('role') != 'student':
+            return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        # Get completed exam IDs from student_test_attempts
+        completed_attempts = mongo_db.student_test_attempts.find({
+            'student_id': ObjectId(current_user_id),
+            'status': 'completed'
+        }, {'test_id': 1})
+        
+        completed_exam_ids = [str(attempt['test_id']) for attempt in completed_attempts]
+        
+        return jsonify({
+            'success': True,
+            'data': completed_exam_ids
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching completed exams: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'message': f'Failed to fetch completed exams: {str(e)}'
+        }), 500
 
 @student_bp.route('/unlocked-modules', methods=['GET'])
 @jwt_required()
