@@ -22,6 +22,7 @@ class MongoDB:
         self.question_bank = self.db.question_bank
         self.student_test_assignments = self.db.student_test_assignments
         self.crt_topics = self.db.crt_topics
+        self.test_results = self.db.test_results
         
         # Create indexes for better performance
         self._create_indexes()
@@ -69,6 +70,13 @@ class MongoDB:
             self.student_progress.create_index("module_id")
             self.student_progress.create_index("level_id")
             self.student_progress.create_index([("student_id", 1), ("module_id", 1), ("level_id", 1)], unique=True)
+            
+            # Test results indexes
+            self.test_results.create_index("test_id")
+            self.test_results.create_index("student_id")
+            self.test_results.create_index("test_type")
+            self.test_results.create_index("submitted_at")
+            self.test_results.create_index([("test_id", 1), ("student_id", 1)])
             
             print("✅ MongoDB indexes created successfully")
         except Exception as e:

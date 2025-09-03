@@ -408,10 +408,10 @@ def get_student_practice_results():
         # Try to get from test_results collection
         try:
             current_app.logger.info(f"Checking test_results collection...")
-            if hasattr(mongo_db, 'db') and hasattr(mongo_db.db, 'test_results'):
+            if hasattr(mongo_db, 'test_results'):
                 current_app.logger.info(f"test_results collection exists")
                 # Check if there are any practice results
-                practice_count = mongo_db.db.test_results.count_documents({'test_type': 'practice'})
+                practice_count = mongo_db.test_results.count_documents({'test_type': 'practice'})
                 current_app.logger.info(f"Found {practice_count} practice results in test_results")
                 pipeline = [
                     {'$match': match_conditions},
@@ -504,7 +504,7 @@ def get_student_practice_results():
                         {'student_email': {'$regex': student_filter, '$options': 'i'}}
                     ]}})
                 
-                results = list(mongo_db.db.test_results.aggregate(pipeline))
+                results = list(mongo_db.test_results.aggregate(pipeline))
                 all_results.extend(results)
                 current_app.logger.info(f"Found {len(results)} practice results in test_results collection")
             else:
@@ -779,8 +779,8 @@ def get_student_online_results():
         
         # Try test_results collection
         try:
-            if hasattr(mongo_db, 'db') and hasattr(mongo_db.db, 'test_results'):
-                test_results = list(mongo_db.db.test_results.aggregate(pipeline))
+            if hasattr(mongo_db, 'test_results'):
+                test_results = list(mongo_db.test_results.aggregate(pipeline))
                 all_results.extend(test_results)
                 current_app.logger.info(f"Found {len(test_results)} online results in test_results")
         except Exception as e:
@@ -1942,15 +1942,18 @@ def debug_test_results():
                 'message': 'Access denied. Admin privileges required.'
             }), 403
         
-        # Check both collections
+        # Check all collections
         debug_info = {
             'student_test_attempts_count': 0,
             'test_results_count': 0,
+            'student_test_assignments_count': 0,
             'sample_student_attempts': [],
             'sample_test_results': [],
+            'sample_assignments': [],
             'collections_exist': {
                 'student_test_attempts': False,
-                'test_results': False
+                'test_results': False,
+                'student_test_assignments': False
             }
         }
         
@@ -1958,32 +1961,43 @@ def debug_test_results():
             # Check student_test_attempts collection
             debug_info['student_test_attempts_count'] = mongo_db.student_test_attempts.count_documents({})
             debug_info['collections_exist']['student_test_attempts'] = True
-            debug_info['sample_student_attempts'] = list(mongo_db.student_test_attempts.find().limit(3))
+            if debug_info['student_test_attempts_count'] > 0:
+                debug_info['sample_student_attempts'] = list(mongo_db.student_test_attempts.find().limit(3))
         except Exception as e:
             debug_info['student_test_attempts_error'] = str(e)
         
         try:
             # Check test_results collection
-            debug_info['test_results_count'] = mongo_db.db.test_results.count_documents({})
-            debug_info['collections_exist']['test_results'] = True
-            debug_info['sample_test_results'] = list(mongo_db.db.test_results.find().limit(3))
+            if hasattr(mongo_db, 'db') and hasattr(mongo_db.db, 'test_results'):
+                debug_info['test_results_count'] = mongo_db.db.test_results.count_documents({})
+                debug_info['collections_exist']['test_results'] = True
+                if debug_info['test_results_count'] > 0:
+                    debug_info['sample_test_results'] = list(mongo_db.db.test_results.find().limit(3))
         except Exception as e:
             debug_info['test_results_error'] = str(e)
         
-        # Convert ObjectIds to strings for JSON serialization
-        for sample in debug_info['sample_student_attempts']:
-            sample['_id'] = str(sample['_id'])
-            if 'student_id' in sample:
-                sample['student_id'] = str(sample['student_id'])
-            if 'test_id' in sample:
-                sample['test_id'] = str(sample['test_id'])
+        try:
+            # Check student_test_assignments collection
+            debug_info['student_test_assignments_count'] = mongo_db.student_test_assignments.count_documents({'attempted': True})
+            debug_info['collections_exist']['student_test_assignments'] = True
+            if debug_info['student_test_assignments_count'] > 0:
+                debug_info['sample_assignments'] = list(mongo_db.student_test_assignments.find({'attempted': True}).limit(3))
+        except Exception as e:
+            debug_info['student_test_assignments_error'] = str(e)
         
-        for sample in debug_info['sample_test_results']:
-            sample['_id'] = str(sample['_id'])
-            if 'student_id' in sample:
-                sample['student_id'] = str(sample['student_id'])
-            if 'test_id' in sample:
-                sample['test_id'] = str(sample['test_id'])
+        # Convert ObjectIds to strings for JSON serialization
+        def convert_objectids(obj):
+            if isinstance(obj, dict):
+                for key, value in obj.items():
+                    if isinstance(value, ObjectId):
+                        obj[key] = str(value)
+                    elif isinstance(value, (list, dict)):
+                        convert_objectids(value)
+            elif isinstance(obj, list):
+                for item in obj:
+                    convert_objectids(item)
+        
+        convert_objectids(debug_info)
         
         return jsonify({
             'success': True,
@@ -1991,11 +2005,88 @@ def debug_test_results():
         }), 200
         
     except Exception as e:
-        current_app.logger.error(f"Error in debug endpoint: {str(e)}")
+        current_app.logger.error(f"Error in debug_test_results: {str(e)}")
         return jsonify({
             'success': False,
-            'message': f'Debug endpoint error: {str(e)}'
-        }), 500 
+            'message': f'Failed to debug test results: {str(e)}'
+        }), 500
+
+@superadmin_bp.route('/test-results-simple', methods=['GET'])
+@jwt_required()
+def get_test_results_simple():
+    """Simple endpoint to get test results without complex aggregation"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
+        all_results = []
+        
+        # Get simple results from student_test_attempts
+        try:
+            if hasattr(mongo_db, 'student_test_attempts'):
+                attempts = list(mongo_db.student_test_attempts.find().limit(50))
+                for attempt in attempts:
+                    attempt['_id'] = str(attempt['_id'])
+                    attempt['student_id'] = str(attempt['student_id'])
+                    attempt['test_id'] = str(attempt['test_id'])
+                    if attempt.get('submitted_at'):
+                        attempt['submitted_at'] = attempt['submitted_at'].isoformat()
+                    attempt['source_collection'] = 'student_test_attempts'
+                all_results.extend(attempts)
+                current_app.logger.info(f"Found {len(attempts)} simple results in student_test_attempts")
+        except Exception as e:
+            current_app.logger.warning(f"Error getting simple results from student_test_attempts: {e}")
+        
+        # Get simple results from test_results
+        try:
+            if hasattr(mongo_db, 'db') and hasattr(mongo_db.db, 'test_results'):
+                results = list(mongo_db.db.test_results.find().limit(50))
+                for result in results:
+                    result['_id'] = str(result['_id'])
+                    result['student_id'] = str(result['student_id'])
+                    result['test_id'] = str(result['test_id'])
+                    if result.get('submitted_at'):
+                        result['submitted_at'] = result['submitted_at'].isoformat()
+                    result['source_collection'] = 'test_results'
+                all_results.extend(results)
+                current_app.logger.info(f"Found {len(results)} simple results in test_results")
+        except Exception as e:
+            current_app.logger.warning(f"Error getting simple results from test_results: {e}")
+        
+        # Get simple results from student_test_assignments
+        try:
+            if hasattr(mongo_db, 'student_test_assignments'):
+                assignments = list(mongo_db.student_test_assignments.find({'attempted': True}).limit(50))
+                for assignment in assignments:
+                    assignment['_id'] = str(assignment['_id'])
+                    assignment['student_id'] = str(assignment['student_id'])
+                    assignment['test_id'] = str(assignment['test_id'])
+                    if assignment.get('completed_at'):
+                        assignment['submitted_at'] = assignment['completed_at'].isoformat()
+                    assignment['source_collection'] = 'student_test_assignments'
+                all_results.extend(assignments)
+                current_app.logger.info(f"Found {len(assignments)} simple results in student_test_assignments")
+        except Exception as e:
+            current_app.logger.warning(f"Error getting simple results from student_test_assignments: {e}")
+        
+        return jsonify({
+            'success': True,
+            'data': all_results,
+            'total_count': len(all_results)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting simple test results: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get simple test results: {str(e)}'
+        }), 500
 
 @superadmin_bp.route('/debug-collections', methods=['GET'])
 @jwt_required()
@@ -2029,11 +2120,11 @@ def debug_collections():
         
         # Check test_results
         try:
-            if hasattr(mongo_db, 'db') and hasattr(mongo_db.db, 'test_results'):
-                count = mongo_db.db.test_results.count_documents({})
+            if hasattr(mongo_db, 'test_results'):
+                count = mongo_db.test_results.count_documents({})
                 debug_info['collections']['test_results'] = count
                 if count > 0:
-                    sample = list(mongo_db.db.test_results.find().limit(1))
+                    sample = list(mongo_db.test_results.find().limit(1))
                     debug_info['sample_data']['test_results'] = sample
         except Exception as e:
             debug_info['collections']['test_results'] = f"Error: {str(e)}"
@@ -2072,6 +2163,1015 @@ def debug_collections():
             'success': False,
             'message': f'Debug failed: {str(e)}'
         }), 500
+
+@superadmin_bp.route('/verify-database', methods=['GET'])
+@jwt_required()
+def verify_database():
+    """Comprehensive database verification endpoint"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
+        verification_info = {
+            'database_connection': {},
+            'collections': {},
+            'sample_data': {},
+            'connection_test': {}
+        }
+        
+        # Test database connection
+        try:
+            # Test basic connection
+            client = mongo_db.db.client
+            db_name = mongo_db.db.name
+            verification_info['database_connection'] = {
+                'status': 'connected',
+                'database_name': db_name,
+                'client_info': str(client)
+            }
+            
+            # Test ping
+            ping_result = client.admin.command('ping')
+            verification_info['connection_test']['ping'] = ping_result
+            
+        except Exception as e:
+            verification_info['database_connection'] = {
+                'status': 'error',
+                'error': str(e)
+            }
+        
+        # Check all collections
+        collections_to_check = [
+            'users', 'students', 'tests', 'test_results', 'student_test_attempts',
+            'student_test_assignments', 'campuses', 'courses', 'batches', 'question_bank'
+        ]
+        
+        for collection_name in collections_to_check:
+            try:
+                collection = getattr(mongo_db, collection_name, None)
+                if collection:
+                    count = collection.count_documents({})
+                    verification_info['collections'][collection_name] = {
+                        'exists': True,
+                        'count': count,
+                        'type': str(type(collection))
+                    }
+                    
+                    # Get sample data if count > 0
+                    if count > 0:
+                        sample = list(collection.find().limit(1))
+                        if sample:
+                            # Remove sensitive data
+                            sample_doc = sample[0]
+                            if '_id' in sample_doc:
+                                sample_doc['_id'] = str(sample_doc['_id'])
+                            verification_info['sample_data'][collection_name] = sample_doc
+                else:
+                    verification_info['collections'][collection_name] = {
+                        'exists': False,
+                        'error': 'Collection not found in mongo_db object'
+                    }
+            except Exception as e:
+                verification_info['collections'][collection_name] = {
+                    'exists': False,
+                    'error': str(e)
+                }
+        
+        # Test specific test result queries
+        test_queries = {
+            'practice_results_count': 0,
+            'online_results_count': 0,
+            'technical_results_count': 0,
+            'total_student_attempts': 0,
+            'total_test_assignments': 0
+        }
+        
+        try:
+            # Count practice results
+            test_queries['practice_results_count'] = mongo_db.student_test_attempts.count_documents({'test_type': 'practice'})
+        except Exception as e:
+            test_queries['practice_results_count'] = f"Error: {str(e)}"
+        
+        try:
+            # Count online results
+            test_queries['online_results_count'] = mongo_db.student_test_assignments.count_documents({'attempted': True})
+        except Exception as e:
+            test_queries['online_results_count'] = f"Error: {str(e)}"
+        
+        try:
+            # Count technical results
+            test_queries['technical_results_count'] = mongo_db.test_results.count_documents({'test_type': 'technical'})
+        except Exception as e:
+            test_queries['technical_results_count'] = f"Error: {str(e)}"
+        
+        try:
+            # Total student attempts
+            test_queries['total_student_attempts'] = mongo_db.student_test_attempts.count_documents({})
+        except Exception as e:
+            test_queries['total_student_attempts'] = f"Error: {str(e)}"
+        
+        try:
+            # Total test assignments
+            test_queries['total_test_assignments'] = mongo_db.student_test_assignments.count_documents({})
+        except Exception as e:
+            test_queries['total_test_assignments'] = f"Error: {str(e)}"
+        
+        verification_info['test_queries'] = test_queries
+        
+        return jsonify({
+            'success': True,
+            'data': verification_info
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in database verification: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Database verification failed: {str(e)}'
+        }), 500
+
+@superadmin_bp.route('/database-status', methods=['GET'])
+@jwt_required()
+def get_database_status():
+    """Get comprehensive database status and connection information"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
+        status_info = {
+            'connection_info': {},
+            'database_info': {},
+            'collections_status': {},
+            'test_data_summary': {},
+            'sample_data': {}
+        }
+        
+        # Get connection information
+        try:
+            client = mongo_db.db.client
+            db = mongo_db.db
+            
+            status_info['connection_info'] = {
+                'database_name': db.name,
+                'client_address': str(client.address),
+                'client_host': str(client.HOST),
+                'client_port': str(client.PORT),
+                'connection_status': 'connected'
+            }
+            
+            # Test ping
+            ping_result = client.admin.command('ping')
+            status_info['connection_info']['ping_result'] = ping_result
+            
+        except Exception as e:
+            status_info['connection_info'] = {
+                'status': 'error',
+                'error': str(e)
+            }
+        
+        # Get database information
+        try:
+            db_stats = db.command('dbStats')
+            status_info['database_info'] = {
+                'collections': db_stats.get('collections', 0),
+                'data_size': db_stats.get('dataSize', 0),
+                'storage_size': db_stats.get('storageSize', 0),
+                'indexes': db_stats.get('indexes', 0),
+                'index_size': db_stats.get('indexSize', 0)
+            }
+        except Exception as e:
+            status_info['database_info'] = {'error': str(e)}
+        
+        # Check all collections and their status
+        collections_to_check = [
+            'users', 'students', 'tests', 'test_results', 'student_test_attempts',
+            'student_test_assignments', 'campuses', 'courses', 'batches', 'question_bank'
+        ]
+        
+        for collection_name in collections_to_check:
+            try:
+                collection = getattr(mongo_db, collection_name, None)
+                if collection:
+                    count = collection.count_documents({})
+                    status_info['collections_status'][collection_name] = {
+                        'exists': True,
+                        'count': count,
+                        'status': 'accessible'
+                    }
+                    
+                    # Get sample data for key collections
+                    if collection_name in ['tests', 'student_test_attempts', 'test_results', 'student_test_assignments'] and count > 0:
+                        sample = list(collection.find().limit(1))
+                        if sample:
+                            sample_doc = sample[0]
+                            if '_id' in sample_doc:
+                                sample_doc['_id'] = str(sample_doc['_id'])
+                            status_info['sample_data'][collection_name] = sample_doc
+                else:
+                    status_info['collections_status'][collection_name] = {
+                        'exists': False,
+                        'status': 'not_accessible'
+                    }
+            except Exception as e:
+                status_info['collections_status'][collection_name] = {
+                    'exists': False,
+                    'status': 'error',
+                    'error': str(e)
+                }
+        
+        # Get test data summary
+        try:
+            # Count tests by type
+            test_types = {}
+            if hasattr(mongo_db, 'tests'):
+                pipeline = [
+                    {'$group': {'_id': '$test_type', 'count': {'$sum': 1}}}
+                ]
+                test_type_results = list(mongo_db.tests.aggregate(pipeline))
+                for result in test_type_results:
+                    test_types[result['_id']] = result['count']
+            
+            # Count test results by type
+            result_types = {}
+            if hasattr(mongo_db, 'student_test_attempts'):
+                pipeline = [
+                    {'$group': {'_id': '$test_type', 'count': {'$sum': 1}}}
+                ]
+                result_type_results = list(mongo_db.student_test_attempts.aggregate(pipeline))
+                for result in result_type_results:
+                    result_types[result['_id']] = result['count']
+            
+            # Count online exam results
+            online_results_count = 0
+            if hasattr(mongo_db, 'student_test_assignments'):
+                online_results_count = mongo_db.student_test_assignments.count_documents({'attempted': True})
+            
+            status_info['test_data_summary'] = {
+                'test_types': test_types,
+                'result_types': result_types,
+                'online_exam_results': online_results_count,
+                'total_tests': sum(test_types.values()) if test_types else 0,
+                'total_results': sum(result_types.values()) if result_types else 0
+            }
+            
+        except Exception as e:
+            status_info['test_data_summary'] = {'error': str(e)}
+        
+        return jsonify({
+            'success': True,
+            'data': status_info
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting database status: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get database status: {str(e)}'
+        }), 500
+
+@superadmin_bp.route('/test-database-connection', methods=['GET'])
+@jwt_required()
+def test_database_connection():
+    """Simple test endpoint to verify database connection and show sample data"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
+        # Test basic connection
+        db_name = mongo_db.db.name
+        client = mongo_db.db.client
+        
+        # Get collection counts
+        collections_info = {}
+        key_collections = ['tests', 'student_test_attempts', 'test_results', 'student_test_assignments', 'users', 'students']
+        
+        for collection_name in key_collections:
+            try:
+                collection = getattr(mongo_db, collection_name, None)
+                if collection:
+                    count = collection.count_documents({})
+                    collections_info[collection_name] = {
+                        'count': count,
+                        'status': 'accessible'
+                    }
+                else:
+                    collections_info[collection_name] = {
+                        'count': 0,
+                        'status': 'not_found'
+                    }
+            except Exception as e:
+                collections_info[collection_name] = {
+                    'count': 0,
+                    'status': 'error',
+                    'error': str(e)
+                }
+        
+        # Get sample test data
+        sample_tests = []
+        if hasattr(mongo_db, 'tests'):
+            try:
+                sample_tests = list(mongo_db.tests.find().limit(3))
+                for test in sample_tests:
+                    if '_id' in test:
+                        test['_id'] = str(test['_id'])
+            except Exception as e:
+                sample_tests = [{'error': str(e)}]
+        
+        # Get sample test results
+        sample_results = []
+        if hasattr(mongo_db, 'student_test_attempts'):
+            try:
+                sample_results = list(mongo_db.student_test_attempts.find().limit(3))
+                for result in sample_results:
+                    if '_id' in result:
+                        result['_id'] = str(result['_id'])
+            except Exception as e:
+                sample_results = [{'error': str(e)}]
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'database_name': db_name,
+                'connection_status': 'connected',
+                'collections_info': collections_info,
+                'sample_tests': sample_tests,
+                'sample_results': sample_results,
+                'message': f'Successfully connected to database: {db_name}'
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error testing database connection: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Database connection test failed: {str(e)}'
+        }), 500
+
+@superadmin_bp.route('/debug-database-connection', methods=['GET'])
+@jwt_required()
+def debug_database_connection():
+    """Debug endpoint to show exact database connection details"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
+        # Get detailed connection information
+        db = mongo_db.db
+        client = db.client
+        
+        # Get environment variables
+        import os
+        mongodb_uri = os.getenv('MONGODB_URI', 'NOT_SET')
+        
+        # Get database name from URI parsing
+        from urllib.parse import urlparse
+        parsed_uri = urlparse(mongodb_uri)
+        uri_db_name = parsed_uri.path.strip('/').split('?')[0] if parsed_uri.path else 'NO_DB_IN_URI'
+        
+        # Get actual database name being used
+        actual_db_name = db.name
+        
+        # Test collections with detailed info
+        collections_debug = {}
+        key_collections = ['tests', 'student_test_attempts', 'test_results', 'student_test_assignments']
+        
+        for collection_name in key_collections:
+            try:
+                collection = getattr(mongo_db, collection_name, None)
+                if collection:
+                    count = collection.count_documents({})
+                    # Get a sample document
+                    sample = list(collection.find().limit(1))
+                    collections_debug[collection_name] = {
+                        'count': count,
+                        'sample_exists': len(sample) > 0,
+                        'sample_doc': sample[0] if sample else None
+                    }
+                else:
+                    collections_debug[collection_name] = {
+                        'count': 0,
+                        'error': 'Collection not found'
+                    }
+            except Exception as e:
+                collections_debug[collection_name] = {
+                    'count': 0,
+                    'error': str(e)
+                }
+        
+        # List all collections in the database
+        all_collections = []
+        try:
+            all_collections = db.list_collection_names()
+        except Exception as e:
+            all_collections = [f'Error: {str(e)}']
+        
+        return jsonify({
+            'success': True,
+            'debug_info': {
+                'environment_mongodb_uri': mongodb_uri,
+                'parsed_db_name_from_uri': uri_db_name,
+                'actual_database_name': actual_db_name,
+                'client_address': str(client.address),
+                'all_collections_in_db': all_collections,
+                'collections_debug': collections_debug,
+                'connection_status': 'connected'
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in database debug: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Database debug failed: {str(e)}'
+        }), 500
+
+@superadmin_bp.route('/force-connect-suma-madam', methods=['GET'])
+@jwt_required()
+def force_connect_suma_madam():
+    """Force connection to suma_madam database and test collections"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
+        # Force connection to suma_madam database
+        import os
+        from pymongo import MongoClient
+        from urllib.parse import urlparse
+        
+        # Get the base URI without database name
+        mongodb_uri = os.getenv('MONGODB_URI', 'mongodb+srv://teja:teja0000@versant.ia46v3i.mongodb.net/suma_madam?retryWrites=true&w=majority&appName=Versant&connectTimeoutMS=30000&socketTimeoutMS=30000&serverSelectionTimeoutMS=30000')
+        
+        # Parse URI and replace database name with suma_madam
+        parsed_uri = urlparse(mongodb_uri)
+        base_uri = f"{parsed_uri.scheme}://{parsed_uri.netloc}"
+        params = parsed_uri.query
+        
+        # Create new URI with suma_madam database
+        new_uri = f"{base_uri}/suma_madam"
+        if params:
+            new_uri += f"?{params}"
+        
+        print(f"🔗 Forcing connection to: {new_uri}")
+        
+        # Create client with suma_madam database
+        client = MongoClient(new_uri, connectTimeoutMS=30000, socketTimeoutMS=30000, serverSelectionTimeoutMS=30000)
+        db = client['suma_madam']
+        
+        # Test connection
+        client.admin.command('ping')
+        
+        # Get collection information
+        collections_info = {}
+        key_collections = ['tests', 'student_test_attempts', 'test_results', 'student_test_assignments', 'users', 'students']
+        
+        for collection_name in key_collections:
+            try:
+                collection = db[collection_name]
+                count = collection.count_documents({})
+                sample = list(collection.find().limit(1))
+                collections_info[collection_name] = {
+                    'count': count,
+                    'sample_exists': len(sample) > 0,
+                    'sample_doc': sample[0] if sample else None
+                }
+            except Exception as e:
+                collections_info[collection_name] = {
+                    'count': 0,
+                    'error': str(e)
+                }
+        
+        # List all collections
+        all_collections = db.list_collection_names()
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'database_name': 'suma_madam',
+                'connection_uri': new_uri,
+                'connection_status': 'connected',
+                'all_collections': all_collections,
+                'collections_info': collections_info,
+                'message': 'Successfully connected to suma_madam database'
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error forcing connection to suma_madam: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to connect to suma_madam database: {str(e)}'
+        }), 500
+
+@superadmin_bp.route('/all-test-results', methods=['GET'])
+@jwt_required()
+def get_all_test_results():
+    """Get all test results from all collections with detailed information"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
+        all_results = []
+        
+        # Get results from student_test_attempts collection
+        try:
+            if hasattr(mongo_db, 'student_test_attempts'):
+                # First check if there are any documents in the collection
+                total_attempts = mongo_db.student_test_attempts.count_documents({})
+                current_app.logger.info(f"Total documents in student_test_attempts: {total_attempts}")
+                
+                if total_attempts > 0:
+                    pipeline = [
+                        {
+                            '$lookup': {
+                                'from': 'users',
+                                'localField': 'student_id',
+                                'foreignField': '_id',
+                                'as': 'student_details'
+                            }
+                        },
+                        {'$unwind': {'path': '$student_details', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$lookup': {
+                                'from': 'tests',
+                                'localField': 'test_id',
+                                'foreignField': '_id',
+                                'as': 'test_details'
+                            }
+                        },
+                        {'$unwind': {'path': '$test_details', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$lookup': {
+                                'from': 'students',
+                                'localField': 'student_id',
+                                'foreignField': 'user_id',
+                                'as': 'student_profile'
+                            }
+                        },
+                        {'$unwind': {'path': '$student_profile', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$lookup': {
+                                'from': 'campuses',
+                                'localField': 'student_profile.campus_id',
+                                'foreignField': '_id',
+                                'as': 'campus_details'
+                            }
+                        },
+                        {'$unwind': {'path': '$campus_details', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$lookup': {
+                                'from': 'courses',
+                                'localField': 'student_profile.course_id',
+                                'foreignField': '_id',
+                                'as': 'course_details'
+                            }
+                        },
+                        {'$unwind': {'path': '$course_details', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$lookup': {
+                                'from': 'batches',
+                                'localField': 'student_profile.batch_id',
+                                'foreignField': '_id',
+                                'as': 'batch_details'
+                            }
+                        },
+                        {'$unwind': {'path': '$batch_details', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$project': {
+                                '_id': 1,
+                                'student_id': 1,
+                                'test_id': 1,
+                                'student_name': {'$ifNull': ['$student_details.name', 'Unknown Student']},
+                                'student_email': {'$ifNull': ['$student_details.email', 'unknown@example.com']},
+                                'campus_name': {'$ifNull': ['$campus_details.name', 'Unknown Campus']},
+                                'course_name': {'$ifNull': ['$course_details.name', 'Unknown Course']},
+                                'batch_name': {'$ifNull': ['$batch_details.name', 'Unknown Batch']},
+                                'test_name': {'$ifNull': ['$test_details.name', 'Unknown Test']},
+                                'module_name': {'$ifNull': ['$test_details.module_id', 'Unknown']},
+                                'test_type': 1,
+                                'average_score': 1,
+                                'score_percentage': 1,
+                                'total_questions': 1,
+                                'correct_answers': 1,
+                                'submitted_at': 1,
+                                'results': 1,  # Include detailed results with transcripts
+                                'source_collection': 'student_test_attempts'
+                            }
+                        },
+                        {'$sort': {'submitted_at': -1}}
+                    ]
+                    
+                    results = list(mongo_db.student_test_attempts.aggregate(pipeline))
+                    all_results.extend(results)
+                    current_app.logger.info(f"Found {len(results)} results in student_test_attempts")
+                else:
+                    current_app.logger.info("No documents found in student_test_attempts collection")
+        except Exception as e:
+            current_app.logger.warning(f"Error getting results from student_test_attempts: {e}")
+        
+        # Get results from test_results collection
+        try:
+            if hasattr(mongo_db, 'db') and hasattr(mongo_db.db, 'test_results'):
+                total_test_results = mongo_db.db.test_results.count_documents({})
+                current_app.logger.info(f"Total documents in test_results: {total_test_results}")
+                
+                if total_test_results > 0:
+                    pipeline = [
+                        {
+                            '$lookup': {
+                                'from': 'users',
+                                'localField': 'student_id',
+                                'foreignField': '_id',
+                                'as': 'student_details'
+                            }
+                        },
+                        {'$unwind': {'path': '$student_details', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$lookup': {
+                                'from': 'tests',
+                                'localField': 'test_id',
+                                'foreignField': '_id',
+                                'as': 'test_details'
+                            }
+                        },
+                        {'$unwind': {'path': '$test_details', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$lookup': {
+                                'from': 'students',
+                                'localField': 'student_id',
+                                'foreignField': 'user_id',
+                                'as': 'student_profile'
+                            }
+                        },
+                        {'$unwind': {'path': '$student_profile', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$lookup': {
+                                'from': 'campuses',
+                                'localField': 'student_profile.campus_id',
+                                'foreignField': '_id',
+                                'as': 'campus_details'
+                            }
+                        },
+                        {'$unwind': {'path': '$campus_details', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$lookup': {
+                                'from': 'courses',
+                                'localField': 'student_profile.course_id',
+                                'foreignField': '_id',
+                                'as': 'course_details'
+                            }
+                        },
+                        {'$unwind': {'path': '$course_details', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$lookup': {
+                                'from': 'batches',
+                                'localField': 'student_profile.batch_id',
+                                'foreignField': '_id',
+                                'as': 'batch_details'
+                            }
+                        },
+                        {'$unwind': {'path': '$batch_details', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$project': {
+                                '_id': 1,
+                                'student_id': 1,
+                                'test_id': 1,
+                                'student_name': {'$ifNull': ['$student_details.name', 'Unknown Student']},
+                                'student_email': {'$ifNull': ['$student_details.email', 'unknown@example.com']},
+                                'campus_name': {'$ifNull': ['$campus_details.name', 'Unknown Campus']},
+                                'course_name': {'$ifNull': ['$course_details.name', 'Unknown Course']},
+                                'batch_name': {'$ifNull': ['$batch_details.name', 'Unknown Batch']},
+                                'test_name': {'$ifNull': ['$test_details.name', 'Unknown Test']},
+                                'module_name': {'$ifNull': ['$test_details.module_id', 'Unknown']},
+                                'test_type': 1,
+                                'average_score': 1,
+                                'score_percentage': 1,
+                                'total_questions': 1,
+                                'correct_answers': 1,
+                                'submitted_at': 1,
+                                'results': 1,  # Include detailed results with transcripts
+                                'source_collection': 'test_results'
+                            }
+                        },
+                        {'$sort': {'submitted_at': -1}}
+                    ]
+                    
+                    results = list(mongo_db.db.test_results.aggregate(pipeline))
+                    all_results.extend(results)
+                    current_app.logger.info(f"Found {len(results)} results in test_results")
+                else:
+                    current_app.logger.info("No documents found in test_results collection")
+        except Exception as e:
+            current_app.logger.warning(f"Error getting results from test_results: {e}")
+        
+        # Get results from student_test_assignments collection
+        try:
+            if hasattr(mongo_db, 'student_test_assignments'):
+                total_assignments = mongo_db.student_test_assignments.count_documents({'attempted': True})
+                current_app.logger.info(f"Total attempted assignments in student_test_assignments: {total_assignments}")
+                
+                if total_assignments > 0:
+                    pipeline = [
+                        {'$match': {'attempted': True}},
+                        {
+                            '$lookup': {
+                                'from': 'tests',
+                                'localField': 'test_id',
+                                'foreignField': '_id',
+                                'as': 'test_details'
+                            }
+                        },
+                        {'$unwind': {'path': '$test_details', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$lookup': {
+                                'from': 'users',
+                                'localField': 'student_id',
+                                'foreignField': '_id',
+                                'as': 'student_details'
+                            }
+                        },
+                        {'$unwind': {'path': '$student_details', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$lookup': {
+                                'from': 'students',
+                                'localField': 'student_id',
+                                'foreignField': 'user_id',
+                                'as': 'student_profile'
+                            }
+                        },
+                        {'$unwind': {'path': '$student_profile', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$lookup': {
+                                'from': 'campuses',
+                                'localField': 'student_profile.campus_id',
+                                'foreignField': '_id',
+                                'as': 'campus_details'
+                            }
+                        },
+                        {'$unwind': {'path': '$campus_details', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$lookup': {
+                                'from': 'courses',
+                                'localField': 'student_profile.course_id',
+                                'foreignField': '_id',
+                                'as': 'course_details'
+                            }
+                        },
+                        {'$unwind': {'path': '$course_details', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$lookup': {
+                                'from': 'batches',
+                                'localField': 'student_profile.batch_id',
+                                'foreignField': '_id',
+                                'as': 'batch_details'
+                            }
+                        },
+                        {'$unwind': {'path': '$batch_details', 'preserveNullAndEmptyArrays': True}},
+                        {
+                            '$project': {
+                                '_id': 1,
+                                'student_id': 1,
+                                'test_id': 1,
+                                'student_name': {'$ifNull': ['$student_details.name', 'Unknown Student']},
+                                'student_email': {'$ifNull': ['$student_details.email', 'unknown@example.com']},
+                                'campus_name': {'$ifNull': ['$campus_details.name', 'Unknown Campus']},
+                                'course_name': {'$ifNull': ['$course_details.name', 'Unknown Course']},
+                                'batch_name': {'$ifNull': ['$batch_details.name', 'Unknown Batch']},
+                                'test_name': {'$ifNull': ['$test_details.name', 'Unknown Test']},
+                                'module_name': {'$ifNull': ['$test_details.module_id', 'Unknown']},
+                                'test_type': {'$ifNull': ['$test_details.test_type', 'practice']},
+                                'average_score': '$percentage',
+                                'score_percentage': '$percentage',
+                                'total_questions': {'$size': {'$ifNull': ['$questions', []]}},
+                                'correct_answers': '$score',
+                                'submitted_at': '$completed_at',
+                                'results': '$detailed_results',  # Include detailed results
+                                'source_collection': 'student_test_assignments'
+                            }
+                        },
+                        {'$sort': {'submitted_at': -1}}
+                    ]
+                    
+                    results = list(mongo_db.student_test_assignments.aggregate(pipeline))
+                    all_results.extend(results)
+                    current_app.logger.info(f"Found {len(results)} results in student_test_assignments")
+                else:
+                    current_app.logger.info("No attempted assignments found in student_test_assignments collection")
+        except Exception as e:
+            current_app.logger.warning(f"Error getting results from student_test_assignments: {e}")
+        
+        # Remove duplicates and process results
+        seen = set()
+        unique_results = []
+        for result in all_results:
+            key = (str(result.get('test_id')), str(result.get('student_id')), str(result.get('submitted_at')))
+            if key not in seen:
+                seen.add(key)
+                # Process the result - convert ObjectIds to strings
+                result['_id'] = str(result['_id'])
+                result['student_id'] = str(result['student_id'])
+                if result.get('test_id'):
+                    result['test_id'] = str(result['test_id'])
+                
+                # Convert any other ObjectId fields that might exist
+                for key, value in result.items():
+                    if hasattr(value, '__class__') and value.__class__.__name__ == 'ObjectId':
+                        result[key] = str(value)
+                
+                result['module_name'] = MODULES.get(result.get('module_name', ''), result.get('module_name', 'Unknown'))
+                if result.get('submitted_at'):
+                    result['submitted_at'] = result['submitted_at'].isoformat()
+                unique_results.append(result)
+        
+        # Sort results by submitted_at in descending order to show latest attempts first
+        unique_results.sort(key=lambda x: x.get('submitted_at', ''), reverse=True)
+        
+        current_app.logger.info(f"Total unique results found: {len(unique_results)}")
+        
+        return jsonify({
+            'success': True,
+            'data': unique_results,
+            'total_count': len(unique_results)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting all test results: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get test results: {str(e)}'
+        }), 500
+
+@superadmin_bp.route('/test-result-details/<result_id>', methods=['GET'])
+@jwt_required()
+def get_test_result_details(result_id):
+    """Get detailed test result with transcripts and audio URLs"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
+        # Try to find the result in all collections
+        result = None
+        source_collection = None
+        
+        # Try student_test_attempts first
+        try:
+            if hasattr(mongo_db, 'student_test_attempts'):
+                result = mongo_db.student_test_attempts.find_one({'_id': ObjectId(result_id)})
+                if result:
+                    source_collection = 'student_test_attempts'
+        except Exception as e:
+            current_app.logger.warning(f"Error searching student_test_attempts: {e}")
+        
+        # Try test_results if not found
+        if not result:
+            try:
+                if hasattr(mongo_db, 'db') and hasattr(mongo_db.db, 'test_results'):
+                    result = mongo_db.db.test_results.find_one({'_id': ObjectId(result_id)})
+                    if result:
+                        source_collection = 'test_results'
+                elif hasattr(mongo_db, 'test_results'):
+                    result = mongo_db.test_results.find_one({'_id': ObjectId(result_id)})
+                    if result:
+                        source_collection = 'test_results'
+            except Exception as e:
+                current_app.logger.warning(f"Error searching test_results: {e}")
+        
+        # Try student_test_assignments if not found
+        if not result:
+            try:
+                if hasattr(mongo_db, 'student_test_assignments'):
+                    result = mongo_db.student_test_assignments.find_one({'_id': ObjectId(result_id)})
+                    if result:
+                        source_collection = 'student_test_assignments'
+            except Exception as e:
+                current_app.logger.warning(f"Error searching student_test_assignments: {e}")
+        
+        if not result:
+            return jsonify({
+                'success': False,
+                'message': 'Test result not found'
+            }), 404
+        
+        # Get test details
+        test = mongo_db.tests.find_one({'_id': result['test_id']})
+        if not test:
+            return jsonify({
+                'success': False,
+                'message': 'Test not found'
+            }), 404
+        
+        # Get student details
+        student = mongo_db.users.find_one({'_id': result['student_id']})
+        if not student:
+            return jsonify({
+                'success': False,
+                'message': 'Student not found'
+            }), 404
+        
+        # Process detailed results
+        detailed_results = []
+        if result.get('results'):
+            for i, question_result in enumerate(result['results']):
+                detailed_result = {
+                    'question_index': i,
+                    'question': question_result.get('question', ''),
+                    'question_type': question_result.get('question_type', 'unknown'),
+                    'is_correct': question_result.get('is_correct', False),
+                    'score': question_result.get('score', 0),
+                    'similarity_score': question_result.get('similarity_score', 0)
+                }
+                
+                # Add audio-specific details for listening/speaking tests
+                if question_result.get('question_type') in ['audio', 'listening', 'speaking']:
+                    detailed_result.update({
+                        'student_audio_url': question_result.get('student_audio_url', ''),
+                        'student_text': question_result.get('student_text', ''),
+                        'original_text': question_result.get('original_text', ''),
+                        'missing_words': question_result.get('missing_words', []),
+                        'extra_words': question_result.get('extra_words', [])
+                    })
+                
+                # Add MCQ-specific details
+                elif question_result.get('question_type') == 'mcq':
+                    detailed_result.update({
+                        'selected_answer': question_result.get('selected_answer', ''),
+                        'correct_answer': question_result.get('correct_answer', ''),
+                        'options': question_result.get('options', [])
+                    })
+                
+                detailed_results.append(detailed_result)
+        
+        # Prepare response
+        response_data = {
+            'result_id': str(result['_id']),
+            'test_id': str(result['test_id']),
+            'student_id': str(result['student_id']),
+            'test_name': test.get('name', 'Unknown Test'),
+            'module_name': MODULES.get(test.get('module_id', ''), test.get('module_id', 'Unknown')),
+            'test_type': result.get('test_type', 'unknown'),
+            'student_name': student.get('name', 'Unknown Student'),
+            'student_email': student.get('email', ''),
+            'average_score': result.get('average_score', 0),
+            'score_percentage': result.get('score_percentage', 0),
+            'total_questions': result.get('total_questions', 0),
+            'correct_answers': result.get('correct_answers', 0),
+            'submitted_at': result.get('submitted_at', '').isoformat() if result.get('submitted_at') else '',
+            'source_collection': source_collection,
+            'detailed_results': detailed_results
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': response_data
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting test result details: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get test result details: {str(e)}'
+        }), 500 
 
 @superadmin_bp.route('/filter-options', methods=['GET'])
 @jwt_required()

@@ -607,17 +607,39 @@ def get_grammar_progress():
         scores_by_subcategory = {}
         
         try:
-            # Check if test_results collection exists
-            if not hasattr(mongo_db, 'test_results'):
-                current_app.logger.warning("test_results collection not found, using empty results")
-                results = []
-            else:
-                results = list(mongo_db.test_results.find({
+            # Get results from both collections
+            all_results = []
+            
+            # Check test_results collection
+            if hasattr(mongo_db, 'test_results'):
+                test_results = list(mongo_db.test_results.find({
                     'student_id': ObjectId(current_user_id),
                     'module_id': 'GRAMMAR'
                 }))
+                all_results.extend(test_results)
+                current_app.logger.info(f"Found {len(test_results)} grammar results in test_results collection")
+            
+            # Check student_test_attempts collection
+            if hasattr(mongo_db, 'student_test_attempts'):
+                attempt_results = list(mongo_db.student_test_attempts.find({
+                    'student_id': current_user_id,
+                    'test_type': 'practice'
+                }))
+                
+                # Filter for grammar tests
+                for attempt in attempt_results:
+                    test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
+                    if test and test.get('module_id') == 'GRAMMAR':
+                        # Convert attempt to match test_results format
+                        attempt_result = {
+                            'subcategory': test.get('subcategory'),
+                            'average_score': attempt.get('average_score', 0) or attempt.get('score_percentage', 0)
+                        }
+                        all_results.append(attempt_result)
+                
+                current_app.logger.info(f"Found {len(attempt_results)} total attempts, filtered for grammar")
 
-            for result in results:
+            for result in all_results:
                 if not isinstance(result, dict):
                     logging.warning(f"Skipping non-dict item in test results for user {current_user_id}: {result}")
                     continue
@@ -1172,6 +1194,7 @@ def get_test_history():
                     {
                         '$project': {
                             '_id': 1,
+                            'test_id': 1,
                             'test_name': '$test_details.name',
                             'module_id': '$test_details.module_id',
                             'subcategory': 1,
@@ -1182,7 +1205,8 @@ def get_test_history():
                             'total_questions': 1,
                             'time_taken': 1,
                             'submitted_at': 1,
-                            'test_type': 1
+                            'test_type': 1,
+                            'detailed_results': 1
                         }
                     },
                     { '$sort': { 'submitted_at': -1 } }
@@ -1219,6 +1243,7 @@ def get_test_history():
                     {
                         '$project': {
                             '_id': 1,
+                            'test_id': 1,
                             'test_name': '$test_details.name',
                             'module_id': '$test_details.module_id',
                             'subcategory': '$test_details.subcategory',
@@ -1229,7 +1254,8 @@ def get_test_history():
                             'total_questions': 1,
                             'time_taken': 1,
                             'submitted_at': 1,
-                            'test_type': 1
+                            'test_type': 1,
+                            'detailed_results': 1
                         }
                     },
                     { '$sort': { 'submitted_at': -1 } }
@@ -1924,7 +1950,7 @@ def get_progress_summary():
             stat['module_display_name'] = MODULES.get(stat['module_name'], 'Unknown')
             stat['accuracy'] = (stat['total_correct'] / stat['total_questions'] * 100) if stat['total_questions'] > 0 else 0
             stat['last_attempt'] = stat['last_attempt'].isoformat() if stat['last_attempt'] else None
-            stat['progress_percentage'] = min(100, (stat['highest_score'] / 100) * 100)
+            stat['progress_percentage'] = min(100, stat['highest_score'] or 0)
             # Convert ObjectId in _id to string if present
             if isinstance(stat.get('_id'), ObjectId):
                 stat['_id'] = str(stat['_id'])
@@ -2141,17 +2167,57 @@ def get_unlocked_modules():
                 module_levels = []
                 for level_id, level in LEVELS.items():
                     if isinstance(level, dict) and level.get('module_id') == module_id:
+                        # Get the highest score for this level
+                        highest_score = 0
+                        try:
+                            # Try to get scores from student_test_attempts
+                            attempts = list(mongo_db.student_test_attempts.find({
+                                'student_id': current_user_id,
+                                'test_type': 'practice'
+                            }))
+                            
+                            # Find tests for this level and get highest score
+                            for attempt in attempts:
+                                test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
+                                if test and test.get('level_id') == level_id:
+                                    score = attempt.get('average_score', 0) or attempt.get('score_percentage', 0)
+                                    if score > highest_score:
+                                        highest_score = score
+                        except Exception as e:
+                            current_app.logger.warning(f"Error fetching scores for level {level_id}: {e}")
+                        
                         module_levels.append({
                             'level_id': level_id,
                             'level_name': level['name'],
-                            'unlocked': (module_id == 'GRAMMAR' or module_id == 'VOCABULARY')
+                            'unlocked': (module_id == 'GRAMMAR' or module_id == 'VOCABULARY'),
+                            'score': highest_score
                         })
                     elif not isinstance(level, dict) and module_id == 'GRAMMAR':
                         # Handle grammar categories as levels
+                        # Get the highest score for this grammar category
+                        highest_score = 0
+                        try:
+                            # Try to get scores from student_test_attempts
+                            attempts = list(mongo_db.student_test_attempts.find({
+                                'student_id': current_user_id,
+                                'test_type': 'practice'
+                            }))
+                            
+                            # Find tests for this grammar category and get highest score
+                            for attempt in attempts:
+                                test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
+                                if test and test.get('module_id') == 'GRAMMAR' and test.get('subcategory') == level_id:
+                                    score = attempt.get('average_score', 0) or attempt.get('score_percentage', 0)
+                                    if score > highest_score:
+                                        highest_score = score
+                        except Exception as e:
+                            current_app.logger.warning(f"Error fetching scores for grammar category {level_id}: {e}")
+                        
                         module_levels.append({
                             'level_id': level_id,
                             'level_name': str(level),
-                            'unlocked': True
+                            'unlocked': True,
+                            'score': highest_score
                         })
                 
                 modules_status.append({
@@ -2173,27 +2239,87 @@ def get_unlocked_modules():
                 module_levels = []
                 for level_id, level in LEVELS.items():
                     if isinstance(level, dict) and level.get('module_id') == module_id:
+                        # Get the highest score for this level
+                        highest_score = 0
+                        try:
+                            # Try to get scores from student_test_attempts
+                            attempts = list(mongo_db.student_test_attempts.find({
+                                'student_id': current_user_id,
+                                'test_type': 'practice'
+                            }))
+                            
+                            # Find tests for this level and get highest score
+                            for attempt in attempts:
+                                test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
+                                if test and test.get('level_id') == level_id:
+                                    score = attempt.get('average_score', 0) or attempt.get('score_percentage', 0)
+                                    if score > highest_score:
+                                        highest_score = score
+                        except Exception as e:
+                            current_app.logger.warning(f"Error fetching scores for level {level_id}: {e}")
+                        
                         module_levels.append({
                             'level_id': level_id,
                             'level_name': level['name'],
-                            'unlocked': True
+                            'unlocked': True,
+                            'score': highest_score
                         })
                     elif not isinstance(level, dict) and module_id == 'GRAMMAR':
                         # Handle grammar categories as levels
+                        # Get the highest score for this grammar category
+                        highest_score = 0
+                        try:
+                            # Try to get scores from student_test_attempts
+                            attempts = list(mongo_db.student_test_attempts.find({
+                                'student_id': current_user_id,
+                                'test_type': 'practice'
+                            }))
+                            
+                            # Find tests for this grammar category and get highest score
+                            for attempt in attempts:
+                                test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
+                                if test and test.get('module_id') == 'GRAMMAR' and test.get('subcategory') == level_id:
+                                    score = attempt.get('average_score', 0) or attempt.get('score_percentage', 0)
+                                    if score > highest_score:
+                                        highest_score = score
+                        except Exception as e:
+                            current_app.logger.warning(f"Error fetching scores for grammar category {level_id}: {e}")
+                        
                         module_levels.append({
                             'level_id': level_id,
                             'level_name': str(level),
-                            'unlocked': True
+                            'unlocked': True,
+                            'score': highest_score
                         })
             else:
                 # Filter levels for this module
                 module_levels = []
                 for level_id, level in LEVELS.items():
                     if isinstance(level, dict) and level.get('module_id') == module_id:
+                        # Get the highest score for this level
+                        highest_score = 0
+                        try:
+                            # Try to get scores from student_test_attempts
+                            attempts = list(mongo_db.student_test_attempts.find({
+                                'student_id': current_user_id,
+                                'test_type': 'practice'
+                            }))
+                            
+                            # Find tests for this level and get highest score
+                            for attempt in attempts:
+                                test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
+                                if test and test.get('level_id') == level_id:
+                                    score = attempt.get('average_score', 0) or attempt.get('score_percentage', 0)
+                                    if score > highest_score:
+                                        highest_score = score
+                        except Exception as e:
+                            current_app.logger.warning(f"Error fetching scores for level {level_id}: {e}")
+                        
                         module_levels.append({
                             'level_id': level_id,
                             'level_name': level['name'],
-                            'unlocked': level_id in authorized_levels
+                            'unlocked': level_id in authorized_levels,
+                            'score': highest_score
                         })
                 
                 unlocked = any(l['unlocked'] for l in module_levels) if module_levels else False

@@ -7,22 +7,23 @@ load_dotenv()
 
 class DatabaseConfig:
     # Updated MongoDB URI with connection options to fix timeout issues
-    MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb+srv://teja:teja0000@versant.ia46v3i.mongodb.net/versant_final?retryWrites=true&w=majority&appName=Versant&connectTimeoutMS=30000&socketTimeoutMS=30000&serverSelectionTimeoutMS=30000')
+    MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb+srv://teja:teja0000@versant.ia46v3i.mongodb.net/suma_madam?retryWrites=true&w=majority&appName=Versant&connectTimeoutMS=30000&socketTimeoutMS=30000&serverSelectionTimeoutMS=30000')
     
     @staticmethod
     def get_database_name():
         """Extract database name from MongoDB URI"""
         if not DatabaseConfig.MONGODB_URI:
-            return 'versant_final'  # fallback default
+            return 'suma_madam'  # Updated to match actual database
         
         try:
             # Parse the URI to extract database name
             parsed_uri = urlparse(DatabaseConfig.MONGODB_URI)
             # The path will be like '/database_name?params'
             db_name = parsed_uri.path.strip('/').split('?')[0]
-            return db_name if db_name else 'versant_final'
+            # If no database name in URI, use suma_madam as default
+            return db_name if db_name else 'suma_madam'
         except Exception:
-            return 'versant_final'  # fallback default
+            return 'suma_madam'  # Updated to match actual database
     
     @staticmethod
     def get_client():

@@ -81,7 +81,7 @@ const TestResult = () => {
     if (navigator.share) {
       navigator.share({
         title: 'My Test Result',
-        text: `I scored ${result.score_percentage || (result.average_score * 100)}% on ${result.test_name}`,
+        text: `I scored ${result.score_percentage || result.average_score || 0}% on ${result.test_name}`,
         url: window.location.href
       })
     } else {
@@ -200,16 +200,16 @@ const TestResult = () => {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Your Score</p>
-                      <p className={`text-3xl font-bold ${getScoreColor(result.score_percentage || (result.average_score * 100))}`}>
-                        {result.score_percentage || (result.average_score * 100)}%
+                      <p className={`text-3xl font-bold ${getScoreColor(result.score_percentage || result.average_score || 0)}`}>
+                        {result.score_percentage || result.average_score || 0}%
                       </p>
                     </div>
-                    <div className={`p-3 rounded-lg ${getScoreColor(result.score_percentage || (result.average_score * 100))}`}>
-                      {getScoreIcon(result.score_percentage || (result.average_score * 100))}
+                    <div className={`p-3 rounded-lg ${getScoreColor(result.score_percentage || result.average_score || 0)}`}>
+                      {getScoreIcon(result.score_percentage || result.average_score || 0)}
                     </div>
                   </div>
                   <p className="text-sm text-gray-600">
-                    {getPerformanceMessage(result.score_percentage || (result.average_score * 100))}
+                    {getPerformanceMessage(result.score_percentage || result.average_score || 0)}
                   </p>
                 </motion.div>
 
