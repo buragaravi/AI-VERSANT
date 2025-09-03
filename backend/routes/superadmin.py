@@ -2086,7 +2086,7 @@ def get_test_results_simple():
         return jsonify({
             'success': False,
             'message': f'Failed to get simple test results: {str(e)}'
-        }), 500
+        }), 500 
 
 @superadmin_bp.route('/debug-collections', methods=['GET'])
 @jwt_required()
@@ -2692,6 +2692,9 @@ def force_connect_suma_madam():
             'message': f'Failed to connect to suma_madam database: {str(e)}'
         }), 500
 
+
+
+
 @superadmin_bp.route('/all-test-results', methods=['GET'])
 @jwt_required()
 def get_all_test_results():
@@ -2707,6 +2710,69 @@ def get_all_test_results():
             }), 403
         
         all_results = []
+        debug_info = {}
+        
+        # Add debug information about the first student attempt
+        try:
+            if hasattr(mongo_db, 'student_test_attempts'):
+                sample_attempt = mongo_db.student_test_attempts.find_one()
+                if sample_attempt:
+                    debug_info['sample_student_attempt'] = {
+                        'student_id': str(sample_attempt.get('student_id')),
+                        'test_id': str(sample_attempt.get('test_id')),
+                        'test_type': sample_attempt.get('test_type'),
+                        'average_score': sample_attempt.get('average_score')
+                    }
+                    
+                    # Get the student profile
+                    student_profile = mongo_db.students.find_one({'user_id': sample_attempt['student_id']})
+                    if student_profile:
+                        debug_info['sample_student_profile'] = {
+                            'user_id': str(student_profile.get('user_id')),
+                            'campus_id': str(student_profile.get('campus_id')) if student_profile.get('campus_id') else None,
+                            'course_id': str(student_profile.get('course_id')) if student_profile.get('course_id') else None,
+                            'batch_id': str(student_profile.get('batch_id')) if student_profile.get('batch_id') else None,
+                            'roll_number': student_profile.get('roll_number')
+                        }
+                        
+                        # Get campus details
+                        if student_profile.get('campus_id'):
+                            campus = mongo_db.campuses.find_one({'_id': student_profile['campus_id']})
+                            if campus:
+                                debug_info['sample_campus'] = {
+                                    'id': str(campus['_id']),
+                                    'name': campus.get('name')
+                                }
+                        
+                        # Get course details
+                        if student_profile.get('course_id'):
+                            course = mongo_db.courses.find_one({'_id': student_profile['course_id']})
+                            if course:
+                                debug_info['sample_course'] = {
+                                    'id': str(course['_id']),
+                                    'name': course.get('name')
+                                }
+                        
+                        # Get batch details
+                        if student_profile.get('batch_id'):
+                            batch = mongo_db.batches.find_one({'_id': student_profile['batch_id']})
+                            if batch:
+                                debug_info['sample_batch'] = {
+                                    'id': str(batch['_id']),
+                                    'name': batch.get('name')
+                                }
+                    
+                    # Get user details
+                    user_details = mongo_db.users.find_one({'_id': sample_attempt['student_id']})
+                    if user_details:
+                        debug_info['sample_user'] = {
+                            'id': str(user_details['_id']),
+                            'name': user_details.get('name'),
+                            'email': user_details.get('email'),
+                            'role': user_details.get('role')
+                        }
+        except Exception as e:
+            current_app.logger.error(f"Error getting debug info: {str(e)}")
         
         # Get results from student_test_attempts collection
         try:
@@ -2717,88 +2783,102 @@ def get_all_test_results():
                 
                 if total_attempts > 0:
                     pipeline = [
-                        {
-                            '$lookup': {
-                                'from': 'users',
-                                'localField': 'student_id',
-                                'foreignField': '_id',
-                                'as': 'student_details'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'users',
+                            'localField': 'student_id',
+                            'foreignField': '_id',
+                            'as': 'student_details'
+                        }
+                    },
                         {'$unwind': {'path': '$student_details', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$lookup': {
-                                'from': 'tests',
-                                'localField': 'test_id',
-                                'foreignField': '_id',
-                                'as': 'test_details'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'tests',
+                            'localField': 'test_id',
+                            'foreignField': '_id',
+                            'as': 'test_details'
+                        }
+                    },
                         {'$unwind': {'path': '$test_details', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$lookup': {
-                                'from': 'students',
-                                'localField': 'student_id',
-                                'foreignField': 'user_id',
-                                'as': 'student_profile'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'students',
+                            'localField': 'student_id',
+                            'foreignField': 'user_id',
+                            'as': 'student_profile'
+                        }
+                    },
                         {'$unwind': {'path': '$student_profile', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$lookup': {
-                                'from': 'campuses',
-                                'localField': 'student_profile.campus_id',
-                                'foreignField': '_id',
-                                'as': 'campus_details'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'campuses',
+                            'localField': 'student_profile.campus_id',
+                            'foreignField': '_id',
+                            'as': 'campus_details'
+                        }
+                    },
                         {'$unwind': {'path': '$campus_details', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$lookup': {
-                                'from': 'courses',
-                                'localField': 'student_profile.course_id',
-                                'foreignField': '_id',
-                                'as': 'course_details'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'courses',
+                            'localField': 'student_profile.course_id',
+                            'foreignField': '_id',
+                            'as': 'course_details'
+                        }
+                    },
                         {'$unwind': {'path': '$course_details', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$lookup': {
-                                'from': 'batches',
-                                'localField': 'student_profile.batch_id',
-                                'foreignField': '_id',
-                                'as': 'batch_details'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'batches',
+                            'localField': 'student_profile.batch_id',
+                            'foreignField': '_id',
+                            'as': 'batch_details'
+                        }
+                    },
                         {'$unwind': {'path': '$batch_details', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$project': {
-                                '_id': 1,
-                                'student_id': 1,
-                                'test_id': 1,
-                                'student_name': {'$ifNull': ['$student_details.name', 'Unknown Student']},
-                                'student_email': {'$ifNull': ['$student_details.email', 'unknown@example.com']},
-                                'campus_name': {'$ifNull': ['$campus_details.name', 'Unknown Campus']},
-                                'course_name': {'$ifNull': ['$course_details.name', 'Unknown Course']},
-                                'batch_name': {'$ifNull': ['$batch_details.name', 'Unknown Batch']},
-                                'test_name': {'$ifNull': ['$test_details.name', 'Unknown Test']},
-                                'module_name': {'$ifNull': ['$test_details.module_id', 'Unknown']},
-                                'test_type': 1,
-                                'average_score': 1,
-                                'score_percentage': 1,
-                                'total_questions': 1,
-                                'correct_answers': 1,
-                                'submitted_at': 1,
-                                'results': 1,  # Include detailed results with transcripts
-                                'source_collection': 'student_test_attempts'
-                            }
-                        },
-                        {'$sort': {'submitted_at': -1}}
-                    ]
-                    
+                    {
+                        '$project': {
+                            '_id': 1,
+                            'student_id': 1,
+                            'test_id': 1,
+                            'student_name': {'$ifNull': ['$student_details.name', 'Unknown Student']},
+                            'student_email': {'$ifNull': ['$student_details.email', 'unknown@example.com']},
+                            'campus_name': {'$ifNull': ['$campus_details.name', 'Unknown Campus']},
+                            'course_name': {'$ifNull': ['$course_details.name', 'Unknown Course']},
+                            'batch_name': {'$ifNull': ['$batch_details.name', 'Unknown Batch']},
+                            'test_name': {'$ifNull': ['$test_details.name', 'Unknown Test']},
+                            'module_name': {'$ifNull': ['$test_details.module_id', 'Unknown']},
+                            'test_type': 1,
+                            'average_score': 1,
+                            'score_percentage': 1,
+                            'total_questions': 1,
+                            'correct_answers': 1,
+                            'submitted_at': 1,
+                            'results': 1,  # Include detailed results with transcripts
+                            'source_collection': 'student_test_attempts',
+                            # Add debug fields to see what's actually in the data
+                            'debug_student_profile': '$student_profile',
+                            'debug_campus_details': '$campus_details',
+                            'debug_course_details': '$course_details',
+                            'debug_batch_details': '$batch_details'
+                        }
+                    },
+                    {'$sort': {'submitted_at': -1}}
+                ]
+                
                     results = list(mongo_db.student_test_attempts.aggregate(pipeline))
                     all_results.extend(results)
                     current_app.logger.info(f"Found {len(results)} results in student_test_attempts")
+                    
+                    # Debug: Check a sample result to see what data we're getting
+                    if results:
+                        sample_result = results[0]
+                        current_app.logger.info(f"Sample result from student_test_attempts: {sample_result}")
+                        current_app.logger.info(f"Sample student_id type: {type(sample_result.get('student_id'))}")
+                        current_app.logger.info(f"Sample student_id value: {sample_result.get('student_id')}")
+                        current_app.logger.info(f"Sample student_name: {sample_result.get('student_name')}")
+                        current_app.logger.info(f"Sample campus_name: {sample_result.get('campus_name')}")
                 else:
                     current_app.logger.info("No documents found in student_test_attempts collection")
         except Exception as e:
@@ -2812,64 +2892,64 @@ def get_all_test_results():
                 
                 if total_test_results > 0:
                     pipeline = [
-                        {
-                            '$lookup': {
-                                'from': 'users',
-                                'localField': 'student_id',
-                                'foreignField': '_id',
-                                'as': 'student_details'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'users',
+                            'localField': 'student_id',
+                            'foreignField': '_id',
+                            'as': 'student_details'
+                        }
+                    },
                         {'$unwind': {'path': '$student_details', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$lookup': {
-                                'from': 'tests',
-                                'localField': 'test_id',
-                                'foreignField': '_id',
-                                'as': 'test_details'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'tests',
+                            'localField': 'test_id',
+                            'foreignField': '_id',
+                            'as': 'test_details'
+                        }
+                    },
                         {'$unwind': {'path': '$test_details', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$lookup': {
-                                'from': 'students',
-                                'localField': 'student_id',
-                                'foreignField': 'user_id',
-                                'as': 'student_profile'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'students',
+                            'localField': 'student_id',
+                            'foreignField': 'user_id',
+                            'as': 'student_profile'
+                        }
+                    },
                         {'$unwind': {'path': '$student_profile', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$lookup': {
-                                'from': 'campuses',
-                                'localField': 'student_profile.campus_id',
-                                'foreignField': '_id',
-                                'as': 'campus_details'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'campuses',
+                            'localField': 'student_profile.campus_id',
+                            'foreignField': '_id',
+                            'as': 'campus_details'
+                        }
+                    },
                         {'$unwind': {'path': '$campus_details', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$lookup': {
-                                'from': 'courses',
-                                'localField': 'student_profile.course_id',
-                                'foreignField': '_id',
-                                'as': 'course_details'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'courses',
+                            'localField': 'student_profile.course_id',
+                            'foreignField': '_id',
+                            'as': 'course_details'
+                        }
+                    },
                         {'$unwind': {'path': '$course_details', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$lookup': {
-                                'from': 'batches',
-                                'localField': 'student_profile.batch_id',
-                                'foreignField': '_id',
-                                'as': 'batch_details'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'batches',
+                            'localField': 'student_profile.batch_id',
+                            'foreignField': '_id',
+                            'as': 'batch_details'
+                        }
+                    },
                         {'$unwind': {'path': '$batch_details', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$project': {
-                                '_id': 1,
-                                'student_id': 1,
+                    {
+                        '$project': {
+                            '_id': 1,
+                            'student_id': 1,
                                 'test_id': 1,
                                 'student_name': {'$ifNull': ['$student_details.name', 'Unknown Student']},
                                 'student_email': {'$ifNull': ['$student_details.email', 'unknown@example.com']},
@@ -2878,19 +2958,19 @@ def get_all_test_results():
                                 'batch_name': {'$ifNull': ['$batch_details.name', 'Unknown Batch']},
                                 'test_name': {'$ifNull': ['$test_details.name', 'Unknown Test']},
                                 'module_name': {'$ifNull': ['$test_details.module_id', 'Unknown']},
-                                'test_type': 1,
-                                'average_score': 1,
-                                'score_percentage': 1,
-                                'total_questions': 1,
-                                'correct_answers': 1,
-                                'submitted_at': 1,
-                                'results': 1,  # Include detailed results with transcripts
-                                'source_collection': 'test_results'
-                            }
-                        },
-                        {'$sort': {'submitted_at': -1}}
-                    ]
-                    
+                            'test_type': 1,
+                            'average_score': 1,
+                            'score_percentage': 1,
+                            'total_questions': 1,
+                            'correct_answers': 1,
+                            'submitted_at': 1,
+                            'results': 1,  # Include detailed results with transcripts
+                            'source_collection': 'test_results'
+                        }
+                    },
+                    {'$sort': {'submitted_at': -1}}
+                ]
+                
                     results = list(mongo_db.db.test_results.aggregate(pipeline))
                     all_results.extend(results)
                     current_app.logger.info(f"Found {len(results)} results in test_results")
@@ -2907,65 +2987,65 @@ def get_all_test_results():
                 
                 if total_assignments > 0:
                     pipeline = [
-                        {'$match': {'attempted': True}},
-                        {
-                            '$lookup': {
-                                'from': 'tests',
-                                'localField': 'test_id',
-                                'foreignField': '_id',
-                                'as': 'test_details'
-                            }
-                        },
+                    {'$match': {'attempted': True}},
+                    {
+                        '$lookup': {
+                            'from': 'tests',
+                            'localField': 'test_id',
+                            'foreignField': '_id',
+                            'as': 'test_details'
+                        }
+                    },
                         {'$unwind': {'path': '$test_details', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$lookup': {
-                                'from': 'users',
-                                'localField': 'student_id',
-                                'foreignField': '_id',
-                                'as': 'student_details'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'users',
+                            'localField': 'student_id',
+                            'foreignField': '_id',
+                            'as': 'student_details'
+                        }
+                    },
                         {'$unwind': {'path': '$student_details', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$lookup': {
-                                'from': 'students',
-                                'localField': 'student_id',
-                                'foreignField': 'user_id',
-                                'as': 'student_profile'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'students',
+                            'localField': 'student_id',
+                            'foreignField': 'user_id',
+                            'as': 'student_profile'
+                        }
+                    },
                         {'$unwind': {'path': '$student_profile', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$lookup': {
-                                'from': 'campuses',
-                                'localField': 'student_profile.campus_id',
-                                'foreignField': '_id',
-                                'as': 'campus_details'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'campuses',
+                            'localField': 'student_profile.campus_id',
+                            'foreignField': '_id',
+                            'as': 'campus_details'
+                        }
+                    },
                         {'$unwind': {'path': '$campus_details', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$lookup': {
-                                'from': 'courses',
-                                'localField': 'student_profile.course_id',
-                                'foreignField': '_id',
-                                'as': 'course_details'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'courses',
+                            'localField': 'student_profile.course_id',
+                            'foreignField': '_id',
+                            'as': 'course_details'
+                        }
+                    },
                         {'$unwind': {'path': '$course_details', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$lookup': {
-                                'from': 'batches',
-                                'localField': 'student_profile.batch_id',
-                                'foreignField': '_id',
-                                'as': 'batch_details'
-                            }
-                        },
+                    {
+                        '$lookup': {
+                            'from': 'batches',
+                            'localField': 'student_profile.batch_id',
+                            'foreignField': '_id',
+                            'as': 'batch_details'
+                        }
+                    },
                         {'$unwind': {'path': '$batch_details', 'preserveNullAndEmptyArrays': True}},
-                        {
-                            '$project': {
-                                '_id': 1,
-                                'student_id': 1,
+                    {
+                        '$project': {
+                            '_id': 1,
+                            'student_id': 1,
                                 'test_id': 1,
                                 'student_name': {'$ifNull': ['$student_details.name', 'Unknown Student']},
                                 'student_email': {'$ifNull': ['$student_details.email', 'unknown@example.com']},
@@ -2975,18 +3055,18 @@ def get_all_test_results():
                                 'test_name': {'$ifNull': ['$test_details.name', 'Unknown Test']},
                                 'module_name': {'$ifNull': ['$test_details.module_id', 'Unknown']},
                                 'test_type': {'$ifNull': ['$test_details.test_type', 'practice']},
-                                'average_score': '$percentage',
-                                'score_percentage': '$percentage',
+                            'average_score': '$percentage',
+                            'score_percentage': '$percentage',
                                 'total_questions': {'$size': {'$ifNull': ['$questions', []]}},
-                                'correct_answers': '$score',
-                                'submitted_at': '$completed_at',
-                                'results': '$detailed_results',  # Include detailed results
-                                'source_collection': 'student_test_assignments'
-                            }
-                        },
-                        {'$sort': {'submitted_at': -1}}
-                    ]
-                    
+                            'correct_answers': '$score',
+                            'submitted_at': '$completed_at',
+                            'results': '$detailed_results',  # Include detailed results
+                            'source_collection': 'student_test_assignments'
+                        }
+                    },
+                    {'$sort': {'submitted_at': -1}}
+                ]
+                
                     results = list(mongo_db.student_test_assignments.aggregate(pipeline))
                     all_results.extend(results)
                     current_app.logger.info(f"Found {len(results)} results in student_test_assignments")
@@ -3013,6 +3093,40 @@ def get_all_test_results():
                     if hasattr(value, '__class__') and value.__class__.__name__ == 'ObjectId':
                         result[key] = str(value)
                 
+                # If student details are missing, try direct lookup
+                if result.get('student_name') == 'Unknown Student' and result.get('student_id'):
+                    try:
+                        # Direct lookup for user details
+                        user_details = mongo_db.users.find_one({'_id': ObjectId(result['student_id'])})
+                        if user_details:
+                            result['student_name'] = user_details.get('name', 'Unknown Student')
+                            result['student_email'] = user_details.get('email', 'unknown@example.com')
+                            
+                            # Direct lookup for student profile
+                            student_profile = mongo_db.students.find_one({'user_id': ObjectId(result['student_id'])})
+                            if student_profile:
+                                # Direct lookup for campus
+                                if student_profile.get('campus_id'):
+                                    campus = mongo_db.campuses.find_one({'_id': student_profile['campus_id']})
+                                    if campus:
+                                        result['campus_name'] = campus.get('name', 'Unknown Campus')
+                                
+                                # Direct lookup for course
+                                if student_profile.get('course_id'):
+                                    course = mongo_db.courses.find_one({'_id': student_profile['course_id']})
+                                    if course:
+                                        result['course_name'] = course.get('name', 'Unknown Course')
+                                
+                                # Direct lookup for batch
+                                if student_profile.get('batch_id'):
+                                    batch = mongo_db.batches.find_one({'_id': student_profile['batch_id']})
+                                    if batch:
+                                        result['batch_name'] = batch.get('name', 'Unknown Batch')
+                                
+                                current_app.logger.info(f"Enhanced result for student {result['student_id']}: {result['student_name']}, {result['campus_name']}, {result['course_name']}, {result['batch_name']}")
+                    except Exception as e:
+                        current_app.logger.error(f"Error enhancing result for student {result.get('student_id')}: {str(e)}")
+                
                 result['module_name'] = MODULES.get(result.get('module_name', ''), result.get('module_name', 'Unknown'))
                 if result.get('submitted_at'):
                     result['submitted_at'] = result['submitted_at'].isoformat()
@@ -3026,7 +3140,8 @@ def get_all_test_results():
         return jsonify({
             'success': True,
             'data': unique_results,
-            'total_count': len(unique_results)
+            'total_count': len(unique_results),
+            'debug_info': debug_info
         }), 200
         
     except Exception as e:

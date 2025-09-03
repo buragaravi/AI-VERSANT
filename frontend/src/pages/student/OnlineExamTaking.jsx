@@ -25,19 +25,34 @@ const OnlineExamTaking = () => {
     const fetchExam = async () => {
       try {
         setLoading(true);
-        // Try to get the random assignment first (for online exams with random questions)
+        // First, get the test details to check if it's a random assignment test
         try {
-          const res = await api.get(`/student/test/${examId}/random-assignment`);
-          setExam(res.data.data);
-          setQuestions(res.data.data.questions || []);
-          setAssignmentId(res.data.data.assignment_id);
-        } catch (randomErr) {
-          // If random assignment fails, try the regular test endpoint
-          console.log('Random assignment failed, trying regular test endpoint:', randomErr);
-          const res = await api.get(`/student/test/${examId}`);
-          setExam(res.data.data);
-          setQuestions(res.data.data.questions || []);
-          setAssignmentId(null); // No assignment ID for regular tests
+          const testRes = await api.get(`/student/test/${examId}`);
+          const testData = testRes.data.data;
+          
+          // Check if this is a random assignment test
+          if (testData.test_type === 'random_assignment' || testData.has_random_questions) {
+            // Try to get the random assignment
+            try {
+              const res = await api.get(`/student/test/${examId}/random-assignment`);
+              setExam(res.data.data);
+              setQuestions(res.data.data.questions || []);
+              setAssignmentId(res.data.data.assignment_id);
+            } catch (randomErr) {
+              // If random assignment fails, fall back to regular test
+              console.log('Random assignment failed, using regular test:', randomErr);
+              setExam(testData);
+              setQuestions(testData.questions || []);
+              setAssignmentId(null);
+            }
+          } else {
+            // Regular online test - use regular test endpoint
+            setExam(testData);
+            setQuestions(testData.questions || []);
+            setAssignmentId(null);
+          }
+        } catch (err) {
+          throw err; // Re-throw to be caught by outer catch
         }
       } catch (err) {
         showError('Failed to load exam.');
@@ -106,6 +121,7 @@ const OnlineExamTaking = () => {
 
       if (assignmentId) {
         // Submit using random assignment endpoint
+        console.log('Submitting via random assignment endpoint with assignment_id:', assignmentId);
         const payload = {
           assignment_id: assignmentId,
           answers: answers,
@@ -120,10 +136,12 @@ const OnlineExamTaking = () => {
         }
       } else {
         // Submit using regular test endpoint (for tests without random questions)
+        console.log('Submitting via regular test endpoint for test_id:', examId);
         // First, we need to start the test to get an attempt_id
         try {
           const startRes = await api.post(`/student/tests/${examId}/start`);
           const attemptId = startRes.data.data.attempt_id;
+          console.log('Got attempt_id:', attemptId);
           
           const payload = {
             attempt_id: attemptId,
@@ -138,6 +156,7 @@ const OnlineExamTaking = () => {
             showError(res.data.message || 'Failed to submit your answers.');
           }
         } catch (startErr) {
+          console.error('Error starting test:', startErr);
           showError('Failed to start test. Please try again.');
         }
       }
