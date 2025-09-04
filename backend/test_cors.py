@@ -13,6 +13,7 @@ def test_cors_configuration():
 
     base_url = "https://ravi-check-versant.onrender.com"
 
+
     test_urls = [
         f"{base_url}/",
         f"{base_url}/health",

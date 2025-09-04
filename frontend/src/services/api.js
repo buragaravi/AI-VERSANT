@@ -2,7 +2,9 @@ import axios from 'axios'
 
 // API Configuration
 // Environment Variables:
+
 // - VITE_API_URL: Set to 'https://ravi-check-versant.onrender.com' for direct backend access
+
 
 // - VITE_API_URL: Set to '/api' for development with Vite proxy
 
@@ -18,9 +20,10 @@ if (!API_URL) {
     API_URL = '/api' // Use Vite proxy in development
   } else {
     // In production, use direct backend access
+
     API_URL = 'https://ravi-check-versant.onrender.com'
 }
-}
+
 
 // For development, always use the proxy regardless of VITE_API_URL
 if (isDevelopment) {
@@ -29,8 +32,10 @@ if (isDevelopment) {
 
 // Ensure we're using the correct backend URL for production
 if (!isDevelopment && API_URL.includes('versant-backend.onrender.com')) {
+
   API_URL = 'https://ravi-check-versant.onrender.com'
 }
+
 
 console.log('API Service - VITE_API_URL:', import.meta.env.VITE_API_URL)
 console.log('API Service - DEV mode:', isDevelopment)
@@ -105,6 +110,7 @@ api.interceptors.response.use(
       console.error('Request URL:', error.config?.url)
       console.error('Environment:', isDevelopment ? 'Development' : 'Production')
       console.error('VITE_API_URL:', import.meta.env.VITE_API_URL)
+
 
       console.error('Expected backend URL: https://ravi-check-versant.onrender.com')
 

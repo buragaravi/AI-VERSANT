@@ -323,7 +323,7 @@ const TestManagement = () => {
                   <tbody>
                     {notifyResults.map((s, idx) => (
                       <tr key={s.email} className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}>
-                        <td className="px-4 py-2 border-b">{s.name}</td>
+                        <td className="px-4 py-2 border-b">{s.student_name || s.name || 'Unknown'}</td>
                         <td className="px-4 py-2 border-b">{s.email}</td>
                         <td className="px-4 py-2 border-b">{s.mobile_number || '-'}</td>
                         <td className="px-4 py-2 border-b">
@@ -334,16 +334,20 @@ const TestManagement = () => {
                           )}
                         </td>
                         <td className="px-4 py-2 border-b">
-                          {s.notify_status === 'sent' && <span className="text-green-700 font-semibold">Sent</span>}
-                          {s.notify_status === 'skipped' && <span className="text-gray-500 font-semibold">Skipped</span>}
-                          {s.notify_status === 'pending' && <span className="text-blue-500 font-semibold">Pending</span>}
-                          {s.notify_status === 'failed' && <span className="text-red-600 font-semibold">Failed</span>}
+                          {s.email_sent ? (
+                            <span className="text-green-700 font-semibold">Sent</span>
+                          ) : (
+                            <span className="text-red-600 font-semibold">Failed</span>
+                          )}
                         </td>
                         <td className="px-4 py-2 border-b">
-                          {s.sms_status === 'sent' && <span className="text-green-700 font-semibold">Sent</span>}
-                          {s.sms_status === 'failed' && <span className="text-red-600 font-semibold">Failed</span>}
-                          {s.sms_status === 'no_mobile' && <span className="text-gray-500 font-semibold">No Mobile</span>}
-                          {!s.sms_status && <span className="text-gray-400 font-semibold">-</span>}
+                          {s.sms_sent ? (
+                            <span className="text-green-700 font-semibold">Sent</span>
+                          ) : s.mobile_number ? (
+                            <span className="text-gray-500 font-semibold">Not Sent</span>
+                          ) : (
+                            <span className="text-gray-500 font-semibold">No Mobile</span>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -593,6 +597,34 @@ const TestPreviewView = ({ test, onBack, onTestEmail, onFixAudioUrls, onNotifySt
     }
   };
 
+  // Copy test links handler
+  const handleCopyTestLinks = async () => {
+    try {
+      success('Fetching test links...');
+      const res = await api.get(`/test-management/test-links/${test._id}`);
+      if (res.data && res.data.success) {
+        const testLinks = res.data.test_links;
+        if (testLinks.length === 0) {
+          error('No students found for this test');
+          return;
+        }
+        
+        // Create a formatted text with test link (same for all students)
+        let linksText = `Test Links for: ${res.data.test_name}\n`;
+        linksText += `Test Type: ${res.data.test_type}\n\n`;
+        linksText += `Test Link: ${testLinks[0].test_link}`;
+        
+        // Copy to clipboard
+        await navigator.clipboard.writeText(linksText);
+        success(`Copied ${testLinks.length} test links to clipboard!`);
+      } else {
+        error(res.data.message || 'Failed to fetch test links');
+      }
+    } catch (e) {
+      error('Failed to copy test links. Please try again.');
+    }
+  };
+
 
 
 
@@ -645,6 +677,12 @@ const TestPreviewView = ({ test, onBack, onTestEmail, onFixAudioUrls, onNotifySt
             className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
           >
             Notify Students
+          </button>
+          <button
+            onClick={handleCopyTestLinks}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+          >
+            📋 Copy Test Links
           </button>
           <button
             onClick={() => navigate(`/superadmin/results?test_id=${test._id}`)}
