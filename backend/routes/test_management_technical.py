@@ -4,7 +4,7 @@ from bson import ObjectId
 from datetime import datetime
 import pytz
 from mongo import mongo_db
-from routes.test_management import require_superadmin, generate_unique_test_id, convert_objectids
+from routes.test_management import require_superadmin, generate_unique_test_id, convert_objectids, generate_test_link
 
 technical_test_bp = Blueprint('technical_test_management', __name__)
 
@@ -223,39 +223,101 @@ def notify_technical_test_students(test_id):
         for student in student_list:
             try:
                 # Send email notification
-                from utils.email_service import send_email
+                from utils.email_service import send_email, render_template
+                try:
+                    html_content = render_template('test_notification.html', 
+                        student_name=student['name'],
+                        test_name=test['name'],
+                        test_id=str(test['_id']),
+                        test_type='Technical',
+                        module=test.get('module_id', 'Unknown'),
+                        level=test.get('level_id', 'Unknown'),
+                        module_display_name=test.get('module_id', 'Unknown'),
+                        level_display_name=test.get('level_id', 'Unknown'),
+                        question_count=len(test.get('questions', [])),
+                        is_online=test.get('test_type') == 'online',
+                        start_dt=test.get('startDateTime', 'Not specified'),
+                        end_dt=test.get('endDateTime', 'Not specified'),
+                        duration=test.get('duration', 'Not specified')
+                    )
+                except Exception as template_error:
+                    current_app.logger.error(f"Template rendering failed for {student['email']}: {template_error}")
+                    html_content = f"""
+                    <html>
+                    <body>
+                        <h2>New Technical Test Available: {test['name']}</h2>
+                        <p>Hello {student['name']},</p>
+                        <p>You have been assigned a new technical test: {test['name']}</p>
+                        <p>Module: {test.get('module_id', 'Unknown')}</p>
+                        <p>Level: {test.get('level_id', 'Unknown')}</p>
+                        <p>Questions: {len(test.get('questions', []))}</p>
+                        <p>Please log in to your account to take the test.</p>
+                    </body>
+                    </html>
+                    """
+                
                 email_sent = send_email(
                     to_email=student['email'],
+                    to_name=student['name'],
                     subject=f"New Technical Test Available: {test['name']}",
-                    template='test_notification.html',
-                    context={
-                        'student_name': student['name'],
-                        'test_name': test['name'],
-                        'test_type': 'Technical',
-                        'module_id': test.get('module_id', 'Unknown'),
-                        'level_id': test.get('level_id', 'Unknown'),
-                        'question_count': len(test.get('questions', [])),
-                        'start_date': test.get('startDateTime', 'Not specified'),
-                        'end_date': test.get('endDateTime', 'Not specified'),
-                        'duration': test.get('duration', 'Not specified')
-                    }
+                    html_content=html_content
                 )
+                
+                # Send SMS notification if mobile number is available
+                sms_sent = False
+                mobile_number = student.get('mobile_number', '')
+                if mobile_number:
+                    try:
+                        from utils.sms_service import send_sms
+                        sms_message = f"New technical test '{test['name']}' assigned to you. Login to take the test. - Study Edge"
+                        sms_sent = send_sms(mobile_number, sms_message)
+                        current_app.logger.info(f"SMS sent to {mobile_number}: {sms_sent}")
+                    except Exception as sms_error:
+                        current_app.logger.error(f"Failed to send SMS to {mobile_number}: {sms_error}")
+                        sms_sent = False
+                else:
+                    current_app.logger.info(f"No mobile number for student {student['name']}")
+                
+                # Generate test link for the student
+                test_link = generate_test_link(test, student)
                 
                 results.append({
                     'student_id': student['_id'],
                     'student_name': student['name'],
                     'email': student['email'],
+                    'mobile_number': mobile_number,
                     'email_sent': email_sent,
-                    'status': 'success' if email_sent else 'failed'
+                    'sms_sent': sms_sent,
+                    'test_link': test_link,
+                    'status': 'success' if (email_sent or sms_sent) else 'failed'
                 })
             except Exception as e:
                 current_app.logger.error(f"Failed to notify student {student['_id']}: {e}")
+                # Generate test link for the student even if email fails
+                test_link = generate_test_link(test, student)
+                
+                # Try to send SMS even if email failed
+                sms_sent = False
+                mobile_number = student.get('mobile_number', '')
+                if mobile_number:
+                    try:
+                        from utils.sms_service import send_sms
+                        sms_message = f"New technical test '{test['name']}' assigned to you. Login to take the test. - Study Edge"
+                        sms_sent = send_sms(mobile_number, sms_message)
+                        current_app.logger.info(f"SMS sent to {mobile_number}: {sms_sent}")
+                    except Exception as sms_error:
+                        current_app.logger.error(f"Failed to send SMS to {mobile_number}: {sms_error}")
+                        sms_sent = False
+                
                 results.append({
                     'student_id': student['_id'],
                     'student_name': student['name'],
                     'email': student['email'],
+                    'mobile_number': mobile_number,
                     'email_sent': False,
-                    'status': 'failed',
+                    'sms_sent': sms_sent,
+                    'test_link': test_link,
+                    'status': 'success' if sms_sent else 'failed',
                     'error': str(e)
                 })
 

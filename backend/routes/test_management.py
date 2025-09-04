@@ -48,6 +48,25 @@ import pytz
 from routes.access_control import require_permission
 from models import Test
 
+def generate_test_link(test, student):
+    """Generate a direct test link for a student"""
+    try:
+        base_url = "https://crt.pydahsoft.in"
+        test_id = str(test['_id'])
+        
+        # Determine the correct route based on test type
+        if test.get('test_type') == 'online':
+            # For online exams, redirect to online-exams page
+            test_link = f"{base_url}/login?redirect=/student/online-exams/{test_id}"
+        else:
+            # For practice tests, redirect to practice-modules page
+            test_link = f"{base_url}/login?redirect=/student/practice-modules/{test_id}"
+        
+        return test_link
+    except Exception as e:
+        current_app.logger.error(f"Error generating test link: {e}")
+        return "https://crt.pydahsoft.in/login"
+
 # OneCompiler API Configuration
 ONECOMPILER_API_KEY = 'f744734571mshb636ee6aecb15e3p16c0e7jsnd142c0e341e6'
 ONECOMPILER_API_HOST = 'onecompiler-apis.p.rapidapi.com'
@@ -718,23 +737,63 @@ def notify_students(test_id):
                 
                 current_app.logger.info(f"Email sent to {student['email']}: {email_sent}")
                 
+                # Send SMS notification if mobile number is available
+                sms_sent = False
+                mobile_number = student.get('mobile_number', '')
+                if mobile_number:
+                    try:
+                        from utils.sms_service import send_sms
+                        sms_message = f"New test '{test['name']}' assigned to you. Login to take the test. - Study Edge"
+                        sms_sent = send_sms(mobile_number, sms_message)
+                        current_app.logger.info(f"SMS sent to {mobile_number}: {sms_sent}")
+                    except Exception as sms_error:
+                        current_app.logger.error(f"Failed to send SMS to {mobile_number}: {sms_error}")
+                        sms_sent = False
+                else:
+                    current_app.logger.info(f"No mobile number for student {student['name']}")
+                
+                # Generate test link for the student
+                test_link = generate_test_link(test, student)
+                
                 results.append({
                     'student_id': student['student_id'],
                     'student_name': student['name'],
                     'email': student['email'],
+                    'mobile_number': mobile_number,
                     'email_sent': email_sent,
-                    'status': 'success' if email_sent else 'failed'
+                    'sms_sent': sms_sent,
+                    'test_link': test_link,
+                    'status': 'success' if (email_sent or sms_sent) else 'failed'
                 })
             except Exception as e:
                 current_app.logger.error(f"Failed to notify student {student['student_id']}: {e}")
                 import traceback
                 current_app.logger.error(f"Full traceback: {traceback.format_exc()}")
+                # Generate test link for the student even if email fails
+                test_link = generate_test_link(test, student)
+                
+                # Try to send SMS even if email failed
+                sms_sent = False
+                mobile_number = student.get('mobile_number', '')
+                if mobile_number:
+                    try:
+                        from utils.sms_service import send_sms
+                        sms_message = f"New test '{test['name']}' assigned to you. Login to take the test. - Study Edge"
+                        sms_sent = send_sms(mobile_number, sms_message)
+                        current_app.logger.info(f"SMS sent to {mobile_number}: {sms_sent}")
+                    except Exception as sms_error:
+                        current_app.logger.error(f"Failed to send SMS to {mobile_number}: {sms_error}")
+                        sms_sent = False
+                
                 results.append({
                     'student_id': student['student_id'],
                     'student_name': student['name'],
                     'email': student['email'],
+                    'mobile_number': mobile_number,
                     'email_sent': False,
-                    'status': 'failed',
+                    'sms_sent': sms_sent,
+                    'test_link': test_link,
+                    'status': 'success' if sms_sent else 'failed',
                     'error': str(e)
                 })
 
@@ -758,6 +817,137 @@ def notify_students(test_id):
     except Exception as e:
         current_app.logger.error(f"Error notifying students: {e}")
         return jsonify({'success': False, 'message': f'Failed to send notification: {e}'}), 500
+
+@test_management_bp.route('/email-status', methods=['GET'])
+@jwt_required()
+@require_superadmin
+def get_email_status():
+    """Get email service status and configuration"""
+    try:
+        from utils.email_service import get_email_status
+        status = get_email_status()
+        return jsonify({
+            'success': True,
+            'status': status
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Error getting email status: {e}")
+        return jsonify({'success': False, 'message': f'Error getting email status: {e}'}), 500
+
+@test_management_bp.route('/test-email', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def test_email():
+    """Test email sending with detailed error information"""
+    try:
+        data = request.get_json()
+        test_email = data.get('email')
+        
+        if not test_email:
+            return jsonify({'success': False, 'message': 'Email address is required'}), 400
+        
+        # Check email service configuration first
+        from utils.email_service import check_email_configuration, get_current_ip
+        email_config = check_email_configuration()
+        
+        if not email_config['properly_configured']:
+            return jsonify({
+                'success': False, 
+                'message': 'Email service not properly configured',
+                'issues': email_config['issues'],
+                'current_ip': get_current_ip(),
+                'brevo_ip_whitelist_url': 'https://app.brevo.com/security/authorised_ips'
+            }), 400
+        
+        # Send test email
+        from utils.email_service import send_email
+        html_content = """
+        <html>
+        <body>
+            <h2>Test Email from Study Edge System</h2>
+            <p>This is a test email to verify that the email service is working correctly.</p>
+            <p>If you receive this email, the notification system is functioning properly.</p>
+            <p>Current IP: """ + get_current_ip() + """</p>
+        </body>
+        </html>
+        """
+        
+        email_sent = send_email(
+            to_email=test_email,
+            to_name='Test User',
+            subject='Test Email from Study Edge System',
+            html_content=html_content
+        )
+        
+        if email_sent:
+            return jsonify({
+                'success': True,
+                'message': 'Test email sent successfully',
+                'current_ip': get_current_ip()
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to send test email. Check logs for details.',
+                'current_ip': get_current_ip(),
+                'brevo_ip_whitelist_url': 'https://app.brevo.com/security/authorised_ips'
+            }), 500
+            
+    except Exception as e:
+        current_app.logger.error(f"Error testing email: {e}")
+        return jsonify({
+            'success': False, 
+            'message': f'Error testing email: {e}',
+            'current_ip': get_current_ip() if 'get_current_ip' in locals() else 'Unknown'
+        }), 500
+
+@test_management_bp.route('/test-links/<test_id>', methods=['GET'])
+@jwt_required()
+@require_superadmin
+def get_test_links(test_id):
+    """Get test links for all students assigned to a test"""
+    try:
+        # Fetch test details
+        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
+        if not test:
+            return jsonify({'success': False, 'message': 'Test not found.'}), 404
+
+        # Fetch all assigned students
+        from routes.student import get_students_for_test_ids
+        try:
+            if test.get('assigned_student_ids'):
+                student_list = get_students_for_test_ids([test_id], assigned_student_ids=test['assigned_student_ids'])
+            else:
+                student_list = get_students_for_test_ids([test_id])
+            
+            if not student_list:
+                return jsonify({'success': False, 'message': 'No students found for this test.'}), 404
+        except Exception as e:
+            current_app.logger.error(f"Error fetching students for test {test_id}: {e}")
+            return jsonify({'success': False, 'message': f'Error fetching students: {e}'}), 500
+
+        # Generate test links for each student
+        test_links = []
+        for student in student_list:
+            test_link = generate_test_link(test, student)
+            test_links.append({
+                'student_id': student['student_id'],
+                'student_name': student['name'],
+                'email': student['email'],
+                'mobile_number': student.get('mobile_number', ''),
+                'test_link': test_link
+            })
+        
+        return jsonify({
+            'success': True,
+            'test_name': test['name'],
+            'test_type': test.get('test_type', 'Practice'),
+            'test_links': test_links
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error getting test links: {e}")
+        return jsonify({'success': False, 'message': f'Error getting test links: {e}'}), 500
 
 
 
