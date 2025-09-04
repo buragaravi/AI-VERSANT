@@ -7,22 +7,23 @@ load_dotenv()
 
 class DatabaseConfig:
     # Updated MongoDB URI with connection options to fix timeout issues
-    MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb+srv://teja:teja0000@versant.ia46v3i.mongodb.net/versant_final?retryWrites=true&w=majority&appName=Versant&connectTimeoutMS=30000&socketTimeoutMS=30000&serverSelectionTimeoutMS=30000')
+    MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb+srv://teja:teja0000@versant.ia46v3i.mongodb.net/suma_madam?retryWrites=true&w=majority&appName=Versant&connectTimeoutMS=30000&socketTimeoutMS=30000&serverSelectionTimeoutMS=30000')
     
     @staticmethod
     def get_database_name():
         """Extract database name from MongoDB URI"""
         if not DatabaseConfig.MONGODB_URI:
-            return 'versant_final'  # fallback default
+            return 'suma_madam'  # Updated to match actual database
         
         try:
             # Parse the URI to extract database name
             parsed_uri = urlparse(DatabaseConfig.MONGODB_URI)
             # The path will be like '/database_name?params'
             db_name = parsed_uri.path.strip('/').split('?')[0]
-            return db_name if db_name else 'versant_final'
+            # If no database name in URI, use suma_madam as default
+            return db_name if db_name else 'suma_madam'
         except Exception:
-            return 'versant_final'  # fallback default
+            return 'suma_madam'  # Updated to match actual database
     
     @staticmethod
     def get_client():
@@ -45,7 +46,6 @@ class DatabaseConfig:
                 'tls': True,
                 'tlsAllowInvalidCertificates': False,
                 'tlsAllowInvalidHostnames': False,
-                'tlsInsecure': False,
                 # Additional connection options for better stability
                 'heartbeatFrequencyMS': 10000,
                 'maxConnecting': 2,
@@ -98,13 +98,19 @@ def init_db():
         users_collection.create_index([("email", 1)], unique=True)
         users_collection.create_index([("username", 1)], unique=True)
         
-        tests_collection = db['tests']
-        tests_collection.create_index([("test_id", 1)], unique=True)
-        tests_collection.create_index([("module", 1), ("difficulty", 1)])
+        # Create test_results collection if it doesn't exist
+        test_results_collection = db['test_results']
+        test_results_collection.create_index([("test_id", 1)])
+        test_results_collection.create_index([("student_id", 1)])
+        test_results_collection.create_index([("module_id", 1)])
+        test_results_collection.create_index([("submitted_at", -1)])
         
-        results_collection = db['test_results']
-        results_collection.create_index([("user_id", 1), ("test_id", 1)])
-        results_collection.create_index([("submitted_at", -1)])
+        # Create student_test_attempts collection if it doesn't exist
+        student_test_attempts_collection = db['student_test_attempts']
+        student_test_attempts_collection.create_index([("test_id", 1)])
+        student_test_attempts_collection.create_index([("student_id", 1)])
+        student_test_attempts_collection.create_index([("module_id", 1)])
+        student_test_attempts_collection.create_index([("submitted_at", -1)])
         
         print("✅ Database indexes created successfully")
         

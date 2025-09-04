@@ -36,10 +36,26 @@ def create_writing_test():
         if module_id != 'WRITING':
             return jsonify({'success': False, 'message': f'Invalid module for writing test: {module_id}'}), 400
 
-        # Check if test name already exists
-        existing_test = mongo_db.tests.find_one({'name': test_name})
+        # Check if test name already exists (case-insensitive)
+        existing_test = mongo_db.tests.find_one({'name': {'$regex': f'^{test_name}$', '$options': 'i'}})
         if existing_test:
             return jsonify({'success': False, 'message': f'Test name "{test_name}" already exists. Please choose a different name.'}), 409
+
+        # Check for duplicate questions within the test
+        question_texts = []
+        duplicate_questions = []
+        for i, question in enumerate(questions):
+            question_text = question.get('question', '').strip().lower()
+            if question_text in question_texts:
+                duplicate_questions.append(f"Question {i+1}: '{question.get('question', '')[:50]}...'")
+            else:
+                question_texts.append(question_text)
+        
+        if duplicate_questions:
+            return jsonify({
+                'success': False, 
+                'message': f'Duplicate questions found: {", ".join(duplicate_questions)}. Please remove duplicates and try again.'
+            }), 400
 
         # Generate unique test ID
         test_id = generate_unique_test_id()

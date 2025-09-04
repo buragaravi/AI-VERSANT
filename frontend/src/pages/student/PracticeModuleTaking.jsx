@@ -3,8 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { useNotification } from '../../contexts/NotificationContext';
 import api from '../../services/api';
-import Header from '../../components/common/Header';
-import Sidebar from '../../components/common/Sidebar';
+
 import { motion } from 'framer-motion';
 import clsx from 'clsx';
 
@@ -123,11 +122,8 @@ const PracticeModuleTaking = () => {
   const currentQuestion = questions[currentQuestionIndex];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar />
-      <div className="flex-1 lg:pl-64">
-        <Header />
-        <main className="px-6 lg:px-10 py-12">
+    <div className="min-h-screen bg-gray-50">
+      <main className="px-6 lg:px-10 py-12">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <div className="flex justify-between items-center mb-4">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 truncate">{module.name}</h1>
@@ -158,17 +154,17 @@ const PracticeModuleTaking = () => {
                       className={clsx(
                         'flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all w-full',
                         {
-                          'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-300': answers[currentQuestion.question_id] === key,
-                          'border-gray-200 hover:border-indigo-400': answers[currentQuestion.question_id] !== key,
+                          'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-300': answers[currentQuestion.question_id] === value,
+                          'border-gray-200 hover:border-indigo-400': answers[currentQuestion.question_id] !== value,
                         }
                       )}
                     >
                       <input
                         type="radio"
                         name={currentQuestion.question_id}
-                        value={key}
-                        checked={answers[currentQuestion.question_id] === key}
-                        onChange={() => handleAnswerChange(currentQuestion.question_id, key)}
+                        value={value}
+                        checked={answers[currentQuestion.question_id] === value}
+                        onChange={() => handleAnswerChange(currentQuestion.question_id, value)}
                         className="h-5 w-5 mr-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                       />
                       <span className="font-semibold text-gray-700">{key}.</span>
@@ -204,8 +200,7 @@ const PracticeModuleTaking = () => {
               </div>
             </div>
           </motion.div>
-        </main>
-      </div>
+      </main>
     </div>
   );
 };

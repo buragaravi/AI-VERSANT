@@ -750,7 +750,9 @@ const TestCreationWizard = ({ onTestCreated, setView, uploadedQuestions, setUplo
     topic_id: '',
     selectedTopic: '',
     technical_question_type: 'compiler', // Default for technical tests
-    question_type: 'mcq' // Default for other tests
+    question_type: 'mcq', // Default for other tests
+    startDateTime: null, // For online tests
+    endDateTime: null, // For online tests
   });
 
   const nextStep = () => {
@@ -760,6 +762,12 @@ const TestCreationWizard = ({ onTestCreated, setView, uploadedQuestions, setUplo
     } else if (testData.module === 'CRT_TECHNICAL' && step === 5) {
       setStep(6); // Go to question upload step
     } else if (testData.module === 'CRT_TECHNICAL' && step === 6) {
+      setStep(7); // Go to final confirmation step
+    } else if (testData.test_type?.toLowerCase() === 'online' && step === 4) {
+      setStep(5); // Go to online test configuration step
+    } else if (testData.test_type?.toLowerCase() === 'online' && step === 5) {
+      setStep(6); // Go to question upload step
+    } else if (testData.test_type?.toLowerCase() === 'online' && step === 6) {
       setStep(7); // Go to final confirmation step
     } else {
       setStep(prev => prev < 7 ? prev + 1 : prev);
@@ -771,6 +779,12 @@ const TestCreationWizard = ({ onTestCreated, setView, uploadedQuestions, setUplo
     if (testData.module === 'CRT_TECHNICAL' && step === 6) {
       setStep(5); // Go back to technical question type step
     } else if (testData.module === 'CRT_TECHNICAL' && step === 5) {
+      setStep(4); // Go back to audience selection step
+    } else if (testData.test_type?.toLowerCase() === 'online' && step === 7) {
+      setStep(6); // Go back to question upload step
+    } else if (testData.test_type?.toLowerCase() === 'online' && step === 6) {
+      setStep(5); // Go back to online test configuration step
+    } else if (testData.test_type?.toLowerCase() === 'online' && step === 5) {
       setStep(4); // Go back to audience selection step
     } else {
       setStep(prev => prev > 1 ? prev - 1 : prev);
@@ -792,8 +806,12 @@ const TestCreationWizard = ({ onTestCreated, setView, uploadedQuestions, setUplo
       case 4:
         return <Step4AudienceSelection nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
       case 5:
+        // Show online test configuration step for online tests
+        if (testData.test_type?.toLowerCase() === 'online') {
+          return <Step5OnlineTestConfig nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
+        }
         // Show technical question type step only for CRT_TECHNICAL
-        if (testData.module === 'CRT_TECHNICAL') {
+        else if (testData.module === 'CRT_TECHNICAL') {
           return <TechnicalTestQuestionType onNext={nextStep} onBack={prevStep} updateTestData={updateTestData} testData={testData} />;
         } else {
           return <Step5QuestionUpload nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} uploadedQuestions={uploadedQuestions} setUploadedQuestions={setUploadedQuestions} />;
@@ -802,19 +820,21 @@ const TestCreationWizard = ({ onTestCreated, setView, uploadedQuestions, setUplo
         // Show question upload step
         if (testData.module === 'CRT_TECHNICAL') {
           return <Step5QuestionUpload nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} uploadedQuestions={uploadedQuestions} setUploadedQuestions={setUploadedQuestions} />;
+        } else if (testData.test_type?.toLowerCase() === 'online') {
+          return <Step5QuestionUpload nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} uploadedQuestions={uploadedQuestions} setUploadedQuestions={setUploadedQuestions} />;
         } else {
           return <Step6ConfirmAndGenerate prevStep={prevStep} testData={testData} onTestCreated={onTestCreated} uploadedQuestions={uploadedQuestions} />;
         }
       case 7:
-        // Final confirmation step for CRT_TECHNICAL
+        // Final confirmation step for CRT_TECHNICAL and online tests
         return <Step6ConfirmAndGenerate prevStep={prevStep} testData={testData} onTestCreated={onTestCreated} uploadedQuestions={uploadedQuestions} />;
       default:
         return <Step1TestCategory nextStep={nextStep} prevStep={prevStep} updateTestData={updateTestData} testData={testData} />;
     }
   };
 
-  // Calculate total steps based on module
-  const totalSteps = testData.module === 'CRT_TECHNICAL' ? 7 : 6;
+  // Calculate total steps based on module and test type
+  const totalSteps = (testData.module === 'CRT_TECHNICAL' || testData.test_type?.toLowerCase() === 'online') ? 7 : 6;
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
@@ -843,8 +863,10 @@ const TestCreationWizard = ({ onTestCreated, setView, uploadedQuestions, setUplo
                 step === 2 ? 'Select Test Type' :
                   step === 3 ? 'Select Module and Level' :
                     step === 4 ? 'Select Audience' :
-                      step === 5 ? (testData.module === 'CRT_TECHNICAL' ? 'Select Question Type' : 'Upload Questions') :
-                        step === 6 ? (testData.module === 'CRT_TECHNICAL' ? 'Upload Questions' : 'Final Confirmation') :
+                      step === 5 ? (testData.test_type?.toLowerCase() === 'online' ? 'Configure Online Test' : 
+                                   testData.module === 'CRT_TECHNICAL' ? 'Select Question Type' : 'Upload Questions') :
+                        step === 6 ? (testData.module === 'CRT_TECHNICAL' ? 'Upload Questions' : 
+                                     testData.test_type?.toLowerCase() === 'online' ? 'Upload Questions' : 'Final Confirmation') :
                           step === 7 ? 'Final Confirmation' : ''
             }
           </p>
@@ -2034,6 +2056,164 @@ const AudioGenerationStatus = () => {
       <span>{getStatusIcon()}</span>
       <span>{details}</span>
     </div>
+  );
+};
+
+const Step5OnlineTestConfig = ({ nextStep, prevStep, updateTestData, testData }) => {
+  const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm({
+    defaultValues: {
+      startDateTime: testData.startDateTime ? new Date(testData.startDateTime) : null,
+      endDateTime: testData.endDateTime ? new Date(testData.endDateTime) : null,
+      duration: testData.duration || 30,
+    }
+  })
+  const { error } = useNotification()
+
+  const startDateTime = watch('startDateTime')
+  const endDateTime = watch('endDateTime')
+  const duration = watch('duration')
+
+  const onSubmit = (data) => {
+    // Validate that start date is before end date
+    if (data.startDateTime && data.endDateTime && data.startDateTime >= data.endDateTime) {
+      error("Start date must be before end date");
+      return;
+    }
+
+    // Validate that start date is in the future
+    if (data.startDateTime && data.startDateTime <= new Date()) {
+      error("Start date must be in the future");
+      return;
+    }
+
+    // Validate duration is positive
+    if (data.duration <= 0) {
+      error("Duration must be greater than 0");
+      return;
+    }
+
+    updateTestData({
+      startDateTime: data.startDateTime,
+      endDateTime: data.endDateTime,
+      duration: data.duration,
+    });
+    nextStep();
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+        <div className="flex items-center space-x-3 border-b pb-4 border-gray-200">
+          <div className="bg-purple-500 p-2 rounded-full text-white">
+            <Briefcase className="h-6 w-6" />
+          </div>
+          <h2 className="text-2xl font-bold mb-4">Configure Online Test</h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Start Date & Time */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg text-gray-800">Start Date & Time</h3>
+            <Controller
+              name="startDateTime"
+              control={control}
+              rules={{ required: 'Start date and time are required' }}
+              render={({ field }) => (
+                <DatePicker
+                  selected={field.value}
+                  onChange={(date) => field.onChange(date)}
+                  showTimeSelect
+                  timeFormat="HH:mm"
+                  timeIntervals={15}
+                  dateFormat="MMMM d, yyyy h:mm aa"
+                  minDate={new Date()}
+                  className="w-full p-3 border border-gray-200 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 transition"
+                  placeholderText="Select start date and time"
+                />
+              )}
+            />
+            {errors.startDateTime && <p className="text-red-500 text-xs mt-1">{errors.startDateTime.message}</p>}
+          </div>
+
+          {/* End Date & Time */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg text-gray-800">End Date & Time</h3>
+            <Controller
+              name="endDateTime"
+              control={control}
+              rules={{ required: 'End date and time are required' }}
+              render={({ field }) => (
+                <DatePicker
+                  selected={field.value}
+                  onChange={(date) => field.onChange(date)}
+                  showTimeSelect
+                  timeFormat="HH:mm"
+                  timeIntervals={15}
+                  dateFormat="MMMM d, yyyy h:mm aa"
+                  minDate={startDateTime || new Date()}
+                  className="w-full p-3 border border-gray-200 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 transition"
+                  placeholderText="Select end date and time"
+                />
+              )}
+            />
+            {errors.endDateTime && <p className="text-red-500 text-xs mt-1">{errors.endDateTime.message}</p>}
+          </div>
+        </div>
+
+        {/* Duration */}
+        <div className="space-y-4">
+          <h3 className="font-semibold text-lg text-gray-800">Test Duration (minutes)</h3>
+          <input
+            {...register('duration', { 
+              required: 'Duration is required',
+              min: { value: 1, message: 'Duration must be at least 1 minute' },
+              max: { value: 480, message: 'Duration cannot exceed 8 hours' }
+            })}
+            type="number"
+            min="1"
+            max="480"
+            className="w-full p-3 border border-gray-200 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 transition"
+            placeholder="Enter test duration in minutes"
+          />
+          {errors.duration && <p className="text-red-500 text-xs mt-1">{errors.duration.message}</p>}
+          <p className="text-sm text-gray-600">Maximum duration: 8 hours (480 minutes)</p>
+        </div>
+
+        {/* Information Box */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+            <div className="text-sm text-blue-800">
+              <p className="font-medium mb-1">Online Test Configuration</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>Students can only access the test during the specified time window</li>
+                <li>The duration is the maximum time each student has to complete the test</li>
+                <li>Once started, students must complete the test within the duration limit</li>
+                <li>Tests will automatically close when the end time is reached</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center pt-8 border-t border-gray-100 mt-10">
+          <button
+            type="button"
+            onClick={prevStep}
+            className="inline-flex items-center justify-center px-6 py-3 text-sm font-medium rounded-xl text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all duration-200 hover:shadow-md transform hover:scale-105"
+          >
+            <ChevronLeft className="h-5 w-5 mr-2" />
+            Back
+          </button>
+          <button
+            type="submit"
+            className="inline-flex items-center justify-center px-8 py-3 text-sm font-medium rounded-xl shadow-lg text-white bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 focus:outline-none focus:ring-4 focus:ring-purple-200 transition-all duration-200 transform hover:scale-105 hover:shadow-xl"
+          >
+            Next: Upload Questions
+            <ChevronRight className="h-5 w-5 ml-2" />
+          </button>
+        </div>
+      </form>
+    </motion.div>
   );
 };
 

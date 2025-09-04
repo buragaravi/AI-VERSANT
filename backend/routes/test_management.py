@@ -1779,26 +1779,8 @@ def submit_practice_test():
         # Process questions and calculate results
         current_app.logger.info(f"Processing {len(test['questions'])} questions for test {test_id}")
         
-        # Create a lookup table for correct answers from the original test
-        correct_answer_lookup = {}
-        try:
-            original_test = mongo_db.tests.find_one({'_id': test_id})
-            if original_test and 'questions' in original_test:
-                current_app.logger.info(f"Creating correct answer lookup table from original test")
-                for orig_q in original_test['questions']:
-                    # Create a key based on question text (first 50 chars) and question type
-                    question_key = f"{orig_q.get('question', '')[:50]}_{orig_q.get('question_type', '')}"
-                    correct_answer_lookup[question_key] = {
-                        'correct_answer': orig_q.get('correct_answer') or orig_q.get('answer') or orig_q.get('right_answer') or '',
-                        'question_text': orig_q.get('question', ''),
-                        'question_id': str(orig_q.get('_id', ''))
-                    }
-                    current_app.logger.info(f"Added to lookup: {question_key} -> {correct_answer_lookup[question_key]}")
-                
-                current_app.logger.info(f"Lookup table created with {len(correct_answer_lookup)} entries")
-                current_app.logger.info(f"Lookup table keys: {list(correct_answer_lookup.keys())}")
-        except Exception as e:
-            current_app.logger.error(f"Error creating correct answer lookup: {e}")
+        # Improved question matching - use question ID as primary key
+        current_app.logger.info(f"Processing questions with improved matching logic")
         
         results = []
         total_score = 0
@@ -1866,13 +1848,18 @@ def submit_practice_test():
                 current_app.logger.info(f"Non-MCQ question {i}: type={question.get('question_type')}")
                 # Handle audio question (Listening or Speaking)
                 audio_key = f'question_{i}'
+                current_app.logger.info(f"Looking for audio file with key: {audio_key}")
+                current_app.logger.info(f"Available files: {list(files.keys())}")
+                
                 if audio_key not in files:
+                    current_app.logger.error(f"Audio recording for question {i+1} not found. Expected key: {audio_key}")
                     return jsonify({
                         'success': False,
-                        'message': f'Audio recording for question {i+1} is required'
+                        'message': f'Audio recording for question {i+1} is required. Expected key: {audio_key}'
                     }), 400
                 
                 audio_file = files[audio_key]
+                current_app.logger.info(f"Found audio file for question {i}: {audio_file.filename}, size: {audio_file.content_length} bytes")
                 
                 # Save student audio to S3
                 current_s3_client = get_s3_client_safe()
@@ -1882,22 +1869,86 @@ def submit_practice_test():
                         'message': 'S3 client not available for audio upload. Please check AWS configuration.'
                     }), 500
                 
-                student_audio_key = f"student_audio/{current_user_id}/{test_id}/{uuid.uuid4()}.wav"
+                # Get file extension from the uploaded file or MIME type
+                if '.' in audio_file.filename:
+                    file_extension = audio_file.filename.split('.')[-1]
+                elif audio_file.content_type and 'webm' in audio_file.content_type:
+                    file_extension = 'webm'
+                else:
+                    file_extension = 'mp3'
+                
+                # Create unique audio key with question identifier
+                question_identifier = question.get('question_id', f'q_{i}')
+                student_audio_key = f"student_audio/{current_user_id}/{test_id}/{question_identifier}_{uuid.uuid4()}.{file_extension}"
+                
+                current_app.logger.info(f"Uploading audio for question {i}: {student_audio_key}")
                 current_s3_client.upload_fileobj(audio_file, S3_BUCKET_NAME, student_audio_key)
                 
+                # Create full S3 URL for frontend access
+                student_audio_url = f"https://{S3_BUCKET_NAME}.s3.amazonaws.com/{student_audio_key}"
+                
                 # Download for transcription
-                temp_audio_path = f"temp_student_{uuid.uuid4()}.wav"
+                temp_audio_path = f"temp_student_{question_identifier}_{uuid.uuid4()}.{file_extension}"
                 current_s3_client.download_file(S3_BUCKET_NAME, student_audio_key, temp_audio_path)
                 
                 # Transcribe student audio
-                student_text = transcribe_audio(temp_audio_path)
-                os.remove(temp_audio_path)
+                try:
+                    # Import the utility function to avoid naming conflict
+                    from utils.audio_generator import transcribe_audio as transcribe_audio_util
+                    
+                    current_app.logger.info(f"Starting transcription for question {i}, file: {temp_audio_path}")
+                    
+                    # Check if file exists and has content
+                    if not os.path.exists(temp_audio_path):
+                        current_app.logger.error(f"Temporary audio file not found: {temp_audio_path}")
+                        student_text = ""
+                    elif os.path.getsize(temp_audio_path) == 0:
+                        current_app.logger.error(f"Temporary audio file is empty: {temp_audio_path}")
+                        student_text = ""
+                    else:
+                        current_app.logger.info(f"Audio file size: {os.path.getsize(temp_audio_path)} bytes")
+                        student_text = transcribe_audio_util(temp_audio_path)
+                        
+                        if not student_text:
+                            current_app.logger.warning(f"Transcription returned empty text for question {i}")
+                            student_text = ""
+                        else:
+                            current_app.logger.info(f"Successfully transcribed question {i}: '{student_text[:100]}...'")
+                            
+                except Exception as e:
+                    current_app.logger.error(f"Error transcribing audio for question {i}: {e}")
+                    current_app.logger.error(f"Audio file path: {temp_audio_path}")
+                    current_app.logger.error(f"File exists: {os.path.exists(temp_audio_path) if 'temp_audio_path' in locals() else 'N/A'}")
+                    student_text = ""
+                finally:
+                    # Clean up temporary files
+                    for temp_file in [temp_audio_path]:
+                        if 'temp_file' in locals() and os.path.exists(temp_file):
+                            try:
+                                os.remove(temp_file)
+                                current_app.logger.info(f"Cleaned up temporary file: {temp_file}")
+                            except Exception as cleanup_error:
+                                current_app.logger.error(f"Error cleaning up temporary file: {cleanup_error}")
+                    
+                    # Also clean up converted wav file if it exists
+                    if 'transcription_path' in locals() and transcription_path != temp_audio_path and os.path.exists(transcription_path):
+                        try:
+                            os.remove(transcription_path)
+                            current_app.logger.info(f"Cleaned up converted file: {transcription_path}")
+                        except Exception as cleanup_error:
+                            current_app.logger.error(f"Error cleaning up converted file: {cleanup_error}")
                 
                 # Get the original text to compare against
                 original_text = question.get('question') or question.get('sentence', '')
                 
                 # Calculate similarity score
-                similarity_score = calculate_similarity_score(original_text, student_text)
+                try:
+                    similarity_score = calculate_similarity_score(original_text, student_text)
+                    # Convert percentage to decimal (0-1 scale)
+                    similarity_score = similarity_score / 100.0
+                except Exception as e:
+                    current_app.logger.error(f"Error calculating similarity for question {i}: {e}")
+                    similarity_score = 0.0
                 
                 # Determine if answer is correct based on module type
                 is_correct = False
@@ -1908,11 +1959,13 @@ def submit_practice_test():
                     threshold = question.get('transcript_validation', {}).get('tolerance', 0.8)
                     is_correct = similarity_score >= threshold
                     score = similarity_score
+                    current_app.logger.info(f"Listening question {i}: original='{original_text[:50]}...', student='{student_text[:50]}...', similarity={similarity_score:.3f}, threshold={threshold}, is_correct={is_correct}")
                 elif test.get('module_id') == 'SPEAKING':
                     # For speaking, similar logic but with different threshold
                     threshold = question.get('transcript_validation', {}).get('tolerance', 0.7)
                     is_correct = similarity_score >= threshold
                     score = similarity_score
+                    current_app.logger.info(f"Speaking question {i}: original='{original_text[:50]}...', student='{student_text[:50]}...', similarity={similarity_score:.3f}, threshold={threshold}, is_correct={is_correct}")
                 
                 if is_correct:
                     correct_answers += 1
@@ -1922,7 +1975,7 @@ def submit_practice_test():
                     'question_index': i,
                     'question': question['question'],
                     'question_type': 'audio',
-                    'student_audio_url': student_audio_key,
+                    'student_audio_url': student_audio_url,
                     'student_text': student_text,
                     'original_text': original_text,
                     'similarity_score': similarity_score,
@@ -2232,7 +2285,7 @@ def validate_transcript():
 
 @test_management_bp.route('/transcribe-audio', methods=['POST'])
 @jwt_required()
-def transcribe_audio():
+def transcribe_audio_endpoint():
     """Transcribe uploaded audio file"""
     try:
         if 'audio' not in request.files:
@@ -2248,8 +2301,11 @@ def transcribe_audio():
         audio_file.save(temp_path)
         
         try:
+            # Import the utility function to avoid naming conflict
+            from utils.audio_generator import transcribe_audio as transcribe_audio_util
+            
             # Transcribe the audio
-            transcribed_text = transcribe_audio(temp_path)
+            transcribed_text = transcribe_audio_util(temp_path)
             
             return jsonify({
                 'success': True,

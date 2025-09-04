@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useNotification } from '../../contexts/NotificationContext'
-import Header from '../../components/common/Header'
-import Sidebar from '../../components/common/Sidebar'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import api, { getTestResultById } from '../../services/api'
 import { 
@@ -83,7 +81,7 @@ const TestResult = () => {
     if (navigator.share) {
       navigator.share({
         title: 'My Test Result',
-        text: `I scored ${result.score_percentage || (result.average_score * 100)}% on ${result.test_name}`,
+        text: `I scored ${result.score_percentage || result.average_score || 0}% on ${result.test_name}`,
         url: window.location.href
       })
     } else {
@@ -121,25 +119,18 @@ const TestResult = () => {
   if (!result) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header />
-        <Sidebar />
-        <div className="lg:pl-64">
-          <main className="py-6">
-            <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
-              <p className="text-gray-600">Result not found.</p>
-            </div>
-          </main>
-        </div>
+        <main className="py-6">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+            <p className="text-gray-600">Result not found.</p>
+          </div>
+        </main>
       </div>
     )
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
-      <Sidebar />
-      <div className="lg:pl-64">
-        <main className="py-6">
+      <main className="py-6">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -209,16 +200,16 @@ const TestResult = () => {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Your Score</p>
-                      <p className={`text-3xl font-bold ${getScoreColor(result.score_percentage || (result.average_score * 100))}`}>
-                        {result.score_percentage || (result.average_score * 100)}%
+                      <p className={`text-3xl font-bold ${getScoreColor(result.score_percentage || result.average_score || 0)}`}>
+                        {result.score_percentage || result.average_score || 0}%
                       </p>
                     </div>
-                    <div className={`p-3 rounded-lg ${getScoreColor(result.score_percentage || (result.average_score * 100))}`}>
-                      {getScoreIcon(result.score_percentage || (result.average_score * 100))}
+                    <div className={`p-3 rounded-lg ${getScoreColor(result.score_percentage || result.average_score || 0)}`}>
+                      {getScoreIcon(result.score_percentage || result.average_score || 0)}
                     </div>
                   </div>
                   <p className="text-sm text-gray-600">
-                    {getPerformanceMessage(result.score_percentage || (result.average_score * 100))}
+                    {getPerformanceMessage(result.score_percentage || result.average_score || 0)}
                   </p>
                 </motion.div>
 
@@ -367,10 +358,9 @@ const TestResult = () => {
             </motion.div>
           </div>
         </main>
-      </div>
 
-      {/* Question Detail Modal */}
-      {showQuestionModal && selectedQuestion && (
+        {/* Question Detail Modal */}
+        {showQuestionModal && selectedQuestion && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
@@ -457,7 +447,7 @@ const TestResult = () => {
             </div>
           </div>
         </div>
-      )}
+        )}
     </div>
   )
 }
