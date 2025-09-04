@@ -551,6 +551,7 @@ def upload_students_to_batch():
         file = request.files.get('file')
         batch_id = request.form.get('batch_id')
         course_ids = request.form.getlist('course_ids')  # Accept multiple course IDs
+        user_id = get_jwt_identity()  # Get current user ID for progress updates
         
         # Debug logging
         current_app.logger.info(f"Upload request - batch_id: {batch_id}, course_ids: {course_ids}, filename: {file.filename if file else 'None'}")
@@ -606,8 +607,19 @@ def upload_students_to_batch():
         created_students = []
         errors = []
         uploaded_emails = []  # Track emails for verification
+        total_students = len(rows)
         
-        for row in rows:
+        # Send initial progress update
+        socketio.emit('upload_progress', {
+            'user_id': user_id,
+            'status': 'started',
+            'total': total_students,
+            'processed': 0,
+            'percentage': 0,
+            'message': 'Starting student upload...'
+        }, room=str(user_id))
+        
+        for index, row in enumerate(rows):
             if is_v2_format:
                 student_name = str(row.get('Student Name', '')).strip()
                 roll_number = str(row.get('Roll Number', '')).strip()
@@ -715,7 +727,9 @@ def upload_students_to_batch():
                 if mobile_number:
                     existing_mobile_numbers.add(mobile_number)
                 
-                # Send welcome email
+                # Send welcome email (non-blocking - don't fail the whole process if email fails)
+                email_sent = False
+                email_error = None
                 try:
                     html_content = render_template(
                         'student_credentials.html',
@@ -733,8 +747,44 @@ def upload_students_to_batch():
                         subject="Welcome to Study Edge - Your Student Credentials",
                         html_content=html_content
                     )
+                    email_sent = True
                 except Exception as e:
-                    errors.append(f"Failed to send email to {email}: {e}")
+                    email_error = str(e)
+                    # Don't add to errors array - just log it
+                    current_app.logger.error(f"Failed to send email to {email}: {e}")
+                
+                # Send progress update after student creation (regardless of email status)
+                percentage = int(((index + 1) / total_students) * 100)
+                if email_sent:
+                    socketio.emit('upload_progress', {
+                        'user_id': user_id,
+                        'status': 'processing',
+                        'total': total_students,
+                        'processed': index + 1,
+                        'percentage': percentage,
+                        'message': f'Student created and email sent to {student_name} ({email})',
+                        'current_student': {
+                            'name': student_name,
+                            'email': email,
+                            'username': username
+                        }
+                    }, room=str(user_id))
+                else:
+                    socketio.emit('upload_progress', {
+                        'user_id': user_id,
+                        'status': 'processing',
+                        'total': total_students,
+                        'processed': index + 1,
+                        'percentage': percentage,
+                        'message': f'Student created successfully for {student_name} ({email}) - Email sending failed',
+                        'current_student': {
+                            'name': student_name,
+                            'email': email,
+                            'username': username
+                        },
+                        'email_warning': True,
+                        'email_error': email_error
+                    }, room=str(user_id))
                     
             except Exception as e:
                 errors.append(f"{student_name}: Database error - {str(e)}")
@@ -756,7 +806,19 @@ def upload_students_to_batch():
                     'fully_uploaded': student_exists and user_exists
                 })
 
+        # Send completion progress update
         if errors:
+            socketio.emit('upload_progress', {
+                'user_id': user_id,
+                'status': 'completed_with_errors',
+                'total': total_students,
+                'processed': total_students,
+                'percentage': 100,
+                'message': f'Upload completed with {len(errors)} errors. {len(created_students)} students uploaded successfully.',
+                'errors': errors,
+                'created_count': len(created_students)
+            }, room=str(user_id))
+            
             return jsonify({
                 'success': bool(created_students), 
                 'message': f"Upload completed with {len(errors)} errors.", 
@@ -766,6 +828,17 @@ def upload_students_to_batch():
                 }, 
                 'errors': errors
             }), 207
+        
+        # Send success completion update
+        socketio.emit('upload_progress', {
+            'user_id': user_id,
+            'status': 'completed',
+            'total': total_students,
+            'processed': total_students,
+            'percentage': 100,
+            'message': f'Successfully uploaded {len(created_students)} students to the batch!',
+            'created_count': len(created_students)
+        }, room=str(user_id))
         
         return jsonify({
             'success': True, 
@@ -1266,8 +1339,23 @@ def create_batch_with_students():
             except Exception as student_error:
                 errors.append(f"An error occurred for student {student.get('student_name', 'N/A')}: {str(student_error)}")
 
-        # 3. Send emails
-        for student_details in created_students_details:
+        # 3. Send emails with progress updates
+        current_user_id = get_jwt_identity()
+        total_emails = len(created_students_details)
+        
+        # Send initial progress update
+        socketio.emit('upload_progress', {
+            'user_id': current_user_id,
+            'status': 'sending_emails',
+            'total': total_emails,
+            'processed': 0,
+            'percentage': 0,
+            'message': 'Sending welcome emails to students...'
+        }, room=str(current_user_id))
+        
+        for index, student_details in enumerate(created_students_details):
+             email_sent = False
+             email_error = None
              try:
                 html_content = render_template('student_credentials.html', params={
                     'name': student_details['student_name'],
@@ -1277,9 +1365,45 @@ def create_batch_with_students():
                     'login_url': "https://pydah-studyedge.vercel.app/login"
                 })
                 send_email(to_email=student_details['email'], to_name=student_details['student_name'], subject="Welcome to VERSANT - Your Student Credentials", html_content=html_content)
+                email_sent = True
+                
              except Exception as email_error:
+                email_error = str(email_error)
                 current_app.logger.error(f"Failed to send welcome email to {student_details['email']}: {email_error}")
-                errors.append(f"Failed to send email to {student_details['email']}.")
+                # Don't add to errors array - just log it
+                
+             # Send progress update after email attempt (regardless of success/failure)
+             percentage = int(((index + 1) / total_emails) * 100)
+             if email_sent:
+                 socketio.emit('upload_progress', {
+                     'user_id': current_user_id,
+                     'status': 'sending_emails',
+                     'total': total_emails,
+                     'processed': index + 1,
+                     'percentage': percentage,
+                     'message': f'Email sent to {student_details["student_name"]} ({student_details["email"]})',
+                     'current_student': {
+                         'name': student_details['student_name'],
+                         'email': student_details['email'],
+                         'username': student_details['username']
+                     }
+                 }, room=str(current_user_id))
+             else:
+                 socketio.emit('upload_progress', {
+                     'user_id': current_user_id,
+                     'status': 'sending_emails',
+                     'total': total_emails,
+                     'processed': index + 1,
+                     'percentage': percentage,
+                     'message': f'Email sending failed for {student_details["student_name"]} ({student_details["email"]}) - Student created successfully',
+                     'current_student': {
+                         'name': student_details['student_name'],
+                         'email': student_details['email'],
+                         'username': student_details['username']
+                     },
+                     'email_warning': True,
+                     'email_error': email_error
+                 }, room=str(current_user_id))
         
         if errors:
             return jsonify({
