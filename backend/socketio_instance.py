@@ -9,6 +9,10 @@ if allow_all_origins:
     socketio = SocketIO(cors_allowed_origins="*")
 else:
     # Use specific origins for production
+<<<<<<< Updated upstream
     default_origins = 'http://localhost:3000,http://localhost:5173,https://pydah-studyedge.vercel.app,https://versant-frontend.vercel.app,https://crt.pydahsoft.in,https://ai-versant-backend.onrender.com'
+=======
+    default_origins = 'http://localhost:3000,http://localhost:5173,https://pydah-studyedge.vercel.app,https://versant-frontend.vercel.app,https://crt.pydahsoft.in,https://ravi-check-versant.onrender.com'
+>>>>>>> Stashed changes
     cors_origins = os.getenv('CORS_ORIGINS', default_origins)
     socketio = SocketIO(cors_allowed_origins=cors_origins.split(',')) 

@@ -10,7 +10,11 @@ def test_cors_configuration():
     """Test CORS configuration for the backend"""
     
     # Test URLs
+<<<<<<< Updated upstream
     base_url = "https://ai-versant-backend.onrender.com"
+=======
+    base_url = "https://ravi-check-versant.onrender.com"
+>>>>>>> Stashed changes
     test_urls = [
         f"{base_url}/",
         f"{base_url}/health",

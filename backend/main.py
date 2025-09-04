@@ -36,7 +36,11 @@ def create_app():
         print("⚠️  AWS S3 initialization failed - audio uploads may not work")
 
     # CORS configuration
+<<<<<<< Updated upstream
     default_origins = 'http://localhost:3000,http://localhost:5173,https://pydah-studyedge.vercel.app,https://versant-frontend.vercel.app,https://crt.pydahsoft.in,https://ai-versant-backend.onrender.com'
+=======
+    default_origins = 'http://localhost:3000,http://localhost:5173,https://pydah-studyedge.vercel.app,https://versant-frontend.vercel.app,https://crt.pydahsoft.in,https://ravi-check-versant.onrender.com'
+>>>>>>> Stashed changes
     cors_origins = os.getenv('CORS_ORIGINS', default_origins)
 
     # Enhanced CORS configuration to handle all possible origins
@@ -191,6 +195,9 @@ def create_app():
     from routes.test_management_audio import audio_test_bp
     from routes.test_management_writing import writing_test_bp
     from routes.test_management_technical import technical_test_bp
+    from routes.progress_routes import progress_bp
+    from routes.enhanced_batch_routes import enhanced_batch_bp
+    from routes.enhanced_test_routes import enhanced_test_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(superadmin_bp, url_prefix='/superadmin')
@@ -213,6 +220,11 @@ def create_app():
     app.register_blueprint(audio_test_bp, url_prefix='/test-management/audio')
     app.register_blueprint(writing_test_bp, url_prefix='/test-management/writing')
     app.register_blueprint(technical_test_bp, url_prefix='/test-management/technical')
+    
+    # Register progress tracking blueprints
+    app.register_blueprint(progress_bp)
+    app.register_blueprint(enhanced_batch_bp)
+    app.register_blueprint(enhanced_test_bp)
 
     print("=== Registered Routes ===")
     for rule in app.url_map.iter_rules():
