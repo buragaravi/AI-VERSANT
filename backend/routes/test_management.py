@@ -1969,26 +1969,8 @@ def submit_practice_test():
         # Process questions and calculate results
         current_app.logger.info(f"Processing {len(test['questions'])} questions for test {test_id}")
         
-        # Create a lookup table for correct answers from the original test
-        correct_answer_lookup = {}
-        try:
-            original_test = mongo_db.tests.find_one({'_id': test_id})
-            if original_test and 'questions' in original_test:
-                current_app.logger.info(f"Creating correct answer lookup table from original test")
-                for orig_q in original_test['questions']:
-                    # Create a key based on question text (first 50 chars) and question type
-                    question_key = f"{orig_q.get('question', '')[:50]}_{orig_q.get('question_type', '')}"
-                    correct_answer_lookup[question_key] = {
-                        'correct_answer': orig_q.get('correct_answer') or orig_q.get('answer') or orig_q.get('right_answer') or '',
-                        'question_text': orig_q.get('question', ''),
-                        'question_id': str(orig_q.get('_id', ''))
-                    }
-                    current_app.logger.info(f"Added to lookup: {question_key} -> {correct_answer_lookup[question_key]}")
-                
-                current_app.logger.info(f"Lookup table created with {len(correct_answer_lookup)} entries")
-                current_app.logger.info(f"Lookup table keys: {list(correct_answer_lookup.keys())}")
-        except Exception as e:
-            current_app.logger.error(f"Error creating correct answer lookup: {e}")
+        # Improved question matching - use question ID as primary key
+        current_app.logger.info(f"Processing questions with improved matching logic")
         
         results = []
         total_score = 0
