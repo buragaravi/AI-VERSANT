@@ -190,9 +190,7 @@ def create_app():
     from routes.test_management_audio import audio_test_bp
     from routes.test_management_writing import writing_test_bp
     from routes.test_management_technical import technical_test_bp
-    from routes.progress_routes import progress_bp
-    from routes.enhanced_batch_routes import enhanced_batch_bp
-    from routes.enhanced_test_routes import enhanced_test_bp
+    # Removed non-existent route imports
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(superadmin_bp, url_prefix='/superadmin')
@@ -217,9 +215,7 @@ def create_app():
     app.register_blueprint(technical_test_bp, url_prefix='/test-management/technical')
     
     # Register progress tracking blueprints
-    app.register_blueprint(progress_bp)
-    app.register_blueprint(enhanced_batch_bp)
-    app.register_blueprint(enhanced_test_bp)
+    # Removed registrations for non-existent blueprints
 
     print("=== Registered Routes ===")
     for rule in app.url_map.iter_rules():
