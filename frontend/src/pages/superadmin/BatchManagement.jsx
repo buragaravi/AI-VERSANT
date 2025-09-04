@@ -54,7 +54,7 @@ const BatchManagement = () => {
     fetchCampuses();
     
     // Initialize WebSocket connection for progress updates
-    const socketUrl = import.meta.env.VITE_SOCKET_IO_URL || 'http://localhost:8000' || 'https://ravi-check-versant.onrender.com' || 'https://versant-backend.onrender.com';
+    const socketUrl = import.meta.env.VITE_SOCKET_IO_URL || 'https://ravi-check-versant.onrender.com';
     const newSocket = io(socketUrl, {
       transports: ['websocket', 'polling']
     });
