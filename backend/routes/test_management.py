@@ -56,8 +56,8 @@ def generate_test_link(test, student):
         
         # Determine the correct route based on test type
         if test.get('test_type') == 'online':
-            # For online exams, redirect to online-exams page
-            test_link = f"{base_url}/login?redirect=/student/online-exams/{test_id}"
+            # For online exams, redirect to exam page
+            test_link = f"{base_url}/login?redirect=/student/exam/{test_id}"
         else:
             # For practice tests, redirect to practice-modules page
             test_link = f"{base_url}/login?redirect=/student/practice-modules/{test_id}"
