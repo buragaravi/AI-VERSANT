@@ -1,5 +1,6 @@
 import os
 import logging
+import requests
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 # Configure logging
@@ -88,6 +89,22 @@ def send_email(to_email, to_name, subject, html_content):
     except ApiException as e:
         logger.error(f"❌ Brevo API error sending email to {to_email}: {e}")
         logger.error(f"   Status: {e.status}, Reason: {e.reason}")
+        
+        # Handle specific error cases
+        if e.status == 401:
+            if "unrecognised IP address" in str(e.body):
+                current_ip = get_current_ip()
+                logger.error("🔒 IP address not authorized in Brevo.")
+                logger.error(f"   Current IP: {current_ip}")
+                logger.error("   Please add your IP to authorized IPs:")
+                logger.error("   https://app.brevo.com/security/authorised_ips")
+            else:
+                logger.error("🔑 Brevo API key may be invalid or expired")
+        elif e.status == 403:
+            logger.error("🚫 Brevo API access forbidden. Check your API key permissions")
+        elif e.status == 429:
+            logger.error("⏰ Brevo API rate limit exceeded. Please try again later")
+        
         return False
     except Exception as e:
         logger.error(f"❌ Error sending email to {to_email}: {e}")
@@ -110,17 +127,33 @@ def check_email_configuration():
         logger.error("❌ Email service configuration issues:")
         for issue in issues:
             logger.error(f"   - {issue}")
-        return False
+        return {'properly_configured': False, 'issues': issues}
     
     logger.info("✅ Email service is properly configured")
-    return True
+    return {'properly_configured': True, 'issues': []}
+
+def get_current_ip():
+    """Get the current public IP address"""
+    try:
+        response = requests.get('https://api.ipify.org', timeout=5)
+        if response.status_code == 200:
+            return response.text.strip()
+    except Exception as e:
+        logger.warning(f"Could not determine current IP address: {e}")
+    return "Unknown"
 
 def get_email_status():
     """Get the current status of email service"""
+    config_status = check_email_configuration()
+    current_ip = get_current_ip()
+    
     return {
         'brevo_available': BREVO_AVAILABLE,
         'brevo_api_key_set': bool(os.getenv('BREVO_API_KEY')),
         'sender_email_set': bool(os.getenv('SENDER_EMAIL')),
         'sender_name_set': bool(os.getenv('SENDER_NAME')),
-        'properly_configured': check_email_configuration()
+        'properly_configured': config_status['properly_configured'],
+        'issues': config_status['issues'],
+        'current_ip': current_ip,
+        'brevo_ip_whitelist_url': 'https://app.brevo.com/security/authorised_ips'
     } 

@@ -6,7 +6,7 @@ import pytz
 import uuid
 import os
 from mongo import mongo_db
-from routes.test_management import require_superadmin, generate_unique_test_id, convert_objectids
+from routes.test_management import require_superadmin, generate_unique_test_id, convert_objectids, generate_test_link
 from config.aws_config import s3_client, S3_BUCKET_NAME
 from utils.audio_generator import generate_audio_from_text
 
@@ -309,19 +309,57 @@ def notify_audio_test_students(test_id):
                     html_content=html_content
                 )
                 
+                # Send SMS notification if mobile number is available
+                sms_sent = False
+                mobile_number = student.get('mobile_number', '')
+                if mobile_number:
+                    try:
+                        from utils.sms_service import send_sms
+                        sms_message = f"New audio test '{test['name']}' assigned to you. Login to take the test. - Study Edge"
+                        sms_sent = send_sms(mobile_number, sms_message)
+                        current_app.logger.info(f"SMS sent to {mobile_number}: {sms_sent}")
+                    except Exception as sms_error:
+                        current_app.logger.error(f"Failed to send SMS to {mobile_number}: {sms_error}")
+                        sms_sent = False
+                else:
+                    current_app.logger.info(f"No mobile number for student {student['name']}")
+                
+                # Generate test link for the student
+                test_link = generate_test_link(test, student)
+                
                 results.append({
                     'student_id': str(student['_id']),
                     'name': student['name'],
                     'email': student['email'],
+
                     'mobile_number': student.get('mobile_number'),
                     'test_status': 'pending',
                     'notify_status': 'sent' if email_sent else 'failed',
                     'sms_status': 'no_mobile',
+
                     'email_sent': email_sent,
-                    'status': 'success' if email_sent else 'failed'
+                    'sms_sent': sms_sent,
+                    'test_link': test_link,
+                    'status': 'success' if (email_sent or sms_sent) else 'failed'
                 })
             except Exception as e:
                 current_app.logger.error(f"Failed to notify student {student['_id']}: {e}")
+                # Generate test link for the student even if email fails
+                test_link = generate_test_link(test, student)
+                
+                # Try to send SMS even if email failed
+                sms_sent = False
+                mobile_number = student.get('mobile_number', '')
+                if mobile_number:
+                    try:
+                        from utils.sms_service import send_sms
+                        sms_message = f"New audio test '{test['name']}' assigned to you. Login to take the test. - Study Edge"
+                        sms_sent = send_sms(mobile_number, sms_message)
+                        current_app.logger.info(f"SMS sent to {mobile_number}: {sms_sent}")
+                    except Exception as sms_error:
+                        current_app.logger.error(f"Failed to send SMS to {mobile_number}: {sms_error}")
+                        sms_sent = False
+                
                 results.append({
                     'student_id': str(student['_id']),
                     'name': student['name'],
@@ -330,8 +368,11 @@ def notify_audio_test_students(test_id):
                     'test_status': 'pending',
                     'notify_status': 'failed',
                     'sms_status': 'no_mobile',
+
                     'email_sent': False,
-                    'status': 'failed',
+                    'sms_sent': sms_sent,
+                    'test_link': test_link,
+                    'status': 'success' if sms_sent else 'failed',
                     'error': str(e)
                 })
 
