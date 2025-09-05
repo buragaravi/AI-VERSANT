@@ -318,227 +318,360 @@ const OnlineExamTaking = () => {
   const currentQuestion = questions[currentQuestionIndex];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <main className="container mx-auto px-4 py-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <main className="container mx-auto px-4 py-6">
         {/* Header with Timer */}
-        <header className="pb-3 mb-4 border-b border-gray-200 flex justify-between items-center">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">{exam.name}</h1>
-          <div className="flex items-center space-x-4">
-            <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+        <header className="pb-6 mb-6 border-b border-gradient-to-r from-transparent via-slate-200 to-transparent flex justify-between items-center">
+          <motion.h1 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            className="text-3xl sm:text-4xl font-light text-slate-700 tracking-wide"
+          >
+            {exam.name}
+          </motion.h1>
+          <div className="flex items-center space-x-6">
+            <motion.span 
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="bg-gradient-to-r from-blue-100 to-indigo-100 text-slate-700 px-4 py-2 rounded-full text-sm font-medium shadow-sm border border-blue-200"
+            >
               Question {currentQuestionIndex + 1} of {questions.length}
-            </span>
+            </motion.span>
             {/* Timer Display - Top Right */}
             {examDuration > 0 ? (
-              <div className={`px-4 py-2 rounded-lg border-2 font-bold text-lg ${
-                timeRemaining <= 300 
-                  ? timeRemaining <= 60 
-                    ? 'bg-red-100 border-red-500 text-red-700 animate-pulse' 
-                    : 'bg-yellow-100 border-yellow-500 text-yellow-700'
-                  : 'bg-blue-100 border-blue-500 text-blue-700'
-              }`}>
-                <div className="flex items-center space-x-2">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className={`px-5 py-3 rounded-2xl border-2 font-semibold text-lg shadow-lg backdrop-blur-sm transition-all duration-500 ${
+                  timeRemaining <= 300 
+                    ? timeRemaining <= 60 
+                      ? 'bg-gradient-to-r from-red-50 to-pink-50 border-red-300 text-red-600 animate-pulse shadow-red-200' 
+                      : 'bg-gradient-to-r from-amber-50 to-yellow-50 border-amber-300 text-amber-600 shadow-amber-200'
+                    : 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-300 text-blue-600 shadow-blue-200'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <motion.svg 
+                    className="w-6 h-6" 
+                    fill="currentColor" 
+                    viewBox="0 0 20 20"
+                    animate={{ rotate: timeRemaining <= 60 ? [0, 10, -10, 0] : 0 }}
+                    transition={{ duration: 0.5, repeat: timeRemaining <= 60 ? Infinity : 0 }}
+                  >
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                  </svg>
-                  <span>{formatTime(timeRemaining)}</span>
+                  </motion.svg>
+                  <span className="font-mono tracking-wider">{formatTime(timeRemaining)}</span>
                 </div>
-              </div>
+              </motion.div>
             ) : (
-              <div className="px-4 py-2 rounded-lg border-2 font-bold text-lg bg-gray-100 border-gray-300 text-gray-600">
-                <div className="flex items-center space-x-2">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className="px-5 py-3 rounded-2xl border-2 font-semibold text-lg bg-gradient-to-r from-slate-50 to-gray-50 border-slate-300 text-slate-600 shadow-lg"
+              >
+                <div className="flex items-center space-x-3">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                   </svg>
                   <span>No Time Limit</span>
                 </div>
-              </div>
+              </motion.div>
             )}
           </div>
         </header>
 
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-lg shadow-md p-6">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-8"
+        >
           {/* Warning Messages */}
           {cheatWarning && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-4 text-center">
-              <strong>Tab switching or leaving the exam is not allowed!</strong> ({cheatCount} warning{cheatCount > 1 ? 's' : ''})
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 text-red-700 px-6 py-4 rounded-2xl mb-6 text-center shadow-lg"
+            >
+              <strong className="text-lg">Tab switching or leaving the exam is not allowed!</strong> ({cheatCount} warning{cheatCount > 1 ? 's' : ''})
               {autoSubmitted && <div className="mt-2 font-bold">Exam auto-submitted due to repeated tab switching.</div>}
-            </div>
+            </motion.div>
           )}
           {timeRemaining <= 60 && timeRemaining > 0 && !autoSubmitted && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-4 text-center animate-pulse">
-              <strong>⚠️ CRITICAL: Only {formatTime(timeRemaining)} remaining!</strong>
-              <div className="mt-1 text-sm">Exam will auto-submit when time runs out.</div>
-            </div>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 text-red-700 px-6 py-4 rounded-2xl mb-6 text-center shadow-lg animate-pulse"
+            >
+              <strong className="text-lg">⚠️ CRITICAL: Only {formatTime(timeRemaining)} remaining!</strong>
+              <div className="mt-2 text-sm">Exam will auto-submit when time runs out.</div>
+            </motion.div>
           )}
           {timeRemaining <= 300 && timeRemaining > 60 && !timerWarning && !autoSubmitted && (
-            <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-2 rounded mb-4 text-center">
-              <strong>⏰ Warning: Only {formatTime(timeRemaining)} remaining!</strong>
-              <div className="mt-1 text-sm">Please complete your exam soon.</div>
-            </div>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 text-amber-700 px-6 py-4 rounded-2xl mb-6 text-center shadow-lg"
+            >
+              <strong className="text-lg">⏰ Warning: Only {formatTime(timeRemaining)} remaining!</strong>
+              <div className="mt-2 text-sm">Please complete your exam soon.</div>
+            </motion.div>
           )}
 
           {/* Progress Bar */}
-          <div className="mb-6">
-            <div className="flex justify-between text-sm text-gray-600 mb-2">
-              <span>Progress: {Object.keys(answers).length} / {questions.length} answered</span>
-              <span>{Math.round((Object.keys(answers).length / questions.length) * 100)}%</span>
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="mb-8"
+          >
+            <div className="flex justify-between text-sm text-slate-600 mb-3">
+              <span className="font-medium">Progress: {Object.keys(answers).length} / {questions.length} answered</span>
+              <span className="font-semibold text-slate-700">{Math.round((Object.keys(answers).length / questions.length) * 100)}%</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${(Object.keys(answers).length / questions.length) * 100}%` }}
-              ></div>
+            <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+              <motion.div 
+                className="bg-gradient-to-r from-blue-500 to-indigo-500 h-3 rounded-full shadow-sm"
+                initial={{ width: 0 }}
+                animate={{ width: `${(Object.keys(answers).length / questions.length) * 100}%` }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+              />
             </div>
-          </div>
+          </motion.div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Main Question Area */}
             <div className="lg:col-span-2">
-              <div ref={examRef} className="select-none">
+              <motion.div 
+                ref={examRef} 
+                className="select-none"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+              >
                 <fieldset disabled={autoSubmitted} style={{ opacity: autoSubmitted ? 0.6 : 1 }}>
-                  <h3 className="text-xl font-semibold mb-6 text-gray-800">{currentQuestion.question}</h3>
+                  <motion.h3 
+                    className="text-2xl font-light mb-8 text-slate-700 leading-relaxed"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.4 }}
+                  >
+                    {currentQuestion.question}
+                  </motion.h3>
                   
                   {currentQuestion.question_type === 'mcq' && (
-                    <div className="space-y-3">
-                      {Object.entries(currentQuestion.options).map(([key, value]) => (
-                        <div
+                    <motion.div 
+                      className="space-y-4"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.6, delay: 0.5 }}
+                    >
+                      {Object.entries(currentQuestion.options).map(([key, value], index) => (
+                        <motion.div
                           key={key}
-                          className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.4, delay: 0.6 + index * 0.1 }}
+                          className={`border-2 rounded-2xl p-5 cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02] ${
                             answers[currentQuestion.question_id] === value
-                              ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
-                              : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
+                              ? 'border-blue-400 bg-gradient-to-r from-blue-50 to-indigo-50 ring-4 ring-blue-100 shadow-lg scale-[1.02]'
+                              : 'border-slate-200 hover:border-blue-300 hover:bg-gradient-to-r hover:from-slate-50 hover:to-blue-50'
                           }`}
                           onClick={() => handleAnswerChange(currentQuestion.question_id, value)}
                         >
                           <div className="flex items-center">
+                            <motion.div
+                              className={`h-5 w-5 mr-4 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
+                                answers[currentQuestion.question_id] === value
+                                  ? 'border-blue-500 bg-blue-500'
+                                  : 'border-slate-300 hover:border-blue-400'
+                              }`}
+                            >
+                              {answers[currentQuestion.question_id] === value && (
+                                <motion.div
+                                  className="w-2 h-2 bg-white rounded-full"
+                                  initial={{ scale: 0 }}
+                                  animate={{ scale: 1 }}
+                                  transition={{ duration: 0.2 }}
+                                />
+                              )}
+                            </motion.div>
                             <input
                               type="radio"
                               name={currentQuestion.question_id}
                               value={value}
                               checked={answers[currentQuestion.question_id] === value}
                               onChange={() => handleAnswerChange(currentQuestion.question_id, value)}
-                              className="h-4 w-4 mr-3 text-blue-600 border-gray-300 focus:ring-blue-500"
+                              className="sr-only"
                             />
-                            <span className="font-semibold text-gray-700 mr-2">{key}.</span>
-                            <span className="text-gray-800">{value}</span>
+                            <span className="font-semibold text-slate-600 mr-3 text-lg">{key}.</span>
+                            <span className="text-slate-700 text-lg leading-relaxed">{value}</span>
                           </div>
-                        </div>
+                        </motion.div>
                       ))}
-                    </div>
+                    </motion.div>
                   )}
 
                   {/* Navigation Buttons */}
-                  <div className="flex justify-between mt-8">
-                    <button
+                  <motion.div 
+                    className="flex justify-between mt-10"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, delay: 0.8 }}
+                  >
+                    <motion.button
                       onClick={() => setCurrentQuestionIndex(prev => prev - 1)}
                       disabled={currentQuestionIndex === 0}
-                      className="px-6 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="px-8 py-3 border-2 border-slate-300 text-sm font-medium rounded-2xl text-slate-700 bg-white/80 backdrop-blur-sm hover:bg-gradient-to-r hover:from-slate-50 hover:to-blue-50 hover:border-blue-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center shadow-lg transition-all duration-300"
                     >
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                       </svg>
                       Previous
-                    </button>
+                    </motion.button>
                     {currentQuestionIndex === questions.length - 1 ? (
-                      <button
+                      <motion.button
                         onClick={handleSubmit}
                         disabled={Object.keys(answers).length !== questions.length || autoSubmitted}
-                        className={`px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white flex items-center ${
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className={`px-8 py-3 border-2 border-transparent text-sm font-medium rounded-2xl shadow-lg text-white flex items-center transition-all duration-300 ${
                           timeRemaining <= 60 
-                            ? 'bg-red-600 hover:bg-red-700 animate-pulse' 
-                            : 'bg-green-600 hover:bg-green-700'
-                        } disabled:bg-gray-400`}
+                            ? 'bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 animate-pulse' 
+                            : 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600'
+                        } disabled:bg-gradient-to-r disabled:from-gray-400 disabled:to-gray-500`}
                       >
                         {autoSubmitted ? 'Auto-Submitting...' : 'Submit Exam'}
-                        <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
-                      </button>
+                      </motion.button>
                     ) : (
-                      <button
+                      <motion.button
                         onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
                         disabled={currentQuestionIndex === questions.length - 1}
-                        className="px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 flex items-center"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="px-8 py-3 border-2 border-transparent text-sm font-medium rounded-2xl shadow-lg text-white bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 disabled:opacity-50 flex items-center transition-all duration-300"
                       >
                         Next
-                        <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>
-                      </button>
+                      </motion.button>
                     )}
-                  </div>
+                  </motion.div>
                 </fieldset>
-              </div>
+              </motion.div>
             </div>
 
             {/* Question Navigation Panel */}
-            <div className="lg:col-span-1">
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h5 className="text-center mb-4 font-semibold text-gray-700">Question Navigation</h5>
-                <div className="grid grid-cols-5 gap-2 mb-4">
+            <motion.div 
+              className="lg:col-span-1"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+            >
+              <div className="bg-white/60 backdrop-blur-sm p-6 rounded-3xl shadow-xl border border-white/20">
+                <motion.h5 
+                  className="text-center mb-6 font-light text-slate-700 text-lg"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.5 }}
+                >
+                  Question Navigation
+                </motion.h5>
+                <motion.div 
+                  className="grid grid-cols-5 gap-3 mb-6"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.6, delay: 0.6 }}
+                >
                   {questions.map((_, index) => (
-                    <button
+                    <motion.button
                       key={index}
                       onClick={() => setCurrentQuestionIndex(index)}
-                      className={`w-10 h-10 rounded-lg text-sm font-medium transition-all ${
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      className={`w-12 h-12 rounded-2xl text-sm font-medium transition-all duration-300 shadow-lg ${
                         index === currentQuestionIndex
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-blue-200'
                           : answers[questions[index]?.question_id]
-                          ? 'bg-green-100 text-green-700 border border-green-300'
-                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                          ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 border-2 border-green-300 hover:shadow-green-200'
+                          : 'bg-white text-slate-700 border-2 border-slate-200 hover:bg-gradient-to-r hover:from-slate-50 hover:to-blue-50 hover:border-blue-300'
                       }`}
                     >
                       {index + 1}
-                    </button>
+                    </motion.button>
                   ))}
-                </div>
+                </motion.div>
                 
                 {/* Legend */}
-                <div className="mb-4 text-xs text-gray-600">
-                  <div className="flex items-center mb-1">
-                    <div className="w-3 h-3 bg-blue-600 rounded mr-2"></div>
-                    <span>Current Question</span>
-                  </div>
-                  <div className="flex items-center mb-1">
-                    <div className="w-3 h-3 bg-green-100 border border-green-300 rounded mr-2"></div>
-                    <span>Answered</span>
+                <motion.div 
+                  className="mb-6 text-sm text-slate-600 space-y-2"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.5, delay: 0.7 }}
+                >
+                  <div className="flex items-center">
+                    <div className="w-4 h-4 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full mr-3 shadow-sm"></div>
+                    <span className="font-medium">Current Question</span>
                   </div>
                   <div className="flex items-center">
-                    <div className="w-3 h-3 bg-white border border-gray-300 rounded mr-2"></div>
-                    <span>Not Answered</span>
+                    <div className="w-4 h-4 bg-gradient-to-r from-green-100 to-emerald-100 border-2 border-green-300 rounded-full mr-3"></div>
+                    <span className="font-medium">Answered</span>
                   </div>
-                </div>
+                  <div className="flex items-center">
+                    <div className="w-4 h-4 bg-white border-2 border-slate-300 rounded-full mr-3"></div>
+                    <span className="font-medium">Not Answered</span>
+                  </div>
+                </motion.div>
 
-                <div className="space-y-2">
-                  <button 
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white hover:bg-gray-50 flex items-center justify-center"
+                <motion.div 
+                  className="space-y-3"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.8 }}
+                >
+                  <motion.button 
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full px-4 py-3 text-sm border-2 border-slate-200 rounded-2xl bg-white/80 backdrop-blur-sm hover:bg-gradient-to-r hover:from-slate-50 hover:to-blue-50 hover:border-blue-300 flex items-center justify-center shadow-lg transition-all duration-300"
                     onClick={() => {
                       // Mark for review functionality (placeholder)
                       console.log('Mark for review');
                     }}
                   >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
                     </svg>
                     Mark for Review
-                  </button>
-                  <button 
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white hover:bg-gray-50 flex items-center justify-center"
+                  </motion.button>
+                  <motion.button 
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full px-4 py-3 text-sm border-2 border-slate-200 rounded-2xl bg-white/80 backdrop-blur-sm hover:bg-gradient-to-r hover:from-slate-50 hover:to-red-50 hover:border-red-300 flex items-center justify-center shadow-lg transition-all duration-300"
                     onClick={() => {
                       // Clear response functionality
                       handleAnswerChange(currentQuestion.question_id, '');
                     }}
                   >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                     Clear Response
-                  </button>
-                </div>
+                  </motion.button>
+                </motion.div>
               </div>
-            </div>
+            </motion.div>
           </div>
-          </motion.div>
+        </motion.div>
       </main>
     </div>
   );
