@@ -24,6 +24,36 @@ def convert_objectids_to_strings(obj):
                 convert_objectids_to_strings(item)
     return obj
 
+def safe_isoformat(date_obj):
+    """Safely convert a date object to ISO format string, handling various types."""
+    if not date_obj:
+        return None
+    
+    if hasattr(date_obj, 'isoformat'):
+        # It's a datetime object
+        return date_obj.isoformat()
+    elif isinstance(date_obj, dict):
+        # It's a MongoDB date dict, extract the date
+        if '$date' in date_obj:
+            try:
+                from datetime import datetime
+                date_str = date_obj['$date']
+                # Handle different MongoDB date formats
+                if 'T' in date_str:
+                    # ISO format with T
+                    date_obj_parsed = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                else:
+                    # Just timestamp
+                    date_obj_parsed = datetime.fromtimestamp(int(date_str) / 1000)
+                return date_obj_parsed.isoformat()
+            except (ValueError, KeyError, TypeError):
+                return str(date_obj)
+        else:
+            return str(date_obj)
+    else:
+        # It's already a string or other type
+        return str(date_obj)
+
 student_bp = Blueprint('student', __name__)
 
 @student_bp.route('/profile', methods=['GET'])
@@ -428,8 +458,8 @@ def get_student_tests():
                 'duration': test.get('duration'),
                 'total_marks': test.get('total_marks'),
                 'instructions': test.get('instructions', ''),
-                'start_date': test.get('start_date', '').isoformat() if test.get('start_date') else None,
-                'end_date': test.get('end_date', '').isoformat() if test.get('end_date') else None,
+                'start_date': safe_isoformat(test.get('start_date')),
+                'end_date': safe_isoformat(test.get('end_date')),
                 'has_attempted': existing_attempt is not None,
                 'attempt_id': str(existing_attempt['_id']) if existing_attempt else None,
                 'highest_score': highest_score
@@ -1606,8 +1636,7 @@ def get_test_history():
             result['level_name'] = LEVELS.get(result.get('level_id'), {}).get('name', 'Unknown')
             
             # Handle timestamp for latest attempt
-            if result.get('latest_submitted_at'):
-                result['latest_submitted_at'] = result['latest_submitted_at'].isoformat()
+            result['latest_submitted_at'] = safe_isoformat(result.get('latest_submitted_at'))
             
             # Process each attempt in the attempts array
             for attempt in result.get('attempts', []):
@@ -1616,10 +1645,8 @@ def get_test_history():
                 attempt['test_id'] = str(attempt['test_id'])
                 
                 # Handle timestamp
-                if attempt.get('end_time'):
-                    attempt['end_time'] = attempt['end_time'].isoformat()
-                if attempt.get('submitted_at'):
-                    attempt['submitted_at'] = attempt['submitted_at'].isoformat()
+                attempt['end_time'] = safe_isoformat(attempt.get('end_time'))
+                attempt['submitted_at'] = safe_isoformat(attempt.get('submitted_at'))
                 
                 # Calculate proper percentage for different test types
                 if attempt.get('test_type') == 'online':
@@ -1823,7 +1850,7 @@ def get_practice_results():
             from config.constants import MODULES
             result['module_name'] = MODULES.get(result['module_name'], 'Unknown')
             result['accuracy'] = (result['total_correct_answers'] / result['total_questions_attempted'] * 100) if result['total_questions_attempted'] > 0 else 0
-            result['last_attempt'] = result['last_attempt'].isoformat() if result['last_attempt'] else None
+            result['last_attempt'] = safe_isoformat(result['last_attempt'])
         
         # Convert any ObjectId fields to strings for JSON serialization
         convert_objectids_to_strings(results)
@@ -1994,7 +2021,7 @@ def get_grammar_detailed_results():
             from config.constants import GRAMMAR_CATEGORIES
             result['subcategory_display_name'] = GRAMMAR_CATEGORIES.get(result['subcategory_name'], result['subcategory_name'])
             result['accuracy'] = (result['total_correct'] / result['total_questions'] * 100) if result['total_questions'] > 0 else 0
-            result['last_attempt'] = result['last_attempt'].isoformat() if result['last_attempt'] else None
+            result['last_attempt'] = safe_isoformat(result['last_attempt'])
             result['status'] = 'completed' if result['highest_score'] >= 60 else 'needs_improvement'
             
             # Sort attempts by date
@@ -2003,7 +2030,7 @@ def get_grammar_detailed_results():
             # Convert ObjectIds to strings
             for attempt in result['attempts']:
                 attempt['result_id'] = str(attempt['result_id'])
-                attempt['submitted_at'] = attempt['submitted_at'].isoformat()
+                attempt['submitted_at'] = safe_isoformat(attempt['submitted_at'])
         
         # Convert any remaining ObjectId fields to strings for JSON serialization
         convert_objectids_to_strings(results)
@@ -2174,7 +2201,7 @@ def get_vocabulary_detailed_results():
             from config.constants import LEVELS
             result['level_display_name'] = LEVELS.get(result['level_name'], {}).get('name', result['level_name'])
             result['accuracy'] = (result['total_correct'] / result['total_questions'] * 100) if result['total_questions'] > 0 else 0
-            result['last_attempt'] = result['last_attempt'].isoformat() if result['last_attempt'] else None
+            result['last_attempt'] = safe_isoformat(result['last_attempt'])
             result['status'] = 'completed' if result['highest_score'] >= 60 else 'needs_improvement'
             
             # Sort attempts by date
@@ -2183,7 +2210,7 @@ def get_vocabulary_detailed_results():
             # Convert ObjectIds to strings
             for attempt in result['attempts']:
                 attempt['result_id'] = str(attempt['result_id'])
-                attempt['submitted_at'] = attempt['submitted_at'].isoformat()
+                attempt['submitted_at'] = safe_isoformat(attempt['submitted_at'])
         
         # Convert any remaining ObjectId fields to strings for JSON serialization
         convert_objectids_to_strings(results)
@@ -2361,7 +2388,10 @@ def get_progress_summary():
         
         for activity in recent_activity:
             activity['_id'] = str(activity['_id'])
-            activity['submitted_at'] = activity['submitted_at'].isoformat()
+            
+            # Handle submitted_at field safely
+            activity['submitted_at'] = safe_isoformat(activity.get('submitted_at'))
+            
             # Convert any ObjectId fields in activity to string
             for k, v in activity.items():
                 if isinstance(v, ObjectId):
@@ -2443,8 +2473,7 @@ def get_test_result_by_id(test_id):
         result['student_id'] = str(result['student_id'])
         
         # Convert datetime to ISO format
-        if result.get('submitted_at'):
-            result['submitted_at'] = result['submitted_at'].isoformat()
+        result['submitted_at'] = safe_isoformat(result.get('submitted_at'))
         
         # Convert any remaining ObjectId fields to strings for JSON serialization
         convert_objectids_to_strings(result)

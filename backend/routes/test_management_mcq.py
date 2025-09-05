@@ -221,37 +221,50 @@ def notify_mcq_test_students(test_id):
         for student in student_list:
             try:
                 # Send email notification
-                from utils.email_service import send_email
+                from utils.email_service import send_email, render_template
+                html_content = render_template('test_notification.html', 
+                    student_name=student['name'],
+                    test_name=test['name'],
+                    test_id=str(test['_id']),
+                    test_type='MCQ',
+                    module=test.get('module_id', 'Unknown'),
+                    level=test.get('level_id', 'Unknown'),
+                    module_display_name=test.get('module_id', 'Unknown'),
+                    level_display_name=test.get('level_id', 'Unknown'),
+                    question_count=len(test.get('questions', [])),
+                    is_online=test.get('test_type') == 'online',
+                    start_dt=test.get('startDateTime', 'Not specified'),
+                    end_dt=test.get('endDateTime', 'Not specified'),
+                    duration=test.get('duration', 'Not specified')
+                )
                 email_sent = send_email(
                     to_email=student['email'],
+                    to_name=student['name'],
                     subject=f"New MCQ Test Available: {test['name']}",
-                    template='test_notification.html',
-                    context={
-                        'student_name': student['name'],
-                        'test_name': test['name'],
-                        'test_type': 'MCQ',
-                        'module_id': test.get('module_id', 'Unknown'),
-                        'level_id': test.get('level_id', 'Unknown'),
-                        'question_count': len(test.get('questions', [])),
-                        'start_date': test.get('startDateTime', 'Not specified'),
-                        'end_date': test.get('endDateTime', 'Not specified'),
-                        'duration': test.get('duration', 'Not specified')
-                    }
+                    html_content=html_content
                 )
                 
                 results.append({
-                    'student_id': student['_id'],
-                    'student_name': student['name'],
+                    'student_id': str(student['_id']),
+                    'name': student['name'],
                     'email': student['email'],
+                    'mobile_number': student.get('mobile_number'),
+                    'test_status': 'pending',
+                    'notify_status': 'sent' if email_sent else 'failed',
+                    'sms_status': 'no_mobile',
                     'email_sent': email_sent,
                     'status': 'success' if email_sent else 'failed'
                 })
             except Exception as e:
                 current_app.logger.error(f"Failed to notify student {student['_id']}: {e}")
                 results.append({
-                    'student_id': student['_id'],
-                    'student_name': student['name'],
+                    'student_id': str(student['_id']),
+                    'name': student['name'],
                     'email': student['email'],
+                    'mobile_number': student.get('mobile_number'),
+                    'test_status': 'pending',
+                    'notify_status': 'failed',
+                    'sms_status': 'no_mobile',
                     'email_sent': False,
                     'status': 'failed',
                     'error': str(e)

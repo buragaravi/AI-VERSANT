@@ -660,9 +660,9 @@ def notify_students(test_id):
 
         # Check email service configuration
         from utils.email_service import check_email_configuration
-        email_config = check_email_configuration()
-        if email_config.get('issues'):
-            current_app.logger.warning(f"Email service has configuration issues: {email_config['issues']}")
+        email_config_ok = check_email_configuration()
+        if not email_config_ok:
+            current_app.logger.warning("Email service has configuration issues")
             current_app.logger.info("Proceeding with notifications, but some may fail")
         
         # Send notifications
@@ -720,8 +720,12 @@ def notify_students(test_id):
                 
                 results.append({
                     'student_id': student['student_id'],
-                    'student_name': student['name'],
+                    'name': student['name'],
                     'email': student['email'],
+                    'mobile_number': student.get('mobile_number'),
+                    'test_status': 'pending',  # Default to pending, could be enhanced to check actual status
+                    'notify_status': 'sent' if email_sent else 'failed',
+                    'sms_status': 'no_mobile',  # Default since SMS is not implemented
                     'email_sent': email_sent,
                     'status': 'success' if email_sent else 'failed'
                 })
@@ -731,8 +735,12 @@ def notify_students(test_id):
                 current_app.logger.error(f"Full traceback: {traceback.format_exc()}")
                 results.append({
                     'student_id': student['student_id'],
-                    'student_name': student['name'],
+                    'name': student['name'],
                     'email': student['email'],
+                    'mobile_number': student.get('mobile_number'),
+                    'test_status': 'pending',
+                    'notify_status': 'failed',
+                    'sms_status': 'no_mobile',
                     'email_sent': False,
                     'status': 'failed',
                     'error': str(e)
