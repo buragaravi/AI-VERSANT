@@ -244,6 +244,16 @@ const OnlineExamTaking = () => {
     };
   }, [isTimerActive, timeRemaining, timerWarning, showError, examDuration]);
 
+  // Debug logging for audio URLs
+  useEffect(() => {
+    if (questions.length > 0 && currentQuestionIndex < questions.length) {
+      const currentQuestion = questions[currentQuestionIndex];
+      if (currentQuestion && currentQuestion.audio_url) {
+        console.log(`Question ${currentQuestionIndex + 1} Audio URL:`, currentQuestion.audio_url);
+      }
+    }
+  }, [currentQuestionIndex, questions]);
+
   // Format time for display (clean MM:SS format)
   const formatTime = (seconds) => {
     const totalSeconds = Math.floor(seconds); // Remove any decimal places
@@ -260,17 +270,43 @@ const OnlineExamTaking = () => {
   const startRecording = async (questionId) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      
+      // Check what audio formats are supported
+      const supportedTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+        'audio/wav'
+      ];
+      
+      let selectedType = 'audio/webm';
+      for (const type of supportedTypes) {
+        if (MediaRecorder.isTypeSupported(type)) {
+          selectedType = type;
+          break;
+        }
+      }
+      
+      console.log(`Using audio format: ${selectedType}`);
+      
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: selectedType });
       const audioChunks = [];
 
       mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
         audioChunks.push(event.data);
+        }
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        const audioBlob = new Blob(audioChunks, { type: selectedType });
         const audioUrl = URL.createObjectURL(audioBlob);
-        setRecordings(prev => ({ ...prev, [questionId]: audioBlob }));
+        console.log(`Recording stopped for question ${questionId}: ${audioBlob.size} bytes, type: ${selectedType}`);
+        setRecordings(prev => {
+          const newRecordings = { ...prev, [questionId]: audioBlob };
+          console.log('Updated recordings:', Object.keys(newRecordings));
+          return newRecordings;
+        });
         setAudioURLs(prev => ({ ...prev, [questionId]: audioUrl }));
         stream.getTracks().forEach(track => track.stop());
       };
@@ -317,16 +353,63 @@ const OnlineExamTaking = () => {
       const isListeningModule = exam?.module_id === 'LISTENING' || exam?.module_id === 'SPEAKING';
       
       if (isListeningModule) {
+        // Validate that all questions have audio recordings for listening modules
+        const missingRecordings = [];
+        questions.forEach((question, index) => {
+          const questionId = question.question_id || question._id;
+          if (!recordings[questionId]) {
+            missingRecordings.push(index + 1);
+          }
+        });
+        
+        if (missingRecordings.length > 0) {
+          showError(`Audio recording is required for questions: ${missingRecordings.join(', ')}`);
+          setIsSubmitting(false);
+          return;
+        }
+        
         // Submit using FormData for listening modules with audio recordings
         console.log('Submitting listening module with audio recordings to online listening endpoint');
         const formData = new FormData();
         formData.append('test_id', examId);
-        Object.entries(answers).forEach(([qid, ans]) => {
-          formData.append(`question_${qid}`, ans);
+        
+        // Process each question with correct indexing
+        questions.forEach((question, index) => {
+          const questionId = question.question_id || question._id;
+          
+          // Add text answer if exists (using question ID format)
+          if (answers[questionId]) {
+            formData.append(`question_${questionId}`, answers[questionId]);
+            console.log(`Added text answer for question ${index}: ${questionId} = ${answers[questionId]}`);
+          }
+          
+          // Add audio recording if exists (using question index format)
+          if (recordings[questionId]) {
+            let fileExtension = 'webm'; // default
+            if (recordings[questionId].type.includes('webm')) {
+              fileExtension = 'webm';
+            } else if (recordings[questionId].type.includes('mp4')) {
+              fileExtension = 'mp4';
+            } else if (recordings[questionId].type.includes('wav')) {
+              fileExtension = 'wav';
+            }
+            
+            formData.append(`question_${index}`, recordings[questionId], `answer_${index}.${fileExtension}`);
+            console.log(`Added audio recording for question ${index}: ${questionId} -> ${recordings[questionId].size} bytes, type: ${recordings[questionId].type}`);
+          } else {
+            console.log(`No recording found for question ${index}: ${questionId}`);
+          }
         });
-        Object.entries(recordings).forEach(([qid, blob]) => {
-          formData.append(`question_${qid}`, blob, `answer_${qid}.webm`);
-        });
+        
+        // Debug: Log what we're sending
+        console.log('FormData contents:');
+        for (let [key, value] of formData.entries()) {
+          if (value instanceof File || value instanceof Blob) {
+            console.log(`${key}: File/Blob (${value.size} bytes, ${value.type})`);
+          } else {
+            console.log(`${key}: ${value}`);
+          }
+        }
         
         const res = await api.post('/test-management/submit-online-listening-test', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
@@ -561,7 +644,10 @@ const OnlineExamTaking = () => {
                       Question Type: {currentQuestion.question_type || 'undefined'}<br/>
                       Audio URL: {currentQuestion.audio_url || 'undefined'}<br/>
                       Module ID: {exam?.module_id || 'undefined'}<br/>
-                      Question ID: {currentQuestion.question_id || 'undefined'}
+                      Question ID: {currentQuestion.question_id || 'undefined'}<br/>
+                      Question Index: {currentQuestionIndex}<br/>
+                      Total Questions: {questions.length}<br/>
+                      Audio Key: audio-{currentQuestion.question_id}-{currentQuestionIndex}
                     </div>
                   )}
 
@@ -575,8 +661,37 @@ const OnlineExamTaking = () => {
                     >
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                         <p className="text-blue-700 font-semibold mb-2">Listen to the audio:</p>
-                        <audio controls className="mx-auto w-full max-w-md">
+                        <audio 
+                          key={`audio-${currentQuestion.question_id}-${currentQuestionIndex}`}
+                          controls 
+                          className="mx-auto w-full max-w-md"
+                          onError={(e) => {
+                            const error = e.target.error;
+                            let errorMessage = 'Failed to load audio file.';
+                            
+                            if (error) {
+                              switch (error.code) {
+                                case MediaError.MEDIA_ERR_NETWORK:
+                                  errorMessage = 'Network error loading audio. Please check your connection.';
+                                  break;
+                                case MediaError.MEDIA_ERR_DECODE:
+                                  errorMessage = 'Audio format not supported. Please try a different browser.';
+                                  break;
+                                case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                                  errorMessage = 'Audio source not supported. Please contact support.';
+                                  break;
+                                default:
+                                  errorMessage = 'Audio loading failed. Please refresh and try again.';
+                              }
+                            }
+                            
+                            showError(errorMessage);
+                          }}
+                          preload="auto"
+                        >
                           <source src={currentQuestion.audio_url} type="audio/mpeg" />
+                          <source src={currentQuestion.audio_url} type="audio/wav" />
+                          <source src={currentQuestion.audio_url} type="audio/ogg" />
                           Your browser does not support the audio element.
                         </audio>
                       </div>
@@ -850,7 +965,16 @@ const OnlineExamTaking = () => {
                     {currentQuestionIndex === questions.length - 1 ? (
                       <motion.button
                         onClick={handleSubmit}
-                        disabled={Object.keys({...answers, ...recordings}).length !== questions.length || autoSubmitted || isSubmitting}
+                        disabled={(() => {
+                          if (autoSubmitted || isSubmitting) return true;
+                          if (exam?.module_id === 'LISTENING' || exam?.module_id === 'SPEAKING') {
+                            // For listening/speaking modules, all questions must have recordings
+                            return Object.keys(recordings).length !== questions.length;
+                          } else {
+                            // For other modules, check answers
+                            return Object.keys(answers).length !== questions.length;
+                          }
+                        })()}
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         className={`px-8 py-3 border-2 border-transparent text-sm font-medium rounded-2xl shadow-lg text-white flex items-center transition-all duration-300 ${
@@ -911,7 +1035,7 @@ const OnlineExamTaking = () => {
                       onClick={() => setCurrentQuestionIndex(index)}
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
-                      className={`w-12 h-12 rounded-2xl text-sm font-medium transition-all duration-300 shadow-lg ${
+                      className={`w-12 h-12 rounded-2xl text-sm font-medium transition-all duration-300 shadow-lg relative ${
                         index === currentQuestionIndex
                           ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-blue-200'
                           : answers[questions[index]?.question_id] || recordings[questions[index]?.question_id]
@@ -920,6 +1044,15 @@ const OnlineExamTaking = () => {
                       }`}
                     >
                       {index + 1}
+                      {/* Show microphone icon for recorded questions in listening modules */}
+                      {(exam?.module_id === 'LISTENING' || exam?.module_id === 'SPEAKING') && recordings[questions[index]?.question_id] && (
+                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                          <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                          </svg>
+                        </div>
+                      )}
                     </motion.button>
                   ))}
                 </motion.div>

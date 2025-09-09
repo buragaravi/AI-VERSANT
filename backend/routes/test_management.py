@@ -4441,6 +4441,20 @@ def submit_online_listening_test():
         
         current_app.logger.info(f"Found student profile: {student.get('name')}")
         
+        # Check for existing completed attempts to prevent duplicates
+        existing_attempt = mongo_db.student_test_attempts.find_one({
+            'test_id': test_id,
+            'student_id': student['_id'],
+            'status': 'completed'
+        })
+        
+        if existing_attempt:
+            current_app.logger.warning(f"Student {student.get('name')} already has a completed attempt for test {test_id}")
+            return jsonify({
+                'success': False,
+                'message': 'You have already completed this test. Duplicate submissions are not allowed.'
+            }), 400
+        
         # Process each question
         results = []
         total_score = 0
@@ -4550,15 +4564,21 @@ def submit_online_listening_test():
                         os.remove(temp_audio_path)
                         current_app.logger.info(f"Cleaned up temporary file: {temp_audio_path}")
                 
-                # Get correct answer for comparison
-                correct_answer = question.get('correct_answer', '')
+                # Get correct answer for comparison - for listening tests, use the original sentence
+                correct_answer = question.get('correct_answer', '') or question.get('question', '')
                 
                 # Calculate similarity score
                 try:
                     from utils.audio_generator import calculate_similarity
+                    current_app.logger.info(f"Calculating similarity for question {i}:")
+                    current_app.logger.info(f"  Student text: '{student_text}'")
+                    current_app.logger.info(f"  Correct answer: '{correct_answer}'")
+                    
                     similarity_score = calculate_similarity(student_text, correct_answer)
                     is_correct = similarity_score >= 0.7  # 70% similarity threshold
                     score = 1 if is_correct else 0
+                    
+                    current_app.logger.info(f"  Similarity score: {similarity_score}%, is_correct: {is_correct}")
                 except Exception as e:
                     current_app.logger.error(f"Error calculating similarity for question {i}: {e}")
                     similarity_score = 0.0
@@ -4581,15 +4601,34 @@ def submit_online_listening_test():
                     'student_audio_url': student_audio_url
                 })
         
-        # Calculate final score
-        average_score = (total_score / total_marks * 100) if total_marks > 0 else 0
+        # Calculate final score - for listening modules, use average of similarity scores
+        if test.get('module_id') == 'LISTENING':
+            # For listening modules, calculate average of all similarity scores
+            similarity_scores = [result.get('similarity_score', 0) for result in results if 'similarity_score' in result]
+            average_score = sum(similarity_scores) / len(similarity_scores) if similarity_scores else 0
+            current_app.logger.info(f"Listening module - using average similarity score: {average_score}%")
+        else:
+            # For other modules, use traditional scoring
+            average_score = (total_score / total_marks * 100) if total_marks > 0 else 0
+        
+        # Calculate correct_answers and total_marks for listening modules
+        if test.get('module_id') == 'LISTENING':
+            # For listening modules, count questions with >=70% similarity as correct
+            correct_answers = sum(1 for result in results if result.get('similarity_score', 0) >= 70)
+            total_marks = len(results)
+            score = correct_answers  # Keep binary score for compatibility
+        else:
+            # For other modules, use traditional scoring
+            correct_answers = total_score
+            total_marks = total_marks
+            score = total_score
         
         # Create result document for student_test_attempts
         current_time = datetime.now(timezone.utc)
         result_doc = {
             'test_id': test_id,
-            'student_id': student['_id'],
-            'user_id': ObjectId(current_user_id),
+            'student_id': student['_id'],  # Use student document ID as primary identifier
+            'user_id': ObjectId(current_user_id),  # Keep user_id for reference
             'test_type': 'online',
             'module_id': test.get('module_id'),
             'subcategory': test.get('subcategory'),
@@ -4600,9 +4639,9 @@ def submit_online_listening_test():
             'duration_seconds': 0,  # Will be calculated by frontend
             'status': 'completed',
             'total_questions': len(test.get('questions', [])),
-            'correct_answers': total_score,
+            'correct_answers': correct_answers,
             'total_marks': total_marks,
-            'score': total_score,
+            'score': score,
             'percentage': average_score,
             'results': results,
             'answers': {f'question_{i}': result['student_answer'] for i, result in enumerate(results)},
@@ -4621,7 +4660,7 @@ def submit_online_listening_test():
             'data': {
                 'test_id': str(test_id),
                 'total_questions': len(test.get('questions', [])),
-                'correct_answers': total_score,
+                'correct_answers': correct_answers,
                 'total_marks': total_marks,
                 'percentage': average_score,
                 'results': results

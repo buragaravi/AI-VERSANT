@@ -1343,12 +1343,26 @@ def get_single_test(test_id):
         if 'questions' in test and isinstance(test['questions'], list):
             # For listening modules, maintain consistent question order to prevent audio mismatch
             if test.get('module_id') == 'LISTENING':
+                # Store original question order with audio URLs for reference
+                original_questions = []
+                for q in test['questions']:
+                    original_questions.append({
+                        'question_id': q.get('question_id'),
+                        'sentence': q.get('sentence', ''),
+                        'audio_url': q.get('audio_url', ''),
+                        'question': q.get('question', '')
+                    })
+                
                 # Use a deterministic shuffle based on test_id to maintain consistency
                 test_id_str = str(test['_id'])
                 random.seed(hash(test_id_str) % 1000000)  # Use test ID as seed for consistent order
                 random.shuffle(test['questions'])
                 random.seed()  # Reset seed to prevent affecting other operations
                 current_app.logger.info(f"Questions shuffled with consistent seed for listening test: {test_id_str}")
+                
+                # Log the shuffled order for debugging
+                for idx, q in enumerate(test['questions']):
+                    current_app.logger.info(f"Shuffled question {idx + 1}: {q.get('question_id')} - {q.get('sentence', '')[:50]}...")
             else:
                 # For other modules, shuffle normally
                 random.shuffle(test['questions'])

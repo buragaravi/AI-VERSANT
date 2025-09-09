@@ -141,34 +141,56 @@ def get_audio_generation_status():
         'recommendation': 'AWS S3 is required for audio generation. Please configure AWS credentials.'
     }
 
-def calculate_similarity_score(original_text, student_audio_text):
+def calculate_similarity(original_text, student_audio_text):
     """Calculate similarity score between original and student audio text"""
     try:
         from difflib import SequenceMatcher
         
+        print(f"Calculating similarity between:")
+        print(f"  Original: '{original_text}'")
+        print(f"  Student: '{student_audio_text}'")
+        
+        # Handle empty texts
+        if not original_text or not student_audio_text:
+            print("One or both texts are empty, returning 0.0")
+            return 0.0
+        
         # Convert to lowercase for better comparison
-        original_lower = original_text.lower()
-        student_lower = student_audio_text.lower()
+        original_lower = original_text.lower().strip()
+        student_lower = student_audio_text.lower().strip()
+        
+        print(f"  Original (lower): '{original_lower}'")
+        print(f"  Student (lower): '{student_lower}'")
         
         # Calculate similarity using SequenceMatcher
         similarity = SequenceMatcher(None, original_lower, student_lower).ratio()
+        print(f"  SequenceMatcher similarity: {similarity}")
         
         # Calculate word-level accuracy
         original_words = set(original_lower.split())
         student_words = set(student_lower.split())
         
+        print(f"  Original words: {original_words}")
+        print(f"  Student words: {student_words}")
+        
         if not original_words:
+            print("No original words found, returning 0.0")
             return 0.0
         
         word_accuracy = len(original_words.intersection(student_words)) / len(original_words)
+        print(f"  Word accuracy: {word_accuracy}")
         
         # Combine similarity and word accuracy
         final_score = (similarity * 0.7) + (word_accuracy * 0.3)
+        print(f"  Final score: {final_score}")
         
         return round(final_score * 100, 2)
     except Exception as e:
         print(f"Error calculating similarity: {str(e)}")
         return 0.0
+
+# Alias for backward compatibility
+calculate_similarity_score = calculate_similarity
 
 def transcribe_audio(audio_file_path):
     """Transcribe audio file to text using speech recognition"""
@@ -180,11 +202,61 @@ def transcribe_audio(audio_file_path):
             print("Warning: speech_recognition package not available. Audio transcription will not work.")
             return ""
         
+        # Check if pydub is available for format conversion
+        if not PYDUB_AVAILABLE:
+            print("Warning: pydub package not available. Audio format conversion will not work.")
+            return ""
+        
         recognizer = sr.Recognizer()
-        with sr.AudioFile(audio_file_path) as source:
-            audio = recognizer.record(source)
-            text = recognizer.recognize_google(audio)
-            return text
+        
+        # Convert audio to WAV format if needed
+        temp_wav_path = None
+        try:
+            # Load audio with pydub to handle different formats
+            print(f"Loading audio file: {audio_file_path}")
+            audio_segment = AudioSegment.from_file(audio_file_path)
+            print(f"Audio loaded successfully: {len(audio_segment)}ms, {audio_segment.frame_rate}Hz, {audio_segment.channels} channels")
+            
+            # Convert to WAV format with proper parameters
+            temp_wav_path = f"temp_converted_{uuid.uuid4()}.wav"
+            print(f"Converting to WAV: {temp_wav_path}")
+            
+            # Set proper audio parameters for speech recognition
+            audio_segment = audio_segment.set_frame_rate(16000).set_channels(1)
+            audio_segment.export(temp_wav_path, format="wav")
+            
+            print(f"WAV conversion completed: {os.path.getsize(temp_wav_path)} bytes")
+            
+            # Use the converted WAV file for transcription
+            with sr.AudioFile(temp_wav_path) as source:
+                # Adjust for ambient noise
+                recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                audio = recognizer.record(source)
+                print(f"Audio recorded for transcription: {len(audio.frame_data)} bytes")
+                text = recognizer.recognize_google(audio)
+                print(f"Transcription successful: '{text}'")
+                return text
+                
+        except Exception as conversion_error:
+            print(f"Error converting audio format: {str(conversion_error)}")
+            # Fallback: try direct transcription if conversion fails
+            try:
+                with sr.AudioFile(audio_file_path) as source:
+                    recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                    audio = recognizer.record(source)
+                    text = recognizer.recognize_google(audio)
+                    return text
+            except Exception as fallback_error:
+                print(f"Fallback transcription also failed: {str(fallback_error)}")
+                return ""
+        finally:
+            # Clean up temporary file
+            if temp_wav_path and os.path.exists(temp_wav_path):
+                try:
+                    os.remove(temp_wav_path)
+                except Exception as cleanup_error:
+                    print(f"Warning: Failed to cleanup temporary file: {cleanup_error}")
+                    
     except Exception as e:
         print(f"Error transcribing audio: {str(e)}")
         return "" 

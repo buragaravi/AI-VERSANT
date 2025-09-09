@@ -1732,11 +1732,34 @@ def get_student_attempts(student_id, test_id):
         test_object_id = ObjectId(test_id)
         
         # Get the student attempt directly from student_test_attempts
+        # Try multiple possible student ID fields
         attempt = mongo_db.student_test_attempts.find_one({
             'student_id': student_object_id,
             'test_id': test_object_id,
             'status': 'completed'
         })
+        
+        if not attempt:
+            # Try with user_id field
+            attempt = mongo_db.student_test_attempts.find_one({
+                'user_id': student_object_id,
+                'test_id': test_object_id,
+                'status': 'completed'
+            })
+        
+        if not attempt:
+            # Try to find any attempt for this test and student (regardless of status)
+            attempt = mongo_db.student_test_attempts.find_one({
+                '$or': [
+                    {'student_id': student_object_id, 'test_id': test_object_id},
+                    {'user_id': student_object_id, 'test_id': test_object_id}
+                ]
+            })
+        
+        current_app.logger.info(f"Looking for student attempt: student_id={student_id}, test_id={test_id}")
+        current_app.logger.info(f"Found attempt: {attempt is not None}")
+        if attempt:
+            current_app.logger.info(f"Attempt details: student_id={attempt.get('student_id')}, user_id={attempt.get('user_id')}, status={attempt.get('status')}, results={len(attempt.get('results', []))}")
         
         if not attempt:
             return jsonify({
@@ -1753,9 +1776,12 @@ def get_student_attempts(student_id, test_id):
                 'message': 'Test not found'
             }), 404
         
-        # Get student details
+        # Get student details - try both user_id and _id fields
         student = mongo_db.students.find_one({'user_id': student_object_id})
         if not student:
+            student = mongo_db.students.find_one({'_id': student_object_id})
+        if not student:
+            current_app.logger.warning(f"Student not found for student_id: {student_id}")
             return jsonify({
                 'success': False,
                 'message': 'Student not found'
@@ -1774,12 +1800,18 @@ def get_student_attempts(student_id, test_id):
                 'question_index': result.get('question_index', 0),
                 'question_id': result.get('question_id', ''),
                 'question_text': result.get('question', 'Question not available'),
+                'question_type': result.get('question_type', 'unknown'),
                 'student_answer': result.get('student_answer', 'No answer provided'),
                 'selected_answer': result.get('student_answer', 'No answer provided'),
                 'correct_answer_letter': result.get('correct_answer_letter', ''),
                 'correct_answer_text': result.get('correct_answer_text', ''),
+                'correct_answer': result.get('correct_answer', ''),
                 'is_correct': result.get('is_correct', False),
-                'score': result.get('score', 0)
+                'score': result.get('score', 0),
+                'similarity_score': result.get('similarity_score', 0),
+                'student_text': result.get('student_answer', ''),  # For audio transcripts
+                'original_text': result.get('correct_answer', ''),  # For audio transcripts
+                'student_audio_url': result.get('student_audio_url', '')
             }
             transformed_results.append(transformed_result)
         
@@ -2338,11 +2370,18 @@ def get_online_tests_overview():
 def get_test_attempts(test_id):
     """Get all student attempts for a specific test"""
     try:
-        # Get all attempts for this test
+        # Get all completed attempts for this test (filter out incomplete ones)
         attempts = list(mongo_db.student_test_attempts.find({
             'test_id': ObjectId(test_id),
-            'test_type': 'online'
+            'test_type': 'online',
+            'status': 'completed'
         }))
+        
+        current_app.logger.info(f"Found {len(attempts)} completed attempts for test {test_id}")
+        for attempt in attempts:
+            current_app.logger.info(f"Attempt: student_id={attempt.get('student_id')}, user_id={attempt.get('user_id')}, correct_answers={attempt.get('correct_answers')}, total_questions={attempt.get('total_questions')}, results={len(attempt.get('results', []))}")
+            if attempt.get('results'):
+                current_app.logger.info(f"  First result: {attempt['results'][0] if attempt['results'] else 'None'}")
         
         if not attempts:
             return jsonify({
@@ -2354,18 +2393,31 @@ def get_test_attempts(test_id):
         # Group attempts by student to get highest score per student
         student_attempts = {}
         for attempt in attempts:
-            student_id = str(attempt['student_id'])
+            # Try both student_id and user_id fields
+            student_id = str(attempt.get('student_id', attempt.get('user_id', '')))
+            if not student_id:
+                current_app.logger.warning(f"Skipping attempt with no student ID: {attempt.get('_id')}")
+                continue
             
             # Calculate score
             score = 0
             if 'correct_answers' in attempt and 'total_questions' in attempt:
                 if attempt['total_questions'] > 0:
                     score = (attempt['correct_answers'] / attempt['total_questions']) * 100
+                    current_app.logger.info(f"Calculated score for student {student_id}: {attempt['correct_answers']}/{attempt['total_questions']} = {score}%")
+                else:
+                    current_app.logger.warning(f"Total questions is 0 for student {student_id}")
+            else:
+                current_app.logger.warning(f"Missing score data for student {student_id}: correct_answers={attempt.get('correct_answers')}, total_questions={attempt.get('total_questions')}")
             
             if student_id not in student_attempts:
                 # Get student details from students collection
+                # Try both user_id and _id fields
                 student = mongo_db.students.find_one({'user_id': ObjectId(student_id)})
                 if not student:
+                    student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+                if not student:
+                    current_app.logger.warning(f"Student not found for student_id: {student_id}")
                     continue
                 
                 # Get campus, course, and batch details
@@ -4154,7 +4206,7 @@ def get_test_result_details(result_id):
         
         return jsonify({
             'success': True,
-            'data': response_data
+            'data': [response_data]  # Return as array for frontend compatibility
         }), 200
         
     except Exception as e:
