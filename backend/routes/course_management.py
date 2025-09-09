@@ -32,14 +32,7 @@ def get_courses():
         
         course_list = []
         for course in courses:
-            admin = mongo_db.users.find_one({'_id': course.get('admin_id')})
             campus = mongo_db.campuses.find_one({'_id': course.get('campus_id')})
-            
-            admin_info = {
-                'id': str(admin['_id']),
-                'name': admin.get('name'),
-                'email': admin.get('email')
-            } if admin else None
             
             campus_info = {
                 'id': str(campus['_id']),
@@ -49,7 +42,6 @@ def get_courses():
             course_list.append({
                 'id': str(course['_id']),
                 'name': course.get('name'),
-                'admin': admin_info,
                 'campus': campus_info,
                 'created_at': course.get('created_at')
             })
@@ -108,12 +100,11 @@ def get_courses_by_batch(batch_id):
 @jwt_required()
 def get_courses_by_campus(campus_id):
     try:
-        courses = mongo_db.get_courses_by_campus_with_admin(campus_id)
+        courses = list(mongo_db.courses.find({'campus_id': ObjectId(campus_id)}))
         course_list = [
             {
                 'id': str(course['_id']),
-                'name': course.get('name'),
-                'admin': course.get('admin')
+                'name': course.get('name')
             }
             for course in courses
         ]
@@ -147,70 +138,23 @@ def create_course(campus_id):
         
         data = request.get_json()
         course_name = data.get('course_name')
-        admin_name = data.get('admin_name')
-        admin_email = data.get('admin_email')
-        admin_password = data.get('admin_password')
 
-        if not all([course_name, admin_name, admin_email, admin_password]):
-            return jsonify({'success': False, 'message': 'All fields are required'}), 400
+        if not course_name:
+            return jsonify({'success': False, 'message': 'Course name is required'}), 400
 
-        if mongo_db.users.find_one({'email': admin_email}):
-            return jsonify({'success': False, 'message': 'A user with this email already exists.'}), 409
-
-        password_hash = bcrypt.generate_password_hash(admin_password).decode('utf-8')
-        
-        # Create course admin user
-        admin_user = {
-            'name': admin_name,
-            'email': admin_email,
-            'username': admin_name,
-            'password_hash': password_hash,
-            'role': ROLES['COURSE_ADMIN'],
-            'is_active': True,
-            'campus_id': ObjectId(campus_id),
-            'created_at': datetime.now(pytz.utc)
-        }
-        user_id = mongo_db.users.insert_one(admin_user).inserted_id
-
-        # Create course
+        # Create course without admin
         course = {
             'name': course_name,
             'campus_id': ObjectId(campus_id),
-            'admin_id': user_id,
             'created_at': datetime.now(pytz.utc)
         }
         course_id = mongo_db.courses.insert_one(course).inserted_id
-        
-        # Update user with course_id
-        mongo_db.users.update_one({'_id': user_id}, {'$set': {'course_id': course_id}})
-        
-        # Send welcome email
-        try:
-            html_content = render_template(
-                'course_admin_credentials.html',
-                params={
-                    'name': admin_name,
-                    'username': admin_name,
-                    'email': admin_email,
-                    'password': admin_password,
-                    'login_url': "https://pydah-studyedge.vercel.app/login"
-                }
-            )
-            send_email(
-                to_email=admin_email,
-                to_name=admin_name,
-                subject="Welcome to VERSANT - Your Course Admin Credentials",
-                html_content=html_content
-            )
-        except Exception as e:
-            print(f"Failed to send welcome email to {admin_email}: {e}")
 
         return jsonify({
             'success': True,
             'message': 'Course created successfully',
             'data': {
-                'course_id': str(course_id),
-                'admin_id': str(user_id)
+                'course_id': str(course_id)
             }
         }), 201
         
@@ -226,17 +170,6 @@ def update_course(course_id):
         # Update course name
         if 'name' in data:
             mongo_db.courses.update_one({'_id': ObjectId(course_id)}, {'$set': {'name': data['name']}})
-            
-        # Update course admin
-        if 'admin_email' in data and 'admin_name' in data:
-            update_data = {'name': data['admin_name'], 'email': data['admin_email'], 'username': data['admin_name']}
-            if 'admin_password' in data and data['admin_password']:
-                password_hash = bcrypt.generate_password_hash(data['admin_password']).decode('utf-8')
-                update_data['password_hash'] = password_hash
-            
-            course = mongo_db.courses.find_one({'_id': ObjectId(course_id)})
-            if course and 'admin_id' in course:
-                mongo_db.users.update_one({'_id': course['admin_id']}, {'$set': update_data})
 
         return jsonify({'success': True, 'message': 'Course updated'}), 200
     except Exception as e:

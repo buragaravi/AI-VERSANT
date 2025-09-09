@@ -31,15 +31,6 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   if (allowedRoles.length > 0 && user && !allowedRoles.includes(user.role)) {
     console.log('ProtectedRoute - User role not allowed, redirecting to appropriate dashboard')
     
-    // Special handling for super admin routes - allow campus and course admins
-    if (location.pathname.startsWith('/superadmin')) {
-      const adminRoles = ['superadmin', 'super_admin', 'campus_admin', 'course_admin']
-      if (adminRoles.includes(user.role)) {
-        console.log('ProtectedRoute - Admin user accessing super admin portal, allowing access')
-        return children
-      }
-    }
-    
     // Redirect to appropriate dashboard based on user role
     const roleRoutes = {
       superadmin: '/superadmin',

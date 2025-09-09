@@ -1,788 +1,857 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
     BarChart3, 
-    TrendingUp, 
-    Target, 
     Users, 
-    Download, 
+    TrendingUp, 
     Eye, 
-    ChevronUp, 
-    ChevronDown,
-    BookOpen,
-    Activity,
-    Building,
-    Clock,
-    Award,
+    ChevronDown, 
+    ChevronUp,
+    FileSpreadsheet,
+    Download,
+    RefreshCw,
     CheckCircle,
-    AlertTriangle,
     XCircle,
-    X
+    Calendar,
+    Clock,
+    User,
+    Mail,
+    Phone,
+    BookOpen,
+    Search,
+    X,
+    Filter
 } from 'lucide-react';
 import { useNotification } from '../../contexts/NotificationContext';
-import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 
-const ResultsManagement = () => {
-    useEffect(() => {
-        window.scrollTo(0, 0);
-    }, []);
+// Test Details View Component
+const TestDetailsView = ({ 
+    test, 
+    testAttempts, 
+    onBack, 
+    onStudentClick, 
+    onExportTestResults, 
+    exportLoading 
+}) => {
+    const attempts = testAttempts[test.test_id] || [];
     
-    const [tests, setTests] = useState([]);
-    const [results, setResults] = useState([]);
+    // Filter states
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedCampus, setSelectedCampus] = useState('all');
+    const [selectedCourse, setSelectedCourse] = useState('all');
+    const [selectedBatch, setSelectedBatch] = useState('all');
+    
+    // Extract unique values for filters
+    const uniqueCampuses = [...new Set(attempts.map(student => student.campus_name).filter(Boolean))];
+    const uniqueCourses = [...new Set(attempts.map(student => student.course_name).filter(Boolean))];
+    const uniqueBatches = [...new Set(attempts.map(student => student.batch_name).filter(Boolean))];
+    
+    // Auto-select single values
+    useEffect(() => {
+        if (uniqueCampuses.length === 1) {
+            setSelectedCampus(uniqueCampuses[0]);
+        }
+        if (uniqueCourses.length === 1) {
+            setSelectedCourse(uniqueCourses[0]);
+        }
+        if (uniqueBatches.length === 1) {
+            setSelectedBatch(uniqueBatches[0]);
+        }
+    }, [uniqueCampuses, uniqueCourses, uniqueBatches]);
+    
+    // Filter students based on all criteria
+    const filteredAttempts = attempts.filter(student => {
+        // Search filter
+        const searchLower = searchTerm.toLowerCase();
+        const matchesSearch = !searchTerm || 
+            student.student_name?.toLowerCase().includes(searchLower) ||
+            student.student_email?.toLowerCase().includes(searchLower) ||
+            student.roll_number?.toLowerCase().includes(searchLower) ||
+            student.campus_name?.toLowerCase().includes(searchLower) ||
+            student.course_name?.toLowerCase().includes(searchLower) ||
+            student.batch_name?.toLowerCase().includes(searchLower);
+        
+        // Campus filter
+        const matchesCampus = selectedCampus === 'all' || student.campus_name === selectedCampus;
+        
+        // Course filter
+        const matchesCourse = selectedCourse === 'all' || student.course_name === selectedCourse;
+        
+        // Batch filter
+        const matchesBatch = selectedBatch === 'all' || student.batch_name === selectedBatch;
+        
+        return matchesSearch && matchesCampus && matchesCourse && matchesBatch;
+    });
+    
+    // Calculate analytics based on filtered data
+    const totalStudents = filteredAttempts.length;
+    const passedStudents = filteredAttempts.filter(student => student.highest_score >= 50).length;
+    const failedStudents = totalStudents - passedStudents;
+    const averageTime = filteredAttempts.length > 0 
+        ? (filteredAttempts.reduce((sum, student) => sum + (student.average_time || 0), 0) / filteredAttempts.length).toFixed(1)
+        : 0;
+    
+    // Reset all filters
+    const resetFilters = () => {
+        setSearchTerm('');
+        setSelectedCampus(uniqueCampuses.length === 1 ? uniqueCampuses[0] : 'all');
+        setSelectedCourse(uniqueCourses.length === 1 ? uniqueCourses[0] : 'all');
+        setSelectedBatch(uniqueBatches.length === 1 ? uniqueBatches[0] : 'all');
+    };
+    
+    // Get active filter count
+    const activeFiltersCount = [
+        searchTerm,
+        selectedCampus !== 'all' && uniqueCampuses.length > 1,
+        selectedCourse !== 'all' && uniqueCourses.length > 1,
+        selectedBatch !== 'all' && uniqueBatches.length > 1
+    ].filter(Boolean).length;
+    
+    return (
+        <div className="space-y-6">
+            {/* Header with Back Button */}
+            <div className="flex items-center gap-4">
+                <button
+                    onClick={onBack}
+                    className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                    <ChevronDown className="w-4 h-4 rotate-90" />
+                    Back to Tests
+                </button>
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900">{test.test_name}</h1>
+                    <p className="text-gray-600">Detailed analysis and student performance</p>
+                </div>
+            </div>
+
+            {/* Analytics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white rounded-xl shadow-lg border border-gray-200 p-6"
+                >
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-gray-600">Total Students</p>
+                            <p className="text-3xl font-bold text-gray-900">{totalStudents}</p>
+                        </div>
+                        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                            <Users className="w-6 h-6 text-blue-600" />
+                        </div>
+                    </div>
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className="bg-white rounded-xl shadow-lg border border-gray-200 p-6"
+                >
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-gray-600">Pass Rate</p>
+                            <p className="text-3xl font-bold text-green-600">
+                                {totalStudents > 0 ? ((passedStudents / totalStudents) * 100).toFixed(1) : 0}%
+                            </p>
+                        </div>
+                        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                            <CheckCircle className="w-6 h-6 text-green-600" />
+                        </div>
+                    </div>
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className="bg-white rounded-xl shadow-lg border border-gray-200 p-6"
+                >
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-gray-600">Average Score</p>
+                            <p className="text-3xl font-bold text-blue-600">{test.average_score}%</p>
+                        </div>
+                        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                            <TrendingUp className="w-6 h-6 text-blue-600" />
+                        </div>
+                    </div>
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="bg-white rounded-xl shadow-lg border border-gray-200 p-6"
+                >
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-gray-600">Highest Score</p>
+                            <p className="text-3xl font-bold text-purple-600">{test.highest_score}%</p>
+                        </div>
+                        <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                            <BarChart3 className="w-6 h-6 text-purple-600" />
+                        </div>
+                    </div>
+                </motion.div>
+            </div>
+
+            {/* Filters and Search Section */}
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                <div className="flex flex-col lg:flex-row gap-4 mb-4">
+                    {/* Search Bar */}
+                    <div className="flex-1">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                            <input
+                                type="text"
+                                placeholder="Search students by name, email, roll number, campus, course, or batch..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                            {searchTerm && (
+                                <button
+                                    onClick={() => setSearchTerm('')}
+                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Filter Controls */}
+                    <div className="flex flex-wrap gap-3">
+                        {/* Campus Filter */}
+                        <div className="flex flex-col">
+                            <label className="text-sm font-medium text-gray-700 mb-1">Campus</label>
+                            <select
+                                value={selectedCampus}
+                                onChange={(e) => setSelectedCampus(e.target.value)}
+                                disabled={uniqueCampuses.length <= 1}
+                                className={`px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                    uniqueCampuses.length <= 1 ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
+                                }`}
+                            >
+                                {uniqueCampuses.length > 1 && <option value="all">All Campuses</option>}
+                                {uniqueCampuses.map(campus => (
+                                    <option key={campus} value={campus}>{campus}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Course Filter */}
+                        <div className="flex flex-col">
+                            <label className="text-sm font-medium text-gray-700 mb-1">Course</label>
+                            <select
+                                value={selectedCourse}
+                                onChange={(e) => setSelectedCourse(e.target.value)}
+                                disabled={uniqueCourses.length <= 1}
+                                className={`px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                    uniqueCourses.length <= 1 ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
+                                }`}
+                            >
+                                {uniqueCourses.length > 1 && <option value="all">All Courses</option>}
+                                {uniqueCourses.map(course => (
+                                    <option key={course} value={course}>{course}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Batch Filter */}
+                        <div className="flex flex-col">
+                            <label className="text-sm font-medium text-gray-700 mb-1">Batch</label>
+                            <select
+                                value={selectedBatch}
+                                onChange={(e) => setSelectedBatch(e.target.value)}
+                                disabled={uniqueBatches.length <= 1}
+                                className={`px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                    uniqueBatches.length <= 1 ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
+                                }`}
+                            >
+                                {uniqueBatches.length > 1 && <option value="all">All Batches</option>}
+                                {uniqueBatches.map(batch => (
+                                    <option key={batch} value={batch}>{batch}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Reset Filters Button */}
+                        {activeFiltersCount > 0 && (
+                            <div className="flex flex-col justify-end">
+                                <button
+                                    onClick={resetFilters}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                                >
+                                    <RefreshCw className="w-4 h-4" />
+                                    Reset Filters
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Filter Status */}
+                <div className="flex items-center justify-between text-sm text-gray-600">
+                    <div className="flex items-center gap-4">
+                        <span>
+                            Showing <span className="font-semibold text-gray-900">{totalStudents}</span> of{' '}
+                            <span className="font-semibold text-gray-900">{attempts.length}</span> students
+                        </span>
+                        {activeFiltersCount > 0 && (
+                            <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
+                                <Filter className="w-3 h-3" />
+                                {activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} active
+                            </span>
+                        )}
+                    </div>
+                    {searchTerm && (
+                        <div className="text-gray-500">
+                            Search results for: <span className="font-medium">"{searchTerm}"</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Student Attempts Section */}
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+                <div className="p-6 border-b border-gray-200">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-xl font-semibold text-gray-900">
+                            Student Attempts ({totalStudents} students)
+                        </h2>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => onExportTestResults(test.test_id, test.test_name, 'excel')}
+                                disabled={exportLoading}
+                                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                            >
+                                {exportLoading ? (
+                                    <RefreshCw className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <FileSpreadsheet className="w-4 h-4" />
+                                )}
+                                Export Excel
+                            </button>
+                            <button
+                                onClick={() => onExportTestResults(test.test_id, test.test_name, 'csv')}
+                                disabled={exportLoading}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                            >
+                                {exportLoading ? (
+                                    <RefreshCw className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <Download className="w-4 h-4" />
+                                )}
+                                Export CSV
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                    {filteredAttempts.length === 0 ? (
+                        <div className="text-center py-12">
+                            <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                            <h3 className="text-lg font-medium text-gray-900 mb-2">
+                                {attempts.length === 0 ? 'No attempts found' : 'No students match the current filters'}
+                            </h3>
+                            <p className="text-gray-500">
+                                {attempts.length === 0 
+                                    ? 'No students have attempted this test yet.' 
+                                    : 'Try adjusting your search or filter criteria.'
+                                }
+                            </p>
+                            {attempts.length > 0 && activeFiltersCount > 0 && (
+                                <button
+                                    onClick={resetFilters}
+                                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                >
+                                    Clear All Filters
+                                </button>
+                            )}
+                        </div>
+                    ) : (
+                        <table className="w-full">
+                            <thead className="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Student Name
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Email
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Campus
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Course
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Batch
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Total Questions
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Correct Answers
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Score
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Attempts
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Latest Attempt
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {filteredAttempts.map((student, studentIndex) => (
+                                    <motion.tr
+                                        key={student.student_id}
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: studentIndex * 0.05 }}
+                                        className="hover:bg-gray-50 cursor-pointer"
+                                        onClick={() => onStudentClick(student.student_id, test.test_id)}
+                                    >
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex items-center">
+                                                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white font-semibold mr-3">
+                                                    {student.student_name?.charAt(0)?.toUpperCase() || 'S'}
+                                                </div>
+                                                <div className="text-sm font-medium text-gray-900">
+                                                    {student.student_name}
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {student.student_email}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {student.campus_name}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {student.course_name}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {student.batch_name}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {student.total_questions}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {student.correct_answers}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
+                                            {student.highest_score.toFixed(1)}%
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {student.attempts_count}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {student.latest_attempt ? new Date(student.latest_attempt).toLocaleDateString() : 'N/A'}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <Eye className="w-4 h-4" />
+                                        </td>
+                                    </motion.tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const ResultsManagement = () => {
     const [loading, setLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState("");
-    const [currentView, setCurrentView] = useState('tests'); // 'tests' or 'results'
+    const [tests, setTests] = useState([]);
+    const [expandedTest, setExpandedTest] = useState(null);
+    const [testAttempts, setTestAttempts] = useState({});
+    const [selectedStudent, setSelectedStudent] = useState(null);
+    const [studentAttemptDetails, setStudentAttemptDetails] = useState(null);
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [exportLoading, setExportLoading] = useState(false);
+    const [currentView, setCurrentView] = useState('list'); // 'list' or 'test-details'
     const [selectedTest, setSelectedTest] = useState(null);
-    const [filters, setFilters] = useState({ 
-        module: '', 
-        test_type: '',
-        campus: '',
-        course: '',
-        batch: '',
-        dateRange: 'all',
-        scoreRange: 'all'
-    });
     const { error, success } = useNotification();
-    const [expandedAttempt, setExpandedAttempt] = useState(null);
 
-    const [filterOptions, setFilterOptions] = useState({
-        modules: [],
-        test_types: [],
-        campuses: [],
-        courses: [],
-        batches: []
-    });
-    const [analytics, setAnalytics] = useState({
-        totalTests: 0,
-        averageScore: 0,
-        passRate: 0,
-        totalStudents: 0,
-        topModule: '',
-        recentActivity: []
-    });
+    useEffect(() => {
+        window.scrollTo(0, 0);
+        fetchTests();
+    }, []);
 
-    const fetchTestResults = async (testId) => {
+    const fetchTests = async () => {
         try {
             setLoading(true);
             setErrorMsg("");
             
-            // Use the existing superadmin endpoint and filter by test_id
-            const response = await api.get('/superadmin/all-test-results');
+            const response = await api.get('/superadmin/online-tests-overview');
             if (response.data.success) {
-                // Check debug information from the response
-                if (response.data.debug_info) {
-                    console.log('Debug student data from backend:', response.data.debug_info);
-                }
-                
-                // Filter results for the specific test
-                const allResults = response.data.data || [];
-                console.log('All results:', allResults.length);
-                console.log('Looking for test_id:', testId);
-                console.log('Sample result test_ids:', allResults.slice(0, 3).map(r => ({ test_id: r.test_id, _id: r._id })));
-                
-                // Debug: Check what student data looks like
-                if (allResults.length > 0) {
-                    console.log('Sample result with student data:', allResults[0]);
-                    console.log('Debug fields:', {
-                        debug_student_profile: allResults[0].debug_student_profile,
-                        debug_campus_details: allResults[0].debug_campus_details,
-                        debug_course_details: allResults[0].debug_course_details,
-                        debug_batch_details: allResults[0].debug_batch_details
-                    });
-                }
-                
-                const filteredResults = allResults.filter(result => {
-                    // Try multiple matching strategies
-                    const testIdStr = String(testId);
-                    const resultTestIdStr = String(result.test_id || '');
-                    const resultIdStr = String(result._id || '');
-                    
-                    const matches = 
-                        result.test_id === testId || 
-                        result._id === testId || 
-                        testIdStr === resultTestIdStr || 
-                        testIdStr === resultIdStr ||
-                        resultTestIdStr.includes(testIdStr) ||
-                        testIdStr.includes(resultTestIdStr);
-                        
-                    if (matches) {
-                        console.log('Match found:', { 
-                            result_test_id: result.test_id, 
-                            result_id: result._id, 
-                            looking_for: testId,
-                            test_name: result.test_name,
-                            student_name: result.student_name
-                        });
-                    }
-                    return matches;
-                });
-                
-                console.log('Filtered results for test:', testId, filteredResults.length);
-                
-                // Group results by student to show student performance
-                const studentResults = {};
-                
-                filteredResults.forEach(result => {
-                    const studentId = result.student_id;
-                    
-                    // Ensure studentId is a string for consistent grouping
-                    const studentKey = String(studentId);
-                    
-                    if (!studentResults[studentKey]) {
-                        studentResults[studentKey] = {
-                            student_id: studentId,
-                            student_name: result.student_name || 'Unknown Student',
-                            student_email: result.student_email || 'unknown@example.com',
-                            campus_name: result.campus_name || 'Unknown Campus',
-                            course_name: result.course_name || 'Unknown Course',
-                            batch_name: result.batch_name || 'Unknown Batch',
-                            attempts: [],
-                            total_attempts: 0,
-                            highest_score: 0,
-                            average_score: 0,
-                            latest_attempt: null
-                        };
-                    }
-                    
-                    const score = result.average_score || result.score_percentage || 0;
-                    studentResults[studentKey].attempts.push({
-                        ...result,
-                        score: score
-                    });
-                    studentResults[studentKey].total_attempts++;
-                    studentResults[studentKey].highest_score = Math.max(studentResults[studentKey].highest_score, score);
-                    
-                    // Keep track of latest attempt
-                    if (!studentResults[studentKey].latest_attempt || 
-                        new Date(result.submitted_at) > new Date(studentResults[studentKey].latest_attempt.submitted_at)) {
-                        studentResults[studentKey].latest_attempt = result;
-                    }
-                });
-                
-                console.log('Grouped students:', Object.keys(studentResults).length);
-                
-                // Calculate average scores for each student
-                Object.values(studentResults).forEach(student => {
-                    if (student.attempts.length > 0) {
-                        student.average_score = student.attempts.reduce((sum, attempt) => sum + attempt.score, 0) / student.attempts.length;
-                    }
-                });
-                
-                // Convert to array and sort by highest score
-                const studentResultsArray = Object.values(studentResults).sort((a, b) => b.highest_score - a.highest_score);
-                
-                console.log('Final student results array:', studentResultsArray);
-                console.log('Setting results and view to results');
-                
-                setResults(studentResultsArray);
-                setCurrentView('results');
+                setTests(response.data.data || []);
             } else {
-                setErrorMsg(response.data.message || 'Failed to fetch test results.');
-                error(response.data.message || 'Failed to fetch test results.');
+                setErrorMsg(response.data.message || 'Failed to fetch tests.');
+                error(response.data.message || 'Failed to fetch tests.');
             }
         } catch (err) {
-            setErrorMsg('Failed to fetch test results. Please check your login status and try again.');
-            error('Failed to fetch test results.');
-            console.error('Error fetching test results:', err);
+            setErrorMsg('Failed to fetch tests. Please check your login status and try again.');
+            error('Failed to fetch tests.');
+            console.error('Error fetching tests:', err);
         } finally {
             setLoading(false);
         }
     };
 
-    useEffect(() => {
-        const fetchFilterOptions = async () => {
-            try {
-                const response = await api.get('/superadmin/filter-options');
-                if (response.data.success) {
-                    setFilterOptions(response.data.data);
-                }
-            } catch (err) {
-                console.error('Error fetching filter options:', err);
-            }
-        };
-
-        const fetchTests = async () => {
-            try {
-                setLoading(true);
-                setErrorMsg("");
-                // First fetch all uploaded tests
-                const testsResponse = await api.get('/test-management/tests');
-                if (testsResponse.data.success) {
-                    const allTests = testsResponse.data.data || [];
-                    
-                    // Then fetch test results to get statistics
-                    const resultsResponse = await api.get('/superadmin/all-test-results');
-                    if (resultsResponse.data.success) {
-                        const allResults = resultsResponse.data.data || [];
-                        
-                        // Group results by test_id to calculate statistics
-                        const testStats = {};
-                        allResults.forEach(result => {
-                            const testId = result.test_id;
-                            if (!testStats[testId]) {
-                                testStats[testId] = {
-                                    total_attempts: 0,
-                                    unique_students: new Set(),
-                                    scores: [],
-                                    highest_score: 0
-                                };
-                            }
-                            testStats[testId].total_attempts++;
-                            testStats[testId].unique_students.add(result.student_id);
-                            const score = result.average_score || result.score_percentage || 0;
-                            testStats[testId].scores.push(score);
-                            testStats[testId].highest_score = Math.max(testStats[testId].highest_score, score);
-                        });
-                        
-                        // Combine test data with statistics
-                        const testsWithStats = allTests.map(test => {
-                            const stats = testStats[test._id] || {
-                                total_attempts: 0,
-                                unique_students: new Set(),
-                                scores: [],
-                                highest_score: 0
-                            };
-                            
-                            return {
-                                ...test,
-                                total_attempts: stats.total_attempts,
-                                unique_students: stats.unique_students.size,
-                                average_score: stats.scores.length > 0 ? 
-                                    (stats.scores.reduce((a, b) => a + b, 0) / stats.scores.length) : 0,
-                                highest_score: stats.highest_score,
-                                pass_rate: stats.scores.length > 0 ? 
-                                    (stats.scores.filter(score => score >= 60).length / stats.scores.length) * 100 : 0
-                            };
-                        });
-                        
-                        setTests(testsWithStats);
-                        calculateAnalyticsFromTests(testsWithStats);
-                    } else {
-                        // If results fetch fails, just show tests without stats
-                        setTests(allTests.map(test => ({
-                            ...test,
-                            total_attempts: 0,
-                            unique_students: 0,
-                            average_score: 0,
-                            highest_score: 0,
-                            pass_rate: 0
-                        })));
-                    }
-                } else {
-                    setErrorMsg(testsResponse.data.message || 'Failed to fetch tests.');
-                    error(testsResponse.data.message || 'Failed to fetch tests.');
-                }
-            } catch (err) {
-                setErrorMsg('Failed to fetch tests overview. Please check your login status and try again.');
-                error('Failed to fetch tests overview.');
-                console.error('Error fetching tests:', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-
-
-        // Load filter options and tests overview
-        fetchFilterOptions();
-        fetchTests();
-    }, [error]);
-
-    const calculateAnalyticsFromTests = (testsData) => {
-        if (!testsData.length) return;
-
-        const totalTests = testsData.length;
-        const totalAttempts = testsData.reduce((sum, test) => sum + (test.total_attempts || 0), 0);
-        const totalScore = testsData.reduce((sum, test) => sum + (test.average_score || 0), 0);
-        const averageScore = totalScore / totalTests;
-        const totalPassed = testsData.reduce((sum, test) => sum + (test.pass_count || 0), 0);
-        const passRate = totalAttempts > 0 ? (totalPassed / totalAttempts) * 100 : 0;
-        
-        // Find top module by average score
-        const moduleScores = {};
-        testsData.forEach(test => {
-            if (!moduleScores[test.module_id]) {
-                moduleScores[test.module_id] = { total: 0, count: 0 };
-            }
-            moduleScores[test.module_id].total += test.average_score || 0;
-            moduleScores[test.module_id].count++;
-        });
-        
-        const topModule = Object.keys(moduleScores).reduce((a, b) => 
-            moduleScores[a].total / moduleScores[a].count > moduleScores[b].total / moduleScores[b].count ? a : b, 
-            Object.keys(moduleScores)[0] || ''
-        );
-
-        setAnalytics({
-            totalTests,
-            averageScore: averageScore.toFixed(1),
-            passRate: passRate.toFixed(1),
-            totalStudents: testsData.reduce((sum, test) => sum + (test.unique_students || 0), 0),
-            topModule,
-            recentActivity: []
-        });
-    };
-
-    const handleFilterChange = (e) => {
-        setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    };
-
-    const handleTestClick = (test) => {
-        console.log('Test clicked:', test);
-        console.log('Test name field:', test.test_name || test.name);
-        console.log('Current view before:', currentView);
-        setSelectedTest(test);
-        fetchTestResults(test._id);
-        // Force view change to results
-        setCurrentView('results');
-    };
-
-    const handleBackToTests = () => {
-        setCurrentView('tests');
-        setSelectedTest(null);
-        setResults([]);
-    };
-
-    const handleExpand = (resultIdx, attemptIdx) => {
-        const key = `${resultIdx}-${attemptIdx}`;
-        setExpandedAttempt(expandedAttempt === key ? null : key);
-    };
-
-
-
-    const handleExportResults = async () => {
+    const fetchTestAttempts = async (testId) => {
         try {
-            const response = await api.get('/superadmin/export-results', {
-                params: filters,
-                responseType: 'blob'
-            });
-            
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', `test-results-${new Date().toISOString().split('T')[0]}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            
-            success('Results exported successfully!');
+            const response = await api.get(`/superadmin/test-attempts/${testId}`);
+            if (response.data.success) {
+                setTestAttempts(prev => ({
+                    ...prev,
+                    [testId]: response.data.data || []
+                }));
+            } else {
+                error('Failed to fetch test attempts.');
+            }
         } catch (err) {
-            error('Failed to export results');
+            console.error('Error fetching test attempts:', err);
+            error('Failed to fetch test attempts.');
         }
     };
 
-    const getScoreColor = (score) => {
-        if (score >= 90) return 'text-green-600 bg-green-100';
-        if (score >= 70) return 'text-blue-600 bg-blue-100';
-        if (score >= 50) return 'text-yellow-600 bg-yellow-100';
-        return 'text-red-600 bg-red-100';
+    const handleTestClick = async (testId) => {
+        const test = tests.find(t => t.test_id === testId);
+        if (test) {
+            setSelectedTest(test);
+            setCurrentView('test-details');
+            if (!testAttempts[testId]) {
+                await fetchTestAttempts(testId);
+            }
+        }
     };
 
-    const getScoreIcon = (score) => {
-        if (score >= 90) return <Award className="w-4 h-4" />;
-        if (score >= 70) return <CheckCircle className="w-4 h-4" />;
-        if (score >= 50) return <AlertTriangle className="w-4 h-4" />;
-        return <XCircle className="w-4 h-4" />;
+    const handleBackToList = () => {
+        setCurrentView('list');
+        setSelectedTest(null);
+        setExpandedTest(null);
     };
 
-    // Filter results based on current filters
-    const filteredResults = results.filter(result => {
-        if (filters.module && result.module_name !== filters.module) return false;
-        if (filters.test_type && result.test_type !== filters.test_type) return false;
-        if (filters.campus && result.campus_name !== filters.campus) return false;
-        if (filters.course && result.course_name !== filters.course) return false;
-        if (filters.batch && result.batch_name !== filters.batch) return false;
-        return true;
-    });
+    const handleStudentClick = async (studentId, testId) => {
+        try {
+            const response = await api.get(`/superadmin/student-attempts/${studentId}/${testId}`);
+            if (response.data.success) {
+                setStudentAttemptDetails(response.data.data);
+                setSelectedStudent(studentId);
+                setShowDetailsModal(true);
+            } else {
+                error('Failed to fetch student attempt details.');
+            }
+        } catch (err) {
+            console.error('Error fetching student details:', err);
+            error('Failed to fetch student attempt details.');
+        }
+    };
+
+    const handleExportTestResults = async (testId, testName, format = 'excel') => {
+        setExportLoading(true);
+        try {
+            const endpoint = format === 'csv' 
+                ? `/superadmin/export-test-attempts-csv/${testId}`
+                : `/superadmin/export-test-attempts/${testId}`;
+            
+            const response = await api.get(endpoint, {
+                responseType: 'blob'
+            });
+            
+            const mimeType = format === 'csv' 
+                ? 'text/csv' 
+                : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+            
+            const fileExtension = format === 'csv' ? 'csv' : 'xlsx';
+            
+            const blob = new Blob([response.data], { type: mimeType });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${testName}_student_results.${fileExtension}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+            success(`Test results exported as ${format.toUpperCase()} successfully!`);
+        } catch (err) {
+            console.error('Export error:', err);
+            error('Failed to export test results. Please try again.');
+        } finally {
+            setExportLoading(false);
+        }
+    };
+
+    const closeDetailsModal = () => {
+        setShowDetailsModal(false);
+        setStudentAttemptDetails(null);
+        setSelectedStudent(null);
+    };
 
     if (loading) {
-        return <LoadingSpinner size="lg" />;
+        return (
+            <main className="px-6 lg:px-10 py-12">
+                <div className="flex items-center justify-center h-64">
+                    <div className="flex items-center gap-3">
+                        <RefreshCw className="w-6 h-6 animate-spin text-blue-600" />
+                        <span className="text-lg text-gray-600">Loading tests...</span>
+                    </div>
+                </div>
+            </main>
+        );
     }
 
     return (
-        <main className="px-6 lg:px-10 py-12">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <div className="flex justify-between items-center mb-8">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">
-                            {currentView === 'tests' ? 'Tests Overview' : 'Test Results'}
-                        </h1>
-                        <p className="mt-2 text-gray-600">
-                            {currentView === 'tests' 
-                                ? 'Overview of all tests with attempt statistics' 
-                                : selectedTest ? `Results for: ${selectedTest.test_name || selectedTest.name || 'Unknown Test'}` : 'Student test results with detailed analysis'
-                            }
-                        </p>
-                        {currentView === 'results' && (
-                            <button
-                                onClick={handleBackToTests}
-                                className="mt-2 flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
-                            >
-                                <ChevronUp className="w-4 h-4" />
-                                Back to Tests Overview
-                            </button>
-                        )}
-                    </div>
-                    {currentView === 'results' && (
-                    <button
-                        onClick={handleExportResults}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                        <Download className="w-4 h-4" />
-                        Export Results
-                    </button>
-                    )}
-                </div>
-
-                {/* Analytics Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="bg-white rounded-xl shadow-lg p-6 border border-gray-200"
-                    >
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Total Tests</p>
-                                <p className="text-2xl font-bold text-gray-900">{analytics.totalTests}</p>
-                            </div>
-                            <div className="p-3 bg-blue-100 rounded-lg">
-                                <BarChart3 className="w-6 h-6 text-blue-600" />
-                            </div>
-                        </div>
-                    </motion.div>
-
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1 }}
-                        className="bg-white rounded-xl shadow-lg p-6 border border-gray-200"
-                    >
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Average Score</p>
-                                <p className="text-2xl font-bold text-gray-900">{analytics.averageScore}%</p>
-                            </div>
-                            <div className="p-3 bg-green-100 rounded-lg">
-                                <TrendingUp className="w-6 h-6 text-green-600" />
-                            </div>
-                        </div>
-                    </motion.div>
-
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                        className="bg-white rounded-xl shadow-lg p-6 border border-gray-200"
-                    >
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Pass Rate</p>
-                                <p className="text-2xl font-bold text-gray-900">{analytics.passRate}%</p>
-                            </div>
-                            <div className="p-3 bg-yellow-100 rounded-lg">
-                                <Target className="w-6 h-6 text-yellow-600" />
-                            </div>
-                        </div>
-                    </motion.div>
-
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.3 }}
-                        className="bg-white rounded-xl shadow-lg p-6 border border-gray-200"
-                    >
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Active Students</p>
-                                <p className="text-2xl font-bold text-gray-900">{analytics.totalStudents}</p>
-                            </div>
-                            <div className="p-3 bg-purple-100 rounded-lg">
-                                <Users className="w-6 h-6 text-purple-600" />
-                            </div>
-                        </div>
-                    </motion.div>
-                </div>
-
-                {/* Advanced Filters */}
-                <div className="bg-white rounded-xl shadow-lg border border-gray-200 mb-8">
-                    <div className="p-6 border-b border-gray-200">
-                        <div className="flex items-center gap-2 mb-4">
-                            <Activity className="w-5 h-5 text-gray-600" />
-                            <h3 className="text-lg font-semibold text-gray-800">Advanced Filters</h3>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Module</label>
-                            <select 
-                                name="module" 
-                                value={filters.module} 
-                                onChange={handleFilterChange} 
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="">All Modules</option>
-                                    {filterOptions.modules?.map(module => (
-                                        <option key={typeof module === 'object' ? module.id : module} value={typeof module === 'object' ? module.name : module}>
-                                            {typeof module === 'object' ? module.name : module}
-                                        </option>
-                                    )) || []}
-                            </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Test Type</label>
-                            <select 
-                                name="test_type" 
-                                value={filters.test_type} 
-                                onChange={handleFilterChange} 
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="">All Types</option>
-                                    {filterOptions.test_types?.map(type => (
-                                        <option key={typeof type === 'object' ? type.id : type} value={typeof type === 'object' ? type.name : type}>
-                                            {typeof type === 'object' ? type.name : type}
-                                        </option>
-                                    )) || []}
-                            </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Campus</label>
-                            <select 
-                                name="campus" 
-                                value={filters.campus} 
-                                onChange={handleFilterChange} 
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="">All Campuses</option>
-                                    {filterOptions.campuses?.map(campus => (
-                                        <option key={typeof campus === 'object' ? campus.id : campus} value={typeof campus === 'object' ? campus.name : campus}>
-                                            {typeof campus === 'object' ? campus.name : campus}
-                                        </option>
-                                    )) || []}
-                            </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Course</label>
-                            <select 
-                                name="course" 
-                                value={filters.course} 
-                                onChange={handleFilterChange} 
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="">All Courses</option>
-                                    {filterOptions.courses?.map(course => (
-                                        <option key={typeof course === 'object' ? course.id : course} value={typeof course === 'object' ? course.name : course}>
-                                            {typeof course === 'object' ? course.name : course}
-                                        </option>
-                                    )) || []}
-                            </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Batch</label>
-                            <select 
-                                name="batch" 
-                                value={filters.batch} 
-                                onChange={handleFilterChange} 
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="">All Batches</option>
-                                    {filterOptions.batches?.map(batch => (
-                                        <option key={typeof batch === 'object' ? batch.id : batch} value={typeof batch === 'object' ? batch.name : batch}>
-                                            {typeof batch === 'object' ? batch.name : batch}
-                                        </option>
-                                    )) || []}
-                            </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
-                            <select 
-                                name="dateRange" 
-                                value={filters.dateRange} 
-                                onChange={handleFilterChange} 
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="all">All Time</option>
-                                <option value="today">Today</option>
-                                <option value="week">This Week</option>
-                                <option value="month">This Month</option>
-                            </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Main Content */}
-                    <div className="p-6">
-                        {currentView === 'tests' ? (
-                            // Tests Overview
-                            <div>
-                        <div className="flex justify-between items-center mb-4">
-                            <h4 className="text-lg font-semibold text-gray-800">
-                                        Tests Overview ({tests.length} tests)
-                            </h4>
-                            <div className="text-sm text-gray-500">
-                                        Click on a test to view detailed results
-                            </div>
-                        </div>
-
-                        {errorMsg && (
-                            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                                <p className="text-red-700">{errorMsg}</p>
-                            </div>
-                        )}
-
-                                {tests.length === 0 ? (
-                            <div className="text-center py-12">
-                                <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                                        <h3 className="text-lg font-medium text-gray-900 mb-2">No tests found</h3>
-                                        <p className="text-gray-500">No tests are available in the system.</p>
-                            </div>
-                        ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        {tests.map((test, index) => (
-                                    <motion.div
-                                                key={test._id}
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: index * 0.1 }}
-                                                onClick={() => handleTestClick(test)}
-                                                className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 hover:shadow-xl hover:border-blue-300 cursor-pointer transition-all duration-200"
-                                    >
-                                        <div className="flex items-center justify-between mb-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-semibold">
-                                                            {test.test_name?.charAt(0)?.toUpperCase() || 'T'}
-                                                </div>
-                                                <div>
-                                                            <h5 className="font-semibold text-gray-900">{test.test_name}</h5>
-                                                            <p className="text-sm text-gray-600">{test.module_id}</p>
-                                                </div>
-                                            </div>
-                                                    <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                                        test.test_type === 'practice' ? 'bg-green-100 text-green-800' :
-                                                        test.test_type === 'online' ? 'bg-blue-100 text-blue-800' :
-                                                        'bg-gray-100 text-gray-800'
-                                                    }`}>
-                                                        {test.test_type}
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="space-y-3">
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-sm text-gray-600">Total Attempts:</span>
-                                                        <span className="font-semibold text-gray-900">{test.total_attempts}</span>
-                                            </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-sm text-gray-600">Highest Score:</span>
-                                                        <span className="font-semibold text-green-600">{test.highest_score.toFixed(1)}%</span>
-                                        </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-sm text-gray-600">Average Score:</span>
-                                                        <span className="font-semibold text-blue-600">{test.average_score.toFixed(1)}%</span>
-                                                    </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-sm text-gray-600">Pass Rate:</span>
-                                                        <span className="font-semibold text-purple-600">{test.pass_rate.toFixed(1)}%</span>
-                                                            </div>
-                                                        </div>
-
-                                                <div className="mt-4 pt-4 border-t border-gray-200">
-                                                    <div className="flex items-center justify-center text-blue-600 text-sm font-medium">
-                                                        <Eye className="w-4 h-4 mr-1" />
-                                                        Click to view results
-                                                    </div>
-                                                </div>
-                                    </motion.div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                        ) : (
-                            // Test Results - Student Performance
+        <>
+            <main className="px-6 lg:px-10 py-12">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                    {currentView === 'test-details' && selectedTest ? (
+                        <TestDetailsView
+                            test={selectedTest}
+                            testAttempts={testAttempts}
+                            onBack={handleBackToList}
+                            onStudentClick={handleStudentClick}
+                            onExportTestResults={handleExportTestResults}
+                            exportLoading={exportLoading}
+                        />
+                    ) : (
+                        <>
+                            {/* Header */}
+                            <div className="flex justify-between items-center mb-8">
                                 <div>
-                                <div className="flex justify-between items-center mb-4">
-                                    <h4 className="text-lg font-semibold text-gray-800">
-                                        Student Performance ({filteredResults.length} students)
-                                    </h4>
-                                    <div className="text-sm text-gray-500">
-                                        Showing {filteredResults.length} students who attempted this test
-                                    </div>
+                                    <h1 className="text-3xl font-bold text-gray-900">
+                                        Online Tests Overview
+                                    </h1>
+                                    <p className="mt-2 text-gray-600">
+                                        Click on a test to view student attempts and detailed results
+                                    </p>
                                 </div>
-                                
-                                {errorMsg && (
-                                    <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                                        <p className="text-red-700">{errorMsg}</p>
-                                    </div>
-                                )}
+                            </div>
 
-                                {filteredResults.length === 0 ? (
-                                    <div className="text-center py-12">
-                                        <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                                        <h3 className="text-lg font-medium text-gray-900 mb-2">No students found</h3>
-                                        <p className="text-gray-500">No students have attempted this test yet.</p>
+                    {/* Error Message */}
+                    {errorMsg && (
+                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                            <p className="text-red-700">{errorMsg}</p>
+                        </div>
+                    )}
+
+                    {/* Tests Table */}
+                    <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-gray-50 border-b border-gray-200">
+                                    <tr>
+                                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Test Name
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Category
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Attempts
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Highest Score
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Average Score
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Actions
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {tests.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="6" className="px-6 py-12 text-center">
+                                                <div className="flex flex-col items-center">
+                                                    <BarChart3 className="w-12 h-12 text-gray-400 mb-4" />
+                                                    <h3 className="text-lg font-medium text-gray-900 mb-2">No online tests found</h3>
+                                                    <p className="text-gray-500">No online tests are available in the system.</p>
                                                 </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        {filteredResults.map((student, studentIdx) => (
-                                            <motion.div
-                                                key={student.student_id}
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        tests.map((test, index) => (
+                                            <motion.tr
+                                                key={test.test_id}
                                                 initial={{ opacity: 0, y: 20 }}
                                                 animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: studentIdx * 0.1 }}
-                                                className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 hover:shadow-xl transition-shadow"
+                                                transition={{ delay: index * 0.1 }}
+                                                className="hover:bg-gray-50 cursor-pointer"
+                                                onClick={() => handleTestClick(test.test_id)}
                                             >
-                                                <div className="flex items-center justify-between mb-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-semibold">
-                                                            {student.student_name?.charAt(0)?.toUpperCase() || 'S'}
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center">
+                                                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-semibold mr-3">
+                                                            {test.test_name?.charAt(0)?.toUpperCase() || 'T'}
                                                         </div>
                                                         <div>
-                                                            <h4 className="text-lg font-semibold text-gray-900">
-                                                                {student.student_name}
-                                                            </h4>
-                                                            <p className="text-sm text-gray-600">{student.student_email}</p>
-                                                        </div>
+                                                            <div className="text-sm font-medium text-gray-900">
+                                                                {test.test_name}
                                                             </div>
-                                                    <div className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${getScoreColor(student.highest_score)}`}>
-                                                        {getScoreIcon(student.highest_score)}
-                                                        {student.highest_score.toFixed(1)}%
+                                                            <div className="text-sm text-gray-500">
+                                                                {test.unique_students} students
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    {test.category}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    {test.total_attempts}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
+                                                    {test.highest_score}%
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                                                    {test.average_score}%
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    <Eye className="w-5 h-5" />
+                                                </td>
+                                            </motion.tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                        </>
+                    )}
+                </motion.div>
+            </main>
+
+            {/* Student Attempt Details Modal */}
+            {showDetailsModal && studentAttemptDetails && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+                    >
+                        <div className="p-6 border-b border-gray-200">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-xl font-semibold text-gray-900">
+                                    Student Attempt Details
+                                </h3>
+                                <button
+                                    onClick={closeDetailsModal}
+                                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                    <XCircle className="w-6 h-6" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto max-h-[70vh]">
+                            {studentAttemptDetails.length === 0 ? (
+                                <div className="text-center py-8">
+                                    <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-2">No attempt details found</h3>
+                                    <p className="text-gray-500">No detailed results available for this student's attempt.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    {studentAttemptDetails.map((attempt, attemptIndex) => (
+                                        <div key={attemptIndex} className="border border-gray-200 rounded-lg p-4">
+                                            <div className="flex justify-between items-center mb-4">
+                                                <h4 className="text-lg font-medium text-gray-900">
+                                                    Attempt {attemptIndex + 1}
+                                                </h4>
+                                                <div className="flex items-center gap-4 text-sm text-gray-600">
+                                                    <span className="flex items-center gap-1">
+                                                        <Calendar className="w-4 h-4" />
+                                                        {attempt.submitted_at ? new Date(attempt.submitted_at).toLocaleDateString() : 'N/A'}
+                                                    </span>
+                                                    <span className="flex items-center gap-1">
+                                                        <Clock className="w-4 h-4" />
+                                                        {attempt.time_taken || 'N/A'} min
+                                                    </span>
+                                                    <span className="font-medium text-green-600">
+                                                        Score: {attempt.score_percentage?.toFixed(1) || 0}%
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {attempt.detailed_results && attempt.detailed_results.length > 0 && (
+                                                <div className="space-y-3">
+                                                    {attempt.detailed_results.map((result, questionIndex) => (
+                                                        <div key={questionIndex} className="border border-gray-100 rounded-lg p-4">
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <h5 className="font-medium text-gray-900">
+                                                                    Question {questionIndex + 1}
+                                                                </h5>
+                                                                <div className={`flex items-center gap-1 ${
+                                                                    result.is_correct ? 'text-green-600' : 'text-red-600'
+                                                                }`}>
+                                                                    {result.is_correct ? (
+                                                                        <CheckCircle className="w-5 h-5" />
+                                                                    ) : (
+                                                                        <XCircle className="w-5 h-5" />
+                                                                    )}
+                                                                    <span className="text-sm font-medium">
+                                                                        {result.is_correct ? 'Correct' : 'Incorrect'}
+                                                                    </span>
                                                                 </div>
                                                             </div>
                                                             
-                                                <div className="space-y-3">
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-sm text-gray-600">Total Attempts:</span>
-                                                        <span className="font-semibold text-gray-900">{student.total_attempts}</span>
-                                                                    </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-sm text-gray-600">Highest Score:</span>
-                                                        <span className="font-semibold text-green-600">{student.highest_score.toFixed(1)}%</span>
-                                                                </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-sm text-gray-600">Average Score:</span>
-                                                        <span className="font-semibold text-blue-600">{student.average_score.toFixed(1)}%</span>
-                                                                    </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-sm text-gray-600">Campus:</span>
-                                                        <span className="font-semibold text-purple-600">{student.campus_name}</span>
-                                                    </div>
-                                                                    </div>
+                                                            <div className="mb-3">
+                                                                <p className="text-gray-700 mb-2">
+                                                                    {result.question_text || 'Question text not available'}
+                                                                </p>
+                                                            </div>
 
-                                                <div className="mt-4 pt-4 border-t border-gray-200">
-                                                    <div className="text-sm text-gray-600">
-                                                        {student.course_name} • {student.batch_name}
-                                                    </div>
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                <div>
+                                                                    <label className="text-sm font-medium text-gray-600">Student's Answer:</label>
+                                                                    <p className={`mt-1 p-2 rounded ${
+                                                                        result.is_correct ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+                                                                    }`}>
+                                                                        {result.student_answer || result.selected_answer || 'No answer provided'}
+                                                                    </p>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-sm font-medium text-gray-600">Correct Answer:</label>
+                                                                    <p className="mt-1 p-2 rounded bg-gray-50 text-gray-800">
+                                                                        {result.correct_answer_text || result.correct_answer || 'Not available'}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            </motion.div>
-                                        ))}
-                                    </div>
-                                )}
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
                             )}
-                    </div>
+                        </div>
+                    </motion.div>
                 </div>
-            </motion.div>
-        </main>
+            )}
+        </>
     );
 };
 
-export default ResultsManagement; 
+export default ResultsManagement;

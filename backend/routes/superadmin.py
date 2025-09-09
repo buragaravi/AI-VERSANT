@@ -16,6 +16,36 @@ superadmin_bp = Blueprint('superadmin', __name__)
 # Define allowed admin roles
 ALLOWED_ADMIN_ROLES = {ROLES['SUPER_ADMIN'], ROLES['CAMPUS_ADMIN'], ROLES['COURSE_ADMIN']}
 
+def safe_isoformat(date_obj):
+    """Safely convert a date object to ISO format string, handling various types."""
+    if not date_obj:
+        return None
+    
+    if hasattr(date_obj, 'isoformat'):
+        # It's a datetime object
+        return date_obj.isoformat()
+    elif isinstance(date_obj, dict):
+        # It's a MongoDB date dict, extract the date
+        if '$date' in date_obj:
+            try:
+                from datetime import datetime
+                date_str = date_obj['$date']
+                # Handle different MongoDB date formats
+                if 'T' in date_str:
+                    # ISO format with T
+                    date_obj_parsed = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                else:
+                    # Just timestamp
+                    date_obj_parsed = datetime.fromtimestamp(int(date_str) / 1000)
+                return date_obj_parsed.isoformat()
+            except (ValueError, KeyError, TypeError):
+                return str(date_obj)
+        else:
+            return str(date_obj)
+    else:
+        # It's already a string or other type
+        return str(date_obj)
+
 @superadmin_bp.route('/dashboard', methods=['GET'])
 @jwt_required()
 def dashboard():
@@ -637,7 +667,7 @@ def get_student_practice_results():
             result['student_id'] = str(result['student_id'])
             result['module_name'] = MODULES.get(result.get('module_name', ''), result.get('module_name', 'Unknown'))
             if result.get('submitted_at'):
-                result['submitted_at'] = result['submitted_at'].isoformat()
+                result['submitted_at'] = safe_isoformat(result['submitted_at'])
 
         return jsonify({
             'success': True,
@@ -908,7 +938,7 @@ def get_student_online_results():
             result['student_id'] = str(result['student_id'])
             result['module_name'] = MODULES.get(result.get('module_name', ''), result.get('module_name', 'Unknown'))
             if result.get('submitted_at'):
-                result['submitted_at'] = result['submitted_at'].isoformat()
+                result['submitted_at'] = safe_isoformat(result['submitted_at'])
 
         return jsonify({
             'success': True,
@@ -1206,7 +1236,7 @@ def get_student_assigned_modules():
                         'score': att.get('average_score', 0),
                         'correct_answers': att.get('correct_answers', 0),
                         'total_questions': att.get('total_questions', 0),
-                        'submitted_at': att.get('submitted_at').isoformat() if att.get('submitted_at') else None,
+                        'submitted_at': safe_isoformat(att.get('submitted_at')) if att.get('submitted_at') else None,
                         'result_id': str(att.get('_id'))
                     }
                     for att in test_attempts
@@ -1683,6 +1713,714 @@ def sentence_upload():
             'message': f'Upload failed: {str(e)}'
         }), 500
 
+@superadmin_bp.route('/student-attempts/<student_id>/<test_id>', methods=['GET'])
+@jwt_required()
+def get_student_attempts(student_id, test_id):
+    """Get detailed attempts for a specific student and test"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Authentication required.'
+            }), 401
+        
+        # Convert string IDs to ObjectId
+        student_object_id = ObjectId(student_id)
+        test_object_id = ObjectId(test_id)
+        
+        # Get the student attempt directly from student_test_attempts
+        attempt = mongo_db.student_test_attempts.find_one({
+            'student_id': student_object_id,
+            'test_id': test_object_id,
+            'status': 'completed'
+        })
+        
+        if not attempt:
+            return jsonify({
+                'success': True,
+                'data': [],
+                'message': 'No completed attempts found for this student and test'
+            })
+        
+        # Get test details
+        test = mongo_db.tests.find_one({'_id': test_object_id})
+        if not test:
+            return jsonify({
+                'success': False,
+                'message': 'Test not found'
+            }), 404
+        
+        # Get student details
+        student = mongo_db.students.find_one({'user_id': student_object_id})
+        if not student:
+            return jsonify({
+                'success': False,
+                'message': 'Student not found'
+            }), 404
+        
+        # Get campus, course, and batch details
+        campus = mongo_db.campuses.find_one({'_id': student.get('campus_id')}) if student.get('campus_id') else None
+        course = mongo_db.courses.find_one({'_id': student.get('course_id')}) if student.get('course_id') else None
+        batch = mongo_db.batches.find_one({'_id': student.get('batch_id')}) if student.get('batch_id') else None
+        
+        # Transform detailed_results to match frontend expectations
+        detailed_results = attempt.get('detailed_results', [])
+        transformed_results = []
+        for result in detailed_results:
+            transformed_result = {
+                'question_index': result.get('question_index', 0),
+                'question_id': result.get('question_id', ''),
+                'question_text': result.get('question', 'Question not available'),
+                'student_answer': result.get('student_answer', 'No answer provided'),
+                'selected_answer': result.get('student_answer', 'No answer provided'),
+                'correct_answer_letter': result.get('correct_answer_letter', ''),
+                'correct_answer_text': result.get('correct_answer_text', ''),
+                'is_correct': result.get('is_correct', False),
+                'score': result.get('score', 0)
+            }
+            transformed_results.append(transformed_result)
+        
+        # Format the response data
+        response_data = {
+            'attempt_id': str(attempt['_id']),
+            'student_id': str(attempt['student_id']),
+            'test_id': str(attempt['test_id']),
+            'test_name': test.get('name', 'Unknown Test'),
+            'student_name': student.get('name', 'Unknown Student'),
+            'student_email': student.get('email', ''),
+            'campus_name': campus.get('name', 'Unknown Campus') if campus else 'Unknown Campus',
+            'course_name': course.get('name', 'Unknown Course') if course else 'Unknown Course',
+            'batch_name': batch.get('name', 'Unknown Batch') if batch else 'Unknown Batch',
+            'roll_number': student.get('roll_number', ''),
+            'mobile_number': student.get('mobile_number', ''),
+            'score': attempt.get('score', 0),
+            'correct_answers': attempt.get('correct_answers', 0),
+            'total_questions': attempt.get('total_questions', 0),
+            'percentage': attempt.get('percentage', 0),
+            'score_percentage': attempt.get('percentage', 0),  # Add this for frontend compatibility
+            'duration_seconds': attempt.get('duration_seconds', 0),
+            'time_taken_ms': attempt.get('time_taken_ms', 0),
+            'time_taken': attempt.get('duration_seconds', 0) / 60,  # Convert to minutes for frontend
+            'start_time': safe_isoformat(attempt.get('start_time')),
+            'end_time': safe_isoformat(attempt.get('end_time')),
+            'submitted_at': safe_isoformat(attempt.get('submitted_at')),
+            'status': attempt.get('status', 'unknown'),
+            'test_type': attempt.get('test_type', 'unknown'),
+            'detailed_results': transformed_results,
+            'answers': attempt.get('answers', {})
+        }
+        
+        # Format duration
+        duration_seconds = response_data.get('duration_seconds', 0)
+        time_taken_ms = response_data.get('time_taken_ms', 0)
+        
+        if duration_seconds > 0:
+            minutes = int(duration_seconds // 60)
+            seconds = int(duration_seconds % 60)
+            response_data['formatted_duration'] = f"{minutes}m {seconds}s"
+        elif time_taken_ms > 0:
+            duration_seconds = time_taken_ms / 1000
+            minutes = int(duration_seconds // 60)
+            seconds = int(duration_seconds % 60)
+            response_data['formatted_duration'] = f"{minutes}m {seconds}s"
+        else:
+            response_data['formatted_duration'] = "0m 0s"
+        
+        return jsonify({
+            'success': True,
+            'data': [response_data],
+            'message': f'Found attempt details for student {student_id} and test {test_id}'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in get_student_attempts: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Failed to fetch student attempts',
+            'error': str(e)
+        }), 500
+
+@superadmin_bp.route('/export-test-attempts/<test_id>', methods=['GET'])
+@jwt_required()
+def export_test_attempts(test_id):
+    """Export test attempts for a specific test as Excel"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Authentication required.'
+            }), 401
+        
+        # Get all attempts for this test
+        attempts = list(mongo_db.student_test_attempts.find({
+            'test_id': ObjectId(test_id),
+            'test_type': 'online'
+        }))
+        
+        if not attempts:
+            return jsonify({
+                'success': False,
+                'message': 'No attempts found for this test'
+            }), 404
+        
+        # Get test details
+        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
+        if not test:
+            return jsonify({
+                'success': False,
+                'message': 'Test not found'
+            }), 404
+        
+        # Process attempts and get student details
+        excel_data = []
+        for attempt in attempts:
+            student_id = str(attempt['student_id'])
+            
+            # Get student details
+            student = mongo_db.students.find_one({'user_id': ObjectId(student_id)})
+            if not student:
+                continue
+            
+            # Get campus, course, and batch details
+            campus = mongo_db.campuses.find_one({'_id': student.get('campus_id')}) if student.get('campus_id') else None
+            course = mongo_db.courses.find_one({'_id': student.get('course_id')}) if student.get('course_id') else None
+            batch = mongo_db.batches.find_one({'_id': student.get('batch_id')}) if student.get('batch_id') else None
+            
+            # Calculate score - ensure we get clean numeric values
+            total_questions = attempt.get('total_questions', 0)
+            correct_answers = attempt.get('correct_answers', 0)
+            
+            # Handle MongoDB number types
+            if isinstance(total_questions, dict):
+                total_questions = total_questions.get('numberInt', total_questions.get('numberDouble', 0))
+            if isinstance(correct_answers, dict):
+                correct_answers = correct_answers.get('numberInt', correct_answers.get('numberDouble', 0))
+            
+            # Convert to integers
+            total_questions = int(total_questions) if total_questions else 0
+            correct_answers = int(correct_answers) if correct_answers else 0
+            
+            # Calculate score percentage
+            score = 0
+            if total_questions > 0:
+                score = (correct_answers / total_questions) * 100
+            
+            # Format dates
+            submitted_at = attempt.get('submitted_at', attempt.get('created_at'))
+            if submitted_at:
+                if isinstance(submitted_at, dict):
+                    # Handle MongoDB date objects
+                    submitted_at = safe_isoformat(submitted_at.get('$date', submitted_at))
+                else:
+                    submitted_at = safe_isoformat(submitted_at)
+            else:
+                submitted_at = ''
+            
+            # Get clean numeric values for duration
+            duration_seconds = attempt.get('duration_seconds', 0)
+            time_taken_ms = attempt.get('time_taken_ms', 0)
+            
+            if isinstance(duration_seconds, dict):
+                duration_seconds = duration_seconds.get('numberDouble', duration_seconds.get('numberInt', 0))
+            if isinstance(time_taken_ms, dict):
+                time_taken_ms = time_taken_ms.get('numberDouble', time_taken_ms.get('numberInt', 0))
+            
+            excel_data.append({
+                'Student Name': str(student.get('name', 'Unknown')),
+                'Student Email': str(student.get('email', '')),
+                'Roll Number': str(student.get('roll_number', '')),
+                'Mobile Number': str(student.get('mobile_number', '')),
+                'Campus': str(campus.get('name', 'Unknown Campus')) if campus else 'Unknown Campus',
+                'Course': str(course.get('name', 'Unknown Course')) if course else 'Unknown Course',
+                'Batch': str(batch.get('name', 'Unknown Batch')) if batch else 'Unknown Batch',
+                'Test Name': str(test.get('name', 'Unknown Test')),
+                'Total Questions': total_questions,
+                'Correct Answers': correct_answers,
+                'Total Score': round(score, 2),
+                'Duration (seconds)': round(float(duration_seconds), 2) if duration_seconds else 0,
+                'Time Taken (ms)': int(time_taken_ms) if time_taken_ms else 0,
+                'Submitted At': submitted_at,
+                'Status': str(attempt.get('status', 'unknown'))
+            })
+        
+        # Create Excel file using openpyxl with enhanced styling
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from openpyxl.utils import get_column_letter
+        from io import BytesIO
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Test Attempts"
+        
+        # Define styles
+        header_font = Font(bold=True, color="FFFFFF", size=12)
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_alignment = Alignment(horizontal='center', vertical='center')
+        
+        title_font = Font(bold=True, size=16, color="2F4F4F")
+        title_alignment = Alignment(horizontal='center', vertical='center')
+        
+        data_font = Font(size=11)
+        data_alignment = Alignment(horizontal='left', vertical='center')
+        
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        # Add test name as title (row 1)
+        test_name = test.get('name', 'Unknown Test')
+        ws.merge_cells('A1:P1')
+        title_cell = ws.cell(row=1, column=1, value=f"Test Results: {test_name}")
+        title_cell.font = title_font
+        title_cell.alignment = title_alignment
+        ws.row_dimensions[1].height = 30
+        
+        # Add empty row for spacing
+        ws.row_dimensions[2].height = 10
+        
+        # Add headers (row 3)
+        headers = [
+            'Student Name', 'Student Email', 'Roll Number', 'Mobile Number',
+            'Campus', 'Course', 'Batch', 'Test Name',
+            'Total Questions', 'Correct Answers', 'Total Score (%)',
+            'Duration (seconds)', 'Time Taken (ms)', 'Submitted At', 'Status'
+        ]
+        
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = border
+        
+        # Add data starting from row 4
+        for row_idx, data in enumerate(excel_data, 4):
+            row_data = [
+                data['Student Name'],
+                data['Student Email'],
+                data['Roll Number'],
+                data['Mobile Number'],
+                data['Campus'],
+                data['Course'],
+                data['Batch'],
+                data['Test Name'],
+                data['Total Questions'],
+                data['Correct Answers'],
+                data['Total Score'],
+                data['Duration (seconds)'],
+                data['Time Taken (ms)'],
+                data['Submitted At'],
+                data['Status']
+            ]
+            
+            for col, value in enumerate(row_data, 1):
+                cell = ws.cell(row=row_idx, column=col, value=value)
+                cell.font = data_font
+                cell.alignment = data_alignment
+                cell.border = border
+                
+                # Add alternating row colors
+                if row_idx % 2 == 0:
+                    cell.fill = PatternFill(start_color="F8F9FA", end_color="F8F9FA", fill_type="solid")
+        
+        # Set column widths for better display
+        column_widths = {
+            'A': 20,  # Student Name
+            'B': 25,  # Student Email
+            'C': 15,  # Roll Number
+            'D': 15,  # Mobile Number
+            'E': 20,  # Campus
+            'F': 20,  # Course
+            'G': 15,  # Batch
+            'H': 25,  # Test Name
+            'I': 15,  # Total Questions
+            'J': 15,  # Correct Answers
+            'K': 15,  # Total Score
+            'L': 15,  # Duration
+            'M': 15,  # Time Taken
+            'N': 20,  # Submitted At
+            'O': 12   # Status
+        }
+        
+        for col_letter, width in column_widths.items():
+            ws.column_dimensions[col_letter].width = width
+        
+        # Set row heights
+        for row in range(4, len(excel_data) + 4):
+            ws.row_dimensions[row].height = 25
+        
+        # Add summary information at the bottom
+        summary_row = len(excel_data) + 6
+        ws.cell(row=summary_row, column=1, value="Summary:").font = Font(bold=True, size=12)
+        ws.cell(row=summary_row + 1, column=1, value=f"Total Students: {len(excel_data)}")
+        ws.cell(row=summary_row + 2, column=1, value=f"Test Name: {test_name}")
+        
+        # Save to BytesIO
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        # Return Excel file
+        from flask import Response
+        return Response(
+            output.getvalue(),
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={
+                'Content-Disposition': f'attachment; filename=test_attempts_{test_id}.xlsx'
+            }
+        )
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in export_test_attempts: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Failed to export test attempts',
+            'error': str(e)
+        }), 500
+
+@superadmin_bp.route('/export-test-attempts-csv/<test_id>', methods=['GET'])
+@jwt_required()
+def export_test_attempts_csv(test_id):
+    """Export test attempts for a specific test as CSV"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Authentication required.'
+            }), 401
+        
+        # Get all attempts for this test
+        attempts = list(mongo_db.student_test_attempts.find({
+            'test_id': ObjectId(test_id),
+            'test_type': 'online'
+        }))
+        
+        if not attempts:
+            return jsonify({
+                'success': False,
+                'message': 'No attempts found for this test'
+            }), 404
+        
+        # Get test details
+        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
+        if not test:
+            return jsonify({
+                'success': False,
+                'message': 'Test not found'
+            }), 404
+        
+        # Process attempts and get student details
+        csv_data = []
+        for attempt in attempts:
+            student_id = str(attempt['student_id'])
+            
+            # Get student details
+            student = mongo_db.students.find_one({'user_id': ObjectId(student_id)})
+            if not student:
+                continue
+            
+            # Get campus, course, and batch details
+            campus = mongo_db.campuses.find_one({'_id': student.get('campus_id')}) if student.get('campus_id') else None
+            course = mongo_db.courses.find_one({'_id': student.get('course_id')}) if student.get('course_id') else None
+            batch = mongo_db.batches.find_one({'_id': student.get('batch_id')}) if student.get('batch_id') else None
+            
+            # Calculate score - ensure we get clean numeric values
+            total_questions = attempt.get('total_questions', 0)
+            correct_answers = attempt.get('correct_answers', 0)
+            
+            # Handle MongoDB number types
+            if isinstance(total_questions, dict):
+                total_questions = total_questions.get('numberInt', total_questions.get('numberDouble', 0))
+            if isinstance(correct_answers, dict):
+                correct_answers = correct_answers.get('numberInt', correct_answers.get('numberDouble', 0))
+            
+            # Convert to integers
+            total_questions = int(total_questions) if total_questions else 0
+            correct_answers = int(correct_answers) if correct_answers else 0
+            
+            # Calculate score percentage
+            score = 0
+            if total_questions > 0:
+                score = (correct_answers / total_questions) * 100
+            
+            # Format dates
+            submitted_at = attempt.get('submitted_at', attempt.get('created_at'))
+            if submitted_at:
+                if isinstance(submitted_at, dict):
+                    submitted_at = safe_isoformat(submitted_at.get('$date', submitted_at))
+                else:
+                    submitted_at = safe_isoformat(submitted_at)
+            else:
+                submitted_at = ''
+            
+            # Get clean numeric values for duration
+            duration_seconds = attempt.get('duration_seconds', 0)
+            time_taken_ms = attempt.get('time_taken_ms', 0)
+            
+            if isinstance(duration_seconds, dict):
+                duration_seconds = duration_seconds.get('numberDouble', duration_seconds.get('numberInt', 0))
+            if isinstance(time_taken_ms, dict):
+                time_taken_ms = time_taken_ms.get('numberDouble', time_taken_ms.get('numberInt', 0))
+            
+            csv_data.append({
+                'Student Name': str(student.get('name', 'Unknown')),
+                'Student Email': str(student.get('email', '')),
+                'Roll Number': str(student.get('roll_number', '')),
+                'Mobile Number': str(student.get('mobile_number', '')),
+                'Campus': str(campus.get('name', 'Unknown Campus')) if campus else 'Unknown Campus',
+                'Course': str(course.get('name', 'Unknown Course')) if course else 'Unknown Course',
+                'Batch': str(batch.get('name', 'Unknown Batch')) if batch else 'Unknown Batch',
+                'Test Name': str(test.get('name', 'Unknown Test')),
+                'Total Questions': total_questions,
+                'Correct Answers': correct_answers,
+                'Total Score (%)': round(score, 2),
+                'Duration (seconds)': round(float(duration_seconds), 2) if duration_seconds else 0,
+                'Time Taken (ms)': int(time_taken_ms) if time_taken_ms else 0,
+                'Submitted At': submitted_at,
+                'Status': str(attempt.get('status', 'unknown'))
+            })
+        
+        # Create CSV file
+        import csv
+        from io import StringIO
+        
+        output = StringIO()
+        writer = csv.DictWriter(output, fieldnames=[
+            'Student Name', 'Student Email', 'Roll Number', 'Mobile Number',
+            'Campus', 'Course', 'Batch', 'Test Name',
+            'Total Questions', 'Correct Answers', 'Total Score (%)',
+            'Duration (seconds)', 'Time Taken (ms)', 'Submitted At', 'Status'
+        ])
+        
+        # Write header
+        writer.writeheader()
+        
+        # Write data
+        for row in csv_data:
+            writer.writerow(row)
+        
+        output.seek(0)
+        
+        # Return CSV file
+        from flask import Response
+        return Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment; filename=test_attempts_{test_id}.csv'
+            }
+        )
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in export_test_attempts_csv: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Failed to export test attempts as CSV',
+            'error': str(e)
+        }), 500
+
+@superadmin_bp.route('/online-tests-overview', methods=['GET'])
+@jwt_required()
+def get_online_tests_overview():
+    """Get overview of all online tests with statistics"""
+    try:
+        # Get all online tests
+        tests = list(mongo_db.tests.find({'test_type': 'online'}, {
+            '_id': 1, 'name': 1, 'module_id': 1, 'created_at': 1
+        }))
+        
+        if not tests:
+            return jsonify({
+                'success': True,
+                'data': [],
+                'message': 'No online tests found'
+            })
+        
+        # Get all test results to calculate statistics
+        test_results = list(mongo_db.student_test_attempts.find({
+            'test_type': 'online'
+        }))
+        
+        # Group results by test_id
+        test_stats = {}
+        for result in test_results:
+            test_id = str(result['test_id'])
+            if test_id not in test_stats:
+                test_stats[test_id] = {
+                    'total_attempts': 0,
+                    'unique_students': set(),
+                    'student_scores': {},  # student_id -> highest_score
+                    'all_scores': []
+                }
+            
+            test_stats[test_id]['total_attempts'] += 1
+            test_stats[test_id]['unique_students'].add(str(result['student_id']))
+            
+            # Calculate score
+            score = 0
+            if 'correct_answers' in result and 'total_questions' in result:
+                if result['total_questions'] > 0:
+                    score = (result['correct_answers'] / result['total_questions']) * 100
+            
+            test_stats[test_id]['all_scores'].append(score)
+            
+            # Track highest score per student
+            student_id = str(result['student_id'])
+            if student_id not in test_stats[test_id]['student_scores']:
+                test_stats[test_id]['student_scores'][student_id] = 0
+            test_stats[test_id]['student_scores'][student_id] = max(
+                test_stats[test_id]['student_scores'][student_id], 
+                score
+            )
+        
+        # Build response with statistics
+        tests_overview = []
+        for test in tests:
+            test_id = str(test['_id'])
+            stats = test_stats.get(test_id, {
+                'total_attempts': 0,
+                'unique_students': set(),
+                'student_scores': {},
+                'all_scores': []
+            })
+            
+            # Calculate statistics
+            unique_students_count = len(stats['unique_students'])
+            highest_score = max(stats['all_scores']) if stats['all_scores'] else 0
+            
+            # Average score from unique students' highest scores
+            student_highest_scores = list(stats['student_scores'].values())
+            average_score = sum(student_highest_scores) / len(student_highest_scores) if student_highest_scores else 0
+            
+            tests_overview.append({
+                'test_id': test_id,
+                'test_name': test.get('name', 'Unknown Test'),
+                'category': test.get('module_id', 'Unknown Category'),
+                'total_attempts': stats['total_attempts'],
+                'unique_students': unique_students_count,
+                'highest_score': round(highest_score, 2),
+                'average_score': round(average_score, 2),
+                'created_at': safe_isoformat(test.get('created_at'))
+            })
+        
+        # Sort by test name
+        tests_overview.sort(key=lambda x: x['test_name'])
+        
+        return jsonify({
+            'success': True,
+            'data': tests_overview,
+            'message': f'Found {len(tests_overview)} online tests'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in get_online_tests_overview: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Failed to fetch online tests overview',
+            'error': str(e)
+        }), 500
+
+@superadmin_bp.route('/test-attempts/<test_id>', methods=['GET'])
+@jwt_required()
+def get_test_attempts(test_id):
+    """Get all student attempts for a specific test"""
+    try:
+        # Get all attempts for this test
+        attempts = list(mongo_db.student_test_attempts.find({
+            'test_id': ObjectId(test_id),
+            'test_type': 'online'
+        }))
+        
+        if not attempts:
+            return jsonify({
+                'success': True,
+                'data': [],
+                'message': 'No attempts found for this test'
+            })
+        
+        # Group attempts by student to get highest score per student
+        student_attempts = {}
+        for attempt in attempts:
+            student_id = str(attempt['student_id'])
+            
+            # Calculate score
+            score = 0
+            if 'correct_answers' in attempt and 'total_questions' in attempt:
+                if attempt['total_questions'] > 0:
+                    score = (attempt['correct_answers'] / attempt['total_questions']) * 100
+            
+            if student_id not in student_attempts:
+                # Get student details from students collection
+                student = mongo_db.students.find_one({'user_id': ObjectId(student_id)})
+                if not student:
+                    continue
+                
+                # Get campus, course, and batch details
+                campus = mongo_db.campuses.find_one({'_id': student.get('campus_id')}) if student.get('campus_id') else None
+                course = mongo_db.courses.find_one({'_id': student.get('course_id')}) if student.get('course_id') else None
+                batch = mongo_db.batches.find_one({'_id': student.get('batch_id')}) if student.get('batch_id') else None
+                
+                student_attempts[student_id] = {
+                    'student_id': student_id,
+                    'student_name': student.get('name', 'Unknown'),
+                    'student_email': student.get('email', ''),
+                    'campus_name': campus.get('name', 'Unknown Campus') if campus else 'Unknown Campus',
+                    'course_name': course.get('name', 'Unknown Course') if course else 'Unknown Course',
+                    'batch_name': batch.get('name', 'Unknown Batch') if batch else 'Unknown Batch',
+                    'total_questions': attempt.get('total_questions', 0),
+                    'correct_answers': attempt.get('correct_answers', 0),
+                    'highest_score': score,
+                    'attempts_count': 0,
+                    'latest_attempt': attempt.get('submitted_at', attempt.get('created_at'))
+                }
+            
+            # Update highest score and attempts count
+            student_attempts[student_id]['highest_score'] = max(
+                student_attempts[student_id]['highest_score'], 
+                score
+            )
+            student_attempts[student_id]['attempts_count'] += 1
+            
+            # Update latest attempt date
+            attempt_date = attempt.get('submitted_at', attempt.get('created_at'))
+            if attempt_date and attempt_date > student_attempts[student_id]['latest_attempt']:
+                student_attempts[student_id]['latest_attempt'] = attempt_date
+        
+        # Convert to list and sort by highest score (descending)
+        attempts_list = list(student_attempts.values())
+        attempts_list.sort(key=lambda x: x['highest_score'], reverse=True)
+        
+        # Format dates
+        for attempt in attempts_list:
+            attempt['latest_attempt'] = safe_isoformat(attempt['latest_attempt'])
+        
+        return jsonify({
+            'success': True,
+            'data': attempts_list,
+            'message': f'Found {len(attempts_list)} students who attempted this test'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in get_test_attempts: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Failed to fetch test attempts',
+            'error': str(e)
+        }), 500
+
 @superadmin_bp.route('/export-results', methods=['GET'])
 @jwt_required()
 def export_results():
@@ -1699,12 +2437,13 @@ def export_results():
         
         # Get query parameters
         module_filter = request.args.get('module')
-        test_type_filter = request.args.get('test_type')
+        test_type_filter = request.args.get('test_type', 'online')  # Default to online tests
         campus_filter = request.args.get('campus')
         course_filter = request.args.get('course')
         batch_filter = request.args.get('batch')
         date_range = request.args.get('dateRange', 'all')
         score_range = request.args.get('scoreRange', 'all')
+        export_format = request.args.get('format', 'csv')  # 'csv' or 'excel'
         
         # Build match conditions
         match_conditions = {}
@@ -1826,59 +2565,162 @@ def export_results():
         
         results = list(mongo_db.db.test_results.aggregate(pipeline))
         
-        # Convert to CSV
-        import csv
-        import io
+        if export_format == 'excel':
+            # Export as Excel
+            try:
+                import pandas as pd
+                from io import BytesIO
+                
+                # Prepare data for Excel
+                excel_data = []
+                for result in results:
+                    # Extract actual values from MongoDB structures
+                    score = result.get('average_score', 0)
+                    if isinstance(score, dict) and 'numberDouble' in score:
+                        score = float(score['numberDouble'])
+                    elif isinstance(score, dict) and 'numberInt' in score:
+                        score = float(score['numberInt'])
+                    
+                    total_questions = result.get('total_questions', 0)
+                    if isinstance(total_questions, dict) and 'numberInt' in total_questions:
+                        total_questions = int(total_questions['numberInt'])
+                    
+                    correct_answers = result.get('correct_answers', 0)
+                    if isinstance(correct_answers, dict) and 'numberInt' in correct_answers:
+                        correct_answers = int(correct_answers['numberInt'])
+                    
+                    # Format submitted_at as proper datetime
+                    submitted_at = result.get('submitted_at', '')
+                    if isinstance(submitted_at, dict) and 'date' in submitted_at:
+                        # Convert MongoDB date to readable format
+                        timestamp = int(submitted_at['date']['numberLong']) / 1000
+                        submitted_at = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        submitted_at = safe_isoformat(submitted_at) if submitted_at else ''
+                    
+                    excel_data.append({
+                        'Student Name': result.get('student_name', ''),
+                        'Student Email': result.get('student_email', ''),
+                        'Campus': result.get('campus_name', ''),
+                        'Course': result.get('course_name', ''),
+                        'Batch': result.get('batch_name', ''),
+                        'Test Name': result.get('test_name', ''),
+                        'Module': result.get('module_name', ''),
+                        'Test Type': result.get('test_type', ''),
+                        'Score (%)': score,
+                        'Total Questions': total_questions,
+                        'Correct Answers': correct_answers,
+                        'Submitted At': submitted_at
+                    })
+                
+                # Create Excel file
+                df = pd.DataFrame(excel_data)
+                output = BytesIO()
+                
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    # Main results sheet
+                    df.to_excel(writer, sheet_name='Test Results', index=False)
+                    
+                    # Summary sheet
+                    summary_data = {
+                        'Metric': ['Total Tests', 'Total Students', 'Average Score', 'Pass Rate'],
+                        'Value': [
+                            len(results),
+                            len(set(r.get('student_id') for r in results)),
+                            sum(r.get('average_score', 0) for r in results) / len(results) if results else 0,
+                            len([r for r in results if r.get('average_score', 0) >= 60]) / len(results) * 100 if results else 0
+                        ]
+                    }
+                    pd.DataFrame(summary_data).to_excel(writer, sheet_name='Summary', index=False)
+                
+                output.seek(0)
+                
+                from flask import Response
+                return Response(
+                    output.getvalue(),
+                    mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    headers={'Content-Disposition': f'attachment; filename=online-test-results-{datetime.now().strftime("%Y%m%d")}.xlsx'}
+                )
+                
+            except ImportError:
+                # Fallback to CSV if pandas is not available
+                current_app.logger.warning("pandas not available, falling back to CSV export")
+                export_format = 'csv'
         
-        output = io.StringIO()
-        writer = csv.writer(output)
-        
-        # Write header
-        writer.writerow([
-            'Student Name',
-            'Student Email',
-            'Campus',
-            'Course',
-            'Batch',
-            'Test Name',
-            'Module',
-            'Test Type',
-            'Score (%)',
-            'Total Questions',
-            'Correct Answers',
-            'Submitted At',
-            'Duration (min)',
-            'Time Taken (min)'
-        ])
-        
-        # Write data
-        for result in results:
+        if export_format == 'csv':
+            # Export as CSV
+            import csv
+            import io
+            
+            output = io.StringIO()
+            writer = csv.writer(output)
+            
+            # Write header
             writer.writerow([
-                result.get('student_name', ''),
-                result.get('student_email', ''),
-                result.get('campus_name', ''),
-                result.get('course_name', ''),
-                result.get('batch_name', ''),
-                result.get('test_name', ''),
-                result.get('module_name', ''),
-                result.get('test_type', ''),
-                result.get('average_score', 0),
-                result.get('total_questions', 0),
-                result.get('correct_answers', 0),
-                result.get('submitted_at', '').isoformat() if result.get('submitted_at') else '',
-                result.get('duration', 0),
-                result.get('time_taken', 0)
+                'Student Name',
+                'Student Email',
+                'Campus',
+                'Course',
+                'Batch',
+                'Test Name',
+                'Module',
+                'Test Type',
+                'Score (%)',
+                'Total Questions',
+                'Correct Answers',
+                'Submitted At'
             ])
-        
-        output.seek(0)
-        csv_content = output.getvalue()
-        
-        from flask import Response
-        return Response(
-            csv_content,
-            mimetype='text/csv',
-            headers={'Content-Disposition': f'attachment; filename=test-results-{datetime.now().strftime("%Y%m%d")}.csv'}
-        )
+            
+            # Write data
+            for result in results:
+                # Extract actual values from MongoDB structures
+                score = result.get('average_score', 0)
+                if isinstance(score, dict) and 'numberDouble' in score:
+                    score = float(score['numberDouble'])
+                elif isinstance(score, dict) and 'numberInt' in score:
+                    score = float(score['numberInt'])
+                
+                total_questions = result.get('total_questions', 0)
+                if isinstance(total_questions, dict) and 'numberInt' in total_questions:
+                    total_questions = int(total_questions['numberInt'])
+                
+                correct_answers = result.get('correct_answers', 0)
+                if isinstance(correct_answers, dict) and 'numberInt' in correct_answers:
+                    correct_answers = int(correct_answers['numberInt'])
+                
+                # Format submitted_at as proper datetime
+                submitted_at = result.get('submitted_at', '')
+                if isinstance(submitted_at, dict) and 'date' in submitted_at:
+                    # Convert MongoDB date to readable format
+                    timestamp = int(submitted_at['date']['numberLong']) / 1000
+                    submitted_at = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    submitted_at = safe_isoformat(submitted_at) if submitted_at else ''
+                
+                writer.writerow([
+                    result.get('student_name', ''),
+                    result.get('student_email', ''),
+                    result.get('campus_name', ''),
+                    result.get('course_name', ''),
+                    result.get('batch_name', ''),
+                    result.get('test_name', ''),
+                    result.get('module_name', ''),
+                    result.get('test_type', ''),
+                    score,
+                    total_questions,
+                    correct_answers,
+                    submitted_at
+                ])
+            
+            output.seek(0)
+            csv_content = output.getvalue()
+            
+            from flask import Response
+            return Response(
+                csv_content,
+                mimetype='text/csv',
+                headers={'Content-Disposition': f'attachment; filename=online-test-results-{datetime.now().strftime("%Y%m%d")}.csv'}
+            )
         
     except Exception as e:
         current_app.logger.error(f"Error exporting results: {str(e)}")
@@ -2036,7 +2878,7 @@ def get_test_results_simple():
                     attempt['student_id'] = str(attempt['student_id'])
                     attempt['test_id'] = str(attempt['test_id'])
                     if attempt.get('submitted_at'):
-                        attempt['submitted_at'] = attempt['submitted_at'].isoformat()
+                        attempt['submitted_at'] = safe_isoformat(attempt['submitted_at'])
                     attempt['source_collection'] = 'student_test_attempts'
                 all_results.extend(attempts)
                 current_app.logger.info(f"Found {len(attempts)} simple results in student_test_attempts")
@@ -2052,7 +2894,7 @@ def get_test_results_simple():
                     result['student_id'] = str(result['student_id'])
                     result['test_id'] = str(result['test_id'])
                     if result.get('submitted_at'):
-                        result['submitted_at'] = result['submitted_at'].isoformat()
+                        result['submitted_at'] = safe_isoformat(result['submitted_at'])
                     result['source_collection'] = 'test_results'
                 all_results.extend(results)
                 current_app.logger.info(f"Found {len(results)} simple results in test_results")
@@ -2068,7 +2910,7 @@ def get_test_results_simple():
                     assignment['student_id'] = str(assignment['student_id'])
                     assignment['test_id'] = str(assignment['test_id'])
                     if assignment.get('completed_at'):
-                        assignment['submitted_at'] = assignment['completed_at'].isoformat()
+                        assignment['submitted_at'] = safe_isoformat(assignment['completed_at'])
                     assignment['source_collection'] = 'student_test_assignments'
                 all_results.extend(assignments)
                 current_app.logger.info(f"Found {len(assignments)} simple results in student_test_assignments")
@@ -3088,10 +3930,22 @@ def get_all_test_results():
                 if result.get('test_id'):
                     result['test_id'] = str(result['test_id'])
                 
-                # Convert any other ObjectId fields that might exist
-                for key, value in result.items():
-                    if hasattr(value, '__class__') and value.__class__.__name__ == 'ObjectId':
-                        result[key] = str(value)
+                # Convert any other ObjectId fields that might exist recursively
+                def convert_objectids_recursive(obj):
+                    if isinstance(obj, dict):
+                        for k, v in obj.items():
+                            if isinstance(v, ObjectId):
+                                obj[k] = str(v)
+                            elif isinstance(v, (dict, list)):
+                                convert_objectids_recursive(v)
+                    elif isinstance(obj, list):
+                        for i, item in enumerate(obj):
+                            if isinstance(item, ObjectId):
+                                obj[i] = str(item)
+                            elif isinstance(item, (dict, list)):
+                                convert_objectids_recursive(item)
+                
+                convert_objectids_recursive(result)
                 
                 # If student details are missing, try direct lookup
                 if result.get('student_name') == 'Unknown Student' and result.get('student_id'):
@@ -3129,13 +3983,35 @@ def get_all_test_results():
                 
                 result['module_name'] = MODULES.get(result.get('module_name', ''), result.get('module_name', 'Unknown'))
                 if result.get('submitted_at'):
-                    result['submitted_at'] = result['submitted_at'].isoformat()
+                    result['submitted_at'] = safe_isoformat(result['submitted_at'])
                 unique_results.append(result)
         
         # Sort results by submitted_at in descending order to show latest attempts first
         unique_results.sort(key=lambda x: x.get('submitted_at', ''), reverse=True)
         
         current_app.logger.info(f"Total unique results found: {len(unique_results)}")
+        
+        # Final comprehensive ObjectId conversion for all results
+        def final_convert_objectids(obj):
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    if isinstance(v, ObjectId):
+                        obj[k] = str(v)
+                    elif isinstance(v, (dict, list)):
+                        final_convert_objectids(v)
+            elif isinstance(obj, list):
+                for i, item in enumerate(obj):
+                    if isinstance(item, ObjectId):
+                        obj[i] = str(item)
+                    elif isinstance(item, (dict, list)):
+                        final_convert_objectids(item)
+        
+        # Convert ObjectIds in all results
+        for result in unique_results:
+            final_convert_objectids(result)
+        
+        # Convert ObjectIds in debug_info as well
+        final_convert_objectids(debug_info)
         
         return jsonify({
             'success': True,
@@ -3271,7 +4147,7 @@ def get_test_result_details(result_id):
             'score_percentage': result.get('score_percentage', 0),
             'total_questions': result.get('total_questions', 0),
             'correct_answers': result.get('correct_answers', 0),
-            'submitted_at': result.get('submitted_at', '').isoformat() if result.get('submitted_at') else '',
+            'submitted_at': safe_isoformat(result.get('submitted_at')) if result.get('submitted_at') else '',
             'source_collection': source_collection,
             'detailed_results': detailed_results
         }
@@ -3406,7 +4282,7 @@ def get_all_practice_results():
                     attempt['student_id'] = str(attempt['student_id'])
                     attempt['test_id'] = str(attempt['test_id'])
                     if attempt.get('submitted_at'):
-                        attempt['submitted_at'] = attempt['submitted_at'].isoformat()
+                        attempt['submitted_at'] = safe_isoformat(attempt['submitted_at'])
                     attempt['source_collection'] = 'student_test_attempts'
                 all_results.extend(attempts)
                 current_app.logger.info(f"Found {len(attempts)} results in student_test_attempts")
@@ -3424,7 +4300,7 @@ def get_all_practice_results():
                     result['student_id'] = str(result['student_id'])
                     result['test_id'] = str(result['test_id'])
                     if result.get('submitted_at'):
-                        result['submitted_at'] = result['submitted_at'].isoformat()
+                        result['submitted_at'] = safe_isoformat(result['submitted_at'])
                     result['source_collection'] = 'test_results'
                 all_results.extend(results)
                 current_app.logger.info(f"Found {len(results)} results in test_results")
@@ -3435,6 +4311,25 @@ def get_all_practice_results():
         
         # Sort by submitted_at (most recent first)
         all_results.sort(key=lambda x: x.get('submitted_at', ''), reverse=True)
+        
+        # Final comprehensive ObjectId conversion for all results
+        def final_convert_objectids(obj):
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    if isinstance(v, ObjectId):
+                        obj[k] = str(v)
+                    elif isinstance(v, (dict, list)):
+                        final_convert_objectids(v)
+            elif isinstance(obj, list):
+                for i, item in enumerate(obj):
+                    if isinstance(item, ObjectId):
+                        obj[i] = str(item)
+                    elif isinstance(item, (dict, list)):
+                        final_convert_objectids(item)
+        
+        # Convert ObjectIds in all results
+        for result in all_results:
+            final_convert_objectids(result)
         
         return jsonify({
             'success': True,
@@ -3483,7 +4378,7 @@ def get_student_progress(student_id):
                     attempt['_id'] = str(attempt['_id'])
                     attempt['test_id'] = str(attempt['test_id'])
                     if attempt.get('submitted_at'):
-                        attempt['submitted_at'] = attempt['submitted_at'].isoformat()
+                        attempt['submitted_at'] = safe_isoformat(attempt['submitted_at'])
                     attempt['source_collection'] = 'student_test_attempts'
                 all_results.extend(attempts)
         except Exception as e:
@@ -3497,7 +4392,7 @@ def get_student_progress(student_id):
                     result['_id'] = str(result['_id'])
                     result['test_id'] = str(result['test_id'])
                     if result.get('submitted_at'):
-                        result['submitted_at'] = result['submitted_at'].isoformat()
+                        result['submitted_at'] = safe_isoformat(result['submitted_at'])
                     result['source_collection'] = 'test_results'
                 all_results.extend(results)
         except Exception as e:

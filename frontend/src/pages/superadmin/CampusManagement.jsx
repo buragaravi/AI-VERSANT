@@ -18,12 +18,9 @@ const CampusManagement = () => {
     const [isEditMode, setIsEditMode] = useState(false);
     const [selectedCampus, setSelectedCampus] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [formData, setFormData] = useState({
-        campus_name: '',
-        admin_name: '',
-        admin_email: '',
-        admin_password: ''
-    });
+      const [formData, setFormData] = useState({
+    campus_name: ''
+  });
     const [expandedCampus, setExpandedCampus] = useState(null);
     const [courses, setCourses] = useState([]);
     const [loadingCourses, setLoadingCourses] = useState(false);
@@ -67,8 +64,7 @@ const CampusManagement = () => {
 
     const filteredCampuses = useMemo(() => {
         return campuses.filter(campus =>
-            (campus.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-            (campus.admin?.name.toLowerCase() || '').includes(searchTerm.toLowerCase())
+            (campus.name?.toLowerCase() || '').includes(searchTerm.toLowerCase())
         );
     }, [campuses, searchTerm]);
 
@@ -81,15 +77,12 @@ const CampusManagement = () => {
             setIsEditMode(true);
             setSelectedCampus(campus);
             setFormData({
-                campus_name: campus.name,
-                admin_name: campus.admin.name,
-                admin_email: campus.admin.email,
-                admin_password: ''
+                campus_name: campus.name
             });
         } else {
             setIsEditMode(false);
             setSelectedCampus(null);
-            setFormData({ campus_name: '', admin_name: '', admin_email: '', admin_password: '' });
+            setFormData({ campus_name: '' });
         }
         setIsModalOpen(true);
     };
@@ -106,9 +99,8 @@ const CampusManagement = () => {
                 await api.put(`/campus-management/${selectedCampus.id}`, formData);
                 success('Campus updated successfully!');
             } else {
-                info('Creating campus and sending credentials...');
                 await api.post('/campus-management/', formData);
-                success('Campus created and credentials sent!');
+                success('Campus created successfully!');
             }
             fetchCampuses();
             closeModal();
@@ -152,7 +144,7 @@ const CampusManagement = () => {
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                                     <input
                                         type="text"
-                                        placeholder="Search by campus or admin name..."
+                                        placeholder="Search by campus name..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                         className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
@@ -166,7 +158,6 @@ const CampusManagement = () => {
                                         <thead className="bg-gray-50">
                                             <tr>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campus</th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campus Admin</th>
                                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                             </tr>
                                         </thead>
@@ -181,10 +172,6 @@ const CampusManagement = () => {
                                                                     {expandedCampus === campus.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                                                                 </div>
                                                             </div>
-                                                        </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap">
-                                                            <div className="text-sm font-medium text-gray-900">{campus.admin?.name || 'N/A'}</div>
-                                                            <div className="text-sm text-gray-500">{campus.admin?.email || 'N/A'}</div>
                                                         </td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                             <button onClick={(e) => { e.stopPropagation(); openModal(campus); }} className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={18} /></button>
@@ -249,14 +236,11 @@ const CampusManagement = () => {
                             <form onSubmit={handleSubmit}>
                                 <div className="space-y-4">
                                     <InputField label="Campus Name" name="campus_name" value={formData.campus_name} onChange={handleInputChange} icon={<Building size={18}/>} />
-                                    <InputField label="Admin Name" name="admin_name" value={formData.admin_name} onChange={handleInputChange} icon={<User size={18}/>} />
-                                    <InputField label="Admin Email" name="admin_email" type="email" value={formData.admin_email} onChange={handleInputChange} icon={<Mail size={18}/>} disabled={isEditMode} />
-                                    <InputField label="Admin Password" name="admin_password" type="password" value={formData.admin_password} onChange={handleInputChange} icon={<Key size={18}/>} placeholder={isEditMode ? 'Leave blank to keep current password' : ''}/>
                                 </div>
                                 <div className="mt-8 flex justify-end">
                                     <button type="button" onClick={closeModal} className="mr-3 bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300">Cancel</button>
                                     <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700" disabled={isSubmitting}>
-                                        {isSubmitting ? 'Submitting...' : (isEditMode ? 'Update' : 'Create & Send Credentials')}
+                                        {isSubmitting ? 'Submitting...' : (isEditMode ? 'Update' : 'Create Campus')}
                                     </button>
                                 </div>
                             </form>

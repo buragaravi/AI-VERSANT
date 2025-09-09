@@ -92,6 +92,8 @@ const TestManagement = () => {
   const [sequence, setSequence] = useState(1)
   const [uploadedQuestions, setUploadedQuestions] = useState([])
   const [notifyModalOpen, setNotifyModalOpen] = useState(false)
+  const [successModalOpen, setSuccessModalOpen] = useState(false)
+  const [createdTestId, setCreatedTestId] = useState(null)
   const [notifyLoading, setNotifyLoading] = useState(false)
   const [notifyResults, setNotifyResults] = useState([])
 
@@ -167,6 +169,8 @@ const TestManagement = () => {
     setView('list')
     setUploadedQuestions([]) // Reset uploaded questions when test is created
     if (newTestId) {
+      setCreatedTestId(newTestId)
+      setSuccessModalOpen(true)
       setProcessingTests(prev => new Set(prev).add(newTestId));
       // Manually add a placeholder to the list for immediate feedback
       setTests(prev => [
@@ -323,7 +327,7 @@ const TestManagement = () => {
                   <tbody>
                     {notifyResults.map((s, idx) => (
                       <tr key={s.email} className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50'}>
-                        <td className="px-4 py-2 border-b">{s.student_name || s.name || 'Unknown'}</td>
+                        <td className="px-4 py-2 border-b">{s.name}</td>
                         <td className="px-4 py-2 border-b">{s.email}</td>
                         <td className="px-4 py-2 border-b">{s.mobile_number || '-'}</td>
                         <td className="px-4 py-2 border-b">
@@ -334,20 +338,16 @@ const TestManagement = () => {
                           )}
                         </td>
                         <td className="px-4 py-2 border-b">
-                          {s.email_sent ? (
-                            <span className="text-green-700 font-semibold">Sent</span>
-                          ) : (
-                            <span className="text-red-600 font-semibold">Failed</span>
-                          )}
+                          {s.notify_status === 'sent' && <span className="text-green-700 font-semibold">Sent</span>}
+                          {s.notify_status === 'skipped' && <span className="text-gray-500 font-semibold">Skipped</span>}
+                          {s.notify_status === 'pending' && <span className="text-blue-500 font-semibold">Pending</span>}
+                          {s.notify_status === 'failed' && <span className="text-red-600 font-semibold">Failed</span>}
                         </td>
                         <td className="px-4 py-2 border-b">
-                          {s.sms_sent ? (
-                            <span className="text-green-700 font-semibold">Sent</span>
-                          ) : s.mobile_number ? (
-                            <span className="text-gray-500 font-semibold">Not Sent</span>
-                          ) : (
-                            <span className="text-gray-500 font-semibold">No Mobile</span>
-                          )}
+                          {s.sms_status === 'sent' && <span className="text-green-700 font-semibold">Sent</span>}
+                          {s.sms_status === 'failed' && <span className="text-red-600 font-semibold">Failed</span>}
+                          {s.sms_status === 'no_mobile' && <span className="text-gray-500 font-semibold">No Mobile</span>}
+                          {!s.sms_status && <span className="text-gray-400 font-semibold">-</span>}
                         </td>
                       </tr>
                     ))}
@@ -363,6 +363,62 @@ const TestManagement = () => {
           </div>
           <div className="flex justify-center mt-4">
             <button onClick={() => setNotifyModalOpen(false)} className="px-6 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 shadow">Close</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Success Modal with Exam URL */}
+      {successModalOpen && (
+        <Modal onClose={() => setSuccessModalOpen(false)} title="Test Created Successfully!">
+          <div className="text-center py-6">
+            <div className="mb-6">
+              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+                <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Test Created Successfully!</h3>
+              <p className="text-gray-600 mb-4">Your test has been created and is ready for students to take.</p>
+            </div>
+            
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <h4 className="font-medium text-gray-900 mb-2">Exam URL:</h4>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={`crt.pydasoft.in/student/exam/${createdTestId}`}
+                  readOnly
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm font-mono"
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`crt.pydasoft.in/student/exam/${createdTestId}`);
+                    success('URL copied to clipboard!');
+                  }}
+                  className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setSuccessModalOpen(false)}
+                className="px-6 py-2 rounded-lg bg-gray-600 text-white font-semibold hover:bg-gray-700 shadow"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  setSuccessModalOpen(false);
+                  setView('list');
+                }}
+                className="px-6 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 shadow"
+              >
+                View Test List
+              </button>
+            </div>
           </div>
         </Modal>
       )}
@@ -412,7 +468,7 @@ const TestListView = ({ tests, loading, setView, onViewTest, onDeleteTest, onTes
         </div>
         <div className="flex space-x-3">
           <button
-            onClick={"testing just"}
+            onClick={onTestEmail}
             className="inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-orange-500 hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-transform transform hover:scale-105"
           >
             🔧 Fix Audio URLs
@@ -597,34 +653,6 @@ const TestPreviewView = ({ test, onBack, onTestEmail, onFixAudioUrls, onNotifySt
     }
   };
 
-  // Copy test links handler
-  const handleCopyTestLinks = async () => {
-    try {
-      success('Fetching test links...');
-      const res = await api.get(`/test-management/test-links/${test._id}`);
-      if (res.data && res.data.success) {
-        const testLinks = res.data.test_links;
-        if (testLinks.length === 0) {
-          error('No students found for this test');
-          return;
-        }
-        
-        // Create a formatted text with test link (same for all students)
-        let linksText = `Test Links for: ${res.data.test_name}\n`;
-        linksText += `Test Type: ${res.data.test_type}\n\n`;
-        linksText += `Test Link: ${testLinks[0].test_link}`;
-        
-        // Copy to clipboard
-        await navigator.clipboard.writeText(linksText);
-        success(`Copied ${testLinks.length} test links to clipboard!`);
-      } else {
-        error(res.data.message || 'Failed to fetch test links');
-      }
-    } catch (e) {
-      error('Failed to copy test links. Please try again.');
-    }
-  };
-
 
 
 
@@ -677,12 +705,6 @@ const TestPreviewView = ({ test, onBack, onTestEmail, onFixAudioUrls, onNotifySt
             className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
           >
             Notify Students
-          </button>
-          <button
-            onClick={handleCopyTestLinks}
-            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
-          >
-            📋 Copy Test Links
           </button>
           <button
             onClick={() => navigate(`/superadmin/results?test_id=${test._id}`)}
@@ -2309,8 +2331,9 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
       let topicId = testData.topic_id || selectedTopic;
 
       if (testData.module.startsWith('CRT_')) {
-        // For CRT modules, use the module_id directly as level_id
-        levelId = testData.module;
+        // For CRT modules, don't set level_id unless it's specifically needed
+        // The backend will handle CRT modules without level_id
+        levelId = null;
         subcategory = null;
       } else if (testData.module === 'GRAMMAR') {
         // For Grammar, use level as level_id (since level contains the grammar category)
@@ -2322,7 +2345,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
         subcategory = null;
       }
 
-      console.log('Fetching questions for:', {
+      console.log('Fetching questions for CRT module:', {
         module_id: testData.module,
         level_id: levelId,
         subcategory: subcategory,
@@ -2330,7 +2353,8 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
         count: count,
         page: page,
         original_level: testData.level,
-        original_subcategory: testData.subcategory
+        original_subcategory: testData.subcategory,
+        isCRT: testData.module.startsWith('CRT_')
       });
 
       // Use the new bulk selection endpoint
@@ -2800,8 +2824,9 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
         let levelId = testData.level;
 
         if (testData.module.startsWith('CRT_')) {
-          // For CRT modules, use the module_id directly as level_id
-          levelId = testData.module;
+          // For CRT modules, don't set level_id unless it's specifically needed
+          // The backend will handle CRT modules without level_id
+          levelId = null;
         }
 
         const payload = {
@@ -2816,6 +2841,9 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
         if (response.data.success) {
           setLocalQuestionCount(response.data.available_count);
           console.log('Question count response:', response.data);
+          console.log('Available count for CRT module:', response.data.available_count);
+        } else {
+          console.error('Question count failed:', response.data.message);
         }
       } catch (error) {
         console.error('Error fetching question count:', error);

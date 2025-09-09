@@ -154,17 +154,17 @@ const PracticeModuleTaking = () => {
                       className={clsx(
                         'flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all w-full',
                         {
-                          'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-300': answers[currentQuestion.question_id] === key,
-                          'border-gray-200 hover:border-indigo-400': answers[currentQuestion.question_id] !== key,
+                          'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-300': answers[currentQuestion.question_id] === value,
+                          'border-gray-200 hover:border-indigo-400': answers[currentQuestion.question_id] !== value,
                         }
                       )}
                     >
                       <input
                         type="radio"
                         name={currentQuestion.question_id}
-                        value={key}
-                        checked={answers[currentQuestion.question_id] === key}
-                        onChange={() => handleAnswerChange(currentQuestion.question_id, key)}
+                        value={value}
+                        checked={answers[currentQuestion.question_id] === value}
+                        onChange={() => handleAnswerChange(currentQuestion.question_id, value)}
                         className="h-5 w-5 mr-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                       />
                       <span className="font-semibold text-gray-700">{key}.</span>

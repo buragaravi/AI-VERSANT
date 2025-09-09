@@ -31,16 +31,9 @@ def get_campuses():
         
         campus_list = []
         for campus in campuses:
-            admin = mongo_db.users.find_one({'_id': campus.get('admin_id')})
-            admin_info = {
-                'id': str(admin['_id']),
-                'name': admin.get('name'),
-                'email': admin.get('email')
-            } if admin else None
             campus_list.append({
                 'id': str(campus['_id']),
                 'name': campus.get('name'),
-                'admin': admin_info,
                 'created_at': campus.get('created_at')
             })
         
@@ -70,7 +63,7 @@ def get_campuses_simple():
 @jwt_required()
 @require_permission(module='campus_management', action='create_campus')
 def create_campus():
-    """Create a new campus and assign an admin - SUPER ADMIN ONLY"""
+    """Create a new campus - SUPER ADMIN ONLY"""
     try:
         current_user_id = get_jwt_identity()
         user = mongo_db.find_user_by_id(current_user_id)
@@ -84,46 +77,22 @@ def create_campus():
         
         data = request.get_json()
         campus_name = data.get('campus_name')
-        admin_name = data.get('admin_name')
-        admin_email = data.get('admin_email')
-        admin_password = data.get('admin_password')
-        if not all([campus_name, admin_name, admin_email, admin_password]):
-            return jsonify({'success': False, 'message': 'All fields are required'}), 400
-
-        if mongo_db.users.find_one({'email': admin_email}):
-            return jsonify({'success': False, 'message': 'Admin with this email already exists'}), 409
-
-        password_hash = bcrypt.generate_password_hash(admin_password).decode('utf-8')
         
-        # Create campus admin user
-        admin_user = {
-            'name': admin_name,
-            'email': admin_email,
-            'username': admin_name,
-            'password_hash': password_hash,
-            'role': ROLES['CAMPUS_ADMIN'],
-            'is_active': True,
-            'created_at': datetime.now(pytz.utc)
-        }
-        user_id = mongo_db.users.insert_one(admin_user).inserted_id
+        if not campus_name:
+            return jsonify({'success': False, 'message': 'Campus name is required'}), 400
 
-        # Create campus
+        # Create campus without admin
         campus = {
             'name': campus_name,
-            'admin_id': user_id,
             'created_at': datetime.now(pytz.utc)
         }
         campus_id = mongo_db.campuses.insert_one(campus).inserted_id
-        
-        # Update user with campus_id
-        mongo_db.users.update_one({'_id': user_id}, {'$set': {'campus_id': campus_id}})
         
         return jsonify({
             'success': True,
             'message': 'Campus created successfully',
             'data': {
-                'campus_id': str(campus_id),
-                'admin_id': str(user_id)
+                'campus_id': str(campus_id)
             }
         }), 201
         
@@ -133,26 +102,15 @@ def create_campus():
 @campus_management_bp.route('/<campus_id>', methods=['PUT'])
 @jwt_required()
 def update_campus(campus_id):
-    """Update a campus name or re-assign admin"""
+    """Update a campus name"""
     try:
         data = request.get_json()
         
         # Update campus name
         if 'name' in data:
             mongo_db.campuses.update_one({'_id': ObjectId(campus_id)}, {'$set': {'name': data['name']}})
-        
-        # Update campus admin
-        if 'admin_email' in data and 'admin_name' in data:
-            update_data = {'name': data['admin_name'], 'email': data['admin_email'], 'username': data['admin_name']}
-            if 'admin_password' in data and data['admin_password']:
-                password_hash = bcrypt.generate_password_hash(data['admin_password']).decode('utf-8')
-                update_data['password_hash'] = password_hash
-            
-            campus = mongo_db.campuses.find_one({'_id': ObjectId(campus_id)})
-            if campus and 'admin_id' in campus:
-                mongo_db.users.update_one({'_id': campus['admin_id']}, {'$set': update_data})
 
-        return jsonify({'success': True}), 200
+        return jsonify({'success': True, 'message': 'Campus updated successfully'}), 200
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 

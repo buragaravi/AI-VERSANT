@@ -19,6 +19,15 @@ const StudentDashboard = () => {
   const [unlockedLoading, setUnlockedLoading] = useState(true)
   const [unlockedError, setUnlockedError] = useState(null)
 
+  // Helper function to safely format numbers
+  const safeToFixed = (value, decimals = 1) => {
+    if (typeof value === 'number' && !isNaN(value)) {
+      return value.toFixed(decimals)
+    }
+    const num = parseFloat(value || 0)
+    return isNaN(num) ? '0.0' : num.toFixed(decimals)
+  }
+
   const coreModules = [
     { id: 'GRAMMAR', name: 'Grammar', icon: '🧠', color: 'bg-indigo-500' },
     { id: 'VOCABULARY', name: 'Vocabulary', icon: '📚', color: 'bg-green-500' }
@@ -158,8 +167,8 @@ const StudentDashboard = () => {
                           style={{ width: `${progressPercentage}%` }}
                         />
                       </div>
-                      <p className="text-sm text-gray-600 mb-1">{progressPercentage.toFixed(1)}% Complete</p>
-                      <p className="text-xs text-gray-500">Best: {highestScore.toFixed(1)}%</p>
+                      <p className="text-sm text-gray-600 mb-1">{safeToFixed(progressPercentage)}% Complete</p>
+                      <p className="text-xs text-gray-500">Best: {safeToFixed(highestScore)}%</p>
                     </div>
                   )
                 })}
@@ -196,7 +205,7 @@ const StudentDashboard = () => {
                         />
                       </div>
                       <div className="flex justify-between text-xs text-gray-600">
-                        <span>Best: {category.highest_score.toFixed(1)}%</span>
+                        <span>Best: {safeToFixed(category.highest_score)}%</span>
                         <span>{category.total_attempts} attempts</span>
                       </div>
                     </div>
@@ -225,7 +234,7 @@ const StudentDashboard = () => {
                     </div>
                     <div className="flex items-center space-x-4">
                       <span className="text-sm font-medium text-gray-700">
-                        {activity.average_score?.toFixed(1)}%
+                        {safeToFixed(activity.average_score)}%
                       </span>
                       <span className="text-sm text-gray-500">
                         {new Date(activity.submitted_at).toLocaleDateString()}
@@ -271,7 +280,7 @@ const StudentDashboard = () => {
                         />
                       </div>
                       <div className="flex justify-between text-xs text-gray-600">
-                        <span>Best: {level.highest_score.toFixed(1)}%</span>
+                        <span>Best: {safeToFixed(level.highest_score)}%</span>
                         <span>{level.total_attempts} attempts</span>
                       </div>
                     </div>

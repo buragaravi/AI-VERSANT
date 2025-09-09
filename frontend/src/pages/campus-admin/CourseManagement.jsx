@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNotification } from '../../contexts/NotificationContext';
 import Header from '../../components/common/Header';
-import Sidebar from '../../components/common/Sidebar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 
@@ -71,10 +70,9 @@ const CourseManagement = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col lg:flex-row">
-      <Sidebar />
-      <div className="flex-1 lg:pl-64">
-        <Header />
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <Header />
+      <div className="flex-1 overflow-x-hidden overflow-y-auto">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-bold text-text">Course Management</h1>
@@ -192,7 +190,6 @@ const CourseManagement = () => {
           </div>
         )}
       </div>
-    </div>
   );
 };
 

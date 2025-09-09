@@ -48,24 +48,35 @@ import pytz
 from routes.access_control import require_permission
 from models import Test
 
-def generate_test_link(test, student):
-    """Generate a direct test link for a student"""
-    try:
-        base_url = "https://crt.pydahsoft.in"
-        test_id = str(test['_id'])
-        
-        # Determine the correct route based on test type
-        if test.get('test_type') == 'online':
-            # For online exams, redirect to exam page
-            test_link = f"{base_url}/login?redirect=/student/exam/{test_id}"
+def safe_isoformat(date_obj):
+    """Safely convert a date object to ISO format string, handling various types."""
+    if not date_obj:
+        return None
+    
+    if hasattr(date_obj, 'isoformat'):
+        # It's a datetime object
+        return date_obj.isoformat()
+    elif isinstance(date_obj, dict):
+        # It's a MongoDB date dict, extract the date
+        if '$date' in date_obj:
+            try:
+                from datetime import datetime
+                date_str = date_obj['$date']
+                # Handle different MongoDB date formats
+                if 'T' in date_str:
+                    # ISO format with T
+                    date_obj_parsed = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                else:
+                    # Just timestamp
+                    date_obj_parsed = datetime.fromtimestamp(int(date_str) / 1000)
+                return date_obj_parsed.isoformat()
+            except (ValueError, KeyError, TypeError):
+                return str(date_obj)
         else:
-            # For practice tests, redirect to practice-modules page
-            test_link = f"{base_url}/login?redirect=/student/practice-modules/{test_id}"
-        
-        return test_link
-    except Exception as e:
-        current_app.logger.error(f"Error generating test link: {e}")
-        return "https://crt.pydahsoft.in/login"
+            return str(date_obj)
+    else:
+        # It's already a string or other type
+        return str(date_obj)
 
 # OneCompiler API Configuration
 ONECOMPILER_API_KEY = 'f744734571mshb636ee6aecb15e3p16c0e7jsnd142c0e341e6'
@@ -214,8 +225,12 @@ def create_test_with_instances():
             # Redirect to writing test creation
             from routes.test_management_writing import create_writing_test
             return create_writing_test()
-        elif module_id in ['CRT_APTITUDE', 'CRT_REASONING', 'CRT_TECHNICAL'] or data.get('level_id') == 'TECHNICAL':
-            # Redirect to technical test creation for all CRT modules
+        elif module_id in ['CRT_APTITUDE', 'CRT_REASONING']:
+            # Redirect to MCQ test creation for CRT Aptitude and Reasoning
+            from routes.test_management_mcq import create_mcq_test
+            return create_mcq_test()
+        elif module_id == 'CRT_TECHNICAL':
+            # Redirect to technical test creation for CRT Technical only
             from routes.test_management_technical import create_technical_test
             return create_technical_test()
         else:
@@ -252,8 +267,12 @@ def get_single_test(test_id):
             # Redirect to writing test retrieval
             from routes.test_management_writing import get_writing_test
             return get_writing_test(test_id)
-        elif module_id in ['CRT_APTITUDE', 'CRT_REASONING', 'CRT_TECHNICAL'] or test.get('level_id') == 'TECHNICAL':
-            # Redirect to technical test retrieval for all CRT modules
+        elif module_id in ['CRT_APTITUDE', 'CRT_REASONING']:
+            # Redirect to MCQ test retrieval for CRT Aptitude and Reasoning
+            from routes.test_management_mcq import get_mcq_test
+            return get_mcq_test(test_id)
+        elif module_id == 'CRT_TECHNICAL' or test.get('level_id') == 'TECHNICAL':
+            # Redirect to technical test retrieval for CRT Technical only
             from routes.test_management_technical import get_technical_test
             return get_technical_test(test_id)
         else:
@@ -364,7 +383,7 @@ def get_test_data():
                 topic['total_questions'] = total_questions
                 topic['used_questions'] = used_questions
                 topic['completion_percentage'] = round(completion_percentage, 1)
-                topic['created_at'] = topic['created_at'].isoformat() if topic['created_at'] else None
+                topic['created_at'] = safe_isoformat(topic['created_at']) if topic['created_at'] else None
                 
                 crt_topics.append(topic)
         except Exception as e:
@@ -452,7 +471,7 @@ def get_all_tests():
         tests_data = []
         for test in tests:
             test['_id'] = str(test['_id'])
-            test['created_at'] = test['created_at'].isoformat() if test['created_at'] else None
+            test['created_at'] = safe_isoformat(test['created_at']) if test['created_at'] else None
             
             # Format campus, batch, and course names properly
             test['campus'] = ', '.join(test.get('campus_names', [])) if test.get('campus_names') else 'N/A'
@@ -679,9 +698,9 @@ def notify_students(test_id):
 
         # Check email service configuration
         from utils.email_service import check_email_configuration
-        email_config = check_email_configuration()
-        if email_config.get('issues'):
-            current_app.logger.warning(f"Email service has configuration issues: {email_config['issues']}")
+        email_config_ok = check_email_configuration()
+        if not email_config_ok:
+            current_app.logger.warning("Email service has configuration issues")
             current_app.logger.info("Proceeding with notifications, but some may fail")
         
         # Send notifications
@@ -737,63 +756,31 @@ def notify_students(test_id):
                 
                 current_app.logger.info(f"Email sent to {student['email']}: {email_sent}")
                 
-                # Send SMS notification if mobile number is available
-                sms_sent = False
-                mobile_number = student.get('mobile_number', '')
-                if mobile_number:
-                    try:
-                        from utils.sms_service import send_sms
-                        sms_message = f"New test '{test['name']}' assigned to you. Login to take the test. - Study Edge"
-                        sms_sent = send_sms(mobile_number, sms_message)
-                        current_app.logger.info(f"SMS sent to {mobile_number}: {sms_sent}")
-                    except Exception as sms_error:
-                        current_app.logger.error(f"Failed to send SMS to {mobile_number}: {sms_error}")
-                        sms_sent = False
-                else:
-                    current_app.logger.info(f"No mobile number for student {student['name']}")
-                
-                # Generate test link for the student
-                test_link = generate_test_link(test, student)
-                
                 results.append({
                     'student_id': student['student_id'],
-                    'student_name': student['name'],
+                    'name': student['name'],
                     'email': student['email'],
-                    'mobile_number': mobile_number,
+                    'mobile_number': student.get('mobile_number'),
+                    'test_status': 'pending',  # Default to pending, could be enhanced to check actual status
+                    'notify_status': 'sent' if email_sent else 'failed',
+                    'sms_status': 'no_mobile',  # Default since SMS is not implemented
                     'email_sent': email_sent,
-                    'sms_sent': sms_sent,
-                    'test_link': test_link,
-                    'status': 'success' if (email_sent or sms_sent) else 'failed'
+                    'status': 'success' if email_sent else 'failed'
                 })
             except Exception as e:
                 current_app.logger.error(f"Failed to notify student {student['student_id']}: {e}")
                 import traceback
                 current_app.logger.error(f"Full traceback: {traceback.format_exc()}")
-                # Generate test link for the student even if email fails
-                test_link = generate_test_link(test, student)
-                
-                # Try to send SMS even if email failed
-                sms_sent = False
-                mobile_number = student.get('mobile_number', '')
-                if mobile_number:
-                    try:
-                        from utils.sms_service import send_sms
-                        sms_message = f"New test '{test['name']}' assigned to you. Login to take the test. - Study Edge"
-                        sms_sent = send_sms(mobile_number, sms_message)
-                        current_app.logger.info(f"SMS sent to {mobile_number}: {sms_sent}")
-                    except Exception as sms_error:
-                        current_app.logger.error(f"Failed to send SMS to {mobile_number}: {sms_error}")
-                        sms_sent = False
-                
                 results.append({
                     'student_id': student['student_id'],
-                    'student_name': student['name'],
+                    'name': student['name'],
                     'email': student['email'],
-                    'mobile_number': mobile_number,
+                    'mobile_number': student.get('mobile_number'),
+                    'test_status': 'pending',
+                    'notify_status': 'failed',
+                    'sms_status': 'no_mobile',
                     'email_sent': False,
-                    'sms_sent': sms_sent,
-                    'test_link': test_link,
-                    'status': 'success' if sms_sent else 'failed',
+                    'status': 'failed',
                     'error': str(e)
                 })
 
@@ -817,137 +804,6 @@ def notify_students(test_id):
     except Exception as e:
         current_app.logger.error(f"Error notifying students: {e}")
         return jsonify({'success': False, 'message': f'Failed to send notification: {e}'}), 500
-
-@test_management_bp.route('/email-status', methods=['GET'])
-@jwt_required()
-@require_superadmin
-def get_email_status():
-    """Get email service status and configuration"""
-    try:
-        from utils.email_service import get_email_status
-        status = get_email_status()
-        return jsonify({
-            'success': True,
-            'status': status
-        }), 200
-    except Exception as e:
-        current_app.logger.error(f"Error getting email status: {e}")
-        return jsonify({'success': False, 'message': f'Error getting email status: {e}'}), 500
-
-@test_management_bp.route('/test-email', methods=['POST'])
-@jwt_required()
-@require_superadmin
-def test_email():
-    """Test email sending with detailed error information"""
-    try:
-        data = request.get_json()
-        test_email = data.get('email')
-        
-        if not test_email:
-            return jsonify({'success': False, 'message': 'Email address is required'}), 400
-        
-        # Check email service configuration first
-        from utils.email_service import check_email_configuration, get_current_ip
-        email_config = check_email_configuration()
-        
-        if not email_config['properly_configured']:
-            return jsonify({
-                'success': False, 
-                'message': 'Email service not properly configured',
-                'issues': email_config['issues'],
-                'current_ip': get_current_ip(),
-                'brevo_ip_whitelist_url': 'https://app.brevo.com/security/authorised_ips'
-            }), 400
-        
-        # Send test email
-        from utils.email_service import send_email
-        html_content = """
-        <html>
-        <body>
-            <h2>Test Email from Study Edge System</h2>
-            <p>This is a test email to verify that the email service is working correctly.</p>
-            <p>If you receive this email, the notification system is functioning properly.</p>
-            <p>Current IP: """ + get_current_ip() + """</p>
-        </body>
-        </html>
-        """
-        
-        email_sent = send_email(
-            to_email=test_email,
-            to_name='Test User',
-            subject='Test Email from Study Edge System',
-            html_content=html_content
-        )
-        
-        if email_sent:
-            return jsonify({
-                'success': True,
-                'message': 'Test email sent successfully',
-                'current_ip': get_current_ip()
-            }), 200
-        else:
-            return jsonify({
-                'success': False,
-                'message': 'Failed to send test email. Check logs for details.',
-                'current_ip': get_current_ip(),
-                'brevo_ip_whitelist_url': 'https://app.brevo.com/security/authorised_ips'
-            }), 500
-            
-    except Exception as e:
-        current_app.logger.error(f"Error testing email: {e}")
-        return jsonify({
-            'success': False, 
-            'message': f'Error testing email: {e}',
-            'current_ip': get_current_ip() if 'get_current_ip' in locals() else 'Unknown'
-        }), 500
-
-@test_management_bp.route('/test-links/<test_id>', methods=['GET'])
-@jwt_required()
-@require_superadmin
-def get_test_links(test_id):
-    """Get test links for all students assigned to a test"""
-    try:
-        # Fetch test details
-        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
-        if not test:
-            return jsonify({'success': False, 'message': 'Test not found.'}), 404
-
-        # Fetch all assigned students
-        from routes.student import get_students_for_test_ids
-        try:
-            if test.get('assigned_student_ids'):
-                student_list = get_students_for_test_ids([test_id], assigned_student_ids=test['assigned_student_ids'])
-            else:
-                student_list = get_students_for_test_ids([test_id])
-            
-            if not student_list:
-                return jsonify({'success': False, 'message': 'No students found for this test.'}), 404
-        except Exception as e:
-            current_app.logger.error(f"Error fetching students for test {test_id}: {e}")
-            return jsonify({'success': False, 'message': f'Error fetching students: {e}'}), 500
-
-        # Generate test links for each student
-        test_links = []
-        for student in student_list:
-            test_link = generate_test_link(test, student)
-            test_links.append({
-                'student_id': student['student_id'],
-                'student_name': student['name'],
-                'email': student['email'],
-                'mobile_number': student.get('mobile_number', ''),
-                'test_link': test_link
-            })
-        
-        return jsonify({
-            'success': True,
-            'test_name': test['name'],
-            'test_type': test.get('test_type', 'Practice'),
-            'test_links': test_links
-        }), 200
-
-    except Exception as e:
-        current_app.logger.error(f"Error getting test links: {e}")
-        return jsonify({'success': False, 'message': f'Error getting test links: {e}'}), 500
 
 
 
@@ -1001,10 +857,10 @@ def upload_module_questions():
             # Handle different question types based on module
             if module_id == 'CRT_TECHNICAL' or level_id == 'CRT_TECHNICAL':
                 # Check question type
-                question_type = q.get('questionType', 'compiler_integrated')
+                question_type = q.get('questionType', 'technical')
                 doc['question_type'] = question_type
                 
-                if question_type == 'compiler_integrated':
+                if question_type == 'technical':
                     doc['testCases'] = q.get('testCases', '')
                     doc['expectedOutput'] = q.get('expectedOutput', '')
                     doc['language'] = q.get('language', 'python')
@@ -1166,10 +1022,40 @@ def fetch_questions_for_test():
             'last_used': 1
         }
     
-    questions = list(mongo_db.question_bank.find(query, projection).sort([
-        ('used_count', 1),
-        ('last_used', 1)
-    ]).limit(n))
+    # Get all questions first, then implement smart random selection
+    all_questions = list(mongo_db.question_bank.find(query, projection))
+    
+    if not all_questions:
+        questions = []
+    else:
+        # Separate unused and used questions
+        unused_questions = [q for q in all_questions if q.get('used_count', 0) == 0]
+        used_questions = [q for q in all_questions if q.get('used_count', 0) > 0]
+        
+        # Sort used questions by usage (least used first)
+        used_questions.sort(key=lambda x: (x.get('used_count', 0), x.get('last_used', 0)))
+        
+        # Select questions: prefer unused, then least used
+        selected_questions = []
+        
+        # First, add unused questions (randomized)
+        if unused_questions:
+            import random
+            random.shuffle(unused_questions)
+            selected_questions.extend(unused_questions[:n])
+        
+        # If we need more questions, add from used questions (randomized from least used)
+        if len(selected_questions) < n and used_questions:
+            remaining_needed = n - len(selected_questions)
+            # Take a larger pool of least used questions and randomize
+            pool_size = min(len(used_questions), remaining_needed * 3)  # 3x pool for better randomization
+            pool_questions = used_questions[:pool_size]
+            random.shuffle(pool_questions)
+            selected_questions.extend(pool_questions[:remaining_needed])
+        
+        # Final shuffle to randomize the order of selected questions
+        random.shuffle(selected_questions)
+        questions = selected_questions
     
     for q in questions:
         q['_id'] = str(q['_id'])
@@ -1241,9 +1127,39 @@ def get_bulk_questions_from_bank():
         # Get total count
         total_count = mongo_db.question_bank.count_documents(query)
         
-        # Get questions with pagination
-        skip = (page - 1) * limit
-        questions = list(mongo_db.question_bank.find(query).skip(skip).limit(limit))
+        # Get all questions first for proper randomization
+        all_questions = list(mongo_db.question_bank.find(query))
+        
+        if not all_questions:
+            questions = []
+        else:
+            # Separate unused and used questions for smart selection
+            unused_questions = [q for q in all_questions if q.get('used_count', 0) == 0]
+            used_questions = [q for q in all_questions if q.get('used_count', 0) > 0]
+            
+            # Sort used questions by usage (least used first)
+            used_questions.sort(key=lambda x: (x.get('used_count', 0), x.get('last_used', 0)))
+            
+            # Select questions: prefer unused, then least used
+            selected_questions = []
+            
+            # First, add unused questions (randomized)
+            if unused_questions:
+                import random
+                random.shuffle(unused_questions)
+                selected_questions.extend(unused_questions)
+            
+            # If we need more questions, add from used questions (randomized from least used)
+            if len(selected_questions) < len(all_questions) and used_questions:
+                # Take a larger pool of least used questions and randomize
+                pool_size = min(len(used_questions), len(used_questions))  # Use all used questions for better randomization
+                pool_questions = used_questions[:pool_size]
+                random.shuffle(pool_questions)
+                selected_questions.extend(pool_questions)
+            
+            # Apply pagination to the randomized selection
+            skip = (page - 1) * limit
+            questions = selected_questions[skip:skip + limit]
         
         # If no questions found for CRT_TECHNICAL and level_id is set, try without level_id
         if module_id == 'CRT_TECHNICAL' and len(questions) == 0 and level_id:
@@ -1263,7 +1179,40 @@ def get_bulk_questions_from_bank():
             
             current_app.logger.info(f"Fallback query: {fallback_query}")
             total_count = mongo_db.question_bank.count_documents(fallback_query)
-            questions = list(mongo_db.question_bank.find(fallback_query).skip(skip).limit(limit))
+            
+            # Get all questions first for proper randomization
+            all_questions = list(mongo_db.question_bank.find(fallback_query))
+            
+            if not all_questions:
+                questions = []
+            else:
+                # Separate unused and used questions for smart selection
+                unused_questions = [q for q in all_questions if q.get('used_count', 0) == 0]
+                used_questions = [q for q in all_questions if q.get('used_count', 0) > 0]
+                
+                # Sort used questions by usage (least used first)
+                used_questions.sort(key=lambda x: (x.get('used_count', 0), x.get('last_used', 0)))
+                
+                # Select questions: prefer unused, then least used
+                selected_questions = []
+                
+                # First, add unused questions (randomized)
+                if unused_questions:
+                    import random
+                    random.shuffle(unused_questions)
+                    selected_questions.extend(unused_questions)
+                
+                # If we need more questions, add from used questions (randomized from least used)
+                if len(selected_questions) < len(all_questions) and used_questions:
+                    # Take a larger pool of least used questions and randomize
+                    pool_size = min(len(used_questions), len(used_questions))  # Use all used questions for better randomization
+                    pool_questions = used_questions[:pool_size]
+                    random.shuffle(pool_questions)
+                    selected_questions.extend(pool_questions)
+                
+                # Apply pagination to the randomized selection
+                skip = (page - 1) * limit
+                questions = selected_questions[skip:skip + limit]
         
         # Convert ObjectIds to strings and format questions
         for question in questions:
@@ -1969,26 +1918,8 @@ def submit_practice_test():
         # Process questions and calculate results
         current_app.logger.info(f"Processing {len(test['questions'])} questions for test {test_id}")
         
-        # Create a lookup table for correct answers from the original test
-        correct_answer_lookup = {}
-        try:
-            original_test = mongo_db.tests.find_one({'_id': test_id})
-            if original_test and 'questions' in original_test:
-                current_app.logger.info(f"Creating correct answer lookup table from original test")
-                for orig_q in original_test['questions']:
-                    # Create a key based on question text (first 50 chars) and question type
-                    question_key = f"{orig_q.get('question', '')[:50]}_{orig_q.get('question_type', '')}"
-                    correct_answer_lookup[question_key] = {
-                        'correct_answer': orig_q.get('correct_answer') or orig_q.get('answer') or orig_q.get('right_answer') or '',
-                        'question_text': orig_q.get('question', ''),
-                        'question_id': str(orig_q.get('_id', ''))
-                    }
-                    current_app.logger.info(f"Added to lookup: {question_key} -> {correct_answer_lookup[question_key]}")
-                
-                current_app.logger.info(f"Lookup table created with {len(correct_answer_lookup)} entries")
-                current_app.logger.info(f"Lookup table keys: {list(correct_answer_lookup.keys())}")
-        except Exception as e:
-            current_app.logger.error(f"Error creating correct answer lookup: {e}")
+        # Improved question matching - use question ID as primary key
+        current_app.logger.info(f"Processing questions with improved matching logic")
         
         results = []
         total_score = 0
@@ -2567,7 +2498,7 @@ def get_crt_topics():
             topic['total_questions'] = total_questions
             topic['used_questions'] = used_questions
             topic['completion_percentage'] = round(completion_percentage, 1)
-            topic['created_at'] = topic['created_at'].isoformat() if topic['created_at'] else None
+            topic['created_at'] = safe_isoformat(topic['created_at']) if topic['created_at'] else None
         
         return jsonify({
             'success': True,
@@ -2635,7 +2566,7 @@ def create_crt_topic():
         
         # Return the created topic with ID as string
         topic_doc['_id'] = str(result.inserted_id)
-        topic_doc['created_at'] = topic_doc['created_at'].isoformat()
+        topic_doc['created_at'] = safe_isoformat(topic_doc['created_at'])
         topic_doc['total_questions'] = 0
         topic_doc['used_questions'] = 0
         topic_doc['completion_percentage'] = 0.0
@@ -2669,7 +2600,7 @@ def get_crt_topic(topic_id):
         
         # Convert ObjectId to string
         topic['_id'] = str(topic['_id'])
-        topic['created_at'] = topic['created_at'].isoformat() if topic['created_at'] else None
+        topic['created_at'] = safe_isoformat(topic['created_at']) if topic['created_at'] else None
         
         return jsonify({
             'success': True,
@@ -2821,7 +2752,7 @@ def get_topic_questions(topic_id):
             if question.get('topic_id'):
                 question['topic_id'] = str(question['topic_id'])
             if question.get('created_at'):
-                question['created_at'] = question['created_at'].isoformat()
+                question['created_at'] = safe_isoformat(question['created_at'])
         
         return jsonify({
             'success': True,
@@ -3024,7 +2955,7 @@ def get_uploaded_files():
             if file.get('topic_id'):
                 file['topic_id'] = str(file['topic_id'])
             if file.get('uploaded_at'):
-                file['uploaded_at'] = file['uploaded_at'].isoformat()
+                file['uploaded_at'] = safe_isoformat(file['uploaded_at'])
         
         return jsonify({
             'success': True,
@@ -3044,10 +2975,38 @@ def get_uploaded_files():
 def get_file_questions(file_id):
     """Get questions from a specific uploaded file"""
     try:
-        # Find questions by upload session ID
+        # Get module_id and topic_id from query parameters
+        module_id = request.args.get('module_id')
+        topic_id = request.args.get('topic_id')
+        
+        current_app.logger.info(f"Fetching questions for file_id: {file_id}, module_id: {module_id}, topic_id: {topic_id}")
+        
+        # Build query based on available parameters
+        query = {}
+        
+        # First try to find by upload_session_id
         questions = list(mongo_db.question_bank.find({
             'upload_session_id': file_id
         }).sort('created_at', -1))
+        
+        # If no questions found by upload_session_id and we have module_id and topic_id, use those
+        if not questions and module_id and topic_id:
+            query = {
+                'module_id': module_id,
+                'topic_id': ObjectId(topic_id) if topic_id else None
+            }
+            # Remove None values from query
+            query = {k: v for k, v in query.items() if v is not None}
+            
+            if query:
+                questions = list(mongo_db.question_bank.find(query).sort('created_at', -1))
+                current_app.logger.info(f"Found {len(questions)} questions by module_id and topic_id: {query}")
+        
+        # If still no questions and we only have module_id, try that
+        if not questions and module_id and not topic_id:
+            query = {'module_id': module_id}
+            questions = list(mongo_db.question_bank.find(query).sort('created_at', -1))
+            current_app.logger.info(f"Found {len(questions)} questions by module_id only: {query}")
         
         # Convert ObjectIds to strings
         for question in questions:
@@ -3055,7 +3014,9 @@ def get_file_questions(file_id):
             if question.get('topic_id'):
                 question['topic_id'] = str(question['topic_id'])
             if question.get('created_at'):
-                question['created_at'] = question['created_at'].isoformat()
+                question['created_at'] = safe_isoformat(question['created_at'])
+        
+        current_app.logger.info(f"Returning {len(questions)} questions for file_id: {file_id}")
         
         return jsonify({
             'success': True,
@@ -4099,7 +4060,7 @@ def get_test_result(result_id):
             'correct_answers': result.get('correct_answers', 0),
             'average_score': result.get('average_score', 0),
             'total_score': result.get('total_score', 0),
-            'submitted_at': result.get('submitted_at', '').isoformat() if result.get('submitted_at') else '',
+            'submitted_at': safe_isoformat(result.get('submitted_at')) if result.get('submitted_at') else '',
             'duration': result.get('duration', 0),
             'time_taken': result.get('time_taken', 0),
             'auto_submitted': result.get('auto_submitted', False),
@@ -4429,4 +4390,248 @@ def fix_audio_urls_in_test(test):
     except Exception as e:
         current_app.logger.error(f"Error fixing audio URLs in test: {e}")
         return test
+
+@test_management_bp.route('/submit-online-listening-test', methods=['POST'])
+@jwt_required()
+def submit_online_listening_test():
+    """Submit online listening test with student audio recordings"""
+    try:
+        current_app.logger.info("=== ONLINE LISTENING TEST SUBMISSION ENDPOINT HIT ===")
+        current_user_id = get_jwt_identity()
+        current_app.logger.info(f"Online listening test submission attempt by user {current_user_id}")
+        
+        data = request.form.to_dict()
+        files = request.files
+        
+        current_app.logger.info(f"Received form data: {data}")
+        current_app.logger.info(f"Received files: {list(files.keys()) if files else 'No files'}")
+        
+        # Validate required fields
+        if not data.get('test_id'):
+            return jsonify({
+                'success': False,
+                'message': 'Test ID is required'
+            }), 400
+        
+        test_id = ObjectId(data['test_id'])
+        test = mongo_db.tests.find_one({'_id': test_id})
+        
+        if not test:
+            return jsonify({
+                'success': False,
+                'message': 'Test not found'
+            }), 404
+        
+        # Check if this is a listening test
+        if test.get('module_id') != 'LISTENING':
+            return jsonify({
+                'success': False,
+                'message': 'This endpoint is only for listening tests'
+            }), 400
+        
+        # Find student profile
+        student = mongo_db.students.find_one({'user_id': ObjectId(current_user_id)})
+        if not student:
+            student = mongo_db.students.find_one({'_id': ObjectId(current_user_id)})
+            if not student:
+                return jsonify({
+                    'success': False,
+                    'message': 'Student profile not found. Please contact your administrator.'
+                }), 404
+        
+        current_app.logger.info(f"Found student profile: {student.get('name')}")
+        
+        # Process each question
+        results = []
+        total_score = 0
+        total_marks = 0
+        
+        for i, question in enumerate(test.get('questions', [])):
+            current_app.logger.info(f"Processing question {i+1}: {question.get('question_type')}")
+            
+            if question.get('question_type') == 'mcq':
+                # Handle MCQ questions
+                answer_key = f'question_{i}'
+                student_answer = data.get(answer_key, '')
+                correct_answer = question.get('correct_answer', '')
+                
+                current_app.logger.info(f"MCQ question {i}: student_answer='{student_answer}', correct_answer='{correct_answer}'")
+                
+                is_correct = student_answer.lower() == correct_answer.lower()
+                score = 1 if is_correct else 0
+                total_score += score
+                total_marks += 1
+                
+                results.append({
+                    'question_index': i,
+                    'question_id': question.get('question_id'),
+                    'question': question.get('question'),
+                    'question_type': 'mcq',
+                    'student_answer': student_answer,
+                    'correct_answer': correct_answer,
+                    'is_correct': is_correct,
+                    'score': score
+                })
+                
+            else:
+                # Handle audio questions (Listening)
+                audio_key = f'question_{i}'
+                current_app.logger.info(f"Looking for audio file with key: {audio_key}")
+                current_app.logger.info(f"Available files: {list(files.keys())}")
+                
+                if audio_key not in files:
+                    current_app.logger.error(f"Audio recording for question {i+1} not found. Expected key: {audio_key}")
+                    return jsonify({
+                        'success': False,
+                        'message': f'Audio recording for question {i+1} is required. Expected key: {audio_key}'
+                    }), 400
+                
+                audio_file = files[audio_key]
+                current_app.logger.info(f"Found audio file for question {i}: {audio_file.filename}, size: {audio_file.content_length} bytes")
+                
+                # Save student audio to S3
+                current_s3_client = get_s3_client_safe()
+                if current_s3_client is None:
+                    return jsonify({
+                        'success': False,
+                        'message': 'S3 client not available for audio upload. Please check AWS configuration.'
+                    }), 500
+                
+                # Get file extension from the uploaded file or MIME type
+                if '.' in audio_file.filename:
+                    file_extension = audio_file.filename.split('.')[-1]
+                elif audio_file.content_type and 'webm' in audio_file.content_type:
+                    file_extension = 'webm'
+                else:
+                    file_extension = 'mp3'
+                
+                # Create unique audio key with question identifier
+                question_identifier = question.get('question_id', f'q_{i}')
+                student_audio_key = f"student_audio/online_tests/{current_user_id}/{test_id}/{question_identifier}_{uuid.uuid4()}.{file_extension}"
+                
+                current_app.logger.info(f"Uploading audio for question {i}: {student_audio_key}")
+                current_s3_client.upload_fileobj(audio_file, S3_BUCKET_NAME, student_audio_key)
+                
+                # Create full S3 URL for frontend access
+                student_audio_url = f"https://{S3_BUCKET_NAME}.s3.amazonaws.com/{student_audio_key}"
+                
+                # Download for transcription
+                temp_audio_path = f"temp_student_{question_identifier}_{uuid.uuid4()}.{file_extension}"
+                current_s3_client.download_file(S3_BUCKET_NAME, student_audio_key, temp_audio_path)
+                
+                # Transcribe student audio
+                try:
+                    from utils.audio_generator import transcribe_audio as transcribe_audio_util
+                    
+                    current_app.logger.info(f"Starting transcription for question {i}, file: {temp_audio_path}")
+                    
+                    if not os.path.exists(temp_audio_path):
+                        current_app.logger.error(f"Temporary audio file not found: {temp_audio_path}")
+                        student_text = ""
+                    elif os.path.getsize(temp_audio_path) == 0:
+                        current_app.logger.error(f"Temporary audio file is empty: {temp_audio_path}")
+                        student_text = ""
+                    else:
+                        current_app.logger.info(f"Audio file size: {os.path.getsize(temp_audio_path)} bytes")
+                        student_text = transcribe_audio_util(temp_audio_path)
+                        
+                        if not student_text:
+                            current_app.logger.warning(f"Transcription returned empty text for question {i}")
+                            student_text = ""
+                        else:
+                            current_app.logger.info(f"Successfully transcribed question {i}: '{student_text[:100]}...'")
+                    
+                except Exception as e:
+                    current_app.logger.error(f"Error transcribing audio for question {i}: {e}")
+                    student_text = ""
+                finally:
+                    # Clean up temporary file
+                    if os.path.exists(temp_audio_path):
+                        os.remove(temp_audio_path)
+                        current_app.logger.info(f"Cleaned up temporary file: {temp_audio_path}")
+                
+                # Get correct answer for comparison
+                correct_answer = question.get('correct_answer', '')
+                
+                # Calculate similarity score
+                try:
+                    from utils.audio_generator import calculate_similarity
+                    similarity_score = calculate_similarity(student_text, correct_answer)
+                    is_correct = similarity_score >= 0.7  # 70% similarity threshold
+                    score = 1 if is_correct else 0
+                except Exception as e:
+                    current_app.logger.error(f"Error calculating similarity for question {i}: {e}")
+                    similarity_score = 0.0
+                    is_correct = False
+                    score = 0
+                
+                total_score += score
+                total_marks += 1
+                
+                results.append({
+                    'question_index': i,
+                    'question_id': question.get('question_id'),
+                    'question': question.get('question'),
+                    'question_type': 'audio',
+                    'student_answer': student_text,
+                    'correct_answer': correct_answer,
+                    'is_correct': is_correct,
+                    'score': score,
+                    'similarity_score': similarity_score,
+                    'student_audio_url': student_audio_url
+                })
+        
+        # Calculate final score
+        average_score = (total_score / total_marks * 100) if total_marks > 0 else 0
+        
+        # Create result document for student_test_attempts
+        current_time = datetime.now(timezone.utc)
+        result_doc = {
+            'test_id': test_id,
+            'student_id': student['_id'],
+            'user_id': ObjectId(current_user_id),
+            'test_type': 'online',
+            'module_id': test.get('module_id'),
+            'subcategory': test.get('subcategory'),
+            'level_id': test.get('level_id'),
+            'start_time': current_time,
+            'end_time': current_time,
+            'submitted_at': current_time,  # Add for compatibility with existing queries
+            'duration_seconds': 0,  # Will be calculated by frontend
+            'status': 'completed',
+            'total_questions': len(test.get('questions', [])),
+            'correct_answers': total_score,
+            'total_marks': total_marks,
+            'score': total_score,
+            'percentage': average_score,
+            'results': results,
+            'answers': {f'question_{i}': result['student_answer'] for i, result in enumerate(results)},
+            'detailed_results': results
+        }
+        
+        current_app.logger.info(f"Saving online listening test result: {result_doc}")
+        
+        # Save to student_test_attempts collection
+        mongo_db.student_test_attempts.insert_one(result_doc)
+        current_app.logger.info("Online listening test result saved to student_test_attempts collection")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Online listening test submitted successfully',
+            'data': {
+                'test_id': str(test_id),
+                'total_questions': len(test.get('questions', [])),
+                'correct_answers': total_score,
+                'total_marks': total_marks,
+                'percentage': average_score,
+                'results': results
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error submitting online listening test: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to submit online listening test: {str(e)}'
+        }), 500
 

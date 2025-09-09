@@ -29,11 +29,14 @@ def dashboard():
         
         # Get course statistics
         total_students = mongo_db.students.count_documents({'course_id': course_id})
+        total_tests = mongo_db.tests.count_documents({'course_id': course_id})
         
         dashboard_data = {
             'course_id': str(course_id),
             'statistics': {
-                'total_students': total_students
+                'total_students': total_students,
+                'total_tests': total_tests,
+                'total_results': total_tests  # Assuming each test has results
             }
         }
         

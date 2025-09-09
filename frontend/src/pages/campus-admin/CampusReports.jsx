@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import Header from '../../components/common/Header';
-import Sidebar from '../../components/common/Sidebar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { useNotification } from '../../contexts/NotificationContext';
 import api from '../../services/api';
@@ -58,10 +57,9 @@ const CampusReports = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <Sidebar />
-      <div className="flex-1 lg:pl-64">
-        <Header />
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <Header />
+      <div className="flex-1 overflow-x-hidden overflow-y-auto">
         <main className="px-6 lg:px-10 py-12">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <h1 className="text-3xl font-bold text-headline">Campus Results & Analytics</h1>

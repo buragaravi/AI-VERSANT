@@ -16,6 +16,36 @@ from routes.access_control import require_permission
 
 batch_management_bp = Blueprint('batch_management', __name__)
 
+def safe_isoformat(date_obj):
+    """Safely convert a date object to ISO format string, handling various types."""
+    if not date_obj:
+        return None
+    
+    if hasattr(date_obj, 'isoformat'):
+        # It's a datetime object
+        return date_obj.isoformat()
+    elif isinstance(date_obj, dict):
+        # It's a MongoDB date dict, extract the date
+        if '$date' in date_obj:
+            try:
+                from datetime import datetime
+                date_str = date_obj['$date']
+                # Handle different MongoDB date formats
+                if 'T' in date_str:
+                    # ISO format with T
+                    date_obj_parsed = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                else:
+                    # Just timestamp
+                    date_obj_parsed = datetime.fromtimestamp(int(date_str) / 1000)
+                return date_obj_parsed.isoformat()
+            except (ValueError, KeyError, TypeError):
+                return str(date_obj)
+        else:
+            return str(date_obj)
+    else:
+        # It's already a string or other type
+        return str(date_obj)
+
 @batch_management_bp.route('/', methods=['GET'])
 @jwt_required()
 @require_permission(module='batch_management')
@@ -551,6 +581,7 @@ def upload_students_to_batch():
         file = request.files.get('file')
         batch_id = request.form.get('batch_id')
         course_ids = request.form.getlist('course_ids')  # Accept multiple course IDs
+        user_id = get_jwt_identity()  # Get current user ID for progress updates
         
         # Debug logging
         current_app.logger.info(f"Upload request - batch_id: {batch_id}, course_ids: {course_ids}, filename: {file.filename if file else 'None'}")
@@ -606,8 +637,19 @@ def upload_students_to_batch():
         created_students = []
         errors = []
         uploaded_emails = []  # Track emails for verification
+        total_students = len(rows)
         
-        for row in rows:
+        # Send initial progress update
+        socketio.emit('upload_progress', {
+            'user_id': user_id,
+            'status': 'started',
+            'total': total_students,
+            'processed': 0,
+            'percentage': 0,
+            'message': 'Starting student upload...'
+        }, room=str(user_id))
+        
+        for index, row in enumerate(rows):
             if is_v2_format:
                 student_name = str(row.get('Student Name', '')).strip()
                 roll_number = str(row.get('Roll Number', '')).strip()
@@ -715,7 +757,9 @@ def upload_students_to_batch():
                 if mobile_number:
                     existing_mobile_numbers.add(mobile_number)
                 
-                # Send welcome email
+                # Send welcome email (non-blocking - don't fail the whole process if email fails)
+                email_sent = False
+                email_error = None
                 try:
                     html_content = render_template(
                         'student_credentials.html',
@@ -733,8 +777,44 @@ def upload_students_to_batch():
                         subject="Welcome to Study Edge - Your Student Credentials",
                         html_content=html_content
                     )
+                    email_sent = True
                 except Exception as e:
-                    errors.append(f"Failed to send email to {email}: {e}")
+                    email_error = str(e)
+                    # Don't add to errors array - just log it
+                    current_app.logger.error(f"Failed to send email to {email}: {e}")
+                
+                # Send progress update after student creation (regardless of email status)
+                percentage = int(((index + 1) / total_students) * 100)
+                if email_sent:
+                    socketio.emit('upload_progress', {
+                        'user_id': user_id,
+                        'status': 'processing',
+                        'total': total_students,
+                        'processed': index + 1,
+                        'percentage': percentage,
+                        'message': f'Student created and email sent to {student_name} ({email})',
+                        'current_student': {
+                            'name': student_name,
+                            'email': email,
+                            'username': username
+                        }
+                    }, room=str(user_id))
+                else:
+                    socketio.emit('upload_progress', {
+                        'user_id': user_id,
+                        'status': 'processing',
+                        'total': total_students,
+                        'processed': index + 1,
+                        'percentage': percentage,
+                        'message': f'Student created successfully for {student_name} ({email}) - Email sending failed',
+                        'current_student': {
+                            'name': student_name,
+                            'email': email,
+                            'username': username
+                        },
+                        'email_warning': True,
+                        'email_error': email_error
+                    }, room=str(user_id))
                     
             except Exception as e:
                 errors.append(f"{student_name}: Database error - {str(e)}")
@@ -756,7 +836,19 @@ def upload_students_to_batch():
                     'fully_uploaded': student_exists and user_exists
                 })
 
+        # Send completion progress update
         if errors:
+            socketio.emit('upload_progress', {
+                'user_id': user_id,
+                'status': 'completed_with_errors',
+                'total': total_students,
+                'processed': total_students,
+                'percentage': 100,
+                'message': f'Upload completed with {len(errors)} errors. {len(created_students)} students uploaded successfully.',
+                'errors': errors,
+                'created_count': len(created_students)
+            }, room=str(user_id))
+            
             return jsonify({
                 'success': bool(created_students), 
                 'message': f"Upload completed with {len(errors)} errors.", 
@@ -766,6 +858,17 @@ def upload_students_to_batch():
                 }, 
                 'errors': errors
             }), 207
+        
+        # Send success completion update
+        socketio.emit('upload_progress', {
+            'user_id': user_id,
+            'status': 'completed',
+            'total': total_students,
+            'processed': total_students,
+            'percentage': 100,
+            'message': f'Successfully uploaded {len(created_students)} students to the batch!',
+            'created_count': len(created_students)
+        }, room=str(user_id))
         
         return jsonify({
             'success': True, 
@@ -1266,8 +1369,23 @@ def create_batch_with_students():
             except Exception as student_error:
                 errors.append(f"An error occurred for student {student.get('student_name', 'N/A')}: {str(student_error)}")
 
-        # 3. Send emails
-        for student_details in created_students_details:
+        # 3. Send emails with progress updates
+        current_user_id = get_jwt_identity()
+        total_emails = len(created_students_details)
+        
+        # Send initial progress update
+        socketio.emit('upload_progress', {
+            'user_id': current_user_id,
+            'status': 'sending_emails',
+            'total': total_emails,
+            'processed': 0,
+            'percentage': 0,
+            'message': 'Sending welcome emails to students...'
+        }, room=str(current_user_id))
+        
+        for index, student_details in enumerate(created_students_details):
+             email_sent = False
+             email_error = None
              try:
                 html_content = render_template('student_credentials.html', params={
                     'name': student_details['student_name'],
@@ -1277,9 +1395,45 @@ def create_batch_with_students():
                     'login_url': "https://pydah-studyedge.vercel.app/login"
                 })
                 send_email(to_email=student_details['email'], to_name=student_details['student_name'], subject="Welcome to VERSANT - Your Student Credentials", html_content=html_content)
+                email_sent = True
+                
              except Exception as email_error:
+                email_error = str(email_error)
                 current_app.logger.error(f"Failed to send welcome email to {student_details['email']}: {email_error}")
-                errors.append(f"Failed to send email to {student_details['email']}.")
+                # Don't add to errors array - just log it
+                
+             # Send progress update after email attempt (regardless of success/failure)
+             percentage = int(((index + 1) / total_emails) * 100)
+             if email_sent:
+                 socketio.emit('upload_progress', {
+                     'user_id': current_user_id,
+                     'status': 'sending_emails',
+                     'total': total_emails,
+                     'processed': index + 1,
+                     'percentage': percentage,
+                     'message': f'Email sent to {student_details["student_name"]} ({student_details["email"]})',
+                     'current_student': {
+                         'name': student_details['student_name'],
+                         'email': student_details['email'],
+                         'username': student_details['username']
+                     }
+                 }, room=str(current_user_id))
+             else:
+                 socketio.emit('upload_progress', {
+                     'user_id': current_user_id,
+                     'status': 'sending_emails',
+                     'total': total_emails,
+                     'processed': index + 1,
+                     'percentage': percentage,
+                     'message': f'Email sending failed for {student_details["student_name"]} ({student_details["email"]}) - Student created successfully',
+                     'current_student': {
+                         'name': student_details['student_name'],
+                         'email': student_details['email'],
+                         'username': student_details['username']
+                     },
+                     'email_warning': True,
+                     'email_error': email_error
+                 }, room=str(current_user_id))
         
         if errors:
             return jsonify({
@@ -1775,7 +1929,7 @@ def get_batch_course_instances():
         for instance in instances:
             instance['_id'] = str(instance['_id'])
             if 'created_at' in instance:
-                instance['created_at'] = instance['created_at'].isoformat()
+                instance['created_at'] = safe_isoformat(instance['created_at'])
         
         return jsonify({'success': True, 'data': instances}), 200
     except Exception as e:
@@ -1813,7 +1967,7 @@ def get_batch_course_instance_details(instance_id):
             } if course else None,
             'student_count': len(students),
             'test_results_count': len(test_results),
-            'created_at': instance.get('created_at', '').isoformat() if instance.get('created_at') else None
+            'created_at': safe_isoformat(instance.get('created_at')) if instance.get('created_at') else None
         }
         
         return jsonify({'success': True, 'data': instance_data}), 200
@@ -1839,7 +1993,7 @@ def get_instance_students(instance_id):
                 'email': student['email'],
                 'username': user['username'] if user else '',
                 'is_active': user['is_active'] if user else True,
-                'created_at': student['created_at'].isoformat() if student.get('created_at') else None
+                'created_at': safe_isoformat(student['created_at']) if student.get('created_at') else None
             })
         
         return jsonify({'success': True, 'data': student_list}), 200
@@ -2232,4 +2386,126 @@ def download_student_credentials(student_id):
         
     except Exception as e:
         current_app.logger.error(f"Error downloading credentials: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@batch_management_bp.route('/students/filtered/credentials', methods=['GET'])
+@jwt_required()
+@require_permission(module='batch_management')
+def download_all_filtered_students_credentials():
+    """Download credentials for all filtered students as CSV"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        # Get query parameters (same as filtered students endpoint)
+        search = request.args.get('search', '')
+        campus_id = request.args.get('campus_id', '')
+        course_id = request.args.get('course_id', '')
+        batch_id = request.args.get('batch_id', '')
+        
+        # Build query (same as filtered students endpoint)
+        query = {'role': 'student'}
+        
+        if search:
+            query['$or'] = [
+                {'name': {'$regex': search, '$options': 'i'}},
+                {'email': {'$regex': search, '$options': 'i'}}
+            ]
+        
+        if campus_id:
+            query['campus_id'] = ObjectId(campus_id)
+        
+        if course_id:
+            query['course_id'] = ObjectId(course_id)
+        
+        if batch_id:
+            query['batch_id'] = ObjectId(batch_id)
+        
+        # Super admin can see all students, others only their campus
+        if user.get('role') != 'superadmin':
+            user_campus_id = user.get('campus_id')
+            if user_campus_id:
+                query['campus_id'] = ObjectId(user_campus_id)
+        
+        # Get all students matching the filter (no pagination)
+        students = list(mongo_db.users.find(query))
+        
+        if not students:
+            return jsonify({'success': False, 'message': 'No students found matching the criteria'}), 404
+        
+        # Create CSV content
+        import csv
+        import io
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Name', 'Email', 'Roll Number', 'Username', 'Password', 'Campus', 'Course', 'Batch'])
+        
+        for student in students:
+            # Get student profile
+            student_profile = mongo_db.students.find_one({'user_id': student['_id']})
+            
+            # Get campus, course, and batch names
+            campus = mongo_db.campuses.find_one({'_id': student.get('campus_id')})
+            course = mongo_db.courses.find_one({'_id': student.get('course_id')})
+            batch = mongo_db.batches.find_one({'_id': student.get('batch_id')})
+            
+            # Generate password using consistent pattern
+            student_name = student.get('name', '')
+            roll_number = student_profile.get('roll_number', '') if student_profile else ''
+            
+            if student_name and roll_number:
+                first_name = student_name.split()[0] if student_name.split() else student_name
+                password = f"{first_name[:4].lower()}{roll_number[-4:]}"
+            else:
+                import secrets
+                import string
+                password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
+            
+            # Update password in database
+            password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+            mongo_db.users.update_one(
+                {'_id': student['_id']},
+                {'$set': {'password_hash': password_hash}}
+            )
+            
+            writer.writerow([
+                student.get('name', ''),
+                student.get('email', ''),
+                student_profile.get('roll_number', '') if student_profile else '',
+                student.get('username', ''),
+                password,
+                campus.get('name', '') if campus else '',
+                course.get('name', '') if course else '',
+                batch.get('name', '') if batch else ''
+            ])
+        
+        output.seek(0)
+        
+        # Generate filename based on filters
+        filename_parts = ['students_credentials']
+        if campus_id:
+            campus = mongo_db.campuses.find_one({'_id': ObjectId(campus_id)})
+            if campus:
+                filename_parts.append(campus.get('name', '').replace(' ', '_'))
+        if course_id:
+            course = mongo_db.courses.find_one({'_id': ObjectId(course_id)})
+            if course:
+                filename_parts.append(course.get('name', '').replace(' ', '_'))
+        if batch_id:
+            batch = mongo_db.batches.find_one({'_id': ObjectId(batch_id)})
+            if batch:
+                filename_parts.append(batch.get('name', '').replace(' ', '_'))
+        if search:
+            filename_parts.append('search')
+        
+        filename = '_'.join(filename_parts) + '.csv'
+        
+        return output.getvalue(), 200, {
+            'Content-Type': 'text/csv',
+            'Content-Disposition': f'attachment; filename="{filename}"'
+        }
+        
+    except Exception as e:
+        current_app.logger.error(f"Error downloading all credentials: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500

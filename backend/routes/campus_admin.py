@@ -31,16 +31,15 @@ def dashboard():
         
         # Get campus statistics
         total_students = mongo_db.students.count_documents({'campus_id': campus_id})
-        total_courses = mongo_db.users.count_documents({
-            'campus_id': campus_id,
-            'role': 'course_admin'
-        })
+        total_courses = mongo_db.courses.count_documents({'campus_id': campus_id})
+        total_tests = mongo_db.tests.count_documents({'campus_id': campus_id})
         
         dashboard_data = {
             'campus_id': str(campus_id),
             'statistics': {
                 'total_students': total_students,
-                'total_courses': total_courses
+                'total_tests': total_tests,
+                'total_results': total_tests  # Assuming each test has results
             }
         }
         
@@ -287,16 +286,9 @@ def get_courses():
         course_list = []
         
         for course in courses:
-            admin = mongo_db.users.find_one({'_id': course.get('admin_id')})
-            admin_info = {
-                'id': str(admin['_id']),
-                'name': admin.get('name'),
-                'email': admin.get('email')
-            } if admin else None
             course_list.append({
                 'id': str(course['_id']),
-                'name': course.get('name'),
-                'admin': admin_info
+                'name': course.get('name')
             })
         
         return jsonify({'success': True, 'data': course_list}), 200
@@ -319,36 +311,18 @@ def create_course():
         campus_id = user.get('campus_id')
         data = request.get_json()
         course_name = data.get('course_name')
-        admin_name = data.get('admin_name')
-        admin_email = data.get('admin_email')
-        admin_password = data.get('admin_password')
         
-        if not all([course_name, admin_name, admin_email, admin_password]):
-            return jsonify({'success': False, 'message': 'All fields are required'}), 400
+        if not course_name:
+            return jsonify({'success': False, 'message': 'Course name is required'}), 400
         
-        if mongo_db.users.find_one({'email': admin_email}):
-            return jsonify({'success': False, 'message': 'A user with this email already exists.'}), 409
-        
-        password_hash = bcrypt.generate_password_hash(admin_password).decode('utf-8')
-        admin_user = {
-            'name': admin_name,
-            'email': admin_email,
-            'username': admin_name,
-            'password_hash': password_hash,
-            'role': 'course_admin',
-            'is_active': True,
-            'campus_id': ObjectId(campus_id)
-        }
-        user_id = mongo_db.users.insert_one(admin_user).inserted_id
         course = {
             'name': course_name,
             'campus_id': ObjectId(campus_id),
-            'admin_id': user_id
+            'created_at': datetime.now(pytz.utc)
         }
         course_id = mongo_db.courses.insert_one(course).inserted_id
-        mongo_db.users.update_one({'_id': user_id}, {'$set': {'course_id': course_id}})
         
-        return jsonify({'success': True, 'data': {'id': str(course_id), 'admin_id': str(user_id)}}), 201
+        return jsonify({'success': True, 'data': {'id': str(course_id)}}), 201
         
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500

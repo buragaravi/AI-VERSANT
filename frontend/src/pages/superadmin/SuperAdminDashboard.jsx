@@ -22,7 +22,7 @@ const SuperAdminDashboard = () => {
     fetchDashboardStats()
     fetchActiveCourses()
     fetchAdminCount()
-  }, [])
+  }, []) // Empty dependency array to run only once
 
   const fetchDashboardStats = async () => {
     try {
@@ -65,27 +65,12 @@ const SuperAdminDashboard = () => {
 
   const fetchAdminCount = async () => {
     try {
-      const campusRes = await getCampuses()
-      if (campusRes.data.success) {
-        const campuses = campusRes.data.data || []
-        let adminIds = new Set()
-        // Add campus admins
-        campuses.forEach(c => {
-          if (c.admin && c.admin.id) adminIds.add(c.admin.id)
-        })
-        // Add course admins
-        for (const campus of campuses) {
-          const courseRes = await getCoursesByCampus(campus.id)
-          if (courseRes.data.success) {
-            const courses = courseRes.data.data || []
-            courses.forEach(course => {
-              if (course.admin && course.admin.id) adminIds.add(course.admin.id)
-            })
-          }
-        }
-        setAdminCount(adminIds.size)
+      // Get admin count from the admin management API
+      const response = await api.get('/admin-management/list')
+      if (response.data.success) {
+        setAdminCount(response.data.data?.length || 0)
       } else {
-        console.error('Failed to fetch campuses for admin count:', campusRes.data.message)
+        console.error('Failed to fetch admin count:', response.data.message)
         setAdminCount(0)
       }
     } catch (e) {

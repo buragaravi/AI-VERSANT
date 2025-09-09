@@ -4,7 +4,7 @@ from bson import ObjectId
 from datetime import datetime
 import pytz
 from mongo import mongo_db
-from routes.test_management import require_superadmin, generate_unique_test_id, convert_objectids, generate_test_link
+from routes.test_management import require_superadmin, generate_unique_test_id, convert_objectids
 
 mcq_test_bp = Blueprint('mcq_test_management', __name__)
 
@@ -33,15 +33,31 @@ def create_mcq_test():
         if not all([test_name, test_type, module_id, campus_id, course_ids, batch_ids]):
             return jsonify({'success': False, 'message': 'Missing required fields'}), 400
 
-        # Validate MCQ modules
-        mcq_modules = ['GRAMMAR', 'VOCABULARY', 'READING']
+        # Validate MCQ modules (including CRT Aptitude and Reasoning)
+        mcq_modules = ['GRAMMAR', 'VOCABULARY', 'READING', 'CRT_APTITUDE', 'CRT_REASONING']
         if module_id not in mcq_modules:
             return jsonify({'success': False, 'message': f'Invalid module for MCQ test: {module_id}'}), 400
 
-        # Check if test name already exists
-        existing_test = mongo_db.tests.find_one({'name': test_name})
+        # Check if test name already exists (case-insensitive)
+        existing_test = mongo_db.tests.find_one({'name': {'$regex': f'^{test_name}$', '$options': 'i'}})
         if existing_test:
             return jsonify({'success': False, 'message': f'Test name "{test_name}" already exists. Please choose a different name.'}), 409
+
+        # Check for duplicate questions within the test
+        question_texts = []
+        duplicate_questions = []
+        for i, question in enumerate(questions):
+            question_text = question.get('question', '').strip().lower()
+            if question_text in question_texts:
+                duplicate_questions.append(f"Question {i+1}: '{question.get('question', '')[:50]}...'")
+            else:
+                question_texts.append(question_text)
+        
+        if duplicate_questions:
+            return jsonify({
+                'success': False, 
+                'message': f'Duplicate questions found: {", ".join(duplicate_questions)}. Please remove duplicates and try again.'
+            }), 400
 
         # Generate unique test ID
         test_id = generate_unique_test_id()
@@ -99,7 +115,7 @@ def create_mcq_test():
             'success': True,
             'message': 'MCQ test created successfully',
             'data': {
-                'test_id': test_id
+                'test_id': str(result.inserted_id)
             }
         }), 201
 
@@ -117,8 +133,8 @@ def get_mcq_test(test_id):
         if not test:
             return jsonify({'success': False, 'message': 'Test not found'}), 404
 
-        # Validate it's an MCQ test
-        mcq_modules = ['GRAMMAR', 'VOCABULARY', 'READING']
+        # Validate it's an MCQ test (including CRT Aptitude and Reasoning)
+        mcq_modules = ['GRAMMAR', 'VOCABULARY', 'READING', 'CRT_APTITUDE', 'CRT_REASONING']
         if test.get('module_id') not in mcq_modules:
             return jsonify({'success': False, 'message': 'Not an MCQ test'}), 400
 
@@ -206,38 +222,21 @@ def notify_mcq_test_students(test_id):
             try:
                 # Send email notification
                 from utils.email_service import send_email, render_template
-                try:
-                    html_content = render_template('test_notification.html', 
-                        student_name=student['name'],
-                        test_name=test['name'],
-                        test_id=str(test['_id']),
-                        test_type='MCQ',
-                        module=test.get('module_id', 'Unknown'),
-                        level=test.get('level_id', 'Unknown'),
-                        module_display_name=test.get('module_id', 'Unknown'),
-                        level_display_name=test.get('level_id', 'Unknown'),
-                        question_count=len(test.get('questions', [])),
-                        is_online=test.get('test_type') == 'online',
-                        start_dt=test.get('startDateTime', 'Not specified'),
-                        end_dt=test.get('endDateTime', 'Not specified'),
-                        duration=test.get('duration', 'Not specified')
-                    )
-                except Exception as template_error:
-                    current_app.logger.error(f"Template rendering failed for {student['email']}: {template_error}")
-                    html_content = f"""
-                    <html>
-                    <body>
-                        <h2>New MCQ Test Available: {test['name']}</h2>
-                        <p>Hello {student['name']},</p>
-                        <p>You have been assigned a new MCQ test: {test['name']}</p>
-                        <p>Module: {test.get('module_id', 'Unknown')}</p>
-                        <p>Level: {test.get('level_id', 'Unknown')}</p>
-                        <p>Questions: {len(test.get('questions', []))}</p>
-                        <p>Please log in to your account to take the test.</p>
-                    </body>
-                    </html>
-                    """
-                
+                html_content = render_template('test_notification.html', 
+                    student_name=student['name'],
+                    test_name=test['name'],
+                    test_id=str(test['_id']),
+                    test_type='MCQ',
+                    module=test.get('module_id', 'Unknown'),
+                    level=test.get('level_id', 'Unknown'),
+                    module_display_name=test.get('module_id', 'Unknown'),
+                    level_display_name=test.get('level_id', 'Unknown'),
+                    question_count=len(test.get('questions', [])),
+                    is_online=test.get('test_type') == 'online',
+                    start_dt=test.get('startDateTime', 'Not specified'),
+                    end_dt=test.get('endDateTime', 'Not specified'),
+                    duration=test.get('duration', 'Not specified')
+                )
                 email_sent = send_email(
                     to_email=student['email'],
                     to_name=student['name'],
@@ -245,61 +244,29 @@ def notify_mcq_test_students(test_id):
                     html_content=html_content
                 )
                 
-                # Send SMS notification if mobile number is available
-                sms_sent = False
-                mobile_number = student.get('mobile_number', '')
-                if mobile_number:
-                    try:
-                        from utils.sms_service import send_sms
-                        sms_message = f"New MCQ test '{test['name']}' assigned to you. Login to take the test. - Study Edge"
-                        sms_sent = send_sms(mobile_number, sms_message)
-                        current_app.logger.info(f"SMS sent to {mobile_number}: {sms_sent}")
-                    except Exception as sms_error:
-                        current_app.logger.error(f"Failed to send SMS to {mobile_number}: {sms_error}")
-                        sms_sent = False
-                else:
-                    current_app.logger.info(f"No mobile number for student {student['name']}")
-                
-                # Generate test link for the student
-                test_link = generate_test_link(test, student)
-                
                 results.append({
-                    'student_id': student['_id'],
-                    'student_name': student['name'],
+                    'student_id': str(student['_id']),
+                    'name': student['name'],
                     'email': student['email'],
-                    'mobile_number': mobile_number,
+                    'mobile_number': student.get('mobile_number'),
+                    'test_status': 'pending',
+                    'notify_status': 'sent' if email_sent else 'failed',
+                    'sms_status': 'no_mobile',
                     'email_sent': email_sent,
-                    'sms_sent': sms_sent,
-                    'test_link': test_link,
-                    'status': 'success' if (email_sent or sms_sent) else 'failed'
+                    'status': 'success' if email_sent else 'failed'
                 })
             except Exception as e:
                 current_app.logger.error(f"Failed to notify student {student['_id']}: {e}")
-                # Generate test link for the student even if email fails
-                test_link = generate_test_link(test, student)
-                
-                # Try to send SMS even if email failed
-                sms_sent = False
-                mobile_number = student.get('mobile_number', '')
-                if mobile_number:
-                    try:
-                        from utils.sms_service import send_sms
-                        sms_message = f"New MCQ test '{test['name']}' assigned to you. Login to take the test. - Study Edge"
-                        sms_sent = send_sms(mobile_number, sms_message)
-                        current_app.logger.info(f"SMS sent to {mobile_number}: {sms_sent}")
-                    except Exception as sms_error:
-                        current_app.logger.error(f"Failed to send SMS to {mobile_number}: {sms_error}")
-                        sms_sent = False
-                
                 results.append({
-                    'student_id': student['_id'],
-                    'student_name': student['name'],
+                    'student_id': str(student['_id']),
+                    'name': student['name'],
                     'email': student['email'],
-                    'mobile_number': mobile_number,
+                    'mobile_number': student.get('mobile_number'),
+                    'test_status': 'pending',
+                    'notify_status': 'failed',
+                    'sms_status': 'no_mobile',
                     'email_sent': False,
-                    'sms_sent': sms_sent,
-                    'test_link': test_link,
-                    'status': 'success' if sms_sent else 'failed',
+                    'status': 'failed',
                     'error': str(e)
                 })
 

@@ -14,6 +14,15 @@ const ProgressTracker = () => {
   const [expandedSections, setExpandedSections] = useState({})
   const { error } = useNotification()
 
+  // Helper function to safely format numbers
+  const safeToFixed = (value, decimals = 1) => {
+    if (typeof value === 'number' && !isNaN(value)) {
+      return value.toFixed(decimals)
+    }
+    const num = parseFloat(value || 0)
+    return isNaN(num) ? '0.0' : num.toFixed(decimals)
+  }
+
   useEffect(() => {
     fetchProgressData()
   }, [])
@@ -170,9 +179,9 @@ const ProgressTracker = () => {
                 />
               </div>
               <div className="flex justify-between text-sm text-gray-600">
-                <span>Progress: {module.progress_percentage.toFixed(1)}%</span>
-                <span>Best: {module.highest_score.toFixed(1)}%</span>
-                <span>Average: {module.average_score.toFixed(1)}%</span>
+                <span>Progress: {safeToFixed(module.progress_percentage)}%</span>
+                <span>Best: {safeToFixed(module.highest_score)}%</span>
+                <span>Average: {safeToFixed(module.average_score)}%</span>
               </div>
             </div>
           ))}
@@ -221,15 +230,15 @@ const ProgressTracker = () => {
                     <p className="text-sm text-gray-600">Attempts</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-green-600">{category.highest_score.toFixed(1)}%</p>
+                    <p className="text-2xl font-bold text-green-600">{safeToFixed(category.highest_score)}%</p>
                     <p className="text-sm text-gray-600">Best Score</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-purple-600">{category.average_score.toFixed(1)}%</p>
+                    <p className="text-2xl font-bold text-purple-600">{safeToFixed(category.average_score)}%</p>
                     <p className="text-sm text-gray-600">Average</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-orange-600">{category.accuracy.toFixed(1)}%</p>
+                    <p className="text-2xl font-bold text-orange-600">{safeToFixed(category.accuracy)}%</p>
                     <p className="text-sm text-gray-600">Accuracy</p>
                   </div>
                 </div>
@@ -241,7 +250,7 @@ const ProgressTracker = () => {
                       <div key={attemptIndex} className="flex items-center justify-between text-sm">
                         <span className="text-gray-600">{attempt.test_name}</span>
                         <div className="flex items-center space-x-4">
-                          <span className="font-medium">{attempt?.score?.toFixed(1)}%</span>
+                          <span className="font-medium">{safeToFixed(attempt?.score)}%</span>
                           <span className="text-gray-500">
                             {new Date(attempt.submitted_at).toLocaleDateString()}
                           </span>
@@ -298,15 +307,15 @@ const ProgressTracker = () => {
                     <p className="text-sm text-gray-600">Attempts</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-green-600">{level.highest_score.toFixed(1)}%</p>
+                    <p className="text-2xl font-bold text-green-600">{safeToFixed(level.highest_score)}%</p>
                     <p className="text-sm text-gray-600">Best Score</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-purple-600">{level.average_score.toFixed(1)}%</p>
+                    <p className="text-2xl font-bold text-purple-600">{safeToFixed(level.average_score)}%</p>
                     <p className="text-sm text-gray-600">Average</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-orange-600">{level.accuracy.toFixed(1)}%</p>
+                    <p className="text-2xl font-bold text-orange-600">{safeToFixed(level.accuracy)}%</p>
                     <p className="text-sm text-gray-600">Accuracy</p>
                   </div>
                 </div>
@@ -318,7 +327,7 @@ const ProgressTracker = () => {
                       <div key={attemptIndex} className="flex items-center justify-between text-sm">
                         <span className="text-gray-600">{attempt.test_name}</span>
                         <div className="flex items-center space-x-4">
-                          <span className="font-medium">{attempt.score.toFixed(1)}%</span>
+                          <span className="font-medium">{safeToFixed(attempt.score)}%</span>
                           <span className="text-gray-500">
                             {new Date(attempt.submitted_at).toLocaleDateString()}
                           </span>
@@ -350,7 +359,7 @@ const ProgressTracker = () => {
               </div>
               <div className="flex items-center space-x-4">
                 <span className="text-sm font-medium text-gray-700">
-                  {activity.average_score?.toFixed(1)}%
+                  {safeToFixed(activity.average_score)}%
                 </span>
                 <span className="text-sm text-gray-500">
                   {new Date(activity.submitted_at).toLocaleDateString()}

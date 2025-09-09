@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import Papa from 'papaparse';
 import api from '../../services/api';
+import { io } from 'socket.io-client';
 
 
 import { Plus, Users, Upload, Download, Building, BookOpen, Trash2, Edit, Eye, X, User, Hash, Mail, Phone } from 'lucide-react';
@@ -33,10 +34,73 @@ const BatchManagement = () => {
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadingStudents, setUploadingStudents] = useState(false);
   const [previewData, setPreviewData] = useState([]);
+  
+  // Progress states
+  const [uploadProgress, setUploadProgress] = useState({
+    status: 'idle', // 'idle', 'started', 'processing', 'sending_emails', 'completed', 'completed_with_errors'
+    total: 0,
+    processed: 0,
+    percentage: 0,
+    message: '',
+    currentStudent: null,
+    error: false,
+    emailWarning: false,
+    emailError: null
+  });
+  const [socket, setSocket] = useState(null);
 
   useEffect(() => {
     fetchBatches();
     fetchCampuses();
+    
+    // Initialize WebSocket connection for progress updates
+    const socketUrl = import.meta.env.VITE_SOCKET_IO_URL || 'https://another-versant.onrender.com/';
+    const newSocket = io(socketUrl, {
+      transports: ['websocket', 'polling']
+    });
+    
+    newSocket.on('connect', () => {
+      console.log('Connected to WebSocket for progress updates');
+    });
+    
+    newSocket.on('upload_progress', (data) => {
+      console.log('Progress update received:', data);
+      setUploadProgress({
+        status: data.status,
+        total: data.total,
+        processed: data.processed,
+        percentage: data.percentage,
+        message: data.message,
+        currentStudent: data.current_student,
+        error: data.error || false,
+        emailWarning: data.email_warning || false,
+        emailError: data.email_error || null
+      });
+      
+      // Show toast for important status changes
+      if (data.status === 'completed') {
+        toast.success(data.message);
+      } else if (data.status === 'completed_with_errors') {
+        toast.error(data.message);
+      } else if (data.email_warning) {
+        // Show warning toast for email failures (but student was created successfully)
+        toast(`⚠️ ${data.message}`, {
+          icon: '⚠️',
+          duration: 4000,
+        });
+      }
+    });
+    
+    newSocket.on('disconnect', () => {
+      console.log('Disconnected from WebSocket');
+    });
+    
+    setSocket(newSocket);
+    
+    // Cleanup on unmount
+    return () => {
+      newSocket.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -161,6 +225,19 @@ const BatchManagement = () => {
     }
 
     setUploadingStudents(true);
+    
+         // Reset progress state
+     setUploadProgress({
+       status: 'idle',
+       total: 0,
+       processed: 0,
+       percentage: 0,
+       message: '',
+       currentStudent: null,
+       error: false,
+       emailWarning: false,
+       emailError: null
+     });
     try {
       const formData = new FormData();
       formData.append('file', uploadFile);
@@ -187,7 +264,7 @@ const BatchManagement = () => {
         const uploadErrors = response.data.errors || [];
         
         if (createdStudents.length > 0) {
-          toast.success(`Successfully uploaded ${createdStudents.length} student(s)!`);
+          // Don't show success toast here as it's handled by WebSocket progress updates
           setShowUploadStudents(false);
           setUploadFile(null);
           setSelectedBatch(null);
@@ -195,8 +272,8 @@ const BatchManagement = () => {
           fetchBatches();
         }
         
-        // Show detailed error messages if any
-        if (uploadErrors.length > 0) {
+        // Show detailed error messages if any (only if not handled by WebSocket)
+        if (uploadErrors.length > 0 && uploadProgress.status !== 'completed_with_errors') {
           const errorMessage = uploadErrors.length > 3 
             ? `${uploadErrors.slice(0, 3).join('; ')}... and ${uploadErrors.length - 3} more errors.`
             : uploadErrors.join('; ');
@@ -547,7 +624,26 @@ const BatchManagement = () => {
         {showUploadStudents && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
             <form onSubmit={handleUploadStudents} className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full relative transform transition-all">
-              <button type="button" onClick={() => setShowUploadStudents(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-600 text-2xl font-bold transition-colors">&times;</button>
+              <button 
+                type="button" 
+                onClick={() => {
+                  setShowUploadStudents(false);
+                                     setUploadProgress({
+                     status: 'idle',
+                     total: 0,
+                     processed: 0,
+                     percentage: 0,
+                     message: '',
+                     currentStudent: null,
+                     error: false,
+                     emailWarning: false,
+                     emailError: null
+                   });
+                }} 
+                className="absolute top-4 right-4 text-gray-400 hover:text-red-600 text-2xl font-bold transition-colors"
+              >
+                &times;
+              </button>
               <div className="text-center mb-6">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Upload className="w-8 h-8 text-green-600" />
@@ -625,6 +721,76 @@ const BatchManagement = () => {
                 </div>
               )}
               
+              {/* Progress Bar */}
+              {uploadProgress.status !== 'idle' && (
+                <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold text-blue-800">Upload Progress</h3>
+                    <span className="text-sm text-blue-600 font-medium">
+                      {uploadProgress.processed}/{uploadProgress.total} ({uploadProgress.percentage}%)
+                    </span>
+                  </div>
+                  
+                                     {/* Progress Bar */}
+                   <div className="w-full bg-blue-200 rounded-full h-3 mb-3">
+                     <motion.div
+                       className={`h-3 rounded-full ${
+                         uploadProgress.error ? 'bg-red-500' : 
+                         uploadProgress.emailWarning ? 'bg-orange-500' :
+                         uploadProgress.status === 'completed' ? 'bg-green-500' :
+                         uploadProgress.status === 'completed_with_errors' ? 'bg-yellow-500' :
+                         'bg-blue-500'
+                       }`}
+                       initial={{ width: 0 }}
+                       animate={{ width: `${uploadProgress.percentage}%` }}
+                       transition={{ duration: 0.3 }}
+                     />
+                   </div>
+                  
+                                     {/* Status Message */}
+                   <div className={`text-sm ${uploadProgress.emailWarning ? 'text-orange-700' : 'text-blue-700'}`}>
+                     <div className="flex items-center gap-2">
+                       {uploadProgress.status === 'started' && (
+                         <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                       )}
+                       {uploadProgress.status === 'processing' && (
+                         <div className={`w-2 h-2 rounded-full animate-pulse ${
+                           uploadProgress.emailWarning ? 'bg-orange-500' : 'bg-blue-500'
+                         }`} />
+                       )}
+                       {uploadProgress.status === 'sending_emails' && (
+                         <div className={`w-2 h-2 rounded-full animate-pulse ${
+                           uploadProgress.emailWarning ? 'bg-orange-500' : 'bg-green-500'
+                         }`} />
+                       )}
+                       {uploadProgress.status === 'completed' && (
+                         <div className="w-2 h-2 bg-green-500 rounded-full" />
+                       )}
+                       {uploadProgress.status === 'completed_with_errors' && (
+                         <div className="w-2 h-2 bg-yellow-500 rounded-full" />
+                       )}
+                       <span>{uploadProgress.message}</span>
+                     </div>
+                   </div>
+                  
+                                     {/* Current Student Info */}
+                   {uploadProgress.currentStudent && (
+                     <div className={`mt-2 p-2 bg-white rounded border ${
+                       uploadProgress.emailWarning ? 'border-orange-200' : 'border-blue-200'
+                     }`}>
+                       <div className="text-xs text-gray-600">
+                         <strong>Current:</strong> {uploadProgress.currentStudent.name} ({uploadProgress.currentStudent.email})
+                         {uploadProgress.emailWarning && (
+                           <div className="text-orange-600 mt-1">
+                             ⚠️ Email sending failed - Student created successfully
+                           </div>
+                         )}
+                       </div>
+                     </div>
+                   )}
+                </div>
+              )}
+              
               <div className="mb-6">
                 <button 
                   type="button" 
@@ -639,17 +805,34 @@ const BatchManagement = () => {
               <div className="flex justify-end gap-3">
                 <button 
                   type="button" 
-                  onClick={() => setShowUploadStudents(false)}
+                  onClick={() => {
+                    setShowUploadStudents(false);
+                                       setUploadProgress({
+                     status: 'idle',
+                     total: 0,
+                     processed: 0,
+                     percentage: 0,
+                     message: '',
+                     currentStudent: null,
+                     error: false,
+                     emailWarning: false,
+                     emailError: null
+                   });
+                  }}
                   className="px-6 py-3 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 font-medium"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
-                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 font-medium shadow-md hover:shadow-lg" 
+                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 font-medium shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" 
                   disabled={uploadingStudents || !selectedBatch || !uploadFile}
                 >
-                  {uploadingStudents ? 'Uploading...' : 'Upload Students'}
+                  {uploadingStudents ? (
+                    uploadProgress.status === 'sending_emails' ? 'Sending Emails...' :
+                    uploadProgress.status === 'processing' ? 'Processing...' :
+                    'Uploading...'
+                  ) : 'Upload Students'}
                 </button>
               </div>
             </form>

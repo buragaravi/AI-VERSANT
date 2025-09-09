@@ -53,6 +53,8 @@ const StudentManagement = () => {
     const [campuses, setCampuses] = useState([]);
     const [selectedCampus, setSelectedCampus] = useState('');
     const [loadingFilters, setLoadingFilters] = useState(false);
+    const [searchInput, setSearchInput] = useState('');
+    const [downloadingAll, setDownloadingAll] = useState(false);
 
     // Fetch campuses on mount
     useEffect(() => {
@@ -130,10 +132,19 @@ const StudentManagement = () => {
                 ...(selectedBatch && { batch_id: selectedBatch })
             });
             
+            console.log('Fetching students with params:', params.toString());
             const res = await api.get(`/batch-management/students/filtered?${params}`);
             
             if (page === 1) {
                 setStudents(res.data.data);
+                // If a student is selected and they're not in the new results, keep the modal open
+                // but update the selected student data if they are in the results
+                if (selectedStudent) {
+                    const updatedStudent = res.data.data.find(s => s._id === selectedStudent._id);
+                    if (updatedStudent) {
+                        setSelectedStudent(updatedStudent);
+                    }
+                }
             } else {
                 setStudents(prev => [...prev, ...res.data.data]);
             }
@@ -147,11 +158,11 @@ const StudentManagement = () => {
             setLoading(false);
             setLoadingMore(false);
         }
-    }, [error, selectedCampus, selectedCourse, selectedBatch]);
+    }, [error, selectedCampus, selectedCourse, selectedBatch, selectedStudent]);
 
     useEffect(() => {
         fetchStudents(1, searchTerm);
-    }, [fetchStudents, searchTerm, selectedCampus, selectedCourse, selectedBatch]);
+    }, [fetchStudents, selectedCampus, selectedCourse, selectedBatch]);
     
     const handleDeleteStudent = async (studentId) => {
         if (window.confirm('Are you sure you want to delete this student? This action is permanent.')) {
@@ -200,6 +211,81 @@ const StudentManagement = () => {
             error(err.response?.data?.message || 'Failed to download credentials');
         }
     };
+
+    const handleDownloadAllCredentials = async () => {
+        try {
+            setDownloadingAll(true);
+            const params = new URLSearchParams({
+                ...(searchTerm && { search: searchTerm }),
+                ...(selectedCampus && { campus_id: selectedCampus }),
+                ...(selectedCourse && { course_id: selectedCourse }),
+                ...(selectedBatch && { batch_id: selectedBatch })
+            });
+            
+            const response = await api.get(`/batch-management/students/filtered/credentials?${params}`, {
+                responseType: 'blob'
+            });
+            
+            // Create a blob URL and download the file
+            const blob = new Blob([response.data], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            
+            // Generate filename based on filters
+            let filename = 'students_credentials';
+            if (selectedCampus) {
+                const campus = campuses.find(c => c.id === selectedCampus);
+                if (campus) filename += `_${campus.name.replace(/\s+/g, '_')}`;
+            }
+            if (selectedCourse) {
+                const course = courses.find(c => c.id === selectedCourse);
+                if (course) filename += `_${course.name.replace(/\s+/g, '_')}`;
+            }
+            if (selectedBatch) {
+                const batch = batches.find(b => b.id === selectedBatch);
+                if (batch) filename += `_${batch.name.replace(/\s+/g, '_')}`;
+            }
+            if (searchTerm) filename += '_search';
+            filename += '.csv';
+            
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+            success('All credentials downloaded successfully');
+        } catch (err) {
+            error(err.response?.data?.message || 'Failed to download all credentials');
+        } finally {
+            setDownloadingAll(false);
+        }
+    };
+
+    const handleSearch = () => {
+        console.log('Searching for:', searchInput);
+        setSearchTerm(searchInput);
+        // Keep the modal open if a student is selected and the search matches them
+        if (selectedStudent) {
+            const studentMatches = selectedStudent.name?.toLowerCase().includes(searchInput.toLowerCase()) ||
+                                 selectedStudent.email?.toLowerCase().includes(searchInput.toLowerCase()) ||
+                                 selectedStudent.roll_number?.toLowerCase().includes(searchInput.toLowerCase());
+            
+            if (!studentMatches) {
+                // If the selected student doesn't match the search, close the modal
+                setIsProgressModalOpen(false);
+                setSelectedStudent(null);
+            }
+        }
+    };
+
+    const handleClearSearch = () => {
+        setSearchInput('');
+        setSearchTerm('');
+        // Keep the modal open when clearing search
+    };
+
 
     // Load more function
     const loadMore = () => {
@@ -409,7 +495,8 @@ const StudentManagement = () => {
                                 <Filter className="mr-2 h-5 w-5 text-gray-500" />
                                 Filter Students
                             </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                                 {/* Campus Filter */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Campus</label>
@@ -466,33 +553,132 @@ const StudentManagement = () => {
                                         ))}
                                     </select>
                                 </div>
+
+                                {/* Download All Credentials Button */}
+                                <div className="flex items-end">
+                                    {students.length > 0 && (
+                                        <button
+                                            onClick={handleDownloadAllCredentials}
+                                            disabled={downloadingAll}
+                                            className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            {downloadingAll ? (
+                                                <>
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                    Downloading...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                    </svg>
+                                                    Download All
+                                                </>
+                                            )}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
-                            {/* Clear Filters Button */}
-                            {(selectedCampus || selectedCourse || selectedBatch) && (
-                                <button
-                                    onClick={() => {
-                                        setSelectedCampus('');
-                                        setSelectedCourse(null);
-                                        setSelectedBatch(null);
-                                    }}
-                                    className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
-                                >
-                                    Clear Filters
-                                </button>
-                            )}
+                            {/* Clear Filters Button and Download info */}
+                            <div className="flex items-center justify-between">
+                                {(selectedCampus || selectedCourse || selectedBatch) && (
+                                    <button
+                                        onClick={() => {
+                                            setSelectedCampus('');
+                                            setSelectedCourse(null);
+                                            setSelectedBatch(null);
+                                        }}
+                                        className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                                    >
+                                        Clear Filters
+                                    </button>
+                                )}
+                                
+                                {/* Download info text */}
+                                {students.length > 0 && (
+                                    <p className="text-sm text-gray-500">
+                                        Downloads credentials for all {totalStudents} filtered students
+                                    </p>
+                                )}
+                            </div>
                         </div>
 
                         {/* Search Section */}
-                        <div className="mb-6 relative">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-tertiary" />
-                            <input
-                                type="text"
-                                placeholder="Search by name, email, or roll number..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-12 pr-4 py-3 border border-stroke rounded-lg shadow-sm focus:ring-1 focus:ring-highlight"
-                            />
+                        <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                            <div className="flex flex-col md:flex-row gap-4">
+                                <div className="flex-1 relative">
+                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search by name, email, or roll number..."
+                                        value={searchInput}
+                                        onChange={(e) => setSearchInput(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                                        className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleSearch}
+                                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                                    >
+                                        <Search className="w-4 h-4" />
+                                        Search
+                                    </button>
+                                    {searchTerm && (
+                                        <button
+                                            onClick={handleClearSearch}
+                                            className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center gap-2"
+                                        >
+                                            Clear
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            {/* Search Status */}
+                            {searchTerm && (
+                                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                                            <span className="text-sm font-medium text-yellow-800">
+                                                Searching for: "{searchTerm}"
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={handleClearSearch}
+                                            className="text-yellow-600 hover:text-yellow-800 text-sm font-medium"
+                                        >
+                                            Clear Search
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Student Modal Status */}
+                            {selectedStudent && isProgressModalOpen && (
+                                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                                            <span className="text-sm font-medium text-blue-800">
+                                                Viewing: {selectedStudent.name}
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                setIsProgressModalOpen(false);
+                                                setSelectedStudent(null);
+                                            }}
+                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                        >
+                                            Close Details
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Enhanced Student Display Table */}

@@ -16,13 +16,10 @@ const CourseManagement = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [selectedCourse, setSelectedCourse] = useState(null);
-    const [formData, setFormData] = useState({
-        campus_id: '',
-        course_name: '',
-        admin_name: '',
-        admin_email: '',
-        admin_password: ''
-    });
+      const [formData, setFormData] = useState({
+    campus_id: '',
+    course_name: ''
+  });
     const [expandedCourse, setExpandedCourse] = useState(null);
     const [batches, setBatches] = useState([]);
     const [loadingBatches, setLoadingBatches] = useState(false);
@@ -71,8 +68,7 @@ const CourseManagement = () => {
     const filteredCourses = useMemo(() => {
         return courses.filter(course =>
             (course.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-            (course.campus?.name.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-            (course.admin?.name.toLowerCase() || '').includes(searchTerm.toLowerCase())
+            (course.campus?.name.toLowerCase() || '').includes(searchTerm.toLowerCase())
         );
     }, [courses, searchTerm]);
 
@@ -86,15 +82,12 @@ const CourseManagement = () => {
             setSelectedCourse(course);
             setFormData({
                 course_name: course.name,
-                admin_name: course.admin.name,
-                admin_email: course.admin.email,
-                admin_password: '',
                 campus_id: course.campus.id
             });
         } else {
             setIsEditMode(false);
             setSelectedCourse(null);
-            setFormData({ campus_id: '', course_name: '', admin_name: '', admin_email: '', admin_password: '' });
+            setFormData({ campus_id: '', course_name: '' });
         }
         setIsModalOpen(true);
     };
@@ -169,7 +162,7 @@ const CourseManagement = () => {
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                                     <input
                                         type="text"
-                                        placeholder="Search by course, campus, or admin..."
+                                        placeholder="Search by course or campus name..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                         className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-gray-900"
@@ -184,7 +177,6 @@ const CourseManagement = () => {
                                             <tr>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Course</th>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Campus</th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Course Admin</th>
                                                 <th className="px-6 py-3 text-right text-xs font-medium text-black uppercase tracking-wider">Actions</th>
                                             </tr>
                                         </thead>
@@ -201,10 +193,6 @@ const CourseManagement = () => {
                                                             </div>
                                                         </td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{course.campus?.name || 'N/A'}</td>
-                                                        <td className="px-6 py-4 whitespace-nowrap">
-                                                            <div className="text-sm font-medium text-gray-900">{course.admin?.name || 'N/A'}</div>
-                                                            <div className="text-sm text-gray-600">{course.admin?.email || 'N/A'}</div>
-                                                        </td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                             <button onClick={(e) => { e.stopPropagation(); openModal(course); }} className="text-blue-600 hover:text-blue-800 mr-4"><Edit size={18} /></button>
                                                             <button onClick={(e) => { e.stopPropagation(); handleDelete(course.id); }} className="text-red-600 hover:text-red-800"><Trash2 size={18}/></button>
@@ -282,13 +270,10 @@ const CourseManagement = () => {
                                         <SelectField label="Campus" name="campus_id" value={formData.campus_id} onChange={handleInputChange} options={campuses} icon={<Building size={18} />} textClass="text-black" />
                                     )}
                                     <InputField label="Course Name" name="course_name" value={formData.course_name} onChange={handleInputChange} icon={<Book size={18}/>} textClass="text-black" />
-                                    <InputField label="Admin Name" name="admin_name" value={formData.admin_name} onChange={handleInputChange} icon={<User size={18}/>} textClass="text-black" />
-                                    <InputField label="Admin Email" name="admin_email" type="email" value={formData.admin_email} onChange={handleInputChange} icon={<Mail size={18}/>} disabled={isEditMode} textClass="text-black" />
-                                    <InputField label="Admin Password" name="admin_password" type="password" value={formData.admin_password} onChange={handleInputChange} icon={<Key size={18}/>} placeholder={isEditMode ? 'Leave blank to keep current password' : ''} textClass="text-black" />
                                 </div>
                                 <div className="mt-8 flex justify-end">
                                     <button type="button" onClick={closeModal} className="mr-3 bg-tertiary text-black px-4 py-2 rounded-lg hover:bg-highlight">Cancel</button>
-                                    <button type="submit" className="bg-highlight text-black px-4 py-2 rounded-lg hover:bg-highlight-hover" disabled={!isEditMode && !formData.campus_id}>{isEditMode ? 'Update' : 'Create'}</button>
+                                    <button type="submit" className="bg-highlight text-black px-4 py-2 rounded-lg hover:bg-highlight-hover" disabled={!isEditMode && !formData.campus_id}>{isEditMode ? 'Update' : 'Create Course'}</button>
                                 </div>
                             </form>
                         </motion.div>

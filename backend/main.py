@@ -36,7 +36,8 @@ def create_app():
         print("⚠️  AWS S3 initialization failed - audio uploads may not work")
 
     # CORS configuration
-    default_origins = 'http://localhost:3000,http://localhost:5173,https://pydah-studyedge.vercel.app,https://versant-frontend.vercel.app,https://crt.pydahsoft.in,https://ai-versant-backend.onrender.com'
+
+    default_origins = 'http://localhost:3000,http://localhost:5173,https://pydah-studyedge.vercel.app,https://versant-frontend.vercel.app,https://crt.pydahsoft.in,https://another-versant.onrender.com/,https://another-versant.vercel.app'
     cors_origins = os.getenv('CORS_ORIGINS', default_origins)
 
     # Enhanced CORS configuration to handle all possible origins
@@ -191,6 +192,7 @@ def create_app():
     from routes.test_management_audio import audio_test_bp
     from routes.test_management_writing import writing_test_bp
     from routes.test_management_technical import technical_test_bp
+    # Removed non-existent route imports
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(superadmin_bp, url_prefix='/superadmin')
@@ -213,6 +215,9 @@ def create_app():
     app.register_blueprint(audio_test_bp, url_prefix='/test-management/audio')
     app.register_blueprint(writing_test_bp, url_prefix='/test-management/writing')
     app.register_blueprint(technical_test_bp, url_prefix='/test-management/technical')
+    
+    # Register progress tracking blueprints
+    # Removed registrations for non-existent blueprints
 
     print("=== Registered Routes ===")
     for rule in app.url_map.iter_rules():
@@ -247,5 +252,22 @@ def create_app():
 app, socketio = create_app()
 
 if __name__ == "__main__":
+    import platform
+    
     port = int(os.environ.get("PORT", 8000))
-    socketio.run(app, host="0.0.0.0", port=port)
+    debug = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
+    
+    # Windows-specific optimizations
+    if platform.system().lower() == 'windows':
+        print("🪟 Windows detected - using optimized settings")
+        socketio.run(
+            app, 
+            host="0.0.0.0", 
+            port=port, 
+            debug=debug,
+            use_reloader=debug,
+            log_output=True
+        )
+    else:
+        # Unix/Linux settings
+        socketio.run(app, host="0.0.0.0", port=port)
