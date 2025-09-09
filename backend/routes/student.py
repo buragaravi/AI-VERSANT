@@ -679,7 +679,58 @@ def submit_test(test_id):
             return jsonify({'success': False, 'message': 'Test already submitted'}), 409
         
         # Calculate score properly
+        # Calculate score properly
         score = 0
+        total_questions = len(test.get('questions', []))
+        correct_answers = 0
+        detailed_results = []
+        
+        current_app.logger.info(f"Calculating score for {total_questions} questions")
+        current_app.logger.info(f"Student answers: {answers}")
+        
+        # Process each question and calculate score
+        for i, question in enumerate(test.get('questions', [])):
+            question_id = str(question.get('_id', i))
+            student_answer = answers.get(question_id, '')
+            
+            # Get correct answer from question
+            correct_answer_letter = question.get('answer', '')  # A, B, C, or D
+            correct_answer_text = ''
+            
+            # Map answer letter to actual option text
+            if correct_answer_letter == 'A':
+                correct_answer_text = question.get('optionA', '')
+            elif correct_answer_letter == 'B':
+                correct_answer_text = question.get('optionB', '')
+            elif correct_answer_letter == 'C':
+                correct_answer_text = question.get('optionC', '')
+            elif correct_answer_letter == 'D':
+                correct_answer_text = question.get('optionD', '')
+            
+            # Check if student answer matches correct answer text
+            is_correct = student_answer == correct_answer_text
+            
+            if is_correct:
+                correct_answers += 1
+                score += 1
+            
+            current_app.logger.info(f"Question {i}: student='{student_answer}', correct='{correct_answer_text}', is_correct={is_correct}")
+            
+            detailed_results.append({
+                'question_index': i,
+                'question_id': question_id,
+                'question': question.get('question', ''),
+                'student_answer': student_answer,
+                'correct_answer_letter': correct_answer_letter,
+                'correct_answer_text': correct_answer_text,
+                'is_correct': is_correct,
+                'score': 1 if is_correct else 0
+            })
+        
+        # Calculate percentage
+        percentage = (score / total_questions) * 100 if total_questions > 0 else 0
+        
+        current_app.logger.info(f"Final score: {score}/{total_questions} = {percentage:.2f}%")
         total_questions = len(test.get('questions', []))
         correct_answers = 0
         detailed_results = []
@@ -755,6 +806,10 @@ def submit_test(test_id):
         update_data = {
             'answers': answers,
             'score': score,
+            'total_questions': total_questions,
+            'correct_answers': correct_answers,
+            'percentage': percentage,
+            'detailed_results': detailed_results,
             'total_questions': total_questions,
             'correct_answers': correct_answers,
             'percentage': percentage,
@@ -844,12 +899,87 @@ def submit_test(test_id):
             current_app.logger.error(f"Error saving to test_results collection: {e}", exc_info=True)
             # Don't fail the entire request if test_results saving fails
         
+        # Save to test_results collection with proper format
+        try:
+            # Convert detailed_results to the format expected by test_results
+            results_for_test_results = []
+            for result in detailed_results:
+                # Find the corresponding question to get question_id
+                question_id = result.get('question_id', '')
+                if not question_id:
+                    # Try to get question_id from the question object
+                    question_index = result.get('question_index', 0)
+                    if question_index < len(test.get('questions', [])):
+                        question_obj = test['questions'][question_index]
+                        question_id = str(question_obj.get('_id', ''))
+                
+                # Convert option text back to option letter for storage
+                student_answer_letter = ''
+                correct_answer_letter = result.get('correct_answer_letter', '')
+                
+                # Find which option letter corresponds to the student's text answer
+                question_obj = None
+                for q in test.get('questions', []):
+                    if str(q.get('_id', '')) == question_id:
+                        question_obj = q
+                        break
+                
+                if question_obj:
+                    student_answer_text = result.get('student_answer', '')
+                    # Map student answer text back to option letter
+                    if student_answer_text == question_obj.get('optionA', ''):
+                        student_answer_letter = 'A'
+                    elif student_answer_text == question_obj.get('optionB', ''):
+                        student_answer_letter = 'B'
+                    elif student_answer_text == question_obj.get('optionC', ''):
+                        student_answer_letter = 'C'
+                    elif student_answer_text == question_obj.get('optionD', ''):
+                        student_answer_letter = 'D'
+                
+                results_for_test_results.append({
+                    'question_id': question_id,
+                    'question': result.get('question', ''),
+                    'student_answer': student_answer_letter,
+                    'correct_answer': correct_answer_letter,
+                    'is_correct': result.get('is_correct', False),
+                    'score': {'$numberInt': str(result.get('score', 0) * 100)}  # Convert to percentage format
+                })
+            
+            # Create test_results document
+            test_result_doc = {
+                'student_id': ObjectId(current_user_id) if isinstance(current_user_id, str) else current_user_id,
+                'test_id': ObjectId(test_id),
+                'module_id': test.get('module_id', ''),
+                'subcategory': test.get('subcategory', ''),
+                'level_id': test.get('level_id'),
+                'results': results_for_test_results,
+                'total_score': {'$numberInt': str(score * 100)},  # Total score in percentage format
+                'average_score': {'$numberDouble': str(percentage)},  # Average percentage
+                'correct_answers': {'$numberInt': str(correct_answers)},
+                'total_questions': {'$numberInt': str(total_questions)},
+                'submitted_at': {'$date': {'$numberLong': str(int(end_time.timestamp() * 1000))}},
+                'test_type': test.get('test_type', 'online'),
+                'time_taken': {'$numberInt': str(int(duration_seconds))}
+            }
+            
+            # Insert into test_results collection
+            mongo_db.test_results.insert_one(test_result_doc)
+            current_app.logger.info(f"Successfully saved test result to test_results collection for test {test_id}")
+            
+        except Exception as e:
+            current_app.logger.error(f"Error saving to test_results collection: {e}", exc_info=True)
+            # Don't fail the entire request if test_results saving fails
+        
         return jsonify({
             'success': True,
             'message': 'Test submitted successfully',
             'data': {
                 'score': score,
                 'total_questions': total_questions,
+                'correct_answers': correct_answers,
+                'percentage': percentage,
+                'detailed_results': detailed_results,
+                'total_marks': test.get('total_marks', 0),
                 'correct_answers': correct_answers,
                 'percentage': percentage,
                 'detailed_results': detailed_results,
@@ -1080,10 +1210,15 @@ def submit_random_test(test_id):
         
 
         # Calculate score properly
+
+        # Calculate score properly
         score = 0
         total_questions = len(assignment['questions'])
         correct_answers = 0
         detailed_results = []
+        
+        current_app.logger.info(f"Calculating score for random test: {total_questions} questions")
+        current_app.logger.info(f"Student answers: {answers}")
         
         current_app.logger.info(f"Calculating score for random test: {total_questions} questions")
         current_app.logger.info(f"Student answers: {answers}")
@@ -1109,17 +1244,44 @@ def submit_random_test(test_id):
             # Check if student answer matches correct answer text
             is_correct = student_answer == correct_answer_text
             
+            question_id = f'question_{i}'
+            student_answer = answers.get(question_id, '')
+            
+            # Get correct answer from question
+            correct_answer_letter = question.get('answer', '')  # A, B, C, or D
+            correct_answer_text = ''
+            
+            # Map answer letter to actual option text
+            if correct_answer_letter == 'A':
+                correct_answer_text = question.get('optionA', '')
+            elif correct_answer_letter == 'B':
+                correct_answer_text = question.get('optionB', '')
+            elif correct_answer_letter == 'C':
+                correct_answer_text = question.get('optionC', '')
+            elif correct_answer_letter == 'D':
+                correct_answer_text = question.get('optionD', '')
+            
+            # Check if student answer matches correct answer text
+            is_correct = student_answer == correct_answer_text
+            
             if is_correct:
                 correct_answers += 1
                 score += 1
             
             current_app.logger.info(f"Question {i}: student='{student_answer}', correct='{correct_answer_text}', is_correct={is_correct}")
             
+            current_app.logger.info(f"Question {i}: student='{student_answer}', correct='{correct_answer_text}', is_correct={is_correct}")
+            
             detailed_results.append({
                 'question_index': i,
                 'question_id': question_id,
+                'question_id': question_id,
                 'question': question.get('question', ''),
                 'student_answer': student_answer,
+                'correct_answer_letter': correct_answer_letter,
+                'correct_answer_text': correct_answer_text,
+                'is_correct': is_correct,
+                'score': 1 if is_correct else 0
                 'correct_answer_letter': correct_answer_letter,
                 'correct_answer_text': correct_answer_text,
                 'is_correct': is_correct,
@@ -1128,6 +1290,8 @@ def submit_random_test(test_id):
         
         # Calculate percentage
         percentage = (score / total_questions) * 100 if total_questions > 0 else 0
+        
+        current_app.logger.info(f"Final random test score: {score}/{total_questions} = {percentage:.2f}%")
         
         current_app.logger.info(f"Final random test score: {score}/{total_questions} = {percentage:.2f}%")
         
@@ -1141,12 +1305,76 @@ def submit_random_test(test_id):
                     'score': score,
                     'total_questions': total_questions,
                     'correct_answers': correct_answers,
+                    'total_questions': total_questions,
+                    'correct_answers': correct_answers,
                     'percentage': percentage,
                     'answers': answers,
                     'detailed_results': detailed_results
                 }
             }
         )
+        
+        # Save to test_results collection with proper format for random tests
+        try:
+            # Convert detailed_results to the format expected by test_results
+            results_for_test_results = []
+            for result in detailed_results:
+                # For random tests, question_id is already in the format 'question_X'
+                question_id = result.get('question_id', '')
+                
+                # Convert option text back to option letter for storage
+                student_answer_letter = ''
+                correct_answer_letter = result.get('correct_answer_letter', '')
+                
+                # Find which option letter corresponds to the student's text answer
+                question_index = result.get('question_index', 0)
+                if question_index < len(assignment['questions']):
+                    question_obj = assignment['questions'][question_index]
+                    student_answer_text = result.get('student_answer', '')
+                    
+                    # Map student answer text back to option letter
+                    if student_answer_text == question_obj.get('optionA', ''):
+                        student_answer_letter = 'A'
+                    elif student_answer_text == question_obj.get('optionB', ''):
+                        student_answer_letter = 'B'
+                    elif student_answer_text == question_obj.get('optionC', ''):
+                        student_answer_letter = 'C'
+                    elif student_answer_text == question_obj.get('optionD', ''):
+                        student_answer_letter = 'D'
+                
+                results_for_test_results.append({
+                    'question_id': question_id,
+                    'question': result.get('question', ''),
+                    'student_answer': student_answer_letter,
+                    'correct_answer': correct_answer_letter,
+                    'is_correct': result.get('is_correct', False),
+                    'score': {'$numberInt': str(result.get('score', 0) * 100)}  # Convert to percentage format
+                })
+            
+            # Create test_results document for random test
+            test_result_doc = {
+                'student_id': ObjectId(current_user_id) if isinstance(current_user_id, str) else current_user_id,
+                'test_id': ObjectId(test_id),
+                'module_id': test.get('module_id', ''),
+                'subcategory': test.get('subcategory', ''),
+                'level_id': test.get('level_id'),
+                'results': results_for_test_results,
+                'total_score': {'$numberInt': str(score * 100)},  # Total score in percentage format
+                'average_score': {'$numberDouble': str(percentage)},  # Average percentage
+                'correct_answers': {'$numberInt': str(correct_answers)},
+                'total_questions': {'$numberInt': str(total_questions)},
+                'submitted_at': {'$date': {'$numberLong': str(int(datetime.now(pytz.utc).timestamp() * 1000))}},
+                'test_type': test.get('test_type', 'online'),
+                'time_taken': {'$numberInt': '0'}  # Random tests don't track time
+            }
+            
+            # Insert into test_results collection
+            mongo_db.test_results.insert_one(test_result_doc)
+            current_app.logger.info(f"Successfully saved random test result to test_results collection for test {test_id}")
+            
+        except Exception as e:
+            current_app.logger.error(f"Error saving random test to test_results collection: {e}", exc_info=True)
+            # Don't fail the entire request if test_results saving fails
         
         # Save to test_results collection with proper format for random tests
         try:
@@ -1527,8 +1755,12 @@ def get_single_test(test_id):
 @jwt_required()
 def get_test_history():
     """Get student's test history with detailed results from student_test_attempts"""
+    """Get student's test history with detailed results from student_test_attempts"""
     try:
         current_user_id = get_jwt_identity()
+        
+        # Get all attempts from student_test_attempts collection
+        all_attempts = []
         
         # Get all attempts from student_test_attempts collection
         all_attempts = []
@@ -1541,6 +1773,8 @@ def get_test_history():
                             '$or': [
                                 {'student_id': ObjectId(current_user_id)},
                                 {'student_id': current_user_id}
+                            ],
+                            'status': 'completed'  # Only get completed attempts
                             ],
                             'status': 'completed'  # Only get completed attempts
                         }
@@ -1567,6 +1801,7 @@ def get_test_history():
                             'average_score': 1,
                             'score_percentage': 1,
                             'percentage': 1,
+                            'percentage': 1,
                             'score': 1,
                             'correct_answers': 1,
                             'total_questions': 1,
@@ -1576,10 +1811,12 @@ def get_test_history():
                             'submitted_at': 1,
                             'end_time': 1,
                             'start_time': 1,
+                            'start_time': 1,
                             'test_type': 1,
                             'detailed_results': 1,
                             'answers': 1,
                             'total_marks': 1,
+                            'status': 1
                             'status': 1
                         }
                     },
@@ -1588,11 +1825,48 @@ def get_test_history():
                 
                 all_attempts = list(mongo_db.student_test_attempts.aggregate(pipeline))
                 current_app.logger.info(f"Found {len(all_attempts)} completed attempts in student_test_attempts collection")
+                all_attempts = list(mongo_db.student_test_attempts.aggregate(pipeline))
+                current_app.logger.info(f"Found {len(all_attempts)} completed attempts in student_test_attempts collection")
             else:
                 current_app.logger.warning("student_test_attempts collection not found")
         except Exception as e:
             current_app.logger.warning(f"Error aggregating from student_test_attempts: {e}")
         
+        # Group attempts by test_id to show all attempts for each test
+        test_groups = {}
+        for attempt in all_attempts:
+            test_id = str(attempt.get('test_id'))
+            if test_id not in test_groups:
+                test_groups[test_id] = {
+                    'test_id': test_id,
+                    'test_name': attempt.get('test_name'),
+                    'module_id': attempt.get('module_id'),
+                    'subcategory': attempt.get('subcategory'),
+                    'level_id': attempt.get('level_id'),
+                    'test_type': attempt.get('test_type'),
+                    'attempts': []
+                }
+            test_groups[test_id]['attempts'].append(attempt)
+        
+        # Convert to list and sort by most recent attempt
+        results = []
+        for test_id, test_data in test_groups.items():
+            # Sort attempts by date (most recent first)
+            test_data['attempts'].sort(key=lambda x: x.get('end_time') or x.get('submitted_at') or datetime.min, reverse=True)
+            
+            # Add test summary data
+            latest_attempt = test_data['attempts'][0]
+            test_data['latest_score'] = latest_attempt.get('percentage') or latest_attempt.get('score_percentage') or latest_attempt.get('average_score') or 0
+            test_data['latest_correct_answers'] = latest_attempt.get('correct_answers', 0)
+            test_data['total_questions'] = latest_attempt.get('total_questions', 0)
+            test_data['latest_submitted_at'] = latest_attempt.get('end_time') or latest_attempt.get('submitted_at')
+            test_data['attempt_count'] = len(test_data['attempts'])
+            
+            results.append(test_data)
+        
+        # Sort results by most recent attempt
+        results.sort(key=lambda x: x.get('latest_submitted_at') or datetime.min, reverse=True)
+        current_app.logger.info(f"Total test groups: {len(results)}")
         # Group attempts by test_id to show all attempts for each test
         test_groups = {}
         for attempt in all_attempts:
@@ -1695,12 +1969,76 @@ def get_test_history():
                     attempt['formatted_duration'] = f"{minutes}m {seconds}s"
                 else:
                     attempt['formatted_duration'] = "N/A"
+            # Handle timestamp for latest attempt
+            if result.get('latest_submitted_at'):
+                result['latest_submitted_at'] = result['latest_submitted_at'].isoformat()
+            
+            # Process each attempt in the attempts array
+            for attempt in result.get('attempts', []):
+                # Convert ObjectIds to strings
+                attempt['_id'] = str(attempt['_id'])
+                attempt['test_id'] = str(attempt['test_id'])
+                
+                # Handle timestamp
+                if attempt.get('end_time'):
+                    attempt['end_time'] = attempt['end_time'].isoformat()
+                if attempt.get('submitted_at'):
+                    attempt['submitted_at'] = attempt['submitted_at'].isoformat()
+                
+                # Calculate proper percentage for different test types
+                if attempt.get('test_type') == 'online':
+                    # For online exams, use score field and calculate percentage
+                    score = attempt.get('score', 0)
+                    total_marks = attempt.get('total_marks', 0)
+                    
+                    if total_marks > 0:
+                        calculated_percentage = (score / total_marks) * 100
+                        attempt['score_percentage'] = calculated_percentage
+                        attempt['average_score'] = calculated_percentage
+                    else:
+                        attempt['score_percentage'] = 0
+                        attempt['average_score'] = 0
+                elif attempt.get('test_type') == 'practice':
+                    # For practice tests, use existing percentage or calculate from score
+                    if 'percentage' in attempt and attempt['percentage'] is not None:
+                        attempt['score_percentage'] = attempt['percentage']
+                        attempt['average_score'] = attempt['percentage']
+                    elif 'average_score' in attempt and attempt['average_score'] is not None:
+                        attempt['score_percentage'] = attempt['average_score']
+                    else:
+                        # Calculate from score and total_questions
+                        score = attempt.get('score', 0)
+                        total_questions = attempt.get('total_questions', 0)
+                        if total_questions > 0:
+                            calculated_percentage = (score / total_questions) * 100
+                            attempt['score_percentage'] = calculated_percentage
+                            attempt['average_score'] = calculated_percentage
+                        else:
+                            attempt['score_percentage'] = 0
+                            attempt['average_score'] = 0
+                
+                # Format duration for display
+                duration_seconds = attempt.get('duration_seconds', 0)
+                time_taken_ms = attempt.get('time_taken_ms', 0)
+                
+                if duration_seconds > 0:
+                    minutes = int(duration_seconds // 60)
+                    seconds = int(duration_seconds % 60)
+                    attempt['formatted_duration'] = f"{minutes}m {seconds}s"
+                elif time_taken_ms > 0:
+                    duration_seconds = time_taken_ms / 1000
+                    minutes = int(duration_seconds // 60)
+                    seconds = int(duration_seconds % 60)
+                    attempt['formatted_duration'] = f"{minutes}m {seconds}s"
+                else:
+                    attempt['formatted_duration'] = "N/A"
         
         # Convert any remaining ObjectId fields to strings for JSON serialization
         convert_objectids_to_strings(results)
         
         return jsonify({
             'success': True,
+            'data': results
             'data': results
         }), 200
         
@@ -2427,8 +2765,10 @@ def get_test_result_by_id(test_id):
         try:
             if hasattr(mongo_db, 'student_test_attempts'):
                 # Try both ObjectId and string formats for student_id
+                # Try both ObjectId and string formats for student_id
                 result = mongo_db.student_test_attempts.find_one({
                     'test_id': ObjectId(test_id),
+                    'student_id': ObjectId(current_user_id) if isinstance(current_user_id, str) else current_user_id
                     'student_id': ObjectId(current_user_id) if isinstance(current_user_id, str) else current_user_id
                 })
                 if result:
@@ -2441,8 +2781,10 @@ def get_test_result_by_id(test_id):
             try:
                 if hasattr(mongo_db, 'test_results'):
                     # Try both ObjectId and string formats for student_id
+                    # Try both ObjectId and string formats for student_id
                     result = mongo_db.test_results.find_one({
                         'test_id': ObjectId(test_id),
+                        'student_id': ObjectId(current_user_id) if isinstance(current_user_id, str) else current_user_id
                         'student_id': ObjectId(current_user_id) if isinstance(current_user_id, str) else current_user_id
                     })
                     if result:

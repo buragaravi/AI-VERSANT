@@ -409,6 +409,7 @@ const OnlineExamTaking = () => {
   });
 
   return (
+<<<<<<< HEAD
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       <main className="container mx-auto px-4 py-6">
         {/* Header with Timer */}
@@ -451,6 +452,59 @@ const OnlineExamTaking = () => {
                     viewBox="0 0 20 20"
                     animate={{ rotate: timeRemaining <= 60 ? [0, 10, -10, 0] : 0 }}
                     transition={{ duration: 0.5, repeat: timeRemaining <= 60 ? Infinity : 0 }}
+=======
+    <div className="min-h-screen bg-gray-50">
+      <main className="px-6 lg:px-10 py-8">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="mb-6">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 text-center">{exam.name}</h1>
+            </div>
+            {cheatWarning && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-4 text-center">
+                <strong>Tab switching or leaving the exam is not allowed!</strong> ({cheatCount} warning{cheatCount > 1 ? 's' : ''})
+                {autoSubmitted && <div className="mt-2 font-bold">Exam auto-submitted due to repeated tab switching.</div>}
+              </div>
+            )}
+            <div ref={examRef} className="bg-white rounded-2xl shadow-lg mx-auto p-4 sm:p-8 max-w-md w-full min-h-[350px] flex flex-col justify-center select-none">
+              <fieldset disabled={autoSubmitted} style={{ opacity: autoSubmitted ? 0.6 : 1 }}>
+                <div className="text-center mb-6 text-sm font-semibold text-gray-500">
+                  Question {currentQuestionIndex + 1} of {questions.length}
+                </div>
+                <div className="text-center">
+                  <p className="text-lg sm:text-xl text-gray-800 mb-8 break-words">{currentQuestion.question}</p>
+                </div>
+                {currentQuestion.question_type === 'mcq' && (
+                  <div className="space-y-4 max-w-lg mx-auto w-full">
+                    {Object.entries(currentQuestion.options).map(([key, value]) => (
+                      <label
+                        key={key}
+                        className={
+                          'flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all w-full ' +
+                          (answers[currentQuestion.question_id] === value
+                            ? 'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-300'
+                            : 'border-gray-200 hover:border-indigo-400')
+                        }
+                      >
+                        <input
+                          type="radio"
+                          name={currentQuestion.question_id}
+                          value={value}
+                          checked={answers[currentQuestion.question_id] === value}
+                          onChange={() => handleAnswerChange(currentQuestion.question_id, value)}
+                          className="h-5 w-5 mr-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                        />
+                        <span className="font-semibold text-gray-700">{key}.</span>
+                        <span className="ml-3 text-gray-800">{value}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-10 flex justify-between items-center">
+                  <button
+                    onClick={() => setCurrentQuestionIndex(prev => prev - 1)}
+                    disabled={currentQuestionIndex === 0}
+                    className="px-6 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+>>>>>>> 48122e88a5aad37051e7821c16096f13fdf19202
                   >
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                   </motion.svg>
