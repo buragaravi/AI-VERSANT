@@ -115,6 +115,62 @@ def check_email_configuration():
     logger.info("✅ Email service is properly configured")
     return True
 
+def send_test_notification_email(student_email, student_name, test_name, test_type, login_url):
+    """Send test notification email to student"""
+    try:
+        subject = f"New Test Assigned: {test_name}"
+        
+        # Create HTML content for test notification
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">
+                    New Test Assignment
+                </h2>
+                
+                <p>Dear {student_name},</p>
+                
+                <p>A new test has been assigned to you:</p>
+                
+                <div style="background-color: #f8f9fa; padding: 15px; border-left: 4px solid #3498db; margin: 20px 0;">
+                    <h3 style="margin: 0 0 10px 0; color: #2c3e50;">Test Details</h3>
+                    <p><strong>Test Name:</strong> {test_name}</p>
+                    <p><strong>Test Type:</strong> {test_type}</p>
+                </div>
+                
+                <p>Please log in to your account to attempt the test:</p>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{login_url}" 
+                       style="background-color: #3498db; color: white; padding: 12px 24px; 
+                              text-decoration: none; border-radius: 5px; display: inline-block;">
+                        Attempt Test Now
+                    </a>
+                </div>
+                
+                <p>If you have any questions, please contact your instructor.</p>
+                
+                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                <p style="font-size: 12px; color: #666;">
+                    This is an automated message from Study Edge Apex. Please do not reply to this email.
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return send_email(
+            to_email=student_email,
+            to_name=student_name,
+            subject=subject,
+            html_content=html_content
+        )
+        
+    except Exception as e:
+        logger.error(f"Error sending test notification email to {student_email}: {e}")
+        return False
+
 def get_email_status():
     """Get the current status of email service"""
     return {

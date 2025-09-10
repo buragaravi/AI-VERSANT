@@ -128,6 +128,61 @@ def get_student_profile():
         logging.error(f"Error fetching student profile for user_id {get_jwt_identity()}: {e}", exc_info=True)
         return jsonify({'success': False, 'message': 'An error occurred while fetching your profile.'}), 500
 
+@student_bp.route('/profile', methods=['PUT'])
+@jwt_required()
+def update_student_profile():
+    """Updates the student profile information."""
+    try:
+        current_user_id = get_jwt_identity()
+        user_object_id = ObjectId(current_user_id)
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+        
+        # Validate email if provided
+        email = data.get('email', '').strip()
+        if email:
+            # Check if email is valid format
+            if '@' not in email or '.' not in email.split('@')[1]:
+                return jsonify({'success': False, 'message': 'Please provide a valid email address'}), 400
+            
+            # Check if email is already taken by another user
+            existing_user = mongo_db.users.find_one({
+                '_id': {'$ne': user_object_id},
+                'email': email
+            })
+            if existing_user:
+                return jsonify({'success': False, 'message': 'This email is already registered with another account'}), 400
+        
+        # Update user collection
+        user_update_data = {}
+        if email:
+            user_update_data['email'] = email
+        
+        if user_update_data:
+            mongo_db.users.update_one(
+                {'_id': user_object_id},
+                {'$set': user_update_data}
+            )
+        
+        # Update student collection
+        student_update_data = {}
+        if email:
+            student_update_data['email'] = email
+        
+        if student_update_data:
+            mongo_db.students.update_one(
+                {'user_id': user_object_id},
+                {'$set': student_update_data}
+            )
+        
+        return jsonify({'success': True, 'message': 'Profile updated successfully'}), 200
+
+    except Exception as e:
+        logging.error(f"Error updating student profile for user_id {get_jwt_identity()}: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'An error occurred while updating your profile.'}), 500
+
 @student_bp.route('/modules', methods=['GET'])
 @jwt_required()
 def get_available_modules():

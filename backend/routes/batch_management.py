@@ -595,12 +595,12 @@ def upload_students_to_batch():
         if not rows:
             return jsonify({'success': False, 'message': 'File is empty or invalid.'}), 400
 
-        # Validate columns - support both formats
+        # Validate columns - support both formats (email is now optional)
         columns = list(rows[0].keys()) if rows else []
         current_app.logger.info(f"File columns: {columns}")
         
-        required_fields_v1 = ['Student Name', 'Roll Number', 'Email', 'Mobile Number']
-        required_fields_v2 = ['Group', 'Roll Number', 'Student Name', 'Email', 'Mobile Number']
+        required_fields_v1 = ['Student Name', 'Roll Number', 'Mobile Number']  # Removed Email from required
+        required_fields_v2 = ['Group', 'Roll Number', 'Student Name', 'Mobile Number']  # Removed Email from required
         
         missing_fields_v1 = [field for field in required_fields_v1 if field not in columns]
         missing_fields_v2 = [field for field in required_fields_v2 if field not in columns]
@@ -653,7 +653,7 @@ def upload_students_to_batch():
             if is_v2_format:
                 student_name = str(row.get('Student Name', '')).strip()
                 roll_number = str(row.get('Roll Number', '')).strip()
-                email = str(row.get('Email', '')).strip().lower()
+                email = str(row.get('Email', '')).strip().lower() if row.get('Email') else ''  # Make email optional
                 mobile_number = str(row.get('Mobile Number', '')).strip()
                 group_name = str(row.get('Group', '')).strip()
                 
@@ -677,17 +677,17 @@ def upload_students_to_batch():
             else:
                 student_name = str(row.get('Student Name', '')).strip()
                 roll_number = str(row.get('Roll Number', '')).strip()
-                email = str(row.get('Email', '')).strip().lower()
+                email = str(row.get('Email', '')).strip().lower() if row.get('Email') else ''  # Make email optional
                 mobile_number = str(row.get('Mobile Number', '')).strip()
                 course_id = course_ids[0]  # Use first course for v1 format
 
             # Validation
             errs = []
-            if not all([student_name, roll_number, email]):
+            if not all([student_name, roll_number]):  # Removed email from required validation
                 errs.append('Missing required fields.')
             if roll_number in existing_roll_numbers:
                 errs.append('Roll number already exists.')
-            if email in existing_emails:
+            if email and email in existing_emails:  # Only check email if provided
                 errs.append('Email already exists.')
             if mobile_number and mobile_number in existing_mobile_numbers:
                 errs.append('Mobile number already exists.')
@@ -702,7 +702,7 @@ def upload_students_to_batch():
                 
                 user_doc = {
                     'username': username,
-                    'email': email,
+                    'email': email if email else None,  # Set to None if empty
                     'password_hash': password_hash,
                     'role': 'student',
                     'name': student_name,
@@ -727,7 +727,7 @@ def upload_students_to_batch():
                     'user_id': user_id,
                     'name': student_name,
                     'roll_number': roll_number,
-                    'email': email,
+                    'email': email if email else None,  # Set to None if empty
                     'mobile_number': mobile_number,
                     'campus_id': campus_id,
                     'course_id': ObjectId(course_id),
@@ -757,31 +757,35 @@ def upload_students_to_batch():
                 if mobile_number:
                     existing_mobile_numbers.add(mobile_number)
                 
-                # Send welcome email (non-blocking - don't fail the whole process if email fails)
+                # Send welcome email only if email is provided (non-blocking - don't fail the whole process if email fails)
                 email_sent = False
                 email_error = None
-                try:
-                    html_content = render_template(
-                        'student_credentials.html',
-                        params={
-                            'name': student_name,
-                            'username': username,
-                            'email': email,
-                            'password': password,
-                            'login_url': "https://pydah-studyedge.vercel.app/login"
-                        }
-                    )
-                    send_email(
-                        to_email=email,
-                        to_name=student_name,
-                        subject="Welcome to Study Edge - Your Student Credentials",
-                        html_content=html_content
-                    )
-                    email_sent = True
-                except Exception as e:
-                    email_error = str(e)
-                    # Don't add to errors array - just log it
-                    current_app.logger.error(f"Failed to send email to {email}: {e}")
+                if email:  # Only send email if email is provided
+                    try:
+                        html_content = render_template(
+                            'student_credentials.html',
+                            params={
+                                'name': student_name,
+                                'username': username,
+                                'email': email,
+                                'password': password,
+                                'login_url': "https://pydah-studyedge.vercel.app/login"
+                            }
+                        )
+                        send_email(
+                            to_email=email,
+                            to_name=student_name,
+                            subject="Welcome to Study Edge - Your Student Credentials",
+                            html_content=html_content
+                        )
+                        email_sent = True
+                    except Exception as e:
+                        email_error = str(e)
+                        # Don't add to errors array - just log it
+                        current_app.logger.error(f"Failed to send email to {email}: {e}")
+                else:
+                    # No email provided - student will be prompted to add email later
+                    current_app.logger.info(f"No email provided for student {student_name} - will be prompted to add email later")
                 
                 # Send progress update after student creation (regardless of email status)
                 percentage = int(((index + 1) / total_students) * 100)
