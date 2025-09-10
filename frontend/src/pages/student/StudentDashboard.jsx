@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNotification } from '../../contexts/NotificationContext'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
+import EmailCollectionPrompt from '../../components/common/EmailCollectionPrompt'
 import api from '../../services/api'
 import { BrainCircuit, BookOpen } from 'lucide-react'
 
@@ -18,6 +19,7 @@ const StudentDashboard = () => {
   const [unlockedModules, setUnlockedModules] = useState([])
   const [unlockedLoading, setUnlockedLoading] = useState(true)
   const [unlockedError, setUnlockedError] = useState(null)
+  const [userProfile, setUserProfile] = useState(null)
 
   // Helper function to safely format numbers
   const safeToFixed = (value, decimals = 1) => {
@@ -35,7 +37,30 @@ const StudentDashboard = () => {
 
   useEffect(() => {
     fetchDashboardData()
+    fetchUserProfile()
   }, [])
+
+  const fetchUserProfile = async () => {
+    try {
+      const response = await api.get('/student/profile')
+      if (response.data.success) {
+        setUserProfile(response.data.data)
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error)
+    }
+  }
+
+  const handleEmailUpdated = (newEmail) => {
+    setUserProfile(prev => ({
+      ...prev,
+      email: newEmail
+    }))
+    // Also update the auth context if needed
+    if (user) {
+      user.email = newEmail
+    }
+  }
 
   useEffect(() => {
     const fetchUnlocked = async () => {
@@ -296,6 +321,12 @@ const StudentDashboard = () => {
           </div>
         </div>
       </div>
+      
+      {/* Email Collection Prompt */}
+      <EmailCollectionPrompt 
+        user={userProfile || user} 
+        onEmailUpdated={handleEmailUpdated}
+      />
     </div>
   )
 }

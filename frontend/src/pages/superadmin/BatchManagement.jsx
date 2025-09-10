@@ -336,21 +336,21 @@ const BatchManagement = () => {
         'Group': 'CSE',
         'Roll Number': '216T1A0541',
         'Student Name': 'KASU BABU',
-        'Email': 'kasusaranya3@gmail.com',
+        'Email': 'kasusaranya3@gmail.com', // Optional field
         'Mobile Number': '77318 84484'
       },
       {
         'Group': 'CSE',
         'Roll Number': '226T1A0501',
         'Student Name': 'AKUMARTHI V SAI MANIKANTA PHANINDRA',
-        'Email': 'vaibhavsai@gmail.com',
+        'Email': '', // Optional - can be left empty
         'Mobile Number': '8466862444'
       },
       {
         'Group': 'ECE',
         'Roll Number': '226T1A0502',
         'Student Name': 'ANDANAPALLI SASANK MOULI',
-        'Email': 'moulirock8@gmail.com',
+        'Email': 'moulirock8@gmail.com', // Optional field
         'Mobile Number': '9701594799'
       }
     ];
@@ -690,9 +690,12 @@ const BatchManagement = () => {
                   className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100" 
                   required
                 />
-                <p className="text-sm text-gray-500 mt-2">
-                  Upload CSV or Excel file with student details
-                </p>
+                <div className="text-sm text-gray-500 mt-2">
+                  <p>Upload CSV or Excel file with student details.</p>
+                  <p className="text-blue-600 font-medium mt-1">
+                    📧 Email is optional - students can add it later from their dashboard
+                  </p>
+                </div>
               </div>
               
               {previewData.length > 0 && (

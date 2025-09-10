@@ -192,6 +192,9 @@ def create_app():
     from routes.test_management_audio import audio_test_bp
     from routes.test_management_writing import writing_test_bp
     from routes.test_management_technical import technical_test_bp
+    
+    # Register SMS management blueprint
+    from routes.sms_management import sms_bp
     # Removed non-existent route imports
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
@@ -215,6 +218,9 @@ def create_app():
     app.register_blueprint(audio_test_bp, url_prefix='/test-management/audio')
     app.register_blueprint(writing_test_bp, url_prefix='/test-management/writing')
     app.register_blueprint(technical_test_bp, url_prefix='/test-management/technical')
+    
+    # Register SMS management blueprint
+    app.register_blueprint(sms_bp, url_prefix='/sms-management')
     
     # Register progress tracking blueprints
     # Removed registrations for non-existent blueprints

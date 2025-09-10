@@ -1,0 +1,33 @@
+[Unit]
+Description=Study Edge Backend Service
+After=network.target
+
+[Service]
+Type=notify
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=/home/ec2-user/study-edge-backend
+Environment=PATH=/home/ec2-user/study-edge-backend/venv/bin
+Environment=PYTHONPATH=/home/ec2-user/study-edge-backend
+Environment=FLASK_ENV=production
+ExecStart=/home/ec2-user/study-edge-backend/venv/bin/gunicorn --config gunicorn_ec2_optimized.py application:application
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=study-edge-backend
+
+# Resource limits for EC2 free tier
+MemoryLimit=800M
+CPUQuota=100%
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/ec2-user/study-edge-backend
+
+[Install]
+WantedBy=multi-user.target
