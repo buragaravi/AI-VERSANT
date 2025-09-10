@@ -158,11 +158,11 @@ const StudentManagement = () => {
             setLoading(false);
             setLoadingMore(false);
         }
-    }, [error, selectedCampus, selectedCourse, selectedBatch, selectedStudent]);
+    }, [error, selectedCampus, selectedCourse, selectedBatch]);
 
     useEffect(() => {
         fetchStudents(1, searchTerm);
-    }, [fetchStudents, selectedCampus, selectedCourse, selectedBatch]);
+    }, [fetchStudents, searchTerm, selectedCampus, selectedCourse, selectedBatch]);
     
     const handleDeleteStudent = async (studentId) => {
         if (window.confirm('Are you sure you want to delete this student? This action is permanent.')) {
@@ -266,6 +266,8 @@ const StudentManagement = () => {
     const handleSearch = () => {
         console.log('Searching for:', searchInput);
         setSearchTerm(searchInput);
+        // Reset to first page when searching
+        setCurrentPage(1);
         // Keep the modal open if a student is selected and the search matches them
         if (selectedStudent) {
             const studentMatches = selectedStudent.name?.toLowerCase().includes(searchInput.toLowerCase()) ||
@@ -283,6 +285,7 @@ const StudentManagement = () => {
     const handleClearSearch = () => {
         setSearchInput('');
         setSearchTerm('');
+        setCurrentPage(1);
         // Keep the modal open when clearing search
     };
 

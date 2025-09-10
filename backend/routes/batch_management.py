@@ -960,10 +960,24 @@ def get_filtered_students():
         query = {'role': 'student'}
         
         if search:
-            query['$or'] = [
+            # We need to search in both users collection and students collection
+            # First, find students with matching roll_number
+            student_matches = list(mongo_db.students.find({
+                'roll_number': {'$regex': search, '$options': 'i'}
+            }))
+            student_user_ids = [str(student['user_id']) for student in student_matches]
+            
+            # Build search query for users collection
+            search_conditions = [
                 {'name': {'$regex': search, '$options': 'i'}},
                 {'email': {'$regex': search, '$options': 'i'}}
             ]
+            
+            # Add user_id matches from students collection
+            if student_user_ids:
+                search_conditions.append({'_id': {'$in': [ObjectId(uid) for uid in student_user_ids]}})
+            
+            query['$or'] = search_conditions
         
         if campus_id:
             query['campus_id'] = ObjectId(campus_id)
