@@ -174,7 +174,7 @@ def test_cloud_scalability(base_url):
 def main():
     """Main function for cloud performance testing"""
     # Your Render.com URL
-    base_url = "https://ai-versant-backend.onrender.com"
+    base_url = "https://52.66.128.80"
     
     print("☁️ VERSANT Backend Cloud Performance Test")
     print("=" * 60)

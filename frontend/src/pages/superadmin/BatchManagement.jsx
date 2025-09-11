@@ -63,7 +63,7 @@ const BatchManagement = () => {
     fetchCampuses();
     
     // Initialize WebSocket connection for progress updates
-    const socketUrl = import.meta.env.VITE_SOCKET_IO_URL || 'https://ai-versant-backend.onrender.com';
+    const socketUrl = import.meta.env.VITE_SOCKET_IO_URL || 'https://52.66.128.80';
     const newSocket = io(socketUrl, {
       transports: ['websocket', 'polling']
     });
