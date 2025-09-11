@@ -2,7 +2,7 @@ import axios from 'axios'
 
 // API Configuration
 // Environment Variables:
-// - VITE_API_URL: Set to 'https://ai-versant-backend.onrender.com' for direct backend access
+// - VITE_API_URL: Set to 'https://52.66.128.80' for direct backend access
 
 // - VITE_API_URL: Set to '/api' for development with Vite proxy
 
@@ -18,7 +18,7 @@ if (!API_URL) {
     API_URL = '/api' // Use Vite proxy in development
   } else {
     // In production, use direct backend access
-    API_URL = 'https://ai-versant-backend.onrender.com'
+    API_URL = 'https://52.66.128.80'
 }
 }
 
@@ -28,8 +28,8 @@ if (isDevelopment) {
 }
 
 // Ensure we're using the correct backend URL for production
-if (!isDevelopment && API_URL.includes('versant-backend.onrender.com')) {
-  API_URL = 'https://ai-versant-backend.onrender.com'
+if (!isDevelopment && API_URL.includes('https://52.66.128.80')) {
+  API_URL = 'https://52.66.128.80'
 }
 
 console.log('API Service - VITE_API_URL:', import.meta.env.VITE_API_URL)
@@ -106,7 +106,7 @@ api.interceptors.response.use(
       console.error('Environment:', isDevelopment ? 'Development' : 'Production')
       console.error('VITE_API_URL:', import.meta.env.VITE_API_URL)
 
-      console.error('Expected backend URL: https://ai-versant-backend.onrender.com')
+      console.error('Expected backend URL: https://52.66.128.80')
 
     }
     
