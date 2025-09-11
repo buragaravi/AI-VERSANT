@@ -1,4 +1,5 @@
 from config.database_simple import DatabaseConfig
+from utils.connection_manager import get_mongo_database
 from bson import ObjectId
 import json
 from datetime import datetime
@@ -6,7 +7,7 @@ from models import BatchCourseInstance
 
 class MongoDB:
     def __init__(self):
-        self.db = DatabaseConfig.get_database()
+        self.db = get_mongo_database()
         self.users = self.db.users
         self.students = self.db.students
         self.modules = self.db.modules

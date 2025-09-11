@@ -11,6 +11,8 @@ import pytz
 import io
 from utils.email_service import send_email, render_template
 from utils.sms_service import send_student_credentials_sms
+from utils.upload_optimizer import optimize_upload_process, cleanup_if_needed, log_upload_progress
+from utils.resilient_services import create_resilient_services
 from utils.async_processor import performance_monitor
 from config.shared import bcrypt
 from socketio_instance import socketio
@@ -667,6 +669,9 @@ def upload_students_to_batch():
         
         current_app.logger.info(f"Starting PHASED processing of {len(rows)} rows")
         
+        # Optimize upload process for this batch size
+        optimize_upload_process(len(rows))
+        
         # Initialize all student results first
         detailed_results = []
         for index, row in enumerate(rows):
@@ -700,6 +705,9 @@ def upload_students_to_batch():
             # Log every 10th row for debugging
             if index % 10 == 0:
                 current_app.logger.info(f"Database Phase - Processing row {index + 1}/{len(rows)}: {row}")
+                # Perform cleanup and log progress
+                cleanup_if_needed(index + 1)
+                log_upload_progress(index + 1, len(rows), "Database Phase - ")
             
             try:
                 if is_v2_format:
@@ -872,6 +880,9 @@ def upload_students_to_batch():
             'message': 'Phase 2: Sending welcome emails...'
         }, room=str(user_id))
         
+        # Create resilient services
+        resilient_services = create_resilient_services()
+        
         for index, student_result in enumerate(detailed_results):
             if not student_result['database_registered']:
                 continue
@@ -881,7 +892,7 @@ def upload_students_to_batch():
             username = student_result.get('username', '')
             password = student_result.get('password', '')
             
-            # Email Sending
+            # Email Sending with Resilient Service
             if email:
                 try:
                     html_content = render_template(
@@ -894,20 +905,26 @@ def upload_students_to_batch():
                             'login_url': "https://pydah-studyedge.vercel.app/login"
                         }
                     )
-                    email_success = send_email(
+                    
+                    # Use resilient email service with retry logic
+                    email_success = resilient_services['email'].send_email_resilient(
                         to_email=email,
                         to_name=student_name,
                         subject="Welcome to Study Edge - Your Student Credentials",
                         html_content=html_content
                     )
+                    
                     student_result['email_sent'] = email_success
                     if email_success:
                         current_app.logger.info(f"✅ Email sent to {email}")
                     else:
-                        current_app.logger.warning(f"⚠️ Email failed for {email}")
+                        current_app.logger.warning(f"⚠️ Email failed for {email} (after retries)")
+                        student_result['errors'].append('Email sending failed after retries')
+                        
                 except Exception as e:
-                    current_app.logger.warning(f"⚠️ Email failed for {email}: {e}")
-                    student_result['errors'].append(f'Email sending failed: {str(e)}')
+                    current_app.logger.error(f"❌ Email service error for {email}: {e}")
+                    student_result['email_sent'] = False
+                    student_result['errors'].append(f'Email service error: {str(e)}')
             else:
                 current_app.logger.info(f"No email provided for student {student_name}")
                 student_result['email_sent'] = False
@@ -951,25 +968,29 @@ def upload_students_to_batch():
             username = student_result.get('username', '')
             password = student_result.get('password', '')
             
-            # SMS Sending
+            # SMS Sending with Resilient Service
             if mobile_number:
                 try:
-                    sms_result = send_student_credentials_sms(
+                    # Use resilient SMS service with retry logic
+                    sms_result = resilient_services['sms'].send_sms_resilient(
                         phone=mobile_number,
                         student_name=student_name,
                         username=username,
                         password=password,
                         login_url="https://pydah-studyedge.vercel.app/login"
                     )
+                    
                     student_result['sms_sent'] = sms_result.get('success', False)
                     if sms_result.get('success'):
                         current_app.logger.info(f"✅ SMS sent to {mobile_number}")
                     else:
-                        current_app.logger.warning(f"⚠️ SMS failed for {mobile_number}: {sms_result.get('error', 'Unknown error')}")
-                        student_result['errors'].append(f'SMS sending failed: {sms_result.get("error", "Unknown error")}')
+                        current_app.logger.warning(f"⚠️ SMS failed for {mobile_number} (after retries): {sms_result.get('error', 'Unknown error')}")
+                        student_result['errors'].append(f'SMS sending failed after retries: {sms_result.get("error", "Unknown error")}')
+                        
                 except Exception as e:
-                    current_app.logger.warning(f"⚠️ SMS failed for {mobile_number}: {e}")
-                    student_result['errors'].append(f'SMS sending failed: {str(e)}')
+                    current_app.logger.error(f"❌ SMS service error for {mobile_number}: {e}")
+                    student_result['sms_sent'] = False
+                    student_result['errors'].append(f'SMS service error: {str(e)}')
             else:
                 current_app.logger.info(f"No mobile number provided for student {student_name}")
                 student_result['sms_sent'] = False
@@ -996,12 +1017,50 @@ def upload_students_to_batch():
         # Finalize all student results
         for student_result in detailed_results:
             student_result['success'] = student_result['database_registered']  # Only database registration is critical
+        
+        # Send completion notification
+        current_app.logger.info("🎉 Student upload process completed successfully!")
+        socketio.emit('upload_progress', {
+            'user_id': user_id,
+            'status': 'completed',
+            'total': total_students,
+            'processed': total_students,
+            'percentage': 100,
+            'message': 'Upload completed! Check results for details.'
+        }, room=str(user_id))
 
         # Calculate comprehensive summary statistics
         successful_registrations = sum(1 for r in detailed_results if r['database_registered'])
         successful_emails = sum(1 for r in detailed_results if r['email_sent'])
         successful_sms = sum(1 for r in detailed_results if r['sms_sent'])
         total_errors = sum(len(r['errors']) for r in detailed_results)
+        
+    except Exception as e:
+        # Global error handler - prevent backend crash
+        current_app.logger.error(f"❌ CRITICAL ERROR in student upload: {e}")
+        
+        # Send error notification
+        socketio.emit('upload_progress', {
+            'user_id': user_id,
+            'status': 'error',
+            'total': total_students,
+            'processed': 0,
+            'percentage': 0,
+            'message': f'Upload failed due to critical error: {str(e)}'
+        }, room=str(user_id))
+        
+        # Return partial results if we have any
+        if 'detailed_results' in locals() and detailed_results:
+            successful_registrations = sum(1 for r in detailed_results if r['database_registered'])
+            successful_emails = sum(1 for r in detailed_results if r['email_sent'])
+            successful_sms = sum(1 for r in detailed_results if r['sms_sent'])
+            total_errors = sum(len(r['errors']) for r in detailed_results)
+        else:
+            successful_registrations = 0
+            successful_emails = 0
+            successful_sms = 0
+            total_errors = 1
+            detailed_results = [{'errors': [f'Critical error: {str(e)}']}]
         
         # Calculate additional statistics
         complete_success = sum(1 for r in detailed_results if r['database_registered'] and r['email_sent'] and r['sms_sent'])

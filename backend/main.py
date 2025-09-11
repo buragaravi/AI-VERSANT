@@ -11,6 +11,13 @@ from dotenv import load_dotenv
 from scheduler import schedule_daily_notifications
 from config.aws_config import init_aws
 
+# Import Windows optimizations first
+try:
+    from utils.windows_optimizer import optimize_windows_sockets, get_optimal_connection_settings
+    optimize_windows_sockets()
+except ImportError:
+    pass
+
 # Optimize Python for high concurrency
 gc.set_threshold(700, 10, 10)  # Optimize garbage collection
 os.environ['PYTHONUNBUFFERED'] = '1'
