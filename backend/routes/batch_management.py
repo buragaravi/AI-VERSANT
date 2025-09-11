@@ -10,11 +10,46 @@ from datetime import datetime
 import pytz
 import io
 from utils.email_service import send_email, render_template
+from utils.sms_service import send_student_credentials_sms
+from utils.async_processor import submit_background_task, async_route, performance_monitor
 from config.shared import bcrypt
 from socketio_instance import socketio
 from routes.access_control import require_permission
 
 batch_management_bp = Blueprint('batch_management', __name__)
+
+def send_credentials_email_background(email, name, username, password, login_url):
+    """Background function to send student credentials email"""
+    try:
+        html_content = render_template('emails/student_credentials.html', 
+            student_name=name,
+            username=username,
+            password=password,
+            login_url=login_url
+        )
+        send_email(
+            to_email=email,
+            to_name=name,
+            subject="Welcome to Study Edge - Your Student Credentials",
+            html_content=html_content
+        )
+        current_app.logger.info(f"✅ Background email sent to {email}")
+    except Exception as e:
+        current_app.logger.error(f"❌ Background email failed for {email}: {e}")
+
+def send_credentials_sms_background(phone, name, username, password, login_url):
+    """Background function to send student credentials SMS"""
+    try:
+        send_student_credentials_sms(
+            phone=phone,
+            student_name=name,
+            username=username,
+            password=password,
+            login_url=login_url
+        )
+        current_app.logger.info(f"✅ Background SMS sent to {phone}")
+    except Exception as e:
+        current_app.logger.error(f"❌ Background SMS failed for {phone}: {e}")
 
 def safe_isoformat(date_obj):
     """Safely convert a date object to ISO format string, handling various types."""
@@ -575,6 +610,8 @@ def validate_student_upload():
 
 @batch_management_bp.route('/upload-students', methods=['POST'])
 @jwt_required()
+@async_route(timeout=60.0)
+@performance_monitor(threshold=5.0)
 def upload_students_to_batch():
     try:
         # Accept file upload and form data
@@ -761,31 +798,30 @@ def upload_students_to_batch():
                 email_sent = False
                 email_error = None
                 if email:  # Only send email if email is provided
-                    try:
-                        html_content = render_template(
-                            'student_credentials.html',
-                            params={
-                                'name': student_name,
-                                'username': username,
-                                'email': email,
-                                'password': password,
-                                'login_url': "https://pydah-studyedge.vercel.app/login"
-                            }
-                        )
-                        send_email(
-                            to_email=email,
-                            to_name=student_name,
-                            subject="Welcome to Study Edge - Your Student Credentials",
-                            html_content=html_content
-                        )
-                        email_sent = True
-                    except Exception as e:
-                        email_error = str(e)
-                        # Don't add to errors array - just log it
-                        current_app.logger.error(f"Failed to send email to {email}: {e}")
+                    # Submit email sending as background task
+                    submit_background_task(
+                        send_credentials_email_background,
+                        email=email,
+                        name=student_name,
+                        username=username,
+                        password=password,
+                        login_url="https://pydah-studyedge.vercel.app/login"
+                    )
+                    email_sent = True  # Mark as sent (will be processed in background)
                 else:
                     # No email provided - student will be prompted to add email later
                     current_app.logger.info(f"No email provided for student {student_name} - will be prompted to add email later")
+                
+                # Send SMS as background task if mobile number is provided
+                if mobile_number:
+                    submit_background_task(
+                        send_credentials_sms_background,
+                        phone=mobile_number,
+                        name=student_name,
+                        username=username,
+                        password=password,
+                        login_url="https://pydah-studyedge.vercel.app/login"
+                    )
                 
                 # Send progress update after student creation (regardless of email status)
                 percentage = int(((index + 1) / total_students) * 100)

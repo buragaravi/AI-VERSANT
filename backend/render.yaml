@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: versant-backend-enterprise
+    env: python
+    region: oregon
+    plan: starter
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+      pip install gunicorn eventlet psutil
+    startCommand: gunicorn --worker-class eventlet --workers 4 --worker-connections 1000 --timeout 300 --keepalive 5 --bind 0.0.0.0:$PORT main:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.18
+      - key: FLASK_DEBUG
+        value: False
+      - key: DEV_MODE
+        value: False
+      - key: ALLOW_ALL_CORS
+        value: true
+      - key: MONGODB_URI
+        fromDatabase:
+          name: versant-mongodb
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_S3_BUCKET
+        sync: false
+      - key: AWS_REGION
+        value: us-east-1
+    healthCheckPath: /health
+    autoDeploy: true
