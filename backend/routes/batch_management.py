@@ -454,7 +454,11 @@ def _parse_student_file(file):
             content = file.read().decode('utf-8-sig')
             csv_reader = csv.DictReader(io.StringIO(content))
             rows = list(csv_reader)
-            print(f"CSV parsing: Found {len(rows)} rows, headers: {list(rows[0].keys()) if rows else []}")
+            
+            # Filter out completely empty rows
+            rows = [row for row in rows if any(str(value).strip() for value in row.values() if value is not None)]
+            
+            print(f"CSV parsing: Found {len(rows)} rows after filtering empty rows, headers: {list(rows[0].keys()) if rows else []}")
         else:
             # Read Excel file
             workbook = openpyxl.load_workbook(file, data_only=True)
@@ -473,7 +477,11 @@ def _parse_student_file(file):
                     if i < len(headers):
                         row_data[headers[i]] = str(cell.value).strip() if cell.value else ''
                 rows.append(row_data)
-            print(f"Excel parsing: Found {len(rows)} rows, headers: {headers}")
+            
+            # Filter out completely empty rows
+            rows = [row for row in rows if any(str(value).strip() for value in row.values() if value is not None)]
+            
+            print(f"Excel parsing: Found {len(rows)} rows after filtering empty rows, headers: {headers}")
     except Exception as e:
         print(f"File parsing error: {e}")
         raise ValueError(f"Error reading file: {e}")
@@ -597,6 +605,9 @@ def upload_students_to_batch():
         
         if not rows:
             return jsonify({'success': False, 'message': 'File is empty or invalid.'}), 400
+        
+        # Log first few rows for debugging
+        current_app.logger.info(f"First 3 rows: {rows[:3] if len(rows) >= 3 else rows}")
 
         # Validate columns - support both formats (email is now optional)
         columns = list(rows[0].keys()) if rows else []
@@ -637,9 +648,9 @@ def upload_students_to_batch():
         existing_emails = set(u['email'] for u in mongo_db.users.find({}, {'email': 1}))
         existing_mobile_numbers = set(u.get('mobile_number', '') for u in mongo_db.users.find({'mobile_number': {'$exists': True, '$ne': ''}}, {'mobile_number': 1}))
 
-        created_students = []
+        # Detailed response tracking
+        detailed_results = []
         errors = []
-        uploaded_emails = []  # Track emails for verification
         total_students = len(rows)
         
         # Send initial progress update
@@ -652,122 +663,165 @@ def upload_students_to_batch():
             'message': 'Starting student upload...'
         }, room=str(user_id))
         
+        current_app.logger.info(f"Starting to process {len(rows)} rows")
+        
         for index, row in enumerate(rows):
-            if is_v2_format:
-                student_name = str(row.get('Student Name', '')).strip()
-                roll_number = str(row.get('Roll Number', '')).strip()
-                email = str(row.get('Email', '')).strip().lower() if row.get('Email') else ''  # Make email optional
-                mobile_number = str(row.get('Mobile Number', '')).strip()
-                group_name = str(row.get('Group', '')).strip()
-                
-                # Find course by group name (assuming group name matches course name)
-                # Try exact match first, then case-insensitive match
-                course = mongo_db.courses.find_one({'name': group_name, '_id': {'$in': [ObjectId(cid) for cid in course_ids]}})
-                if not course:
-                    # Try case-insensitive match
-                    course = mongo_db.courses.find_one({
-                        'name': {'$regex': f'^{group_name}$', '$options': 'i'}, 
-                        '_id': {'$in': [ObjectId(cid) for cid in course_ids]}
-                    })
-                
-                if not course:
-                    # Get available courses for better error message
-                    available_courses = list(mongo_db.courses.find({'_id': {'$in': [ObjectId(cid) for cid in course_ids]}}, {'name': 1}))
-                    available_names = [c['name'] for c in available_courses]
-                    errors.append(f"{student_name}: Course/Group '{group_name}' not found in this batch. Available courses: {', '.join(available_names)}")
-                    continue
-                course_id = str(course['_id'])
-            else:
-                student_name = str(row.get('Student Name', '')).strip()
-                roll_number = str(row.get('Roll Number', '')).strip()
-                email = str(row.get('Email', '')).strip().lower() if row.get('Email') else ''  # Make email optional
-                mobile_number = str(row.get('Mobile Number', '')).strip()
-                course_id = course_ids[0]  # Use first course for v1 format
-
-            # Validation
-            errs = []
-            if not all([student_name, roll_number]):  # Removed email from required validation
-                errs.append('Missing required fields.')
-            if roll_number in existing_roll_numbers:
-                errs.append('Roll number already exists.')
-            if email and email in existing_emails:  # Only check email if provided
-                errs.append('Email already exists.')
-            if mobile_number and mobile_number in existing_mobile_numbers:
-                errs.append('Mobile number already exists.')
-            if errs:
-                errors.append(f"{student_name or roll_number or email}: {', '.join(errs)}")
-                continue
-
+            # Initialize detailed result for this student
+            student_result = {
+                'student_name': '',
+                'roll_number': '',
+                'email': '',
+                'mobile_number': '',
+                'database_registered': False,
+                'email_sent': False,
+                'sms_sent': False,
+                'errors': [],
+                'success': False
+            }
+            
+            # Log every 10th row for debugging
+            if index % 10 == 0:
+                current_app.logger.info(f"Processing row {index + 1}/{len(rows)}: {row}")
+            
             try:
-                username = roll_number
-                password = f"{student_name.split()[0][:4].lower()}{roll_number[-4:]}"
-                password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
-                
-                user_doc = {
-                    'username': username,
-                    'email': email if email else None,  # Set to None if empty
-                    'password_hash': password_hash,
-                    'role': 'student',
-                    'name': student_name,
-                    'mobile_number': mobile_number,
-                    'campus_id': campus_id,
-                    'course_id': ObjectId(course_id),
-                    'batch_id': ObjectId(batch_id),
-                    'is_active': True,
-                    'created_at': datetime.now(pytz.utc),
-                    'mfa_enabled': False
-                }
-                
-                # Insert user first
-                user_result = mongo_db.users.insert_one(user_doc)
-                if not user_result.inserted_id:
-                    errors.append(f"{student_name}: Failed to create user account.")
-                    continue
-                
-                user_id = user_result.inserted_id
-                
-                student_doc = {
-                    'user_id': user_id,
-                    'name': student_name,
+                if is_v2_format:
+                    student_name = str(row.get('Student Name', '')).strip()
+                    roll_number = str(row.get('Roll Number', '')).strip()
+                    email = str(row.get('Email', '')).strip().lower() if row.get('Email') else ''  # Make email optional
+                    mobile_number = str(row.get('Mobile Number', '')).strip()
+                    group_name = str(row.get('Group', '')).strip()
+                    
+                    # Find course by group name (assuming group name matches course name)
+                    # Try exact match first, then case-insensitive match
+                    course = mongo_db.courses.find_one({'name': group_name, '_id': {'$in': [ObjectId(cid) for cid in course_ids]}})
+                    if not course:
+                        # Try case-insensitive match
+                        course = mongo_db.courses.find_one({
+                            'name': {'$regex': f'^{group_name}$', '$options': 'i'}, 
+                            '_id': {'$in': [ObjectId(cid) for cid in course_ids]}
+                        })
+                    
+                    if not course:
+                        # Get available courses for better error message
+                        available_courses = list(mongo_db.courses.find({'_id': {'$in': [ObjectId(cid) for cid in course_ids]}}, {'name': 1}))
+                        available_names = [c['name'] for c in available_courses]
+                        student_result['errors'].append(f"Course/Group '{group_name}' not found in this batch. Available courses: {', '.join(available_names)}")
+                        detailed_results.append(student_result)
+                        continue
+                    course_id = str(course['_id'])
+                else:
+                    student_name = str(row.get('Student Name', '')).strip()
+                    roll_number = str(row.get('Roll Number', '')).strip()
+                    email = str(row.get('Email', '')).strip().lower() if row.get('Email') else ''  # Make email optional
+                    mobile_number = str(row.get('Mobile Number', '')).strip()
+                    course_id = course_ids[0]  # Use first course for v1 format
+
+                # Update student result with basic info
+                student_result.update({
+                    'student_name': student_name,
                     'roll_number': roll_number,
-                    'email': email if email else None,  # Set to None if empty
-                    'mobile_number': mobile_number,
-                    'campus_id': campus_id,
-                    'course_id': ObjectId(course_id),
-                    'batch_id': ObjectId(batch_id),
-                    'created_at': datetime.now(pytz.utc)
-                }
+                    'email': email,
+                    'mobile_number': mobile_number
+                })
+
+                # Validation
+                validation_errors = []
                 
-                # Insert student profile
-                student_result = mongo_db.students.insert_one(student_doc)
-                if not student_result.inserted_id:
-                    # Rollback user creation if student creation fails
-                    mongo_db.users.delete_one({'_id': user_id})
-                    errors.append(f"{student_name}: Failed to create student profile.")
+                # Check for missing required fields (name and roll number)
+                if not student_name or not roll_number or student_name.strip() == '' or roll_number.strip() == '':
+                    validation_errors.append('Missing required fields.')
+                
+                # Skip processing if missing required fields
+                if validation_errors:
+                    student_result['errors'] = validation_errors
+                    detailed_results.append(student_result)
                     continue
                 
-                created_students.append({
-                    'name': student_name,
-                    'email': email,
-                    'username': username,
-                    'password': password
-                })
-                uploaded_emails.append(email)
+                # Check for duplicates only if we have valid data
+                if roll_number in existing_roll_numbers:
+                    validation_errors.append('Roll number already exists.')
+                if email and email in existing_emails:  # Only check email if provided
+                    validation_errors.append('Email already exists.')
+                if mobile_number and mobile_number in existing_mobile_numbers:
+                    validation_errors.append('Mobile number already exists.')
                 
-                # Update existing sets to prevent duplicates within the same upload
-                existing_roll_numbers.add(roll_number)
-                existing_emails.add(email)
-                if mobile_number:
-                    existing_mobile_numbers.add(mobile_number)
-                
-                # Send welcome email only if email is provided (non-blocking - don't fail the whole process if email fails)
-                email_sent = False
-                email_error = None
-                if email:  # Only send email if email is provided
-                    # Send email synchronously but don't fail if it doesn't work
+                if validation_errors:
+                    student_result['errors'] = validation_errors
+                    detailed_results.append(student_result)
+                    continue
+
+                # Database Registration
+                try:
+                    username = roll_number
+                    password = f"{student_name.split()[0][:4].lower()}{roll_number[-4:]}"
+                    password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+                    
+                    user_doc = {
+                        'username': username,
+                        'email': email if email else None,  # Set to None if empty
+                        'password_hash': password_hash,
+                        'role': 'student',
+                        'name': student_name,
+                        'mobile_number': mobile_number,
+                        'campus_id': campus_id,
+                        'course_id': ObjectId(course_id),
+                        'batch_id': ObjectId(batch_id),
+                        'is_active': True,
+                        'created_at': datetime.now(pytz.utc),
+                        'mfa_enabled': False
+                    }
+                    
+                    # Insert user first
+                    user_result = mongo_db.users.insert_one(user_doc)
+                    if not user_result.inserted_id:
+                        student_result['errors'].append('Failed to create user account.')
+                        detailed_results.append(student_result)
+                        continue
+                    
+                    user_id_inserted = user_result.inserted_id
+                    
+                    student_doc = {
+                        'user_id': user_id_inserted,
+                        'name': student_name,
+                        'roll_number': roll_number,
+                        'email': email if email else None,  # Set to None if empty
+                        'mobile_number': mobile_number,
+                        'campus_id': campus_id,
+                        'course_id': ObjectId(course_id),
+                        'batch_id': ObjectId(batch_id),
+                        'created_at': datetime.now(pytz.utc)
+                    }
+                    
+                    # Insert student profile
+                    student_result_db = mongo_db.students.insert_one(student_doc)
+                    if not student_result_db.inserted_id:
+                        # Rollback user creation if student creation fails
+                        mongo_db.users.delete_one({'_id': user_id_inserted})
+                        student_result['errors'].append('Failed to create student profile.')
+                        detailed_results.append(student_result)
+                        continue
+                    
+                    # Database registration successful
+                    student_result['database_registered'] = True
+                    student_result['username'] = username
+                    student_result['password'] = password
+                    
+                    # Update existing sets to prevent duplicates within the same upload
+                    existing_roll_numbers.add(roll_number)
+                    existing_emails.add(email)
+                    if mobile_number:
+                        existing_mobile_numbers.add(mobile_number)
+                    
+                except Exception as e:
+                    student_result['errors'].append(f'Database error: {str(e)}')
+                    detailed_results.append(student_result)
+                    continue
+
+                # Email Sending (non-blocking)
+                if email and student_result['database_registered']:
                     try:
                         html_content = render_template(
-                            'emails/student_credentials.html',
+                            'student_credentials.html',
                             params={
                                 'name': student_name,
                                 'username': username,
@@ -776,110 +830,137 @@ def upload_students_to_batch():
                                 'login_url': "https://pydah-studyedge.vercel.app/login"
                             }
                         )
-                        send_email(
+                        email_success = send_email(
                             to_email=email,
                             to_name=student_name,
                             subject="Welcome to Study Edge - Your Student Credentials",
                             html_content=html_content
                         )
-                        email_sent = True
-                        current_app.logger.info(f"✅ Email sent to {email}")
+                        student_result['email_sent'] = email_success
+                        if email_success:
+                            current_app.logger.info(f"✅ Email sent to {email}")
+                        else:
+                            current_app.logger.warning(f"⚠️ Email failed for {email}")
                     except Exception as e:
                         current_app.logger.warning(f"⚠️ Email failed for {email}: {e}")
-                        email_sent = False  # Don't fail the whole process
+                        student_result['errors'].append(f'Email sending failed: {str(e)}')
                 else:
-                    # No email provided - student will be prompted to add email later
-                    current_app.logger.info(f"No email provided for student {student_name} - will be prompted to add email later")
+                    if not email:
+                        current_app.logger.info(f"No email provided for student {student_name}")
+                    student_result['email_sent'] = False
                 
-                # Send SMS if mobile number is provided (non-blocking)
-                if mobile_number:
+                # SMS Sending (non-blocking)
+                if mobile_number and student_result['database_registered']:
                     try:
-                        send_student_credentials_sms(
+                        sms_result = send_student_credentials_sms(
                             phone=mobile_number,
                             student_name=student_name,
                             username=username,
                             password=password,
                             login_url="https://pydah-studyedge.vercel.app/login"
                         )
-                        current_app.logger.info(f"✅ SMS sent to {mobile_number}")
+                        student_result['sms_sent'] = sms_result.get('success', False)
+                        if sms_result.get('success'):
+                            current_app.logger.info(f"✅ SMS sent to {mobile_number}")
+                        else:
+                            current_app.logger.warning(f"⚠️ SMS failed for {mobile_number}: {sms_result.get('error', 'Unknown error')}")
+                            student_result['errors'].append(f'SMS sending failed: {sms_result.get("error", "Unknown error")}')
                     except Exception as e:
                         current_app.logger.warning(f"⚠️ SMS failed for {mobile_number}: {e}")
-                
-                # Send progress update after student creation (regardless of email status)
-                percentage = int(((index + 1) / total_students) * 100)
-                if email_sent:
-                    socketio.emit('upload_progress', {
-                        'user_id': user_id,
-                        'status': 'processing',
-                        'total': total_students,
-                        'processed': index + 1,
-                        'percentage': percentage,
-                        'message': f'Student created and email sent to {student_name} ({email})',
-                        'current_student': {
-                            'name': student_name,
-                            'email': email,
-                            'username': username
-                        }
-                    }, room=str(user_id))
+                        student_result['errors'].append(f'SMS sending failed: {str(e)}')
                 else:
-                    socketio.emit('upload_progress', {
-                        'user_id': user_id,
-                        'status': 'processing',
-                        'total': total_students,
-                        'processed': index + 1,
-                        'percentage': percentage,
-                        'message': f'Student created successfully for {student_name} ({email}) - Email sending failed',
-                        'current_student': {
-                            'name': student_name,
-                            'email': email,
-                            'username': username
-                        },
-                        'email_warning': True,
-                        'email_error': email_error
-                    }, room=str(user_id))
+                    if not mobile_number:
+                        current_app.logger.info(f"No mobile number provided for student {student_name}")
+                    student_result['sms_sent'] = False
+                
+                # Determine overall success
+                student_result['success'] = student_result['database_registered']  # Only database registration is critical
+                
+                # Add to detailed results
+                detailed_results.append(student_result)
+                
+                # Send progress update
+                percentage = int(((index + 1) / total_students) * 100)
+                socketio.emit('upload_progress', {
+                    'user_id': user_id,
+                    'status': 'processing',
+                    'total': total_students,
+                    'processed': index + 1,
+                    'percentage': percentage,
+                    'message': f'Processed {student_name} - DB: {"✅" if student_result["database_registered"] else "❌"} Email: {"✅" if student_result["email_sent"] else "❌"} SMS: {"✅" if student_result["sms_sent"] else "❌"}',
+                    'current_student': {
+                        'name': student_name,
+                        'email': email,
+                        'username': username,
+                        'database_registered': student_result['database_registered'],
+                        'email_sent': student_result['email_sent'],
+                        'sms_sent': student_result['sms_sent']
+                    }
+                }, room=str(user_id))
                     
             except Exception as e:
-                errors.append(f"{student_name}: Database error - {str(e)}")
+                student_result['errors'].append(f'Unexpected error: {str(e)}')
+                detailed_results.append(student_result)
                 continue
 
-        # Verify upload success
-        verification_results = []
-        if uploaded_emails:
-            students_verified = list(mongo_db.students.find({'email': {'$in': uploaded_emails}, 'batch_id': ObjectId(batch_id)}))
-            users_verified = list(mongo_db.users.find({'email': {'$in': uploaded_emails}, 'batch_id': ObjectId(batch_id)}))
-            
-            for email in uploaded_emails:
-                student_exists = any(s['email'] == email for s in students_verified)
-                user_exists = any(u['email'] == email for u in users_verified)
-                verification_results.append({
-                    'email': email,
-                    'student_profile_exists': student_exists,
-                    'user_account_exists': user_exists,
-                    'fully_uploaded': student_exists and user_exists
-                })
-
+        # Calculate comprehensive summary statistics
+        successful_registrations = sum(1 for r in detailed_results if r['database_registered'])
+        successful_emails = sum(1 for r in detailed_results if r['email_sent'])
+        successful_sms = sum(1 for r in detailed_results if r['sms_sent'])
+        total_errors = sum(len(r['errors']) for r in detailed_results)
+        
+        # Calculate additional statistics
+        complete_success = sum(1 for r in detailed_results if r['database_registered'] and r['email_sent'] and r['sms_sent'])
+        partial_success = sum(1 for r in detailed_results if r['database_registered'] and (r['email_sent'] or r['sms_sent']))
+        database_only = sum(1 for r in detailed_results if r['database_registered'] and not r['email_sent'] and not r['sms_sent'])
+        complete_failures = sum(1 for r in detailed_results if not r['database_registered'])
+        
+        # Create comprehensive summary
+        comprehensive_summary = {
+            'total_students': total_students,
+            'database_registered': successful_registrations,
+            'emails_sent': successful_emails,
+            'sms_sent': successful_sms,
+            'total_errors': total_errors,
+            'complete_success': complete_success,
+            'partial_success': partial_success,
+            'database_only': database_only,
+            'complete_failures': complete_failures,
+            'success_rate': round((successful_registrations / total_students * 100), 2) if total_students > 0 else 0,
+            'email_success_rate': round((successful_emails / successful_registrations * 100), 2) if successful_registrations > 0 else 0,
+            'sms_success_rate': round((successful_sms / successful_registrations * 100), 2) if successful_registrations > 0 else 0
+        }
+        
         # Send completion progress update
-        if errors:
+        if total_errors > 0:
             socketio.emit('upload_progress', {
                 'user_id': user_id,
                 'status': 'completed_with_errors',
                 'total': total_students,
                 'processed': total_students,
                 'percentage': 100,
-                'message': f'Upload completed with {len(errors)} errors. {len(created_students)} students uploaded successfully.',
-                'errors': errors,
-                'created_count': len(created_students)
+                'message': f'Upload completed. DB: {successful_registrations}/{total_students}, Email: {successful_emails}, SMS: {successful_sms}',
+                'summary': comprehensive_summary
             }, room=str(user_id))
             
             return jsonify({
-                'success': bool(created_students), 
-                'message': f"Upload completed with {len(errors)} errors.", 
+                'success': successful_registrations > 0, 
+                'message': f"Upload completed with {total_errors} errors. {successful_registrations} students registered in database.", 
                 'data': {
-                    'created_students': created_students,
-                    'verification_results': verification_results
-                }, 
-                'errors': errors
-            }), 207
+                    'detailed_results': detailed_results,
+                    'summary': comprehensive_summary,
+                    'status_breakdown': {
+                        'complete_success': complete_success,
+                        'partial_success': partial_success,
+                        'database_only': database_only,
+                        'complete_failures': complete_failures
+                    }
+                }
+            }), 207 if total_errors > 0 else 201
+        
+        # Log final results for debugging
+        current_app.logger.info(f"Final processing results: {len(detailed_results)} detailed results, {total_students} total students")
+        current_app.logger.info(f"Summary: DB={successful_registrations}, Email={successful_emails}, SMS={successful_sms}, Errors={total_errors}")
         
         # Send success completion update
         socketio.emit('upload_progress', {
@@ -888,16 +969,22 @@ def upload_students_to_batch():
             'total': total_students,
             'processed': total_students,
             'percentage': 100,
-            'message': f'Successfully uploaded {len(created_students)} students to the batch!',
-            'created_count': len(created_students)
+            'message': f'Successfully processed {total_students} students! DB: {successful_registrations}, Email: {successful_emails}, SMS: {successful_sms}',
+            'summary': comprehensive_summary
         }, room=str(user_id))
         
         return jsonify({
             'success': True, 
-            'message': f"Successfully uploaded {len(created_students)} students to the batch.", 
+            'message': f"Successfully processed {total_students} students.", 
             'data': {
-                'created_students': created_students,
-                'verification_results': verification_results
+                'detailed_results': detailed_results,
+                'summary': comprehensive_summary,
+                'status_breakdown': {
+                    'complete_success': complete_success,
+                    'partial_success': partial_success,
+                    'database_only': database_only,
+                    'complete_failures': complete_failures
+                }
             }
         }), 201
 
