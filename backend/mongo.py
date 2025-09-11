@@ -60,7 +60,7 @@ class MongoDB:
         try:
             # Users collection indexes
             self.users.create_index("username", unique=True)
-            self.users.create_index("email", unique=True)
+            self.users.create_index("email")  # Non-unique index for performance
             self.users.create_index("role")
             self.users.create_index("campus_id")
             self.users.create_index("course_id")

@@ -177,7 +177,7 @@ def optimize_db_connections():
                     collection.create_index("created_at")
                     collection.create_index("updated_at")
                     if collection_name == 'users':
-                        collection.create_index("email", unique=True)
+                        collection.create_index("email")  # Non-unique index for performance
                     elif collection_name == 'test_results':
                         collection.create_index("student_id")
                         collection.create_index("test_id")

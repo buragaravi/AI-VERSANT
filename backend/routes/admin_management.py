@@ -49,12 +49,10 @@ def create_admin():
                 'message': 'Invalid admin role'
             }), 400
         
-        # Check if email already exists
+        # Note: Email duplicates are now allowed at database level
+        # We can log a warning but don't prevent admin creation
         if mongo_db.users.find_one({'email': admin_email}):
-            return jsonify({
-                'success': False,
-                'message': 'Admin with this email already exists'
-            }), 409
+            current_app.logger.warning(f"⚠️ Admin email {admin_email} already exists for another user, but allowing duplicate")
         
         # Validate campus/course assignments
         if admin_role == 'campus_admin':

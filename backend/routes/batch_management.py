@@ -536,7 +536,8 @@ def validate_student_upload():
 
         # Fetch existing data for validation
         existing_roll_numbers = set(s['roll_number'] for s in mongo_db.students.find({}, {'roll_number': 1}))
-        existing_emails = set(u['email'] for u in mongo_db.users.find({}, {'email': 1}))
+        # Note: Email duplicates are now allowed, so we don't need to check existing emails
+        existing_emails = set()  # Empty set since we allow email duplicates
         existing_mobile_numbers = set(u.get('mobile_number', '') for u in mongo_db.users.find({'mobile_number': {'$exists': True, '$ne': ''}}, {'mobile_number': 1}))
         
         # Get campus info for validation
@@ -645,7 +646,8 @@ def upload_students_to_batch():
 
         # Fetch existing data for validation
         existing_roll_numbers = set(s['roll_number'] for s in mongo_db.students.find({}, {'roll_number': 1}))
-        existing_emails = set(u['email'] for u in mongo_db.users.find({}, {'email': 1}))
+        # Note: Email duplicates are now allowed, so we don't need to check existing emails
+        existing_emails = set()  # Empty set since we allow email duplicates
         existing_mobile_numbers = set(u.get('mobile_number', '') for u in mongo_db.users.find({'mobile_number': {'$exists': True, '$ne': ''}}, {'mobile_number': 1}))
 
         # Detailed response tracking
@@ -663,10 +665,11 @@ def upload_students_to_batch():
             'message': 'Starting student upload...'
         }, room=str(user_id))
         
-        current_app.logger.info(f"Starting to process {len(rows)} rows")
+        current_app.logger.info(f"Starting PHASED processing of {len(rows)} rows")
         
+        # Initialize all student results first
+        detailed_results = []
         for index, row in enumerate(rows):
-            # Initialize detailed result for this student
             student_result = {
                 'student_name': '',
                 'roll_number': '',
@@ -678,10 +681,25 @@ def upload_students_to_batch():
                 'errors': [],
                 'success': False
             }
+            detailed_results.append(student_result)
+        
+        # PHASE 1: DATABASE REGISTRATION
+        current_app.logger.info("🚀 PHASE 1: Starting database registration...")
+        socketio.emit('upload_progress', {
+            'user_id': user_id,
+            'status': 'processing',
+            'total': total_students,
+            'processed': 0,
+            'percentage': 0,
+            'message': 'Phase 1: Registering students in database...'
+        }, room=str(user_id))
+        
+        for index, row in enumerate(rows):
+            student_result = detailed_results[index]
             
             # Log every 10th row for debugging
             if index % 10 == 0:
-                current_app.logger.info(f"Processing row {index + 1}/{len(rows)}: {row}")
+                current_app.logger.info(f"Database Phase - Processing row {index + 1}/{len(rows)}: {row}")
             
             try:
                 if is_v2_format:
@@ -740,8 +758,10 @@ def upload_students_to_batch():
                 # Check for duplicates only if we have valid data
                 if roll_number in existing_roll_numbers:
                     validation_errors.append('Roll number already exists.')
-                if email and email in existing_emails:  # Only check email if provided
-                    validation_errors.append('Email already exists.')
+                # Note: Email duplicates are now allowed at database level
+                # We can log a warning but don't treat it as an error
+                if email and email.strip() and email in existing_emails:
+                    current_app.logger.warning(f"⚠️ Email {email} already exists for another user, but allowing duplicate")
                 if mobile_number and mobile_number in existing_mobile_numbers:
                     validation_errors.append('Mobile number already exists.')
                 
@@ -758,7 +778,7 @@ def upload_students_to_batch():
                     
                     user_doc = {
                         'username': username,
-                        'email': email if email else None,  # Set to None if empty
+                        'email': email if email and email.strip() else None,  # Always include email field
                         'password_hash': password_hash,
                         'role': 'student',
                         'name': student_name,
@@ -784,7 +804,7 @@ def upload_students_to_batch():
                         'user_id': user_id_inserted,
                         'name': student_name,
                         'roll_number': roll_number,
-                        'email': email if email else None,  # Set to None if empty
+                        'email': email if email and email.strip() else None,  # Always include email field
                         'mobile_number': mobile_number,
                         'campus_id': campus_id,
                         'course_id': ObjectId(course_id),
@@ -814,94 +834,168 @@ def upload_students_to_batch():
                     
                 except Exception as e:
                     student_result['errors'].append(f'Database error: {str(e)}')
-                    detailed_results.append(student_result)
+                    current_app.logger.error(f"Database error for student {index + 1}: {e}")
                     continue
 
-                # Email Sending (non-blocking)
-                if email and student_result['database_registered']:
-                    try:
-                        html_content = render_template(
-                            'student_credentials.html',
-                            params={
-                                'name': student_name,
-                                'username': username,
-                                'email': email,
-                                'password': password,
-                                'login_url': "https://pydah-studyedge.vercel.app/login"
-                            }
-                        )
-                        email_success = send_email(
-                            to_email=email,
-                            to_name=student_name,
-                            subject="Welcome to Study Edge - Your Student Credentials",
-                            html_content=html_content
-                        )
-                        student_result['email_sent'] = email_success
-                        if email_success:
-                            current_app.logger.info(f"✅ Email sent to {email}")
-                        else:
-                            current_app.logger.warning(f"⚠️ Email failed for {email}")
-                    except Exception as e:
-                        current_app.logger.warning(f"⚠️ Email failed for {email}: {e}")
-                        student_result['errors'].append(f'Email sending failed: {str(e)}')
-                else:
-                    if not email:
-                        current_app.logger.info(f"No email provided for student {student_name}")
-                    student_result['email_sent'] = False
-                
-                # SMS Sending (non-blocking)
-                if mobile_number and student_result['database_registered']:
-                    try:
-                        sms_result = send_student_credentials_sms(
-                            phone=mobile_number,
-                            student_name=student_name,
-                            username=username,
-                            password=password,
-                            login_url="https://pydah-studyedge.vercel.app/login"
-                        )
-                        student_result['sms_sent'] = sms_result.get('success', False)
-                        if sms_result.get('success'):
-                            current_app.logger.info(f"✅ SMS sent to {mobile_number}")
-                        else:
-                            current_app.logger.warning(f"⚠️ SMS failed for {mobile_number}: {sms_result.get('error', 'Unknown error')}")
-                            student_result['errors'].append(f'SMS sending failed: {sms_result.get("error", "Unknown error")}')
-                    except Exception as e:
-                        current_app.logger.warning(f"⚠️ SMS failed for {mobile_number}: {e}")
-                        student_result['errors'].append(f'SMS sending failed: {str(e)}')
-                else:
-                    if not mobile_number:
-                        current_app.logger.info(f"No mobile number provided for student {student_name}")
-                    student_result['sms_sent'] = False
-                
-                # Determine overall success
-                student_result['success'] = student_result['database_registered']  # Only database registration is critical
-                
-                # Add to detailed results
-                detailed_results.append(student_result)
-                
-                # Send progress update
-                percentage = int(((index + 1) / total_students) * 100)
+                # Send progress update for database phase
+                percentage = int(((index + 1) / total_students) * 33)  # Database phase is 33% of total
                 socketio.emit('upload_progress', {
                     'user_id': user_id,
                     'status': 'processing',
                     'total': total_students,
                     'processed': index + 1,
                     'percentage': percentage,
-                    'message': f'Processed {student_name} - DB: {"✅" if student_result["database_registered"] else "❌"} Email: {"✅" if student_result["email_sent"] else "❌"} SMS: {"✅" if student_result["sms_sent"] else "❌"}',
+                    'message': f'Database Phase: {student_name} - {"✅" if student_result["database_registered"] else "❌"}',
                     'current_student': {
                         'name': student_name,
                         'email': email,
-                        'username': username,
+                        'username': username if student_result['database_registered'] else '',
                         'database_registered': student_result['database_registered'],
-                        'email_sent': student_result['email_sent'],
-                        'sms_sent': student_result['sms_sent']
+                        'email_sent': False,
+                        'sms_sent': False
                     }
                 }, room=str(user_id))
                     
             except Exception as e:
-                student_result['errors'].append(f'Unexpected error: {str(e)}')
-                detailed_results.append(student_result)
+                student_result['errors'].append(f'Database error: {str(e)}')
+                current_app.logger.error(f"Database error for student {index + 1}: {e}")
                 continue
+
+        # PHASE 2: EMAIL SENDING
+        current_app.logger.info("📧 PHASE 2: Starting email sending...")
+        socketio.emit('upload_progress', {
+            'user_id': user_id,
+            'status': 'sending_emails',
+            'total': total_students,
+            'processed': total_students,
+            'percentage': 33,
+            'message': 'Phase 2: Sending welcome emails...'
+        }, room=str(user_id))
+        
+        for index, student_result in enumerate(detailed_results):
+            if not student_result['database_registered']:
+                continue
+                
+            student_name = student_result['student_name']
+            email = student_result['email']
+            username = student_result.get('username', '')
+            password = student_result.get('password', '')
+            
+            # Email Sending
+            if email:
+                try:
+                    html_content = render_template(
+                        'student_credentials.html',
+                        params={
+                            'name': student_name,
+                            'username': username,
+                            'email': email,
+                            'password': password,
+                            'login_url': "https://pydah-studyedge.vercel.app/login"
+                        }
+                    )
+                    email_success = send_email(
+                        to_email=email,
+                        to_name=student_name,
+                        subject="Welcome to Study Edge - Your Student Credentials",
+                        html_content=html_content
+                    )
+                    student_result['email_sent'] = email_success
+                    if email_success:
+                        current_app.logger.info(f"✅ Email sent to {email}")
+                    else:
+                        current_app.logger.warning(f"⚠️ Email failed for {email}")
+                except Exception as e:
+                    current_app.logger.warning(f"⚠️ Email failed for {email}: {e}")
+                    student_result['errors'].append(f'Email sending failed: {str(e)}')
+            else:
+                current_app.logger.info(f"No email provided for student {student_name}")
+                student_result['email_sent'] = False
+            
+            # Send progress update for email phase
+            percentage = 33 + int(((index + 1) / total_students) * 33)  # Email phase is 33% of total
+            socketio.emit('upload_progress', {
+                'user_id': user_id,
+                'status': 'sending_emails',
+                'total': total_students,
+                'processed': index + 1,
+                'percentage': min(percentage, 66),
+                'message': f'Email Phase: {student_name} - {"✅" if student_result["email_sent"] else "❌"}',
+                'current_student': {
+                    'name': student_name,
+                    'email': email,
+                    'username': username,
+                    'database_registered': student_result['database_registered'],
+                    'email_sent': student_result['email_sent'],
+                    'sms_sent': False
+                }
+            }, room=str(user_id))
+
+        # PHASE 3: SMS SENDING
+        current_app.logger.info("📱 PHASE 3: Starting SMS sending...")
+        socketio.emit('upload_progress', {
+            'user_id': user_id,
+            'status': 'sending_sms',
+            'total': total_students,
+            'processed': total_students,
+            'percentage': 66,
+            'message': 'Phase 3: Sending SMS notifications...'
+        }, room=str(user_id))
+        
+        for index, student_result in enumerate(detailed_results):
+            if not student_result['database_registered']:
+                continue
+                
+            student_name = student_result['student_name']
+            mobile_number = student_result['mobile_number']
+            username = student_result.get('username', '')
+            password = student_result.get('password', '')
+            
+            # SMS Sending
+            if mobile_number:
+                try:
+                    sms_result = send_student_credentials_sms(
+                        phone=mobile_number,
+                        student_name=student_name,
+                        username=username,
+                        password=password,
+                        login_url="https://pydah-studyedge.vercel.app/login"
+                    )
+                    student_result['sms_sent'] = sms_result.get('success', False)
+                    if sms_result.get('success'):
+                        current_app.logger.info(f"✅ SMS sent to {mobile_number}")
+                    else:
+                        current_app.logger.warning(f"⚠️ SMS failed for {mobile_number}: {sms_result.get('error', 'Unknown error')}")
+                        student_result['errors'].append(f'SMS sending failed: {sms_result.get("error", "Unknown error")}')
+                except Exception as e:
+                    current_app.logger.warning(f"⚠️ SMS failed for {mobile_number}: {e}")
+                    student_result['errors'].append(f'SMS sending failed: {str(e)}')
+            else:
+                current_app.logger.info(f"No mobile number provided for student {student_name}")
+                student_result['sms_sent'] = False
+            
+            # Send progress update for SMS phase
+            percentage = 66 + int(((index + 1) / total_students) * 34)  # SMS phase is 34% of total
+            socketio.emit('upload_progress', {
+                'user_id': user_id,
+                'status': 'sending_sms',
+                'total': total_students,
+                'processed': index + 1,
+                'percentage': min(percentage, 100),
+                'message': f'SMS Phase: {student_name} - {"✅" if student_result["sms_sent"] else "❌"}',
+                'current_student': {
+                    'name': student_name,
+                    'email': student_result['email'],
+                    'username': username,
+                    'database_registered': student_result['database_registered'],
+                    'email_sent': student_result['email_sent'],
+                    'sms_sent': student_result['sms_sent']
+                }
+            }, room=str(user_id))
+
+        # Finalize all student results
+        for student_result in detailed_results:
+            student_result['success'] = student_result['database_registered']  # Only database registration is critical
 
         # Calculate comprehensive summary statistics
         successful_registrations = sum(1 for r in detailed_results if r['database_registered'])
@@ -1433,16 +1527,17 @@ def create_batch_with_students():
                     errors.append(f"Course '{student['course_name']}' not found in campus '{student['campus_name']}' for student '{student.get('student_name', 'N/A')}'.")
                     continue
 
-                # Check for existing user with same roll number, email, or mobile number
-                existing_user = mongo_db.users.find_one({
-                    '$or': [
-                        {'username': student['roll_number']},
-                        {'email': student['email']}
-                    ]
-                })
+                # Check for roll number duplicates (still enforced)
+                existing_user = mongo_db.users.find_one({'username': student['roll_number']})
                 if existing_user:
-                    errors.append(f"Student with roll number '{student['roll_number']}' or email '{student['email']}' already exists.")
+                    errors.append(f"Student with roll number '{student['roll_number']}' already exists.")
                     continue
+                
+                # Check for email duplicates (now just a warning)
+                if student.get('email'):
+                    existing_email_user = mongo_db.users.find_one({'email': student['email']})
+                    if existing_email_user:
+                        current_app.logger.warning(f"⚠️ Email {student['email']} already exists for another user, but allowing duplicate")
 
                 # Check for duplicate mobile number if provided
                 if student.get('mobile_number') and mongo_db.users.find_one({'mobile_number': student['mobile_number']}):
@@ -1601,7 +1696,8 @@ def add_students_to_batch(batch_id):
             valid_course_names = set(c['name'] for c in mongo_db.courses.find({'_id': {'$in': course_ids}}))
             # Fetch existing data for validation
             existing_roll_numbers = set(s['roll_number'] for s in mongo_db.students.find({}, {'roll_number': 1}))
-            existing_emails = set(u['email'] for u in mongo_db.users.find({}, {'email': 1}))
+            # Note: Email duplicates are now allowed, so we don't need to check existing emails
+            existing_emails = set()  # Empty set since we allow email duplicates
             existing_mobile_numbers = set(u.get('mobile_number', '') for u in mongo_db.users.find({'mobile_number': {'$exists': True, '$ne': ''}}, {'mobile_number': 1}))
             preview_data = []
             for row in rows:
@@ -1768,16 +1864,17 @@ def add_students_to_batch(batch_id):
                 if not course or course['_id'] not in valid_course_ids:
                     errors.append(f"Course '{student['course_name']}' is not valid for this batch for student '{student.get('student_name', 'N/A')}'.")
                     continue
-                # Check for existing user with same roll number, email, or mobile number
-                existing_user = mongo_db.users.find_one({
-                    '$or': [
-                        {'username': student['roll_number']},
-                        {'email': student['email']}
-                    ]
-                })
+                # Check for roll number duplicates (still enforced)
+                existing_user = mongo_db.users.find_one({'username': student['roll_number']})
                 if existing_user:
-                    errors.append(f"Student with roll number '{student['roll_number']}' or email '{student['email']}' already exists.")
+                    errors.append(f"Student with roll number '{student['roll_number']}' already exists.")
                     continue
+                
+                # Check for email duplicates (now just a warning)
+                if student.get('email'):
+                    existing_email_user = mongo_db.users.find_one({'email': student['email']})
+                    if existing_email_user:
+                        current_app.logger.warning(f"⚠️ Email {student['email']} already exists for another user, but allowing duplicate")
                 # Check for duplicate mobile number if provided
                 if student.get('mobile_number') and mongo_db.users.find_one({'mobile_number': student['mobile_number']}):
                     errors.append(f"Student with mobile number '{student['mobile_number']}' already exists.")
@@ -2163,7 +2260,8 @@ def upload_students_to_instance(instance_id):
         
         # Fetch existing data for validation
         existing_roll_numbers = set(s['roll_number'] for s in mongo_db.students.find({}, {'roll_number': 1}))
-        existing_emails = set(u['email'] for u in mongo_db.users.find({}, {'email': 1}))
+        # Note: Email duplicates are now allowed, so we don't need to check existing emails
+        existing_emails = set()  # Empty set since we allow email duplicates
         
         created_students = []
         errors = []
