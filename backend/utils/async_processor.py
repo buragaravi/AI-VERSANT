@@ -130,13 +130,22 @@ class AsyncProcessor:
 async_processor = AsyncProcessor(max_workers=100)  # Increased workers for high concurrency
 
 def async_route(timeout: float = 30.0):
-    """Decorator to make routes async and non-blocking"""
+    """Decorator to make routes async and non-blocking with proper Flask context"""
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             try:
-                # Submit task to async processor
-                future = async_processor.submit_immediate(func, *args, **kwargs)
+                # Get current Flask app context
+                from flask import current_app
+                app = current_app._get_current_object()
+                
+                def run_with_context():
+                    """Run function with Flask application context"""
+                    with app.app_context():
+                        return func(*args, **kwargs)
+                
+                # Submit task to async processor with context
+                future = async_processor.submit_immediate(run_with_context)
                 
                 # Wait for result with timeout
                 result = future.result(timeout=timeout)

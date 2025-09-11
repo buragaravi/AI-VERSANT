@@ -11,45 +11,12 @@ import pytz
 import io
 from utils.email_service import send_email, render_template
 from utils.sms_service import send_student_credentials_sms
-from utils.async_processor import submit_background_task, async_route, performance_monitor
+from utils.async_processor import performance_monitor
 from config.shared import bcrypt
 from socketio_instance import socketio
 from routes.access_control import require_permission
 
 batch_management_bp = Blueprint('batch_management', __name__)
-
-def send_credentials_email_background(email, name, username, password, login_url):
-    """Background function to send student credentials email"""
-    try:
-        html_content = render_template('emails/student_credentials.html', 
-            student_name=name,
-            username=username,
-            password=password,
-            login_url=login_url
-        )
-        send_email(
-            to_email=email,
-            to_name=name,
-            subject="Welcome to Study Edge - Your Student Credentials",
-            html_content=html_content
-        )
-        current_app.logger.info(f"✅ Background email sent to {email}")
-    except Exception as e:
-        current_app.logger.error(f"❌ Background email failed for {email}: {e}")
-
-def send_credentials_sms_background(phone, name, username, password, login_url):
-    """Background function to send student credentials SMS"""
-    try:
-        send_student_credentials_sms(
-            phone=phone,
-            student_name=name,
-            username=username,
-            password=password,
-            login_url=login_url
-        )
-        current_app.logger.info(f"✅ Background SMS sent to {phone}")
-    except Exception as e:
-        current_app.logger.error(f"❌ Background SMS failed for {phone}: {e}")
 
 def safe_isoformat(date_obj):
     """Safely convert a date object to ISO format string, handling various types."""
@@ -610,7 +577,6 @@ def validate_student_upload():
 
 @batch_management_bp.route('/upload-students', methods=['POST'])
 @jwt_required()
-@async_route(timeout=60.0)
 @performance_monitor(threshold=5.0)
 def upload_students_to_batch():
     try:
@@ -798,30 +764,46 @@ def upload_students_to_batch():
                 email_sent = False
                 email_error = None
                 if email:  # Only send email if email is provided
-                    # Submit email sending as background task
-                    submit_background_task(
-                        send_credentials_email_background,
-                        email=email,
-                        name=student_name,
-                        username=username,
-                        password=password,
-                        login_url="https://pydah-studyedge.vercel.app/login"
-                    )
-                    email_sent = True  # Mark as sent (will be processed in background)
+                    # Send email synchronously but don't fail if it doesn't work
+                    try:
+                        html_content = render_template(
+                            'emails/student_credentials.html',
+                            params={
+                                'name': student_name,
+                                'username': username,
+                                'email': email,
+                                'password': password,
+                                'login_url': "https://pydah-studyedge.vercel.app/login"
+                            }
+                        )
+                        send_email(
+                            to_email=email,
+                            to_name=student_name,
+                            subject="Welcome to Study Edge - Your Student Credentials",
+                            html_content=html_content
+                        )
+                        email_sent = True
+                        current_app.logger.info(f"✅ Email sent to {email}")
+                    except Exception as e:
+                        current_app.logger.warning(f"⚠️ Email failed for {email}: {e}")
+                        email_sent = False  # Don't fail the whole process
                 else:
                     # No email provided - student will be prompted to add email later
                     current_app.logger.info(f"No email provided for student {student_name} - will be prompted to add email later")
                 
-                # Send SMS as background task if mobile number is provided
+                # Send SMS if mobile number is provided (non-blocking)
                 if mobile_number:
-                    submit_background_task(
-                        send_credentials_sms_background,
-                        phone=mobile_number,
-                        name=student_name,
-                        username=username,
-                        password=password,
-                        login_url="https://pydah-studyedge.vercel.app/login"
-                    )
+                    try:
+                        send_student_credentials_sms(
+                            phone=mobile_number,
+                            student_name=student_name,
+                            username=username,
+                            password=password,
+                            login_url="https://pydah-studyedge.vercel.app/login"
+                        )
+                        current_app.logger.info(f"✅ SMS sent to {mobile_number}")
+                    except Exception as e:
+                        current_app.logger.warning(f"⚠️ SMS failed for {mobile_number}: {e}")
                 
                 # Send progress update after student creation (regardless of email status)
                 percentage = int(((index + 1) / total_students) * 100)
