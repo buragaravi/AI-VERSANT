@@ -38,19 +38,110 @@ def configure_brevo():
         logger.error(f"❌ Error configuring Brevo: {e}")
         return None
 
-def render_template(template_name, **context):
+def render_template(template_name, params=None, **context):
     """Render email template"""
     try:
+        # Merge params and context
+        if params:
+            context.update(params)
+            
         template_dir = os.path.join(os.path.dirname(__file__), '..', 'templates', 'emails')
+        
+        # Check if template directory exists
+        if not os.path.exists(template_dir):
+            logger.warning(f"⚠️ Template directory not found: {template_dir}")
+            # Create a fallback template
+            return create_fallback_template(template_name, context)
+        
         env = Environment(
             loader=FileSystemLoader(template_dir),
             autoescape=select_autoescape(['html'])
         )
+        
+        # Check if template file exists
+        template_path = os.path.join(template_dir, template_name)
+        if not os.path.exists(template_path):
+            logger.warning(f"⚠️ Template file not found: {template_path}")
+            return create_fallback_template(template_name, context)
+            
         template = env.get_template(template_name)
         return template.render(**context)
     except Exception as e:
         logger.error(f"❌ Error rendering template {template_name}: {e}")
+        return create_fallback_template(template_name, context)
+
+def create_fallback_template(template_name, context):
+    """Create a fallback template when the original template is not found"""
+    try:
+        if 'student_credentials' in template_name.lower():
+            return create_student_credentials_fallback(context)
+        else:
+            return create_generic_fallback(context)
+    except Exception as e:
+        logger.error(f"❌ Error creating fallback template: {e}")
         return f"<p>Error rendering template: {e}</p>"
+
+def create_student_credentials_fallback(context):
+    """Create fallback student credentials template"""
+    name = context.get('name', 'Student')
+    username = context.get('username', 'N/A')
+    email = context.get('email', 'N/A')
+    password = context.get('password', 'N/A')
+    login_url = context.get('login_url', 'https://pydah-studyedge.vercel.app/login')
+    
+    return f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">
+                Welcome to VERSANT - Your Student Credentials
+            </h2>
+            
+            <p>Dear {name},</p>
+            
+            <p>Your account has been created successfully. Here are your login credentials:</p>
+            
+            <div style="background-color: #f8f9fa; padding: 15px; border-left: 4px solid #3498db; margin: 20px 0;">
+                <h3 style="margin: 0 0 10px 0; color: #2c3e50;">Login Credentials</h3>
+                <p><strong>Username:</strong> {username}</p>
+                <p><strong>Password:</strong> {password}</p>
+                <p><strong>Email:</strong> {email}</p>
+            </div>
+            
+            <p>Please log in to your account using the link below:</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{login_url}" 
+                   style="background-color: #3498db; color: white; padding: 12px 24px; 
+                          text-decoration: none; border-radius: 5px; display: inline-block;">
+                    Login to VERSANT
+                </a>
+            </div>
+            
+            <p>If you have any questions, please contact your instructor.</p>
+            
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+            <p style="font-size: 12px; color: #666;">
+                This is an automated message from Study Edge Apex. Please do not reply to this email.
+            </p>
+        </div>
+    </body>
+    </html>
+    """
+
+def create_generic_fallback(context):
+    """Create generic fallback template"""
+    return f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #2c3e50;">Notification</h2>
+            <p>This is an automated message from Study Edge Apex.</p>
+            <p>Please do not reply to this email.</p>
+        </div>
+    </body>
+    </html>
+    """
 
 def send_email(to_email, to_name, subject, html_content):
     """Send email using Brevo service"""

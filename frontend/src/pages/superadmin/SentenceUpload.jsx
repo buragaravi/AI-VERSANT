@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FaUpload, FaFileAlt, FaTrash, FaHeadphones, FaMicrophone, FaVolumeUp, FaPlay, FaPause } from 'react-icons/fa';
 import Papa from 'papaparse';
+import StudentUploadResults from '../../components/common/StudentUploadResults';
 
 const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
   const [file, setFile] = useState(null);
@@ -11,6 +12,8 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
   const [selectedLevel, setSelectedLevel] = useState('Beginner');
   const [previewSentences, setPreviewSentences] = useState([]);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [uploadResults, setUploadResults] = useState(null);
+  const [showResults, setShowResults] = useState(false);
   
   // Audio configuration for Listening module
   const [audioConfig, setAudioConfig] = useState({
@@ -196,13 +199,43 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
       const result = await response.json();
 
       if (response.ok) {
-        setSuccess(`${config.title} sentences uploaded successfully!`);
+        // Handle detailed response for student uploads
+        if (result.data && result.data.detailed_results) {
+          const { detailed_results, summary } = result.data;
+          
+          // Create detailed success message
+          const successMessage = `Student upload completed! 
+            Database: ${summary.database_registered}/${summary.total_students} 
+            Emails: ${summary.emails_sent} 
+            SMS: ${summary.sms_sent}`;
+          
+          setSuccess(successMessage);
+          setUploadResults(result.data);
+          
+          // Automatically show results dialog for student uploads
+          setTimeout(() => {
+            setShowResults(true);
+          }, 1000);
+          
+          // Log detailed results for debugging
+          console.log('Detailed Upload Results:', {
+            summary,
+            detailed_results: detailed_results.slice(0, 5) // Show first 5 for preview
+          });
+        } else {
+          setSuccess(`${config.title} sentences uploaded successfully!`);
+        }
+        
         if (onUpload) {
           onUpload(result.data);
         }
-        setTimeout(() => {
-          onClose();
-        }, 2000);
+        
+        // Don't auto-close if we have detailed results
+        if (!result.data?.detailed_results) {
+          setTimeout(() => {
+            onClose();
+          }, 2000);
+        }
       } else {
         setError(result.message || 'Upload failed');
       }
@@ -614,7 +647,17 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
 
       {success && (
         <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
-          {success}
+          <div className="flex items-center justify-between">
+            <span>{success}</span>
+            {uploadResults && (
+              <button
+                onClick={() => setShowResults(true)}
+                className="ml-4 px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+              >
+                View Details
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -724,6 +767,17 @@ const SentenceUpload = ({ onUpload, onClose, moduleType = 'LISTENING' }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Student Upload Results Modal */}
+      {showResults && uploadResults && (
+        <StudentUploadResults
+          results={uploadResults}
+          onClose={() => {
+            setShowResults(false);
+            onClose();
+          }}
+        />
       )}
     </div>
   );

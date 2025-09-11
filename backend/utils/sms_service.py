@@ -93,14 +93,14 @@ def send_sms_post(params: Dict, is_unicode: bool = False) -> requests.Response:
         response = requests.get(api_url, params=params, headers=headers, timeout=30)
         return response
 
-def send_student_credentials_sms(phone_number: str, username: str, password: str, login_url: str = "crt.pydahsoft.in") -> Dict:
+def send_student_credentials_sms(phone: str, student_name: str, username: str, password: str, login_url: str = "crt.pydahsoft.in") -> Dict:
     """Send student credentials SMS"""
     try:
         if not SMS_AVAILABLE:
-            logger.warning(f"⚠️ SMS service disabled. Would send to {phone_number}: Credentials for {username}")
+            logger.warning(f"⚠️ SMS service disabled. Would send to {phone}: Credentials for {username}")
             return {'success': False, 'error': 'SMS service not configured'}
         
-        logger.info(f"📱 Sending student credentials SMS to: {phone_number}")
+        logger.info(f"📱 Sending student credentials SMS to: {phone}")
         
         # Replace template variables: Welcome to {#var#}, Your Credentials\nusername: {#var#}\npassword: {#var#}\nLogin with {#var#} - Pydah {#var#}
         message = STUDENT_CREDENTIALS_TEMPLATE.replace('{#var#}', 'Pydah Apex', 1) \
@@ -112,7 +112,7 @@ def send_student_credentials_sms(phone_number: str, username: str, password: str
         params = {
             'apikey': BULKSMS_API_KEY,
             'sender': BULKSMS_SENDER_ID,
-            'number': phone_number,
+            'number': phone,
             'message': message
         }
         

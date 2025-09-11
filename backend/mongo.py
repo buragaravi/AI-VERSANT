@@ -191,6 +191,7 @@ class MongoDB:
                     '$project': {
                         '_id': 0,
                         'id': {'$toString': '$_id'},
+                        'user_id': {'$toString': '$user_id'},
                         'name': '$name',
                         'email': '$email',
                         'roll_number': '$roll_number',

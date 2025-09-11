@@ -4,9 +4,9 @@ import { toast } from 'react-hot-toast';
 import Papa from 'papaparse';
 import api from '../../services/api';
 import { io } from 'socket.io-client';
+import StudentUploadResults from '../../components/common/StudentUploadResults';
 
-
-import { Plus, Users, Upload, Download, Building, BookOpen, Trash2, Edit, Eye, X, User, Hash, Mail, Phone } from 'lucide-react';
+import { Plus, Users, Upload, Download, Building, BookOpen, Trash2, Edit, Eye, X, User, Hash, Mail, Phone, CheckSquare, Square, AlertTriangle } from 'lucide-react';
 
 const BatchManagement = () => {
   useEffect(() => {
@@ -48,6 +48,15 @@ const BatchManagement = () => {
     emailError: null
   });
   const [socket, setSocket] = useState(null);
+  
+  // Upload results states
+  const [uploadResults, setUploadResults] = useState(null);
+  const [showUploadResults, setShowUploadResults] = useState(false);
+  
+  // Bulk deletion states
+  const [selectedStudents, setSelectedStudents] = useState([]);
+  const [isDeletingStudents, setIsDeletingStudents] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     fetchBatches();
@@ -156,7 +165,9 @@ const BatchManagement = () => {
     try {
       const response = await api.get(`/batch-management/batch/${batchId}/students`);
       if (response.data.success) {
+        console.log('Batch students data structure:', response.data.data);
         setBatchStudents(response.data.data);
+        setSelectedStudents([]); // Clear any previous selections
         setShowBatchDetails(true);
       }
     } catch (error) {
@@ -258,31 +269,61 @@ const BatchManagement = () => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
+      // Debug logging
+      console.log('Upload response:', {
+        status: response.status,
+        success: response.data.success,
+        data: response.data,
+        hasDetailedResults: !!response.data.data?.detailed_results
+      });
+
       // Handle both success and partial success (207 status)
       if (response.data.success || response.status === 207) {
-        const createdStudents = response.data.data?.created_students || response.data.created_students || [];
-        const uploadErrors = response.data.errors || [];
-        
-        if (createdStudents.length > 0) {
-          // Don't show success toast here as it's handled by WebSocket progress updates
+        // Check if we have detailed results (new format)
+        if (response.data.data?.detailed_results) {
+          console.log('Detailed upload results received:', response.data.data);
+          setUploadResults(response.data.data);
+          setShowUploadResults(true);
           setShowUploadStudents(false);
           setUploadFile(null);
           setSelectedBatch(null);
           setPreviewData([]);
           fetchBatches();
-        }
-        
-        // Show detailed error messages if any (only if not handled by WebSocket)
-        if (uploadErrors.length > 0 && uploadProgress.status !== 'completed_with_errors') {
-          const errorMessage = uploadErrors.length > 3 
-            ? `${uploadErrors.slice(0, 3).join('; ')}... and ${uploadErrors.length - 3} more errors.`
-            : uploadErrors.join('; ');
-          toast.error(`Upload completed with errors: ${errorMessage}`);
-        }
-        
-        // If no students were created, show general error
-        if (createdStudents.length === 0) {
-          toast.error('No students were uploaded. Please check your file and try again.');
+        } else if (response.data.detailed_results) {
+          // Fallback: check if detailed_results is directly in response.data
+          console.log('Detailed upload results received (fallback):', response.data);
+          setUploadResults(response.data);
+          setShowUploadResults(true);
+          setShowUploadStudents(false);
+          setUploadFile(null);
+          setSelectedBatch(null);
+          setPreviewData([]);
+          fetchBatches();
+        } else {
+          // Handle old format for backward compatibility
+          const createdStudents = response.data.data?.created_students || response.data.created_students || [];
+          const uploadErrors = response.data.errors || [];
+          
+          if (createdStudents.length > 0) {
+            setShowUploadStudents(false);
+            setUploadFile(null);
+            setSelectedBatch(null);
+            setPreviewData([]);
+            fetchBatches();
+          }
+          
+          // Show detailed error messages if any
+          if (uploadErrors.length > 0 && uploadProgress.status !== 'completed_with_errors') {
+            const errorMessage = uploadErrors.length > 3 
+              ? `${uploadErrors.slice(0, 3).join('; ')}... and ${uploadErrors.length - 3} more errors.`
+              : uploadErrors.join('; ');
+            toast.error(`Upload completed with errors: ${errorMessage}`);
+          }
+          
+          // If no students were created, show general error
+          if (createdStudents.length === 0) {
+            toast.error('No students were uploaded. Please check your file and try again.');
+          }
         }
       } else {
         toast.error(response.data.message || 'Failed to upload students');
@@ -294,23 +335,47 @@ const BatchManagement = () => {
       if (error.response?.status === 207) {
         // Partial success - some students uploaded, some failed
         const responseData = error.response.data;
-        const createdStudents = responseData.data?.created_students || responseData.created_students || [];
-        const uploadErrors = responseData.errors || [];
         
-        if (createdStudents.length > 0) {
-          toast.success(`Partially successful: ${createdStudents.length} student(s) uploaded.`);
+        // Check if we have detailed results (new format)
+        if (responseData.data?.detailed_results) {
+          console.log('Detailed upload results received (error case):', responseData.data);
+          setUploadResults(responseData.data);
+          setShowUploadResults(true);
           setShowUploadStudents(false);
           setUploadFile(null);
           setSelectedBatch(null);
           setPreviewData([]);
           fetchBatches();
-        }
-        
-        if (uploadErrors.length > 0) {
-          const errorMessage = uploadErrors.length > 3 
-            ? `${uploadErrors.slice(0, 3).join('; ')}... and ${uploadErrors.length - 3} more errors.`
-            : uploadErrors.join('; ');
-          toast.error(`Upload errors: ${errorMessage}`);
+        } else if (responseData.detailed_results) {
+          // Fallback: check if detailed_results is directly in responseData
+          console.log('Detailed upload results received (error case fallback):', responseData);
+          setUploadResults(responseData);
+          setShowUploadResults(true);
+          setShowUploadStudents(false);
+          setUploadFile(null);
+          setSelectedBatch(null);
+          setPreviewData([]);
+          fetchBatches();
+        } else {
+          // Handle old format for backward compatibility
+          const createdStudents = responseData.data?.created_students || responseData.created_students || [];
+          const uploadErrors = responseData.errors || [];
+          
+          if (createdStudents.length > 0) {
+            toast.success(`Partially successful: ${createdStudents.length} student(s) uploaded.`);
+            setShowUploadStudents(false);
+            setUploadFile(null);
+            setSelectedBatch(null);
+            setPreviewData([]);
+            fetchBatches();
+          }
+          
+          if (uploadErrors.length > 0) {
+            const errorMessage = uploadErrors.length > 3 
+              ? `${uploadErrors.slice(0, 3).join('; ')}... and ${uploadErrors.length - 3} more errors.`
+              : uploadErrors.join('; ');
+            toast.error(`Upload errors: ${errorMessage}`);
+          }
         }
       } else if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
         // Multiple validation errors
@@ -327,6 +392,61 @@ const BatchManagement = () => {
       }
     } finally {
       setUploadingStudents(false);
+    }
+  };
+
+  // Bulk deletion functions
+  const handleSelectAllStudents = () => {
+    if (selectedStudents.length === batchStudents.length) {
+      setSelectedStudents([]);
+    } else {
+      setSelectedStudents(batchStudents.map((_, index) => index));
+    }
+  };
+
+  const handleSelectStudent = (index) => {
+    if (selectedStudents.includes(index)) {
+      setSelectedStudents(selectedStudents.filter(i => i !== index));
+    } else {
+      setSelectedStudents([...selectedStudents, index]);
+    }
+  };
+
+  const handleBulkDeleteStudents = async () => {
+    if (selectedStudents.length === 0) {
+      toast.error('Please select students to delete');
+      return;
+    }
+
+    setIsDeletingStudents(true);
+    try {
+      // Get actual user IDs from the selected indices
+      const studentIds = selectedStudents.map(index => {
+        const student = batchStudents[index];
+        // Use user_id for bulk deletion (required by backend)
+        return student.user_id || student._id || student.id;
+      }).filter(id => id); // Filter out any undefined IDs
+      
+      console.log('Deleting students with IDs:', studentIds);
+      
+      const response = await api.post('/batch-management/students/bulk-delete', {
+        student_ids: studentIds
+      });
+
+      if (response.data.success) {
+        toast.success(response.data.message || `Successfully deleted ${selectedStudents.length} student(s)`);
+        setSelectedStudents([]);
+        setShowDeleteConfirm(false);
+        fetchBatches(); // Refresh the batch list
+        setShowBatchDetails(false); // Close the details modal
+      } else {
+        toast.error(response.data.message || 'Failed to delete students');
+      }
+    } catch (error) {
+      console.error('Bulk delete error:', error);
+      toast.error(error.response?.data?.message || 'Failed to delete students');
+    } finally {
+      setIsDeletingStudents(false);
     }
   };
 
@@ -873,12 +993,24 @@ const BatchManagement = () => {
                       </p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setShowBatchDetails(false)}
-                    className="p-3 hover:bg-gray-100 rounded-2xl transition-all duration-200 hover:scale-110"
-                  >
-                    <X className="h-6 w-6 text-gray-500" />
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {selectedStudents.length > 0 && (
+                      <button
+                        onClick={() => setShowDeleteConfirm(true)}
+                        disabled={isDeletingStudents}
+                        className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white rounded-xl transition-all duration-200 flex items-center gap-2 font-semibold"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete ({selectedStudents.length})
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowBatchDetails(false)}
+                      className="p-3 hover:bg-gray-100 rounded-2xl transition-all duration-200 hover:scale-110"
+                    >
+                      <X className="h-6 w-6 text-gray-500" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -890,6 +1022,18 @@ const BatchManagement = () => {
                       <table className="w-full">
                         <thead>
                           <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                            <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider w-12">
+                              <button
+                                onClick={handleSelectAllStudents}
+                                className="flex items-center justify-center w-6 h-6 rounded border-2 border-gray-300 hover:border-blue-500 transition-colors"
+                              >
+                                {selectedStudents.length === batchStudents.length && batchStudents.length > 0 ? (
+                                  <CheckSquare className="h-4 w-4 text-blue-600" />
+                                ) : (
+                                  <Square className="h-4 w-4 text-gray-400" />
+                                )}
+                              </button>
+                            </th>
                             <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
                               <div className="flex items-center gap-2">
                                 <User className="h-4 w-4 text-blue-600" />
@@ -923,8 +1067,22 @@ const BatchManagement = () => {
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: index * 0.05 }}
-                              className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 group"
+                              className={`hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 group ${
+                                selectedStudents.includes(index) ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                              }`}
                             >
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <button
+                                  onClick={() => handleSelectStudent(index)}
+                                  className="flex items-center justify-center w-6 h-6 rounded border-2 border-gray-300 hover:border-blue-500 transition-colors"
+                                >
+                                  {selectedStudents.includes(index) ? (
+                                    <CheckSquare className="h-4 w-4 text-blue-600" />
+                                  ) : (
+                                    <Square className="h-4 w-4 text-gray-400" />
+                                  )}
+                                </button>
+                              </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
                                   <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
@@ -1000,6 +1158,89 @@ const BatchManagement = () => {
               </div>
             </motion.div>
           </motion.div>
+        )}
+
+        {/* Bulk Delete Confirmation Modal */}
+        {showDeleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-100"
+            >
+              <div className="flex items-center gap-4 mb-4">
+                <div className="p-3 bg-red-100 rounded-full">
+                  <AlertTriangle className="h-6 w-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Confirm Deletion</h3>
+                  <p className="text-sm text-gray-600">This action cannot be undone</p>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-gray-700 mb-3">
+                  Are you sure you want to delete <span className="font-semibold text-red-600">{selectedStudents.length}</span> student{selectedStudents.length !== 1 ? 's' : ''}?
+                </p>
+                
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-sm text-red-800 font-medium mb-2">Selected students:</p>
+                  <div className="max-h-32 overflow-y-auto">
+                    {selectedStudents.map((index) => (
+                      <div key={index} className="text-sm text-red-700 py-1">
+                        • {batchStudents[index]?.name} ({batchStudents[index]?.roll_number})
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={isDeletingStudents}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 rounded-lg transition-colors font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkDeleteStudents}
+                  disabled={isDeletingStudents}
+                  className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white rounded-lg transition-colors font-semibold flex items-center gap-2"
+                >
+                  {isDeletingStudents ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4" />
+                      Delete Students
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Student Upload Results Modal */}
+        {showUploadResults && uploadResults && (
+          <StudentUploadResults
+            results={uploadResults}
+            onClose={() => {
+              setShowUploadResults(false);
+              setUploadResults(null);
+            }}
+          />
         )}
       </main>
   );
