@@ -31,15 +31,15 @@ class DatabaseConfig:
             if not DatabaseConfig.MONGODB_URI:
                 raise ValueError("MONGODB_URI environment variable is not set")
             
-            # Cloud-optimized client options (using valid PyMongo parameters)
+            # Windows-optimized client options to prevent socket buffer exhaustion
             client_options = {
-                'connectTimeoutMS': 60000,  # Increased timeout for cloud
-                'socketTimeoutMS': 60000,
-                'serverSelectionTimeoutMS': 60000,
-                'maxPoolSize': 50,  # Increased pool size for cloud
-                'minPoolSize': 5,
-                'maxIdleTimeMS': 30000,
-                'waitQueueTimeoutMS': 60000,
+                'connectTimeoutMS': 10000,  # Reduced timeout for Windows
+                'socketTimeoutMS': 10000,   # Reduced timeout for Windows
+                'serverSelectionTimeoutMS': 10000,  # Reduced timeout for Windows
+                'maxPoolSize': 20,  # Reduced for Windows stability
+                'minPoolSize': 2,   # Reduced minimum connections
+                'maxIdleTimeMS': 60000,  # Increased idle time
+                'waitQueueTimeoutMS': 5000,  # Reduced queue timeout
                 'retryWrites': True,
                 'w': 'majority',
                 'appName': 'Versant-Cloud',

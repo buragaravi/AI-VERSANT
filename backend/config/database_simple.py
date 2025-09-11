@@ -40,20 +40,20 @@ class DatabaseConfig:
             if not DatabaseConfig.MONGODB_URI:
                 raise ValueError("MONGODB_URI environment variable is not set")
             
-            # Optimized client options for high concurrency
+            # Windows-optimized client options to prevent socket buffer exhaustion
             client_options = {
-                'connectTimeoutMS': 30000,
-                'socketTimeoutMS': 30000,
-                'serverSelectionTimeoutMS': 30000,
-                'maxPoolSize': 100,  # Increased for high concurrency
-                'minPoolSize': 10,   # Maintain minimum connections
-                'maxIdleTimeMS': 30000,
-                'waitQueueTimeoutMS': 10000,
+                'connectTimeoutMS': 10000,  # Reduced timeout
+                'socketTimeoutMS': 10000,   # Reduced timeout
+                'serverSelectionTimeoutMS': 10000,  # Reduced timeout
+                'maxPoolSize': 20,  # Reduced for Windows stability
+                'minPoolSize': 2,   # Reduced minimum connections
+                'maxIdleTimeMS': 60000,  # Increased idle time
+                'waitQueueTimeoutMS': 5000,  # Add queue timeout
                 'retryWrites': True,
+                'retryReads': True,
                 'w': 'majority',
                 'appName': 'Versant',
-                'heartbeatFrequencyMS': 10000,
-                'serverSelectionTimeoutMS': 5000
+                'heartbeatFrequencyMS': 10000
             }
             
             # Ensure required parameters are in the connection string
