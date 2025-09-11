@@ -2305,6 +2305,92 @@ def delete_student_management(student_id):
         current_app.logger.error(f"Error deleting student: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
+@batch_management_bp.route('/students/bulk-delete', methods=['POST'])
+@jwt_required()
+@require_permission(module='batch_management')
+def bulk_delete_students():
+    """Bulk delete students"""
+    try:
+        data = request.get_json()
+        student_ids = data.get('student_ids', [])
+        
+        if not student_ids:
+            return jsonify({'success': False, 'message': 'No students selected for deletion'}), 400
+        
+        if not isinstance(student_ids, list):
+            return jsonify({'success': False, 'message': 'Invalid student IDs format'}), 400
+        
+        # Validate that all IDs are valid ObjectIds
+        valid_ids = []
+        invalid_ids = []
+        
+        for student_id in student_ids:
+            try:
+                valid_ids.append(ObjectId(student_id))
+            except Exception:
+                invalid_ids.append(student_id)
+        
+        if invalid_ids:
+            return jsonify({
+                'success': False, 
+                'message': f'Invalid student IDs: {", ".join(invalid_ids)}'
+            }), 400
+        
+        # Check if students exist
+        existing_students = list(mongo_db.users.find(
+            {'_id': {'$in': valid_ids}}, 
+            {'_id': 1, 'name': 1}
+        ))
+        
+        existing_ids = [str(student['_id']) for student in existing_students]
+        missing_ids = [str(sid) for sid in valid_ids if str(sid) not in existing_ids]
+        
+        if missing_ids:
+            return jsonify({
+                'success': False,
+                'message': f'Students not found: {", ".join(missing_ids)}'
+            }), 404
+        
+        # Perform bulk deletion
+        deleted_count = 0
+        failed_deletions = []
+        
+        for student_id in valid_ids:
+            try:
+                # Delete user account
+                user_result = mongo_db.users.delete_one({'_id': student_id})
+                
+                # Delete student profile
+                student_result = mongo_db.students.delete_one({'user_id': student_id})
+                
+                if user_result.deleted_count > 0 or student_result.deleted_count > 0:
+                    deleted_count += 1
+                else:
+                    failed_deletions.append(str(student_id))
+                    
+            except Exception as e:
+                current_app.logger.error(f"Error deleting student {student_id}: {e}")
+                failed_deletions.append(str(student_id))
+        
+        # Prepare response
+        response_data = {
+            'success': True,
+            'deleted_count': deleted_count,
+            'total_requested': len(valid_ids)
+        }
+        
+        if failed_deletions:
+            response_data['failed_deletions'] = failed_deletions
+            response_data['message'] = f'Successfully deleted {deleted_count} students. Failed to delete {len(failed_deletions)} students.'
+        else:
+            response_data['message'] = f'Successfully deleted {deleted_count} students.'
+        
+        return jsonify(response_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in bulk delete students: {e}")
+        return jsonify({'success': False, 'message': f'An unexpected error occurred: {str(e)}'}), 500
+
 @batch_management_bp.route('/students/<student_id>/send-credentials', methods=['POST'])
 @jwt_required()
 @require_permission(module='batch_management')

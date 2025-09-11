@@ -55,6 +55,13 @@ const StudentManagement = () => {
     const [loadingFilters, setLoadingFilters] = useState(false);
     const [searchInput, setSearchInput] = useState('');
     const [downloadingAll, setDownloadingAll] = useState(false);
+    
+    // Bulk selection state
+    const [selectedStudents, setSelectedStudents] = useState(new Set());
+    const [isAllSelected, setIsAllSelected] = useState(false);
+    const [showBulkActions, setShowBulkActions] = useState(false);
+    const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+    const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
 
     // Fetch campuses on mount
     useEffect(() => {
@@ -162,6 +169,8 @@ const StudentManagement = () => {
 
     useEffect(() => {
         fetchStudents(1, searchTerm);
+        // Clear selection when filters change
+        clearSelection();
     }, [fetchStudents, searchTerm, selectedCampus, selectedCourse, selectedBatch]);
     
     const handleDeleteStudent = async (studentId) => {
@@ -174,6 +183,66 @@ const StudentManagement = () => {
                 error(err.response?.data?.message || 'Failed to delete student.');
             }
         }
+    };
+
+    // Bulk selection functions
+    const handleSelectStudent = (studentId) => {
+        const newSelected = new Set(selectedStudents);
+        if (newSelected.has(studentId)) {
+            newSelected.delete(studentId);
+        } else {
+            newSelected.add(studentId);
+        }
+        setSelectedStudents(newSelected);
+        setShowBulkActions(newSelected.size > 0);
+        setIsAllSelected(newSelected.size === students.length && students.length > 0);
+    };
+
+    const handleSelectAll = () => {
+        if (isAllSelected) {
+            setSelectedStudents(new Set());
+            setShowBulkActions(false);
+        } else {
+            const allIds = new Set(students.map(student => student._id));
+            setSelectedStudents(allIds);
+            setShowBulkActions(true);
+        }
+        setIsAllSelected(!isAllSelected);
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedStudents.size === 0) {
+            error('No students selected for deletion.');
+            return;
+        }
+
+        setBulkDeleteLoading(true);
+        try {
+            const response = await api.post('/batch-management/students/bulk-delete', {
+                student_ids: Array.from(selectedStudents)
+            });
+
+            if (response.data.success) {
+                success(response.data.message);
+                setSelectedStudents(new Set());
+                setShowBulkActions(false);
+                setIsAllSelected(false);
+                setShowBulkDeleteModal(false);
+                fetchStudents(); // Refresh the list
+            } else {
+                error(response.data.message || 'Failed to delete students.');
+            }
+        } catch (err) {
+            error(err.response?.data?.message || 'Failed to delete students.');
+        } finally {
+            setBulkDeleteLoading(false);
+        }
+    };
+
+    const clearSelection = () => {
+        setSelectedStudents(new Set());
+        setShowBulkActions(false);
+        setIsAllSelected(false);
     };
 
     const handleSendCredentialsAgain = async (student) => {
@@ -717,10 +786,69 @@ const StudentManagement = () => {
                                             </div>
                                         </div>
 
+                                        {/* Bulk Actions Bar */}
+                                        {showBulkActions && (
+                                            <motion.div 
+                                                initial={{ opacity: 0, y: -20 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4"
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-2 bg-red-100 rounded-lg">
+                                                            <Trash2 className="w-5 h-5 text-red-600" />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-lg font-semibold text-red-900">
+                                                                {selectedStudents.size} Student{selectedStudents.size !== 1 ? 's' : ''} Selected
+                                                            </h3>
+                                                            <p className="text-sm text-red-700">
+                                                                Choose an action to perform on selected students
+                                                            </p>
+                                                            {selectedStudents.size > 0 && (
+                                                                <div className="mt-2 text-xs text-red-600">
+                                                                    Selected: {Array.from(selectedStudents).slice(0, 3).map(id => {
+                                                                        const student = students.find(s => s._id === id);
+                                                                        return student?.name || 'Unknown';
+                                                                    }).join(', ')}
+                                                                    {selectedStudents.size > 3 && ` and ${selectedStudents.size - 3} more...`}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <button
+                                                            onClick={clearSelection}
+                                                            className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                                                        >
+                                                            Clear Selection
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setShowBulkDeleteModal(true)}
+                                                            className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                            Delete Selected
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        )}
+
                                         {/* Enhanced Table */}
                                         <table className="min-w-full">
                                             <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                                                 <tr>
+                                                    <th className="px-6 py-5 text-left border-b border-gray-200 w-12">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isAllSelected}
+                                                                onChange={handleSelectAll}
+                                                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                                                            />
+                                                        </div>
+                                                    </th>
                                                     <th className="px-8 py-5 text-left border-b border-gray-200">
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">Student</span>
@@ -767,9 +895,24 @@ const StudentManagement = () => {
                                                         initial={{ opacity: 0, y: 20 }}
                                                         animate={{ opacity: 1, y: 0 }}
                                                         transition={{ delay: index * 0.05 }}
-                                                        className="group hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 cursor-pointer transition-all duration-300 transform hover:scale-[1.01]" 
+                                                        className={`group hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 cursor-pointer transition-all duration-300 transform hover:scale-[1.01] ${
+                                                            selectedStudents.has(student._id) 
+                                                                ? 'bg-blue-50 border-l-4 border-blue-500' 
+                                                                : ''
+                                                        }`}
                                                         onClick={() => handleStudentClick(student)}
                                                     >
+                                                        <td className="px-6 py-6 whitespace-nowrap w-12">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedStudents.has(student._id)}
+                                                                onChange={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleSelectStudent(student._id);
+                                                                }}
+                                                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                                                            />
+                                                        </td>
                                                         <td className="px-8 py-6 whitespace-nowrap">
                                                             <div className="flex items-center gap-4">
                                                                 <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
@@ -1041,6 +1184,68 @@ const StudentManagement = () => {
                     </div>
                 </Modal>
             )}
+            {/* Bulk Delete Confirmation Modal */}
+            {showBulkDeleteModal && (
+                <Modal 
+                    isOpen={showBulkDeleteModal} 
+                    onClose={() => setShowBulkDeleteModal(false)} 
+                    title="Confirm Bulk Delete"
+                >
+                    <div className="p-6">
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="p-3 bg-red-100 rounded-full">
+                                <Trash2 className="w-8 h-8 text-red-600" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-semibold text-gray-900">
+                                    Delete {selectedStudents.size} Student{selectedStudents.size !== 1 ? 's' : ''}?
+                                </h3>
+                                <p className="text-gray-600 mt-1">
+                                    This action cannot be undone. All selected students and their data will be permanently deleted.
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                            <h4 className="font-semibold text-red-900 mb-2">Warning:</h4>
+                            <ul className="text-sm text-red-800 space-y-1">
+                                <li>• All student accounts will be deleted</li>
+                                <li>• All student progress data will be lost</li>
+                                <li>• All test results will be permanently removed</li>
+                                <li>• This action cannot be reversed</li>
+                            </ul>
+                        </div>
+                        
+                        <div className="flex items-center justify-end gap-3">
+                            <button
+                                onClick={() => setShowBulkDeleteModal(false)}
+                                disabled={bulkDeleteLoading}
+                                className="px-6 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleBulkDelete}
+                                disabled={bulkDeleteLoading}
+                                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {bulkDeleteLoading ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                        Deleting...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Trash2 className="w-4 h-4" />
+                                        Delete {selectedStudents.size} Student{selectedStudents.size !== 1 ? 's' : ''}
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
             {/* Unlock message toast */}
             {unlockMsg && (
                 <div className="fixed top-8 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg z-50 text-lg font-semibold animate-fade-in">{unlockMsg}</div>
