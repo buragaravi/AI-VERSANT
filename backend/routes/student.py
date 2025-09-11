@@ -6,6 +6,7 @@ from config.constants import GRAMMAR_CATEGORIES, MODULES, LEVELS
 import logging
 from datetime import datetime
 import pytz
+from utils.async_processor import async_route, performance_monitor, submit_background_task, cached_async_result
 
 # Helper function to recursively convert ObjectId fields to strings
 def convert_objectids_to_strings(obj):
@@ -23,6 +24,19 @@ def convert_objectids_to_strings(obj):
             elif isinstance(item, (dict, list)):
                 convert_objectids_to_strings(item)
     return obj
+
+def safe_object_id_conversion(user_id):
+    """Safely convert user ID to ObjectId"""
+    try:
+        if isinstance(user_id, str):
+            return ObjectId(user_id)
+        elif isinstance(user_id, ObjectId):
+            return user_id
+        else:
+            raise ValueError(f"Invalid user ID type: {type(user_id)}")
+    except Exception as e:
+        current_app.logger.error(f"Invalid user ID format: {user_id} - {e}")
+        raise ValueError(f"Invalid user ID format: {user_id}")
 
 def safe_isoformat(date_obj):
     """Safely convert a date object to ISO format string, handling various types."""
@@ -1935,10 +1949,19 @@ def get_practice_results():
 
 @student_bp.route('/grammar-detailed-results', methods=['GET'])
 @jwt_required()
+@async_route(timeout=10.0)
+@performance_monitor(threshold=1.5)
+@cached_async_result(ttl=180)  # Cache for 3 minutes
 def get_grammar_detailed_results():
     """Get detailed grammar practice results by subcategory"""
     try:
         current_user_id = get_jwt_identity()
+        
+        # Convert to ObjectId safely
+        try:
+            user_object_id = safe_object_id_conversion(current_user_id)
+        except ValueError as e:
+            return jsonify({'success': False, 'message': str(e)}), 400
         
         # Get grammar results from both collections
         all_results = []
@@ -1949,7 +1972,7 @@ def get_grammar_detailed_results():
                 pipeline = [
                     {
                         '$match': {
-                            'student_id': ObjectId(current_user_id),
+                            'student_id': user_object_id,
                             'module_id': 'GRAMMAR',
                             'test_type': 'practice'
                         }
@@ -2115,10 +2138,19 @@ def get_grammar_detailed_results():
 
 @student_bp.route('/vocabulary-detailed-results', methods=['GET'])
 @jwt_required()
+@async_route(timeout=10.0)
+@performance_monitor(threshold=1.5)
+@cached_async_result(ttl=180)  # Cache for 3 minutes
 def get_vocabulary_detailed_results():
     """Get detailed vocabulary practice results"""
     try:
         current_user_id = get_jwt_identity()
+        
+        # Convert to ObjectId safely
+        try:
+            user_object_id = safe_object_id_conversion(current_user_id)
+        except ValueError as e:
+            return jsonify({'success': False, 'message': str(e)}), 400
         
         # Get vocabulary results from both collections
         all_results = []
@@ -2129,7 +2161,7 @@ def get_vocabulary_detailed_results():
                 pipeline = [
                     {
                         '$match': {
-                            'student_id': ObjectId(current_user_id),
+                            'student_id': user_object_id,
                             'module_id': 'VOCABULARY',
                             'test_type': 'practice'
                         }
@@ -2295,10 +2327,19 @@ def get_vocabulary_detailed_results():
 
 @student_bp.route('/progress-summary', methods=['GET'])
 @jwt_required()
+@async_route(timeout=15.0)
+@performance_monitor(threshold=2.0)
+@cached_async_result(ttl=300)  # Cache for 5 minutes
 def get_progress_summary():
     """Get comprehensive progress summary for student"""
     try:
         current_user_id = get_jwt_identity()
+        
+        # Convert to ObjectId safely
+        try:
+            user_object_id = safe_object_id_conversion(current_user_id)
+        except ValueError as e:
+            return jsonify({'success': False, 'message': str(e)}), 400
         
         # Get progress from both collections
         total_results = 0
@@ -2308,14 +2349,14 @@ def get_progress_summary():
         try:
             if hasattr(mongo_db, 'test_results'):
                 total_results += mongo_db.test_results.count_documents({
-                    'student_id': ObjectId(current_user_id),
+                    'student_id': user_object_id,
                     'test_type': 'practice'
                 })
                 
                 pipeline = [
                     {
                         '$match': {
-                            'student_id': ObjectId(current_user_id),
+                            'student_id': user_object_id,
                             'test_type': 'practice'
                         }
                     },
@@ -2430,15 +2471,18 @@ def get_progress_summary():
             if isinstance(stat.get('_id'), ObjectId):
                 stat['_id'] = str(stat['_id'])
         
-        # Get recent activity from both collections
+        # Get recent activity from both collections with comprehensive error handling
         recent_activity = []
         
         try:
             if hasattr(mongo_db, 'test_results'):
                 test_recent = list(mongo_db.test_results.find({
-                    'student_id': ObjectId(current_user_id)
+                    'student_id': user_object_id
                 }).sort('submitted_at', -1).limit(5))
+                # Filter out invalid entries
+                test_recent = [item for item in test_recent if isinstance(item, dict) and item.get('_id')]
                 recent_activity.extend(test_recent)
+                current_app.logger.info(f"Found {len(test_recent)} valid test results")
         except Exception as e:
             current_app.logger.warning(f"Error fetching recent activity from test_results: {e}")
         
@@ -2447,24 +2491,89 @@ def get_progress_summary():
                 attempt_recent = list(mongo_db.student_test_attempts.find({
                     'student_id': current_user_id
                 }).sort('submitted_at', -1).limit(5))
+                # Filter out invalid entries
+                attempt_recent = [item for item in attempt_recent if isinstance(item, dict) and item.get('_id')]
                 recent_activity.extend(attempt_recent)
+                current_app.logger.info(f"Found {len(attempt_recent)} valid test attempts")
         except Exception as e:
             current_app.logger.warning(f"Error fetching recent activity from student_test_attempts: {e}")
         
-        # Sort by date and take top 10
-        recent_activity.sort(key=lambda x: x.get('submitted_at', datetime.min), reverse=True)
-        recent_activity = recent_activity[:10]
-        
-        for activity in recent_activity:
-            activity['_id'] = str(activity['_id'])
+        # Process recent activity with comprehensive error handling
+        try:
+            # Sort by date and take top 10 - with proper error handling
+            def get_sort_key(activity):
+                """Get sort key for activity, handling None and missing fields safely"""
+                try:
+                    # Ensure activity is a dictionary
+                    if not isinstance(activity, dict):
+                        return datetime.min
+                        
+                    submitted_at = activity.get('submitted_at')
+                    if submitted_at is None:
+                        return datetime.min
+                        
+                    if isinstance(submitted_at, str):
+                        # Try to parse string dates
+                        try:
+                            from dateutil import parser
+                            parsed_date = parser.parse(submitted_at)
+                            return parsed_date if isinstance(parsed_date, datetime) else datetime.min
+                        except ImportError:
+                            # Fallback to datetime parsing
+                            try:
+                                parsed_date = datetime.fromisoformat(submitted_at.replace('Z', '+00:00'))
+                                return parsed_date if isinstance(parsed_date, datetime) else datetime.min
+                            except:
+                                return datetime.min
+                    elif isinstance(submitted_at, datetime):
+                        return submitted_at
+                    else:
+                        return datetime.min
+                except Exception as e:
+                    current_app.logger.warning(f"Error in get_sort_key: {e}")
+                    return datetime.min
             
-            # Handle submitted_at field safely
-            activity['submitted_at'] = safe_isoformat(activity.get('submitted_at'))
+            # Sort with error handling
+            try:
+                recent_activity.sort(key=get_sort_key, reverse=True)
+            except Exception as e:
+                current_app.logger.error(f"Error sorting recent activity: {e}")
+                # If sorting fails, just take the first 10 items without sorting
+                pass
+                
+            recent_activity = recent_activity[:10]
             
-            # Convert any ObjectId fields in activity to string
-            for k, v in activity.items():
-                if isinstance(v, ObjectId):
-                    activity[k] = str(v)
+            # Process each activity item
+            processed_activities = []
+            for activity in recent_activity:
+                try:
+                    # Ensure activity is a dictionary
+                    if not isinstance(activity, dict):
+                        continue
+                        
+                    # Create a copy to avoid modifying the original
+                    processed_activity = dict(activity)
+                    processed_activity['_id'] = str(processed_activity.get('_id', ''))
+                    
+                    # Handle submitted_at field safely
+                    processed_activity['submitted_at'] = safe_isoformat(processed_activity.get('submitted_at'))
+                    
+                    # Convert any ObjectId fields in activity to string
+                    for k, v in processed_activity.items():
+                        if isinstance(v, ObjectId):
+                            processed_activity[k] = str(v)
+                    
+                    processed_activities.append(processed_activity)
+                except Exception as e:
+                    current_app.logger.warning(f"Error processing activity item: {e}")
+                    continue
+            
+            recent_activity = processed_activities
+            
+        except Exception as e:
+            current_app.logger.error(f"Error processing recent activity: {e}")
+            # Fallback: return empty list if processing fails
+            recent_activity = []
         
         summary = {
             'total_practice_tests': total_results,

@@ -1,4 +1,6 @@
 import os
+import gc
+import psutil
 from flask import Flask, jsonify
 from socketio_instance import socketio
 from config.shared import bcrypt
@@ -8,6 +10,11 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from scheduler import schedule_daily_notifications
 from config.aws_config import init_aws
+
+# Optimize Python for high concurrency
+gc.set_threshold(700, 10, 10)  # Optimize garbage collection
+os.environ['PYTHONUNBUFFERED'] = '1'
+os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
 
 load_dotenv()
 
@@ -195,6 +202,12 @@ def create_app():
     
     # Register SMS management blueprint
     from routes.sms_management import sms_bp
+    
+    # Register async routes
+    from routes.async_auth import async_auth_bp
+    
+    # Register performance monitoring routes
+    from routes.performance_monitor import performance_bp
     # Removed non-existent route imports
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
@@ -221,6 +234,12 @@ def create_app():
     
     # Register SMS management blueprint
     app.register_blueprint(sms_bp, url_prefix='/sms-management')
+    
+    # Register async routes
+    app.register_blueprint(async_auth_bp, url_prefix='/async-auth')
+    
+    # Register performance monitoring routes
+    app.register_blueprint(performance_bp, url_prefix='/performance')
     
     # Register progress tracking blueprints
     # Removed registrations for non-existent blueprints
@@ -253,7 +272,78 @@ def create_app():
     # Initialize the scheduler for daily notifications
     schedule_daily_notifications(app)
     
+    # Initialize async processing system for high concurrency
+    try:
+        from utils.async_processor import init_async_system
+        init_async_system()
+        print("✅ Async processing system initialized for 200-500 concurrent users")
+        print(f"   Max workers: 100")
+        print(f"   DB connections: 200")
+        print(f"   Cache size: 10,000")
+    except Exception as e:
+        print(f"⚠️ Warning: Async system initialization failed: {e}")
+    
+    # Add development routes if in development mode
+    if os.environ.get("FLASK_DEBUG", "False").lower() == "true" or os.environ.get("DEV_MODE", "False").lower() == "true":
+        add_dev_routes(app)
+    
     return app, socketio
+
+def add_dev_routes(app):
+    """Add development routes for testing async features"""
+    @app.route('/dev/async-status')
+    def dev_async_status():
+        """Development endpoint to check async status"""
+        try:
+            from utils.async_processor import async_processor, db_pool, response_cache
+            
+            return {
+                'success': True,
+                'async_system': {
+                    'workers': async_processor.max_workers,
+                    'active_tasks': len(async_processor.running_tasks),
+                    'task_counter': async_processor.task_counter
+                },
+                'database_pool': {
+                    'max_connections': db_pool.max_connections,
+                    'active_connections': db_pool.connection_count,
+                    'available_connections': db_pool.connections.qsize()
+                },
+                'cache': {
+                    'max_size': response_cache.max_size,
+                    'current_size': len(response_cache.cache),
+                    'utilization': f"{(len(response_cache.cache) / response_cache.max_size) * 100:.1f}%"
+                }
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    @app.route('/dev/test-parallel')
+    def dev_test_parallel():
+        """Development endpoint to test parallel processing"""
+        try:
+            from utils.async_processor import parallel_execute
+            import time
+            
+            def slow_task(task_id):
+                time.sleep(1)  # Simulate slow operation
+                return f"Task {task_id} completed"
+            
+            start_time = time.time()
+            
+            # Run 3 tasks in parallel
+            results = parallel_execute([lambda: slow_task(1), lambda: slow_task(2), lambda: slow_task(3)], timeout=5.0)
+            
+            end_time = time.time()
+            
+            return {
+                'success': True,
+                'results': results,
+                'execution_time': f"{end_time - start_time:.2f}s",
+                'message': 'Parallel execution test completed'
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
 
 app, socketio = create_app()
 
