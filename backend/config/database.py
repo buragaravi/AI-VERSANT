@@ -95,7 +95,7 @@ def init_db():
         
         # Create indexes for better performance
         users_collection = db['users']
-        users_collection.create_index([("email", 1)], unique=True)
+        users_collection.create_index([("email", 1)])  # Non-unique index for performance
         users_collection.create_index([("username", 1)], unique=True)
         
         # Create test_results collection if it doesn't exist

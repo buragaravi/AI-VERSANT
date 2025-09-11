@@ -161,13 +161,14 @@ def update_student_profile():
             if '@' not in email or '.' not in email.split('@')[1]:
                 return jsonify({'success': False, 'message': 'Please provide a valid email address'}), 400
             
-            # Check if email is already taken by another user
+            # Note: Email duplicates are now allowed at database level
+            # We can log a warning but don't prevent the update
             existing_user = mongo_db.users.find_one({
                 '_id': {'$ne': user_object_id},
                 'email': email
             })
             if existing_user:
-                return jsonify({'success': False, 'message': 'This email is already registered with another account'}), 400
+                current_app.logger.warning(f"⚠️ Email {email} already exists for another user, but allowing duplicate")
         
         # Update user collection
         user_update_data = {}

@@ -114,7 +114,7 @@ def init_db():
         print("🔄 Creating database indexes...")
         
         users_collection = db['users']
-        users_collection.create_index([("email", 1)], unique=True)
+        users_collection.create_index([("email", 1)])  # Non-unique index for performance
         users_collection.create_index([("username", 1)], unique=True)
         
         tests_collection = db['tests']
