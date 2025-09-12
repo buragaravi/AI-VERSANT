@@ -21,8 +21,8 @@ worker_connections = 1000  # Conservative for cloud
 max_requests = 500  # Lower to prevent memory leaks
 max_requests_jitter = 50
 
-# Timeout settings - optimized for cloud
-timeout = 60  # Shorter timeout for cloud
+# Timeout settings - optimized for bulk operations (1000+ students)
+timeout = 300  # 5 minutes for large uploads
 keepalive = 2
 graceful_timeout = 30
 

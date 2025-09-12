@@ -16,8 +16,8 @@ worker_connections = 1000
 max_requests = 500
 max_requests_jitter = 50
 
-# Timeout settings
-timeout = 60
+# Timeout settings - optimized for bulk operations (1000+ students)
+timeout = 300  # 5 minutes for large uploads
 keepalive = 2
 graceful_timeout = 30
 

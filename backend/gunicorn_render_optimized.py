@@ -19,7 +19,7 @@ worker_connections = 2000  # Increased from 1000
 # Performance tuning
 max_requests = 1000  # Increased from 500
 max_requests_jitter = 100
-timeout = 60  # Reduced from 120 for faster recovery
+timeout = 300  # 5 minutes for bulk operations (1000+ students)
 keepalive = 10  # Increased from 5
 graceful_timeout = 30
 

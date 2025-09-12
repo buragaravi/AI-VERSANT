@@ -20,7 +20,7 @@ worker_connections = 1000  # Reduced for free tier
 # Performance tuning for limited resources
 max_requests = 500  # Restart workers after 500 requests to prevent memory leaks
 max_requests_jitter = 50
-timeout = 30  # Reduced timeout for faster recovery
+timeout = 300  # 5 minutes for bulk operations (1000+ students)
 keepalive = 5  # Reduced keepalive
 graceful_timeout = 20
 

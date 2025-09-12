@@ -1,14 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FaCheck, FaTimes, FaEnvelope, FaSms, FaDatabase, FaExclamationTriangle, 
   FaEye, FaEyeSlash, FaDownload, FaFilter, FaChartBar, FaUsers, 
   FaCheckCircle, FaExclamationCircle, FaTimesCircle, FaInfoCircle 
 } from 'react-icons/fa';
+import { toast } from 'react-hot-toast';
+import api from '../../services/api';
 
-const StudentUploadResults = ({ results, onClose }) => {
+const StudentUploadResults = ({ results, onClose, batchId }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all'); // all, success, error, partial
   const [sortBy, setSortBy] = useState('name'); // name, status, email, sms
+  const [isSendingEmails, setIsSendingEmails] = useState(false);
+  const [isSendingSMS, setIsSendingSMS] = useState(false);
+
+  // Debug state changes
+  useEffect(() => {
+    console.log('isSendingEmails changed to:', isSendingEmails);
+  }, [isSendingEmails]);
+
+  useEffect(() => {
+    console.log('isSendingSMS changed to:', isSendingSMS);
+  }, [isSendingSMS]);
+
+  // Force re-render when state changes
+  const [renderKey, setRenderKey] = useState(0);
+  useEffect(() => {
+    setRenderKey(prev => prev + 1);
+  }, [isSendingEmails, isSendingSMS]);
 
   if (!results || !results.detailed_results) {
     return null;
@@ -103,9 +122,73 @@ const StudentUploadResults = ({ results, onClose }) => {
     window.URL.revokeObjectURL(url);
   };
 
+  const handleSendEmails = async () => {
+    if (!batchId) {
+      toast.error('No batch ID available for sending emails');
+      return;
+    }
+
+    console.log('Starting email sending...');
+    setIsSendingEmails(true);
+    
+    try {
+      console.log('Making API call for emails...');
+      const response = await api.post(`/batch-management/batch/${batchId}/send-emails`);
+      console.log('Email API response:', response.data);
+      
+      if (response.data.success) {
+        toast.success(response.data.message);
+      } else {
+        toast.error(response.data.message || 'Failed to send emails');
+      }
+    } catch (error) {
+      console.error('Error sending emails:', error);
+      toast.error('Failed to send emails. Please try again.');
+    } finally {
+      console.log('Setting isSendingEmails to false');
+      // Use a callback to ensure state update
+      setIsSendingEmails(prev => {
+        console.log('Previous state was:', prev);
+        return false;
+      });
+    }
+  };
+
+  const handleSendSMS = async () => {
+    if (!batchId) {
+      toast.error('No batch ID available for sending SMS');
+      return;
+    }
+
+    console.log('Starting SMS sending...');
+    setIsSendingSMS(true);
+    
+    try {
+      console.log('Making API call for SMS...');
+      const response = await api.post(`/batch-management/batch/${batchId}/send-sms`);
+      console.log('SMS API response:', response.data);
+      
+      if (response.data.success) {
+        toast.success(response.data.message);
+      } else {
+        toast.error(response.data.message || 'Failed to send SMS');
+      }
+    } catch (error) {
+      console.error('Error sending SMS:', error);
+      toast.error('Failed to send SMS. Please try again.');
+    } finally {
+      console.log('Setting isSendingSMS to false');
+      // Use a callback to ensure state update
+      setIsSendingSMS(prev => {
+        console.log('Previous SMS state was:', prev);
+        return false;
+      });
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+      <div key={renderKey} className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 text-white">
           <div className="flex items-center justify-between">
@@ -436,9 +519,29 @@ const StudentUploadResults = ({ results, onClose }) => {
               Upload completed at {new Date().toLocaleString()}
             </div>
             <div className="flex space-x-3">
+              {batchId && (
+                <>
+                  <button
+                    onClick={handleSendEmails}
+                    disabled={isSendingEmails}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-md flex items-center transition-colors"
+                  >
+                    <FaEnvelope className="mr-2" />
+                    {isSendingEmails ? 'Sending...' : 'Send Emails'}
+                  </button>
+                  <button
+                    onClick={handleSendSMS}
+                    disabled={isSendingSMS}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white rounded-md flex items-center transition-colors"
+                  >
+                    <FaSms className="mr-2" />
+                    {isSendingSMS ? 'Sending...' : 'Send SMS'}
+                  </button>
+                </>
+              )}
               <button
                 onClick={exportToCSV}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center"
               >
                 <FaDownload className="mr-2" />
                 Export Results
