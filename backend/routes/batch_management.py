@@ -750,7 +750,7 @@ def upload_students_to_batch():
                     'mobile_number': mobile_number
                 })
 
-                # Validation
+            # Validation
                 validation_errors = []
                 
                 # Check for missing required fields (name and roll number)
@@ -839,21 +839,21 @@ def upload_students_to_batch():
                     existing_emails.add(email)
                     if mobile_number:
                         existing_mobile_numbers.add(mobile_number)
-                    
+                
                 except Exception as e:
                     student_result['errors'].append(f'Database error: {str(e)}')
                     current_app.logger.error(f"Database error for student {index + 1}: {e}")
                     continue
 
                 # Send progress update for database phase
-                percentage = int(((index + 1) / total_students) * 33)  # Database phase is 33% of total
+                percentage = int(((index + 1) / total_students) * 100)  # Database phase is 100% of upload
                 socketio.emit('upload_progress', {
                     'user_id': user_id,
                     'status': 'processing',
                     'total': total_students,
                     'processed': index + 1,
                     'percentage': percentage,
-                    'message': f'Database Phase: {student_name} - {"✅" if student_result["database_registered"] else "❌"}',
+                    'message': f'Uploading: {student_name} - {"✅" if student_result["database_registered"] else "❌"}',
                     'current_student': {
                         'name': student_name,
                         'email': email,
@@ -869,221 +869,49 @@ def upload_students_to_batch():
                 current_app.logger.error(f"Database error for student {index + 1}: {e}")
                 continue
 
-        # PHASE 2: EMAIL SENDING
-        current_app.logger.info("📧 PHASE 2: Starting email sending...")
-        socketio.emit('upload_progress', {
-            'user_id': user_id,
-            'status': 'sending_emails',
-            'total': total_students,
-            'processed': total_students,
-            'percentage': 33,
-            'message': 'Phase 2: Sending welcome emails...'
-        }, room=str(user_id))
-        
-        # Create resilient services
-        resilient_services = create_resilient_services()
-        
-        for index, student_result in enumerate(detailed_results):
-            if not student_result['database_registered']:
-                continue
-                
-            student_name = student_result['student_name']
-            email = student_result['email']
-            username = student_result.get('username', '')
-            password = student_result.get('password', '')
-            
-            # Email Sending with Resilient Service
-            if email:
-                try:
-                    html_content = render_template(
-                        'student_credentials.html',
-                        params={
-                            'name': student_name,
-                            'username': username,
-                            'email': email,
-                            'password': password,
-                            'login_url': "https://pydah-studyedge.vercel.app/login"
-                        }
-                    )
-                    
-                    # Use resilient email service with retry logic
-                    email_success = resilient_services['email'].send_email_resilient(
-                        to_email=email,
-                        to_name=student_name,
-                        subject="Welcome to Study Edge - Your Student Credentials",
-                        html_content=html_content
-                    )
-                    
-                    student_result['email_sent'] = email_success
-                    if email_success:
-                        current_app.logger.info(f"✅ Email sent to {email}")
-                    else:
-                        current_app.logger.warning(f"⚠️ Email failed for {email} (after retries)")
-                        student_result['errors'].append('Email sending failed after retries')
-                        
-                except Exception as e:
-                    current_app.logger.error(f"❌ Email service error for {email}: {e}")
-                    student_result['email_sent'] = False
-                    student_result['errors'].append(f'Email service error: {str(e)}')
-            else:
-                current_app.logger.info(f"No email provided for student {student_name}")
-                student_result['email_sent'] = False
-            
-            # Send progress update for email phase
-            percentage = 33 + int(((index + 1) / total_students) * 33)  # Email phase is 33% of total
-            socketio.emit('upload_progress', {
-                'user_id': user_id,
-                'status': 'sending_emails',
-                'total': total_students,
-                'processed': index + 1,
-                'percentage': min(percentage, 66),
-                'message': f'Email Phase: {student_name} - {"✅" if student_result["email_sent"] else "❌"}',
-                'current_student': {
-                    'name': student_name,
-                    'email': email,
-                    'username': username,
-                    'database_registered': student_result['database_registered'],
-                    'email_sent': student_result['email_sent'],
-                    'sms_sent': False
-                }
-            }, room=str(user_id))
+        # Database upload completed - no email/SMS sending here
+        current_app.logger.info("✅ Database upload phase completed successfully!")
 
-        # PHASE 3: SMS SENDING
-        current_app.logger.info("📱 PHASE 3: Starting SMS sending...")
-        socketio.emit('upload_progress', {
-            'user_id': user_id,
-            'status': 'sending_sms',
-            'total': total_students,
-            'processed': total_students,
-            'percentage': 66,
-            'message': 'Phase 3: Sending SMS notifications...'
-        }, room=str(user_id))
-        
-        for index, student_result in enumerate(detailed_results):
-            if not student_result['database_registered']:
-                continue
-                
-            student_name = student_result['student_name']
-            mobile_number = student_result['mobile_number']
-            username = student_result.get('username', '')
-            password = student_result.get('password', '')
-            
-            # SMS Sending with Resilient Service
-            if mobile_number:
-                try:
-                    # Use resilient SMS service with retry logic
-                    sms_result = resilient_services['sms'].send_sms_resilient(
-                        phone=mobile_number,
-                        student_name=student_name,
-                        username=username,
-                        password=password,
-                        login_url="https://pydah-studyedge.vercel.app/login"
-                    )
-                    
-                    student_result['sms_sent'] = sms_result.get('success', False)
-                    if sms_result.get('success'):
-                        current_app.logger.info(f"✅ SMS sent to {mobile_number}")
-                    else:
-                        current_app.logger.warning(f"⚠️ SMS failed for {mobile_number} (after retries): {sms_result.get('error', 'Unknown error')}")
-                        student_result['errors'].append(f'SMS sending failed after retries: {sms_result.get("error", "Unknown error")}')
-                        
-                except Exception as e:
-                    current_app.logger.error(f"❌ SMS service error for {mobile_number}: {e}")
-                    student_result['sms_sent'] = False
-                    student_result['errors'].append(f'SMS service error: {str(e)}')
-            else:
-                current_app.logger.info(f"No mobile number provided for student {student_name}")
-                student_result['sms_sent'] = False
-            
-            # Send progress update for SMS phase
-            percentage = 66 + int(((index + 1) / total_students) * 34)  # SMS phase is 34% of total
-            socketio.emit('upload_progress', {
-                'user_id': user_id,
-                'status': 'sending_sms',
-                'total': total_students,
-                'processed': index + 1,
-                'percentage': min(percentage, 100),
-                'message': f'SMS Phase: {student_name} - {"✅" if student_result["sms_sent"] else "❌"}',
-                'current_student': {
-                    'name': student_name,
-                    'email': student_result['email'],
-                    'username': username,
-                    'database_registered': student_result['database_registered'],
-                    'email_sent': student_result['email_sent'],
-                    'sms_sent': student_result['sms_sent']
-                }
-            }, room=str(user_id))
-
-        # Finalize all student results
+        # Finalize all student results - only database registration matters for upload
         for student_result in detailed_results:
-            student_result['success'] = student_result['database_registered']  # Only database registration is critical
+            student_result['success'] = student_result['database_registered']
+            # Initialize email/SMS flags as False (not sent during upload)
+            student_result['email_sent'] = False
+            student_result['sms_sent'] = False
         
         # Send completion notification
-        current_app.logger.info("🎉 Student upload process completed successfully!")
+        current_app.logger.info("🎉 Student database upload completed successfully!")
         socketio.emit('upload_progress', {
             'user_id': user_id,
             'status': 'completed',
             'total': total_students,
             'processed': total_students,
             'percentage': 100,
-            'message': 'Upload completed! Check results for details.'
+            'message': 'Database upload completed! Use Send Emails/SMS buttons to send credentials.'
         }, room=str(user_id))
-
-        # Calculate comprehensive summary statistics
+                    
+        # Calculate summary statistics (only database registrations)
         successful_registrations = sum(1 for r in detailed_results if r['database_registered'])
-        successful_emails = sum(1 for r in detailed_results if r['email_sent'])
-        successful_sms = sum(1 for r in detailed_results if r['sms_sent'])
         total_errors = sum(len(r['errors']) for r in detailed_results)
         
-    except Exception as e:
-        # Global error handler - prevent backend crash
-        current_app.logger.error(f"❌ CRITICAL ERROR in student upload: {e}")
+        # Calculate additional statistics (database only)
+        database_only = successful_registrations  # All successful registrations are database-only
+        complete_failures = total_students - successful_registrations
         
-        # Send error notification
-        socketio.emit('upload_progress', {
-            'user_id': user_id,
-            'status': 'error',
-            'total': total_students,
-            'processed': 0,
-            'percentage': 0,
-            'message': f'Upload failed due to critical error: {str(e)}'
-        }, room=str(user_id))
-        
-        # Return partial results if we have any
-        if 'detailed_results' in locals() and detailed_results:
-            successful_registrations = sum(1 for r in detailed_results if r['database_registered'])
-            successful_emails = sum(1 for r in detailed_results if r['email_sent'])
-            successful_sms = sum(1 for r in detailed_results if r['sms_sent'])
-            total_errors = sum(len(r['errors']) for r in detailed_results)
-        else:
-            successful_registrations = 0
-            successful_emails = 0
-            successful_sms = 0
-            total_errors = 1
-            detailed_results = [{'errors': [f'Critical error: {str(e)}']}]
-        
-        # Calculate additional statistics
-        complete_success = sum(1 for r in detailed_results if r['database_registered'] and r['email_sent'] and r['sms_sent'])
-        partial_success = sum(1 for r in detailed_results if r['database_registered'] and (r['email_sent'] or r['sms_sent']))
-        database_only = sum(1 for r in detailed_results if r['database_registered'] and not r['email_sent'] and not r['sms_sent'])
-        complete_failures = sum(1 for r in detailed_results if not r['database_registered'])
-        
-        # Create comprehensive summary
-        comprehensive_summary = {
+        # Create summary for database upload only
+        upload_summary = {
             'total_students': total_students,
             'database_registered': successful_registrations,
-            'emails_sent': successful_emails,
-            'sms_sent': successful_sms,
+            'emails_sent': 0,  # No emails sent during upload
+            'sms_sent': 0,     # No SMS sent during upload
             'total_errors': total_errors,
-            'complete_success': complete_success,
-            'partial_success': partial_success,
             'database_only': database_only,
             'complete_failures': complete_failures,
             'success_rate': round((successful_registrations / total_students * 100), 2) if total_students > 0 else 0,
-            'email_success_rate': round((successful_emails / successful_registrations * 100), 2) if successful_registrations > 0 else 0,
-            'sms_success_rate': round((successful_sms / successful_registrations * 100), 2) if successful_registrations > 0 else 0
+            'email_success_rate': 0,  # No emails sent during upload
+            'sms_success_rate': 0     # No SMS sent during upload
         }
-        
+
         # Send completion progress update
         if total_errors > 0:
             socketio.emit('upload_progress', {
@@ -1092,19 +920,17 @@ def upload_students_to_batch():
                 'total': total_students,
                 'processed': total_students,
                 'percentage': 100,
-                'message': f'Upload completed. DB: {successful_registrations}/{total_students}, Email: {successful_emails}, SMS: {successful_sms}',
-                'summary': comprehensive_summary
+                'message': f'Database upload completed with {total_errors} errors. {successful_registrations} students registered.',
+                'summary': upload_summary
             }, room=str(user_id))
             
             return jsonify({
                 'success': successful_registrations > 0, 
-                'message': f"Upload completed with {total_errors} errors. {successful_registrations} students registered in database.", 
+                'message': f"Database upload completed with {total_errors} errors. {successful_registrations} students registered. Use Send Emails/SMS buttons to send credentials.", 
                 'data': {
                     'detailed_results': detailed_results,
-                    'summary': comprehensive_summary,
+                    'summary': upload_summary,
                     'status_breakdown': {
-                        'complete_success': complete_success,
-                        'partial_success': partial_success,
                         'database_only': database_only,
                         'complete_failures': complete_failures
                     }
@@ -1113,7 +939,7 @@ def upload_students_to_batch():
         
         # Log final results for debugging
         current_app.logger.info(f"Final processing results: {len(detailed_results)} detailed results, {total_students} total students")
-        current_app.logger.info(f"Summary: DB={successful_registrations}, Email={successful_emails}, SMS={successful_sms}, Errors={total_errors}")
+        current_app.logger.info(f"Summary: DB={successful_registrations}, Errors={total_errors}")
         
         # Send success completion update
         socketio.emit('upload_progress', {
@@ -1122,19 +948,17 @@ def upload_students_to_batch():
             'total': total_students,
             'processed': total_students,
             'percentage': 100,
-            'message': f'Successfully processed {total_students} students! DB: {successful_registrations}, Email: {successful_emails}, SMS: {successful_sms}',
-            'summary': comprehensive_summary
+            'message': f'Successfully uploaded {total_students} students to database! Use Send Emails/SMS buttons to send credentials.',
+            'summary': upload_summary
         }, room=str(user_id))
         
         return jsonify({
             'success': True, 
-            'message': f"Successfully processed {total_students} students.", 
+            'message': f"Successfully uploaded {total_students} students to database. Use Send Emails/SMS buttons to send credentials.", 
             'data': {
                 'detailed_results': detailed_results,
-                'summary': comprehensive_summary,
+                'summary': upload_summary,
                 'status_breakdown': {
-                    'complete_success': complete_success,
-                    'partial_success': partial_success,
                     'database_only': database_only,
                     'complete_failures': complete_failures
                 }
@@ -2875,3 +2699,276 @@ def download_all_filtered_students_credentials():
     except Exception as e:
         current_app.logger.error(f"Error downloading all credentials: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
+
+@batch_management_bp.route('/batch/<batch_id>/send-emails', methods=['POST'])
+@jwt_required()
+@require_permission(module='batch_management')
+def send_batch_emails(batch_id):
+    """Send welcome emails to all students in a batch."""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+
+        # Verify batch exists and user has access
+        batch = mongo_db.batches.find_one({'_id': ObjectId(batch_id)})
+        if not batch:
+            return jsonify({'success': False, 'message': 'Batch not found'}), 404
+
+        # Get all students in the batch
+        students = list(mongo_db.students.find({'batch_id': ObjectId(batch_id)}))
+        if not students:
+            return jsonify({'success': False, 'message': 'No students found in this batch'}), 404
+
+        # Get user details for each student
+        student_details = []
+        for student in students:
+            user_detail = mongo_db.users.find_one({'_id': student['user_id']})
+            if user_detail:
+                student_details.append({
+                    'student_id': str(student['_id']),
+                    'name': student['name'],
+                    'email': student.get('email'),
+                    'username': user_detail.get('username', ''),
+                    'password': user_detail.get('password', '')
+                })
+
+        # Filter students with email addresses
+        students_with_email = [s for s in student_details if s['email']]
+        total_students = len(students_with_email)
+
+        if total_students == 0:
+            return jsonify({'success': False, 'message': 'No students with email addresses found in this batch'}), 400
+
+        # Create resilient services
+        resilient_services = create_resilient_services()
+        
+        # Track results
+        email_results = []
+        successful_emails = 0
+        failed_emails = 0
+
+        # Send emails with progress tracking
+        for index, student in enumerate(students_with_email):
+            student_name = student['name']
+            email = student['email']
+            username = student['username']
+            password = student['password']
+            
+            result = {
+                'student_id': student['student_id'],
+                'name': student_name,
+                'email': email,
+                'email_sent': False,
+                'error': None
+            }
+            
+            try:
+                # Render email template
+                html_content = render_template(
+                    'student_credentials.html',
+                    params={
+                        'name': student_name,
+                        'username': username,
+                        'email': email,
+                        'password': password,
+                        'login_url': "https://pydah-studyedge.vercel.app/login"
+                    }
+                )
+                
+                # Send email using resilient service
+                email_success = resilient_services['email'].send_email_resilient(
+                    to_email=email,
+                    to_name=student_name,
+                    subject="Welcome to Study Edge - Your Student Credentials",
+                    html_content=html_content
+                )
+                
+                result['email_sent'] = email_success
+                if email_success:
+                    successful_emails += 1
+                    current_app.logger.info(f"✅ Email sent to {email}")
+                else:
+                    failed_emails += 1
+                    result['error'] = 'Email sending failed after retries'
+                    current_app.logger.warning(f"⚠️ Email failed for {email}")
+                    
+            except Exception as e:
+                failed_emails += 1
+                result['error'] = str(e)
+                current_app.logger.error(f"❌ Email error for {email}: {e}")
+            
+            email_results.append(result)
+            
+            # Send progress update
+            percentage = int(((index + 1) / total_students) * 100)
+            socketio.emit('email_progress', {
+                'user_id': current_user_id,
+                'status': 'sending_emails',
+                'total': total_students,
+                'processed': index + 1,
+                'percentage': percentage,
+                'message': f'Sending emails: {student_name} - {"✅" if result["email_sent"] else "❌"}',
+                'current_student': {
+                    'name': student_name,
+                    'email': email,
+                    'email_sent': result['email_sent']
+                }
+            }, room=str(current_user_id))
+
+        # Send completion notification
+        socketio.emit('email_progress', {
+            'user_id': current_user_id,
+            'status': 'completed',
+            'total': total_students,
+            'processed': total_students,
+            'percentage': 100,
+            'message': f'Email sending completed! {successful_emails} sent, {failed_emails} failed'
+        }, room=str(current_user_id))
+
+        return jsonify({
+            'success': True,
+            'message': f'Email sending completed. {successful_emails} emails sent, {failed_emails} failed.',
+            'data': {
+                'total_students': total_students,
+                'successful_emails': successful_emails,
+                'failed_emails': failed_emails,
+                'email_results': email_results
+            }
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error sending batch emails: {e}")
+        return jsonify({'success': False, 'message': f'Failed to send emails: {str(e)}'}), 500
+
+@batch_management_bp.route('/batch/<batch_id>/send-sms', methods=['POST'])
+@jwt_required()
+@require_permission(module='batch_management')
+def send_batch_sms(batch_id):
+    """Send SMS notifications to all students in a batch."""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+
+        # Verify batch exists and user has access
+        batch = mongo_db.batches.find_one({'_id': ObjectId(batch_id)})
+        if not batch:
+            return jsonify({'success': False, 'message': 'Batch not found'}), 404
+
+        # Get all students in the batch
+        students = list(mongo_db.students.find({'batch_id': ObjectId(batch_id)}))
+        if not students:
+            return jsonify({'success': False, 'message': 'No students found in this batch'}), 404
+
+        # Get user details for each student
+        student_details = []
+        for student in students:
+            user_detail = mongo_db.users.find_one({'_id': student['user_id']})
+            if user_detail:
+                student_details.append({
+                    'student_id': str(student['_id']),
+                    'name': student['name'],
+                    'mobile_number': student.get('mobile_number'),
+                    'username': user_detail.get('username', ''),
+                    'password': user_detail.get('password', '')
+                })
+
+        # Filter students with mobile numbers
+        students_with_mobile = [s for s in student_details if s['mobile_number']]
+        total_students = len(students_with_mobile)
+
+        if total_students == 0:
+            return jsonify({'success': False, 'message': 'No students with mobile numbers found in this batch'}), 400
+
+        # Create resilient services
+        resilient_services = create_resilient_services()
+        
+        # Track results
+        sms_results = []
+        successful_sms = 0
+        failed_sms = 0
+
+        # Send SMS with progress tracking
+        for index, student in enumerate(students_with_mobile):
+            student_name = student['name']
+            mobile_number = student['mobile_number']
+            username = student['username']
+            password = student['password']
+            
+            result = {
+                'student_id': student['student_id'],
+                'name': student_name,
+                'mobile_number': mobile_number,
+                'sms_sent': False,
+                'error': None
+            }
+            
+            try:
+                # Send SMS using resilient service
+                sms_result = resilient_services['sms'].send_sms_resilient(
+                    phone=mobile_number,
+                    student_name=student_name,
+                    username=username,
+                    password=password,
+                    login_url="https://pydah-studyedge.vercel.app/login"
+                )
+                
+                result['sms_sent'] = sms_result.get('success', False)
+                if sms_result.get('success'):
+                    successful_sms += 1
+                    current_app.logger.info(f"✅ SMS sent to {mobile_number}")
+                else:
+                    failed_sms += 1
+                    result['error'] = sms_result.get('error', 'SMS sending failed after retries')
+                    current_app.logger.warning(f"⚠️ SMS failed for {mobile_number}: {result['error']}")
+                    
+            except Exception as e:
+                failed_sms += 1
+                result['error'] = str(e)
+                current_app.logger.error(f"❌ SMS error for {mobile_number}: {e}")
+            
+            sms_results.append(result)
+            
+            # Send progress update
+            percentage = int(((index + 1) / total_students) * 100)
+            socketio.emit('sms_progress', {
+                'user_id': current_user_id,
+                'status': 'sending_sms',
+                'total': total_students,
+                'processed': index + 1,
+                'percentage': percentage,
+                'message': f'Sending SMS: {student_name} - {"✅" if result["sms_sent"] else "❌"}',
+                'current_student': {
+                    'name': student_name,
+                    'mobile_number': mobile_number,
+                    'sms_sent': result['sms_sent']
+                }
+            }, room=str(current_user_id))
+
+        # Send completion notification
+        socketio.emit('sms_progress', {
+            'user_id': current_user_id,
+            'status': 'completed',
+            'total': total_students,
+            'processed': total_students,
+            'percentage': 100,
+            'message': f'SMS sending completed! {successful_sms} sent, {failed_sms} failed'
+        }, room=str(current_user_id))
+
+        return jsonify({
+            'success': True,
+            'message': f'SMS sending completed. {successful_sms} SMS sent, {failed_sms} failed.',
+            'data': {
+                'total_students': total_students,
+                'successful_sms': successful_sms,
+                'failed_sms': failed_sms,
+                'sms_results': sms_results
+            }
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error sending batch SMS: {e}")
+        return jsonify({'success': False, 'message': f'Failed to send SMS: {str(e)}'}), 500

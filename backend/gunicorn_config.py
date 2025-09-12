@@ -17,8 +17,8 @@ max_requests = 500  # Reduced to prevent memory leaks
 max_requests_jitter = 50
 worker_connections = 1000  # Eventlet specific
 
-# Timeout - increased for complex operations
-timeout = 120
+# Timeout - increased for bulk operations (1000+ students)
+timeout = 300  # 5 minutes for large uploads
 keepalive = 5
 graceful_timeout = 30
 

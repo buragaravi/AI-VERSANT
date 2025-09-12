@@ -1,10 +1,11 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, make_response
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from bson import ObjectId
 import bcrypt
 import csv
 import io
 import json
+import pandas as pd
 from mongo import mongo_db
 from config.constants import ROLES, MODULES, LEVELS, TEST_TYPES, WRITING_CONFIG
 from datetime import datetime, timedelta
@@ -2267,89 +2268,147 @@ def export_test_attempts_csv(test_id):
 @superadmin_bp.route('/online-tests-overview', methods=['GET'])
 @jwt_required()
 def get_online_tests_overview():
-    """Get overview of all online tests with statistics"""
+    """Get overview of all online tests with statistics using optimized aggregation"""
     try:
-        # Get all online tests
-        tests = list(mongo_db.tests.find({'test_type': 'online'}, {
-            '_id': 1, 'name': 1, 'module_id': 1, 'created_at': 1
-        }))
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
         
-        if not tests:
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
             return jsonify({
-                'success': True,
-                'data': [],
-                'message': 'No online tests found'
-            })
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
         
-        # Get all test results to calculate statistics
-        test_results = list(mongo_db.student_test_attempts.find({
-            'test_type': 'online'
+        # Use aggregation pipeline for better performance
+        pipeline = [
+            {
+                '$match': {
+                    'test_type': 'online',
+                    'status': 'completed'
+                }
+            },
+            {
+                '$group': {
+                    '_id': '$test_id',
+                    'total_attempts': {'$sum': 1},
+                    'unique_students': {'$addToSet': '$student_id'},
+                    'all_scores': {
+                        '$push': {
+                            '$cond': [
+                                {'$gt': ['$total_questions', 0]},
+                                {'$multiply': [{'$divide': ['$correct_answers', '$total_questions']}, 100]},
+                                0
+                            ]
+                        }
+                    },
+                    'student_scores': {
+                        '$push': {
+                            'student_id': '$student_id',
+                            'score': {
+                                '$cond': [
+                                    {'$gt': ['$total_questions', 0]},
+                                    {'$multiply': [{'$divide': ['$correct_answers', '$total_questions']}, 100]},
+                                    0
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'tests',
+                    'localField': '_id',
+                    'foreignField': '_id',
+                    'as': 'test_details'
+                }
+            },
+            {
+                '$unwind': '$test_details'
+            },
+            {
+                '$project': {
+                    'test_id': '$_id',
+                    'test_name': '$test_details.name',
+                    'category': '$test_details.module_id',
+                    'created_at': '$test_details.created_at',
+                    'total_attempts': 1,
+                    'unique_students_count': {'$size': '$unique_students'},
+                    'highest_score': {'$max': '$all_scores'},
+                    'average_score': {'$avg': '$all_scores'},
+                    'campus_ids': {
+                        '$map': {
+                            'input': '$test_details.campus_ids',
+                            'as': 'campus_id',
+                            'in': {'$toString': '$$campus_id'}
+                        }
+                    },
+                    'course_ids': {
+                        '$map': {
+                            'input': '$test_details.course_ids',
+                            'as': 'course_id',
+                            'in': {'$toString': '$$course_id'}
+                        }
+                    },
+                    'batch_ids': {
+                        '$map': {
+                            'input': '$test_details.batch_ids',
+                            'as': 'batch_id',
+                            'in': {'$toString': '$$batch_id'}
+                        }
+                    }
+                }
+            },
+            {
+                '$sort': {'test_name': 1}
+            }
+        ]
+        
+        # Execute aggregation
+        test_stats = list(mongo_db.student_test_attempts.aggregate(pipeline))
+        
+        # Get tests without attempts
+        attempted_test_ids = [stat['test_id'] for stat in test_stats]
+        tests_without_attempts = list(mongo_db.tests.find({
+            'test_type': 'online',
+            '_id': {'$nin': attempted_test_ids}
+        }, {
+            '_id': 1, 'name': 1, 'module_id': 1, 'created_at': 1,
+            'campus_ids': 1, 'course_ids': 1, 'batch_ids': 1
         }))
         
-        # Group results by test_id
-        test_stats = {}
-        for result in test_results:
-            test_id = str(result['test_id'])
-            if test_id not in test_stats:
-                test_stats[test_id] = {
-                    'total_attempts': 0,
-                    'unique_students': set(),
-                    'student_scores': {},  # student_id -> highest_score
-                    'all_scores': []
-                }
-            
-            test_stats[test_id]['total_attempts'] += 1
-            test_stats[test_id]['unique_students'].add(str(result['student_id']))
-            
-            # Calculate score
-            score = 0
-            if 'correct_answers' in result and 'total_questions' in result:
-                if result['total_questions'] > 0:
-                    score = (result['correct_answers'] / result['total_questions']) * 100
-            
-            test_stats[test_id]['all_scores'].append(score)
-            
-            # Track highest score per student
-            student_id = str(result['student_id'])
-            if student_id not in test_stats[test_id]['student_scores']:
-                test_stats[test_id]['student_scores'][student_id] = 0
-            test_stats[test_id]['student_scores'][student_id] = max(
-                test_stats[test_id]['student_scores'][student_id], 
-                score
-            )
-        
-        # Build response with statistics
-        tests_overview = []
-        for test in tests:
-            test_id = str(test['_id'])
-            stats = test_stats.get(test_id, {
-                'total_attempts': 0,
-                'unique_students': set(),
-                'student_scores': {},
-                'all_scores': []
-            })
-            
-            # Calculate statistics
-            unique_students_count = len(stats['unique_students'])
-            highest_score = max(stats['all_scores']) if stats['all_scores'] else 0
-            
-            # Average score from unique students' highest scores
-            student_highest_scores = list(stats['student_scores'].values())
-            average_score = sum(student_highest_scores) / len(student_highest_scores) if student_highest_scores else 0
-            
-            tests_overview.append({
-                'test_id': test_id,
+        # Add tests without attempts
+        for test in tests_without_attempts:
+            test_stats.append({
+                'test_id': test['_id'],
                 'test_name': test.get('name', 'Unknown Test'),
                 'category': test.get('module_id', 'Unknown Category'),
-                'total_attempts': stats['total_attempts'],
-                'unique_students': unique_students_count,
-                'highest_score': round(highest_score, 2),
-                'average_score': round(average_score, 2),
-                'created_at': safe_isoformat(test.get('created_at'))
+                'created_at': test.get('created_at'),
+                'total_attempts': 0,
+                'unique_students_count': 0,
+                'highest_score': 0,
+                'average_score': 0,
+                'campus_ids': [str(cid) for cid in test.get('campus_ids', [])],
+                'course_ids': [str(cid) for cid in test.get('course_ids', [])],
+                'batch_ids': [str(bid) for bid in test.get('batch_ids', [])]
             })
         
-        # Sort by test name
-        tests_overview.sort(key=lambda x: x['test_name'])
+        # Format response
+        tests_overview = []
+        for stat in test_stats:
+            tests_overview.append({
+                'test_id': str(stat['test_id']),
+                'test_name': stat.get('test_name', 'Unknown Test'),
+                'category': stat.get('category', 'Unknown Category'),
+                'total_attempts': stat.get('total_attempts', 0),
+                'unique_students': stat.get('unique_students_count', 0),
+                'highest_score': round(stat.get('highest_score', 0), 2),
+                'average_score': round(stat.get('average_score', 0), 2),
+                'created_at': safe_isoformat(stat.get('created_at')),
+                'campus_ids': [str(cid) for cid in stat.get('campus_ids', [])],
+                'course_ids': [str(cid) for cid in stat.get('course_ids', [])],
+                'batch_ids': [str(bid) for bid in stat.get('batch_ids', [])]
+            })
         
         return jsonify({
             'success': True,
@@ -2358,7 +2417,7 @@ def get_online_tests_overview():
         })
         
     except Exception as e:
-        current_app.logger.error(f"Error in get_online_tests_overview: {str(e)}")
+        current_app.logger.error(f"Error in get_online_tests_overview: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
             'message': 'Failed to fetch online tests overview',
@@ -2368,108 +2427,465 @@ def get_online_tests_overview():
 @superadmin_bp.route('/test-attempts/<test_id>', methods=['GET'])
 @jwt_required()
 def get_test_attempts(test_id):
-    """Get all student attempts for a specific test"""
+    """Get all student attempts for a specific test including unattempted students"""
     try:
-        # Get all completed attempts for this test (filter out incomplete ones)
-        attempts = list(mongo_db.student_test_attempts.find({
-            'test_id': ObjectId(test_id),
-            'test_type': 'online',
-            'status': 'completed'
-        }))
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
         
-        current_app.logger.info(f"Found {len(attempts)} completed attempts for test {test_id}")
-        for attempt in attempts:
-            current_app.logger.info(f"Attempt: student_id={attempt.get('student_id')}, user_id={attempt.get('user_id')}, correct_answers={attempt.get('correct_answers')}, total_questions={attempt.get('total_questions')}, results={len(attempt.get('results', []))}")
-            if attempt.get('results'):
-                current_app.logger.info(f"  First result: {attempt['results'][0] if attempt['results'] else 'None'}")
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
         
-        if not attempts:
+        # Validate ObjectId
+        try:
+            test_object_id = ObjectId(test_id)
+        except Exception:
+            return jsonify({
+                'success': False,
+                'message': 'Invalid test ID format'
+            }), 400
+        
+        # Get test details first
+        test = mongo_db.tests.find_one({'_id': test_object_id})
+        if not test:
+            return jsonify({
+                'success': False,
+                'message': 'Test not found'
+            }), 404
+        
+        # Get all students assigned to this test based on campus, course, and batch assignments
+        campus_ids = test.get('campus_ids', [])
+        course_ids = test.get('course_ids', [])
+        batch_ids = test.get('batch_ids', [])
+        
+        # Build student query
+        student_query = {}
+        if campus_ids:
+            student_query['campus_id'] = {'$in': campus_ids}
+        if course_ids:
+            student_query['course_id'] = {'$in': course_ids}
+        if batch_ids:
+            student_query['batch_id'] = {'$in': batch_ids}
+        
+        if not student_query:
             return jsonify({
                 'success': True,
                 'data': [],
-                'message': 'No attempts found for this test'
+                'message': 'No students assigned to this test'
             })
         
-        # Group attempts by student to get highest score per student
-        student_attempts = {}
-        for attempt in attempts:
-            # Try both student_id and user_id fields
-            student_id = str(attempt.get('student_id', attempt.get('user_id', '')))
-            if not student_id:
-                current_app.logger.warning(f"Skipping attempt with no student ID: {attempt.get('_id')}")
-                continue
-            
-            # Calculate score
-            score = 0
-            if 'correct_answers' in attempt and 'total_questions' in attempt:
-                if attempt['total_questions'] > 0:
-                    score = (attempt['correct_answers'] / attempt['total_questions']) * 100
-                    current_app.logger.info(f"Calculated score for student {student_id}: {attempt['correct_answers']}/{attempt['total_questions']} = {score}%")
-                else:
-                    current_app.logger.warning(f"Total questions is 0 for student {student_id}")
-            else:
-                current_app.logger.warning(f"Missing score data for student {student_id}: correct_answers={attempt.get('correct_answers')}, total_questions={attempt.get('total_questions')}")
-            
-            if student_id not in student_attempts:
-                # Get student details from students collection
-                # Try both user_id and _id fields
-                student = mongo_db.students.find_one({'user_id': ObjectId(student_id)})
-                if not student:
-                    student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
-                if not student:
-                    current_app.logger.warning(f"Student not found for student_id: {student_id}")
-                    continue
-                
-                # Get campus, course, and batch details
-                campus = mongo_db.campuses.find_one({'_id': student.get('campus_id')}) if student.get('campus_id') else None
-                course = mongo_db.courses.find_one({'_id': student.get('course_id')}) if student.get('course_id') else None
-                batch = mongo_db.batches.find_one({'_id': student.get('batch_id')}) if student.get('batch_id') else None
-                
-                student_attempts[student_id] = {
-                    'student_id': student_id,
-                    'student_name': student.get('name', 'Unknown'),
-                    'student_email': student.get('email', ''),
-                    'campus_name': campus.get('name', 'Unknown Campus') if campus else 'Unknown Campus',
-                    'course_name': course.get('name', 'Unknown Course') if course else 'Unknown Course',
-                    'batch_name': batch.get('name', 'Unknown Batch') if batch else 'Unknown Batch',
-                    'total_questions': attempt.get('total_questions', 0),
-                    'correct_answers': attempt.get('correct_answers', 0),
-                    'highest_score': score,
-                    'attempts_count': 0,
-                    'latest_attempt': attempt.get('submitted_at', attempt.get('created_at'))
+        # Use aggregation to get all assigned students with their attempt data
+        pipeline = [
+            {
+                '$match': student_query
+            },
+            {
+                '$lookup': {
+                    'from': 'users',
+                    'localField': 'user_id',
+                    'foreignField': '_id',
+                    'as': 'user_details'
                 }
-            
-            # Update highest score and attempts count
-            student_attempts[student_id]['highest_score'] = max(
-                student_attempts[student_id]['highest_score'], 
-                score
-            )
-            student_attempts[student_id]['attempts_count'] += 1
-            
-            # Update latest attempt date
-            attempt_date = attempt.get('submitted_at', attempt.get('created_at'))
-            if attempt_date and attempt_date > student_attempts[student_id]['latest_attempt']:
-                student_attempts[student_id]['latest_attempt'] = attempt_date
+            },
+            {
+                '$unwind': '$user_details'
+            },
+            {
+                '$lookup': {
+                    'from': 'campuses',
+                    'localField': 'campus_id',
+                    'foreignField': '_id',
+                    'as': 'campus_details'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'courses',
+                    'localField': 'course_id',
+                    'foreignField': '_id',
+                    'as': 'course_details'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'batches',
+                    'localField': 'batch_id',
+                    'foreignField': '_id',
+                    'as': 'batch_details'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'student_test_attempts',
+                    'let': {'student_id': '$_id', 'user_id': '$user_id'},
+                    'pipeline': [
+                        {
+                            '$match': {
+                                '$expr': {
+                                    '$and': [
+                                        {'$eq': ['$test_id', test_object_id]},
+                                        {'$eq': ['$test_type', 'online']},
+                                        {'$eq': ['$status', 'completed']},
+                                        {
+                                            '$or': [
+                                                {'$eq': ['$student_id', '$$student_id']},
+                                                {'$eq': ['$student_id', '$$user_id']}
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            '$project': {
+                                'score': {
+                                    '$cond': [
+                                        {'$gt': ['$total_questions', 0]},
+                                        {'$multiply': [{'$divide': ['$correct_answers', '$total_questions']}, 100]},
+                                        0
+                                    ]
+                                },
+                                'correct_answers': 1,
+                                'total_questions': 1,
+                                'submitted_at': 1,
+                                'created_at': 1
+                            }
+                        }
+                    ],
+                    'as': 'attempts'
+                }
+            },
+            {
+                '$project': {
+                    'student_id': {'$toString': '$_id'},
+                    'student_name': '$name',
+                    'student_email': '$user_details.email',
+                    'roll_number': 1,
+                    'mobile_number': 1,
+                    'campus_name': {'$arrayElemAt': ['$campus_details.name', 0]},
+                    'course_name': {'$arrayElemAt': ['$course_details.name', 0]},
+                    'batch_name': {'$arrayElemAt': ['$batch_details.name', 0]},
+                    'attempts_count': {'$size': '$attempts'},
+                    'highest_score': {
+                        '$cond': [
+                            {'$gt': [{'$size': '$attempts'}, 0]},
+                            {'$max': '$attempts.score'},
+                            0
+                        ]
+                    },
+                    'average_score': {
+                        '$cond': [
+                            {'$gt': [{'$size': '$attempts'}, 0]},
+                            {'$avg': '$attempts.score'},
+                            0
+                        ]
+                    },
+                    'total_questions': {'$arrayElemAt': ['$attempts.total_questions', 0]},
+                    'correct_answers': {'$arrayElemAt': ['$attempts.correct_answers', 0]},
+                    'latest_attempt': {'$max': '$attempts.submitted_at'},
+                    'has_attempted': {'$gt': [{'$size': '$attempts'}, 0]}
+                }
+            },
+            {
+                '$sort': {'has_attempted': -1, 'highest_score': -1}
+            }
+        ]
         
-        # Convert to list and sort by highest score (descending)
-        attempts_list = list(student_attempts.values())
-        attempts_list.sort(key=lambda x: x['highest_score'], reverse=True)
+        # Execute aggregation
+        students_data = list(mongo_db.students.aggregate(pipeline))
         
-        # Format dates
-        for attempt in attempts_list:
-            attempt['latest_attempt'] = safe_isoformat(attempt['latest_attempt'])
+        # Format the response
+        attempts_list = []
+        for student in students_data:
+            # Safely handle None values for scores
+            highest_score = student.get('highest_score')
+            average_score = student.get('average_score')
+            
+            attempts_list.append({
+                'student_id': student.get('student_id', ''),
+                'student_name': student.get('student_name', 'Unknown'),
+                'student_email': student.get('student_email', ''),
+                'roll_number': student.get('roll_number', ''),
+                'mobile_number': student.get('mobile_number', ''),
+                'campus_name': student.get('campus_name', 'Unknown Campus'),
+                'course_name': student.get('course_name', 'Unknown Course'),
+                'batch_name': student.get('batch_name', 'Unknown Batch'),
+                'total_questions': student.get('total_questions', 0) or 0,
+                'correct_answers': student.get('correct_answers', 0) or 0,
+                'highest_score': round(highest_score, 2) if highest_score is not None else 0,
+                'average_score': round(average_score, 2) if average_score is not None else 0,
+                'attempts_count': student.get('attempts_count', 0),
+                'latest_attempt': safe_isoformat(student.get('latest_attempt')),
+                'has_attempted': student.get('has_attempted', False)
+            })
+        
+        # Calculate summary statistics
+        total_assigned = len(attempts_list)
+        attempted_count = sum(1 for s in attempts_list if s['has_attempted'])
+        unattempted_count = total_assigned - attempted_count
         
         return jsonify({
             'success': True,
             'data': attempts_list,
-            'message': f'Found {len(attempts_list)} students who attempted this test'
+            'summary': {
+                'total_assigned': total_assigned,
+                'attempted': attempted_count,
+                'unattempted': unattempted_count,
+                'attempt_rate': round((attempted_count / total_assigned * 100), 2) if total_assigned > 0 else 0
+            },
+            'message': f'Found {total_assigned} assigned students ({attempted_count} attempted, {unattempted_count} unattempted)'
         })
         
     except Exception as e:
-        current_app.logger.error(f"Error in get_test_attempts: {str(e)}")
+        current_app.logger.error(f"Error in get_test_attempts: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
             'message': 'Failed to fetch test attempts',
+            'error': str(e)
+        }), 500
+
+@superadmin_bp.route('/export-test-attempts-complete/<test_id>', methods=['GET'])
+@jwt_required()
+def export_test_attempts_complete(test_id):
+    """Export complete test data including both attempted and unattempted students"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
+        # Validate ObjectId
+        try:
+            test_object_id = ObjectId(test_id)
+        except Exception:
+            return jsonify({
+                'success': False,
+                'message': 'Invalid test ID format'
+            }), 400
+        
+        # Get test details
+        test = mongo_db.tests.find_one({'_id': test_object_id})
+        if not test:
+            return jsonify({
+                'success': False,
+                'message': 'Test not found'
+            }), 404
+        
+        # Get all students assigned to this test using aggregation
+        campus_ids = test.get('campus_ids', [])
+        course_ids = test.get('course_ids', [])
+        batch_ids = test.get('batch_ids', [])
+        
+        # Build student query
+        student_query = {}
+        if campus_ids:
+            student_query['campus_id'] = {'$in': campus_ids}
+        if course_ids:
+            student_query['course_id'] = {'$in': course_ids}
+        if batch_ids:
+            student_query['batch_id'] = {'$in': batch_ids}
+        
+        if not student_query:
+            return jsonify({
+                'success': False,
+                'message': 'No students assigned to this test'
+            }), 404
+        
+        # Use aggregation to get all assigned students with their attempt data
+        pipeline = [
+            {
+                '$match': student_query
+            },
+            {
+                '$lookup': {
+                    'from': 'users',
+                    'localField': 'user_id',
+                    'foreignField': '_id',
+                    'as': 'user_details'
+                }
+            },
+            {
+                '$unwind': '$user_details'
+            },
+            {
+                '$lookup': {
+                    'from': 'campuses',
+                    'localField': 'campus_id',
+                    'foreignField': '_id',
+                    'as': 'campus_details'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'courses',
+                    'localField': 'course_id',
+                    'foreignField': '_id',
+                    'as': 'course_details'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'batches',
+                    'localField': 'batch_id',
+                    'foreignField': '_id',
+                    'as': 'batch_details'
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'student_test_attempts',
+                    'let': {'student_id': '$_id', 'user_id': '$user_id'},
+                    'pipeline': [
+                        {
+                            '$match': {
+                                '$expr': {
+                                    '$and': [
+                                        {'$eq': ['$test_id', test_object_id]},
+                                        {'$eq': ['$test_type', 'online']},
+                                        {'$eq': ['$status', 'completed']},
+                                        {
+                                            '$or': [
+                                                {'$eq': ['$student_id', '$$student_id']},
+                                                {'$eq': ['$student_id', '$$user_id']}
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            '$project': {
+                                'score': {
+                                    '$cond': [
+                                        {'$gt': ['$total_questions', 0]},
+                                        {'$multiply': [{'$divide': ['$correct_answers', '$total_questions']}, 100]},
+                                        0
+                                    ]
+                                },
+                                'correct_answers': 1,
+                                'total_questions': 1,
+                                'submitted_at': 1,
+                                'created_at': 1,
+                                'duration_seconds': 1,
+                                'time_taken_ms': 1
+                            }
+                        }
+                    ],
+                    'as': 'attempts'
+                }
+            },
+            {
+                '$project': {
+                    'student_id': {'$toString': '$_id'},
+                    'student_name': '$name',
+                    'student_email': '$user_details.email',
+                    'roll_number': 1,
+                    'mobile_number': 1,
+                    'campus_name': {'$arrayElemAt': ['$campus_details.name', 0]},
+                    'course_name': {'$arrayElemAt': ['$course_details.name', 0]},
+                    'batch_name': {'$arrayElemAt': ['$batch_details.name', 0]},
+                    'attempts_count': {'$size': '$attempts'},
+                    'highest_score': {
+                        '$cond': [
+                            {'$gt': [{'$size': '$attempts'}, 0]},
+                            {'$max': '$attempts.score'},
+                            0
+                        ]
+                    },
+                    'average_score': {
+                        '$cond': [
+                            {'$gt': [{'$size': '$attempts'}, 0]},
+                            {'$avg': '$attempts.score'},
+                            0
+                        ]
+                    },
+                    'total_questions': {'$arrayElemAt': ['$attempts.total_questions', 0]},
+                    'correct_answers': {'$arrayElemAt': ['$attempts.correct_answers', 0]},
+                    'latest_attempt': {'$max': '$attempts.submitted_at'},
+                    'has_attempted': {'$gt': [{'$size': '$attempts'}, 0]},
+                    'duration_seconds': {'$arrayElemAt': ['$attempts.duration_seconds', 0]},
+                    'time_taken_ms': {'$arrayElemAt': ['$attempts.time_taken_ms', 0]}
+                }
+            },
+            {
+                '$sort': {'has_attempted': -1, 'highest_score': -1}
+            }
+        ]
+        
+        # Execute aggregation
+        students_data = list(mongo_db.students.aggregate(pipeline))
+        
+        if not students_data:
+            return jsonify({
+                'success': False,
+                'message': 'No students found for this test'
+            }), 404
+        
+        # Process data for Excel
+        excel_data = []
+        for student in students_data:
+            # Calculate duration in minutes
+            duration_seconds = student.get('duration_seconds', 0)
+            time_taken_ms = student.get('time_taken_ms', 0)
+            duration_minutes = 0
+            if duration_seconds:
+                duration_minutes = duration_seconds / 60
+            elif time_taken_ms:
+                duration_minutes = (time_taken_ms / 1000) / 60
+            
+            # Format submitted date
+            latest_attempt = student.get('latest_attempt')
+            if latest_attempt:
+                latest_attempt = safe_isoformat(latest_attempt)
+            else:
+                latest_attempt = ''
+            
+            # Safely handle None values for scores
+            highest_score = student.get('highest_score')
+            average_score = student.get('average_score')
+            
+            excel_data.append({
+                'Student Name': str(student.get('student_name', 'Unknown')),
+                'Student Email': str(student.get('student_email', '')),
+                'Roll Number': str(student.get('roll_number', '')),
+                'Mobile Number': str(student.get('mobile_number', '')),
+                'Campus': str(student.get('campus_name', 'Unknown Campus')),
+                'Course': str(student.get('course_name', 'Unknown Course')),
+                'Batch': str(student.get('batch_name', 'Unknown Batch')),
+                'Status': 'Attempted' if student.get('has_attempted', False) else 'Not Attempted',
+                'Total Questions': int(student.get('total_questions', 0) or 0) if student.get('has_attempted') else 0,
+                'Correct Answers': int(student.get('correct_answers', 0) or 0) if student.get('has_attempted') else 0,
+                'Score (%)': round(highest_score, 2) if student.get('has_attempted') and highest_score is not None else 0,
+                'Average Score (%)': round(average_score, 2) if student.get('has_attempted') and average_score is not None else 0,
+                'Attempts Count': int(student.get('attempts_count', 0)),
+                'Duration (minutes)': round(duration_minutes, 2) if student.get('has_attempted') else 0,
+                'Latest Attempt': latest_attempt if student.get('has_attempted') else ''
+            })
+        
+        # Create Excel file
+        output = io.BytesIO()
+        df = pd.DataFrame(excel_data)
+        df.to_excel(output, index=False, engine='openpyxl')
+        output.seek(0)
+        
+        # Create response
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename="{test.get("name", "test")}_complete_results.xlsx"'
+        
+        return response
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in export_test_attempts_complete: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Failed to export complete test data',
             'error': str(e)
         }), 500
 

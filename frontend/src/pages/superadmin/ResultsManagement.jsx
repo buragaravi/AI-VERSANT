@@ -41,6 +41,16 @@ const TestDetailsView = ({
     const [selectedCampus, setSelectedCampus] = useState('all');
     const [selectedCourse, setSelectedCourse] = useState('all');
     const [selectedBatch, setSelectedBatch] = useState('all');
+    const [selectedStatus, setSelectedStatus] = useState('all');
+    
+    // Pagination states
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage] = useState(10);
+    
+    // Reset pagination when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, selectedCampus, selectedCourse, selectedBatch, selectedStatus]);
     
     // Extract unique values for filters
     const uniqueCampuses = [...new Set(attempts.map(student => student.campus_name).filter(Boolean))];
@@ -81,13 +91,31 @@ const TestDetailsView = ({
         // Batch filter
         const matchesBatch = selectedBatch === 'all' || student.batch_name === selectedBatch;
         
-        return matchesSearch && matchesCampus && matchesCourse && matchesBatch;
+        // Status filter
+        const matchesStatus = selectedStatus === 'all' || 
+            (selectedStatus === 'attempted' && student.has_attempted) ||
+            (selectedStatus === 'unattempted' && !student.has_attempted);
+        
+        return matchesSearch && matchesCampus && matchesCourse && matchesBatch && matchesStatus;
     });
+    
+    // Reset pagination when filters change
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, selectedCampus, selectedCourse, selectedBatch, selectedStatus]);
+    
+    // Pagination logic
+    const totalPages = Math.ceil(filteredAttempts.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedAttempts = filteredAttempts.slice(startIndex, endIndex);
     
     // Calculate analytics based on filtered data
     const totalStudents = filteredAttempts.length;
-    const passedStudents = filteredAttempts.filter(student => student.highest_score >= 50).length;
-    const failedStudents = totalStudents - passedStudents;
+    const attemptedStudents = filteredAttempts.filter(student => student.has_attempted).length;
+    const unattemptedStudents = totalStudents - attemptedStudents;
+    const passedStudents = filteredAttempts.filter(student => student.has_attempted && student.highest_score >= 50).length;
+    const failedStudents = attemptedStudents - passedStudents;
     const averageTime = filteredAttempts.length > 0 
         ? (filteredAttempts.reduce((sum, student) => sum + (student.average_time || 0), 0) / filteredAttempts.length).toFixed(1)
         : 0;
@@ -98,6 +126,8 @@ const TestDetailsView = ({
         setSelectedCampus(uniqueCampuses.length === 1 ? uniqueCampuses[0] : 'all');
         setSelectedCourse(uniqueCourses.length === 1 ? uniqueCourses[0] : 'all');
         setSelectedBatch(uniqueBatches.length === 1 ? uniqueBatches[0] : 'all');
+        setSelectedStatus('all');
+        setCurrentPage(1);
     };
     
     // Get active filter count
@@ -105,7 +135,8 @@ const TestDetailsView = ({
         searchTerm,
         selectedCampus !== 'all' && uniqueCampuses.length > 1,
         selectedCourse !== 'all' && uniqueCourses.length > 1,
-        selectedBatch !== 'all' && uniqueBatches.length > 1
+        selectedBatch !== 'all' && uniqueBatches.length > 1,
+        selectedStatus !== 'all'
     ].filter(Boolean).length;
     
     return (
@@ -126,7 +157,7 @@ const TestDetailsView = ({
             </div>
 
             {/* Analytics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -134,7 +165,7 @@ const TestDetailsView = ({
                 >
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-gray-600">Total Students</p>
+                            <p className="text-sm font-medium text-gray-600">Total Assigned</p>
                             <p className="text-3xl font-bold text-gray-900">{totalStudents}</p>
                         </div>
                         <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
@@ -151,10 +182,8 @@ const TestDetailsView = ({
                 >
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-gray-600">Pass Rate</p>
-                            <p className="text-3xl font-bold text-green-600">
-                                {totalStudents > 0 ? ((passedStudents / totalStudents) * 100).toFixed(1) : 0}%
-                            </p>
+                            <p className="text-sm font-medium text-gray-600">Attempted</p>
+                            <p className="text-3xl font-bold text-green-600">{attemptedStudents}</p>
                         </div>
                         <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
                             <CheckCircle className="w-6 h-6 text-green-600" />
@@ -170,11 +199,11 @@ const TestDetailsView = ({
                 >
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-medium text-gray-600">Average Score</p>
-                            <p className="text-3xl font-bold text-blue-600">{test.average_score}%</p>
+                            <p className="text-sm font-medium text-gray-600">Unattempted</p>
+                            <p className="text-3xl font-bold text-red-600">{unattemptedStudents}</p>
                         </div>
-                        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                            <TrendingUp className="w-6 h-6 text-blue-600" />
+                        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                            <XCircle className="w-6 h-6 text-red-600" />
                         </div>
                     </div>
                 </motion.div>
@@ -187,11 +216,51 @@ const TestDetailsView = ({
                 >
                     <div className="flex items-center justify-between">
                         <div>
+                            <p className="text-sm font-medium text-gray-600">Pass Rate</p>
+                            <p className="text-3xl font-bold text-blue-600">
+                                {attemptedStudents > 0 ? ((passedStudents / attemptedStudents) * 100).toFixed(1) : 0}%
+                            </p>
+                        </div>
+                        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                            <TrendingUp className="w-6 h-6 text-blue-600" />
+                        </div>
+                    </div>
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 }}
+                    className="bg-white rounded-xl shadow-lg border border-gray-200 p-6"
+                >
+                    <div className="flex items-center justify-between">
+                        <div>
                             <p className="text-sm font-medium text-gray-600">Highest Score</p>
-                            <p className="text-3xl font-bold text-purple-600">{test.highest_score}%</p>
+                            <p className="text-3xl font-bold text-purple-600">
+                                {attemptedStudents > 0 ? Math.max(...filteredAttempts.filter(s => s.has_attempted).map(s => s.highest_score)).toFixed(1) : 0}%
+                            </p>
                         </div>
                         <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
                             <BarChart3 className="w-6 h-6 text-purple-600" />
+                        </div>
+                    </div>
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    className="bg-white rounded-xl shadow-lg border border-gray-200 p-6"
+                >
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-gray-600">Average Score</p>
+                            <p className="text-3xl font-bold text-orange-600">
+                                {attemptedStudents > 0 ? (filteredAttempts.filter(s => s.has_attempted).reduce((sum, s) => sum + s.average_score, 0) / attemptedStudents).toFixed(1) : 0}%
+                            </p>
+                        </div>
+                        <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+                            <TrendingUp className="w-6 h-6 text-orange-600" />
                         </div>
                     </div>
                 </motion.div>
@@ -278,6 +347,20 @@ const TestDetailsView = ({
                             </select>
                         </div>
 
+                        {/* Status Filter */}
+                        <div className="flex flex-col">
+                            <label className="text-sm font-medium text-gray-700 mb-1">Status</label>
+                            <select
+                                value={selectedStatus}
+                                onChange={(e) => setSelectedStatus(e.target.value)}
+                                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                            >
+                                <option value="all">All Students</option>
+                                <option value="attempted">Attempted</option>
+                                <option value="unattempted">Not Attempted</option>
+                            </select>
+                        </div>
+
                         {/* Reset Filters Button */}
                         {activeFiltersCount > 0 && (
                             <div className="flex flex-col justify-end">
@@ -324,6 +407,18 @@ const TestDetailsView = ({
                         </h2>
                         <div className="flex gap-2">
                             <button
+                                onClick={() => onExportTestResults(test.test_id, test.test_name, 'complete')}
+                                disabled={exportLoading}
+                                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                            >
+                                {exportLoading ? (
+                                    <RefreshCw className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <FileSpreadsheet className="w-4 h-4" />
+                                )}
+                                Export Complete
+                            </button>
+                            <button
                                 onClick={() => onExportTestResults(test.test_id, test.test_name, 'excel')}
                                 disabled={exportLoading}
                                 className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
@@ -333,7 +428,7 @@ const TestDetailsView = ({
                                 ) : (
                                     <FileSpreadsheet className="w-4 h-4" />
                                 )}
-                                Export Excel
+                                Export Attempted
                             </button>
                             <button
                                 onClick={() => onExportTestResults(test.test_id, test.test_name, 'csv')}
@@ -407,66 +502,93 @@ const TestDetailsView = ({
                                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Latest Attempt
                                     </th>
-                                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Actions
-                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {filteredAttempts.map((student, studentIndex) => (
+                                {paginatedAttempts.map((student, studentIndex) => (
                                     <motion.tr
                                         key={student.student_id}
                                         initial={{ opacity: 0, x: -20 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         transition={{ delay: studentIndex * 0.05 }}
-                                        className="hover:bg-gray-50 cursor-pointer"
-                                        onClick={() => onStudentClick(student.student_id, test.test_id)}
+                                        className={`hover:bg-gray-50 ${student.has_attempted ? 'cursor-pointer' : 'cursor-default'}`}
+                                        onClick={() => student.has_attempted && onStudentClick(student.student_id, test.test_id)}
                                     >
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center">
-                                                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white font-semibold mr-3">
-                                                    {student.student_name?.charAt(0)?.toUpperCase() || 'S'}
-                                                </div>
-                                                <div className="text-sm font-medium text-gray-900">
-                                                    {student.student_name}
+                                                {student.has_attempted ? (
+                                                    <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white font-semibold mr-3">
+                                                        {student.student_name?.charAt(0)?.toUpperCase() || 'S'}
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-10 h-10 bg-gradient-to-br from-gray-400 to-gray-500 rounded-full flex items-center justify-center text-white font-semibold mr-3">
+                                                        {student.student_name?.charAt(0)?.toUpperCase() || 'S'}
+                                                    </div>
+                                                )}
+                                                <div className="flex flex-col">
+                                                    <div className="text-sm font-medium text-gray-900">
+                                                        {student.student_name}
+                                                    </div>
+                                                    <div className={`text-xs px-2 py-1 rounded-full inline-block w-fit ${
+                                                        student.has_attempted 
+                                                            ? 'bg-green-100 text-green-800' 
+                                                            : 'bg-red-100 text-red-800'
+                                                    }`}>
+                                                        {student.has_attempted ? 'Attempted' : 'Not Attempted'}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {student.student_email}
+                                            {student.student_email || '-'}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {student.campus_name}
+                                            {student.campus_name || '-'}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {student.course_name}
+                                            {student.course_name || '-'}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {student.batch_name}
+                                            {student.batch_name || '-'}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {student.total_questions}
+                                            {student.has_attempted ? student.total_questions : '-'}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {student.correct_answers}
+                                            {student.has_attempted ? student.correct_answers : '-'}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                                            {student.highest_score.toFixed(1)}%
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            {student.has_attempted ? (
+                                                <span className={`${
+                                                    student.highest_score >= 70 ? 'text-green-600' :
+                                                    student.highest_score >= 50 ? 'text-yellow-600' : 'text-red-600'
+                                                }`}>
+                                                    {student.highest_score.toFixed(1)}%
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-400">-</span>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                             {student.attempts_count}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {student.latest_attempt ? new Date(student.latest_attempt).toLocaleDateString() : 'N/A'}
-                                        </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            <button
-                                                onClick={() => handleStudentClick(student.student_id, selectedTest.test_id)}
-                                                className="text-blue-600 hover:text-blue-800 transition-colors"
-                                                title="View Details"
-                                            >
-                                            <Eye className="w-4 h-4" />
-                                            </button>
+                                            {student.has_attempted ? (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onStudentClick(student.student_id, test.test_id);
+                                                    }}
+                                                    className="text-blue-600 hover:text-blue-800 transition-colors"
+                                                    title="View Details"
+                                                >
+                                                    <Eye className="w-4 h-4" />
+                                                </button>
+                                            ) : (
+                                                <span className="text-gray-400" title="No attempts to view">
+                                                    <Eye className="w-4 h-4" />
+                                                </span>
+                                            )}
                                         </td>
                                     </motion.tr>
                                 ))}
@@ -474,6 +596,63 @@ const TestDetailsView = ({
                         </table>
                     )}
                 </div>
+                
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                    <div className="bg-white px-6 py-4 border-t border-gray-200">
+                        <div className="flex items-center justify-between">
+                            <div className="text-sm text-gray-700">
+                                Showing {startIndex + 1} to {Math.min(endIndex, filteredAttempts.length)} of {filteredAttempts.length} students
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                    disabled={currentPage === 1}
+                                    className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Previous
+                                </button>
+                                
+                                <div className="flex space-x-1">
+                                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                        let pageNum;
+                                        if (totalPages <= 5) {
+                                            pageNum = i + 1;
+                                        } else if (currentPage <= 3) {
+                                            pageNum = i + 1;
+                                        } else if (currentPage >= totalPages - 2) {
+                                            pageNum = totalPages - 4 + i;
+                                        } else {
+                                            pageNum = currentPage - 2 + i;
+                                        }
+                                        
+                                        return (
+                                            <button
+                                                key={pageNum}
+                                                onClick={() => setCurrentPage(pageNum)}
+                                                className={`px-3 py-2 text-sm font-medium rounded-md ${
+                                                    currentPage === pageNum
+                                                        ? 'bg-blue-600 text-white'
+                                                        : 'text-gray-500 bg-white border border-gray-300 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                {pageNum}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                    disabled={currentPage === totalPages}
+                                    className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -578,31 +757,44 @@ const ResultsManagement = () => {
     const handleExportTestResults = async (testId, testName, format = 'excel') => {
         setExportLoading(true);
         try {
-            const endpoint = format === 'csv' 
-                ? `/superadmin/export-test-attempts-csv/${testId}`
-                : `/superadmin/export-test-attempts/${testId}`;
+            let endpoint;
+            let mimeType;
+            let fileExtension;
+            let fileName;
+            
+            if (format === 'complete') {
+                endpoint = `/superadmin/export-test-attempts-complete/${testId}`;
+                mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                fileExtension = 'xlsx';
+                fileName = `${testName}_complete_results.${fileExtension}`;
+            } else if (format === 'csv') {
+                endpoint = `/superadmin/export-test-attempts-csv/${testId}`;
+                mimeType = 'text/csv';
+                fileExtension = 'csv';
+                fileName = `${testName}_attempted_results.${fileExtension}`;
+            } else {
+                endpoint = `/superadmin/export-test-attempts/${testId}`;
+                mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                fileExtension = 'xlsx';
+                fileName = `${testName}_attempted_results.${fileExtension}`;
+            }
             
             const response = await api.get(endpoint, {
                 responseType: 'blob'
             });
             
-            const mimeType = format === 'csv' 
-                ? 'text/csv' 
-                : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-            
-            const fileExtension = format === 'csv' ? 'csv' : 'xlsx';
-            
             const blob = new Blob([response.data], { type: mimeType });
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `${testName}_student_results.${fileExtension}`;
+            link.download = fileName;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
             
-            success(`Test results exported as ${format.toUpperCase()} successfully!`);
+            const formatName = format === 'complete' ? 'Complete (All Students)' : format.toUpperCase();
+            success(`Test results exported as ${formatName} successfully!`);
         } catch (err) {
             console.error('Export error:', err);
             error('Failed to export test results. Please try again.');

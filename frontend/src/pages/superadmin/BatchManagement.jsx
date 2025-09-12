@@ -37,15 +37,13 @@ const BatchManagement = () => {
   
   // Progress states
   const [uploadProgress, setUploadProgress] = useState({
-    status: 'idle', // 'idle', 'started', 'processing', 'sending_emails', 'completed', 'completed_with_errors'
+    status: 'idle', // 'idle', 'started', 'processing', 'completed', 'completed_with_errors'
     total: 0,
     processed: 0,
     percentage: 0,
     message: '',
     currentStudent: null,
-    error: false,
-    emailWarning: false,
-    emailError: null
+    error: false
   });
   const [socket, setSocket] = useState(null);
   
@@ -57,19 +55,80 @@ const BatchManagement = () => {
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [isDeletingStudents, setIsDeletingStudents] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  
+  // Email/SMS sending states
+  const [isSendingEmails, setIsSendingEmails] = useState(false);
+  const [isSendingSMS, setIsSendingSMS] = useState(false);
+  const [emailProgress, setEmailProgress] = useState({
+    status: 'idle',
+    total: 0,
+    processed: 0,
+    percentage: 0,
+    message: '',
+    currentStudent: null
+  });
+  const [smsProgress, setSmsProgress] = useState({
+    status: 'idle',
+    total: 0,
+    processed: 0,
+    percentage: 0,
+    message: '',
+    currentStudent: null
+  });
 
   useEffect(() => {
     fetchBatches();
     fetchCampuses();
     
     // Initialize WebSocket connection for progress updates
-    const socketUrl = import.meta.env.VITE_SOCKET_IO_URL || 'https://52.66.128.80';
+    // Use localhost for development, production URL for production
+    const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const socketUrl = isDevelopment 
+      ? 'http://localhost:8000' 
+      : (import.meta.env.VITE_SOCKET_IO_URL || 'http://52.66.128.80:8000');
+    const token = localStorage.getItem('token');
+    
     const newSocket = io(socketUrl, {
-      transports: ['websocket', 'polling']
+      transports: ['polling', 'websocket'], // Try polling first, then websocket
+      upgrade: true,
+      rememberUpgrade: false,
+      auth: {
+        token: token
+      },
+      extraHeaders: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      // Force HTTP for development, HTTPS for production
+      secure: socketUrl.startsWith('https://'),
+      rejectUnauthorized: false // Allow self-signed certificates in development
     });
     
     newSocket.on('connect', () => {
       console.log('Connected to WebSocket for progress updates');
+      // Join user-specific room for progress updates
+      if (token) {
+        try {
+          // Decode JWT token to get user_id
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          const user_id = payload.sub || payload.user_id;
+          newSocket.emit('join_room', { user_id: user_id });
+        } catch (e) {
+          console.error('Failed to decode token for room join:', e);
+        }
+      }
+    });
+    
+    newSocket.on('connect_error', (error) => {
+      console.error('WebSocket connection error:', error);
+      // Silent error - don't show toast for WebSocket connection issues
+    });
+    
+    newSocket.on('disconnect', (reason) => {
+      console.log('WebSocket disconnected:', reason);
+      if (reason === 'io server disconnect') {
+        // Server disconnected the client, try to reconnect
+        newSocket.connect();
+      }
     });
     
     newSocket.on('upload_progress', (data) => {
@@ -81,9 +140,7 @@ const BatchManagement = () => {
         percentage: data.percentage,
         message: data.message,
         currentStudent: data.current_student,
-        error: data.error || false,
-        emailWarning: data.email_warning || false,
-        emailError: data.email_error || null
+        error: data.error || false
       });
       
       // Show toast for important status changes
@@ -91,17 +148,61 @@ const BatchManagement = () => {
         toast.success(data.message);
       } else if (data.status === 'completed_with_errors') {
         toast.error(data.message);
-      } else if (data.email_warning) {
-        // Show warning toast for email failures (but student was created successfully)
-        toast(`⚠️ ${data.message}`, {
-          icon: '⚠️',
-          duration: 4000,
-        });
       }
+    });
+    
+    // Also listen for database_progress (new event name)
+    newSocket.on('database_progress', (data) => {
+      console.log('Database progress update received:', data);
+      setUploadProgress({
+        status: data.status,
+        total: data.total,
+        processed: data.processed,
+        percentage: data.percentage,
+        message: data.message,
+        currentStudent: data.current_student,
+        error: data.error || false
+      });
     });
     
     newSocket.on('disconnect', () => {
       console.log('Disconnected from WebSocket');
+    });
+    
+    // Email progress listener
+    newSocket.on('email_progress', (data) => {
+      console.log('Email progress update received:', data);
+      setEmailProgress({
+        status: data.status,
+        total: data.total,
+        processed: data.processed,
+        percentage: data.percentage,
+        message: data.message,
+        currentStudent: data.current_student
+      });
+      
+      if (data.status === 'completed') {
+        toast.success(data.message);
+        setIsSendingEmails(false);
+      }
+    });
+    
+    // SMS progress listener
+    newSocket.on('sms_progress', (data) => {
+      console.log('SMS progress update received:', data);
+      setSmsProgress({
+        status: data.status,
+        total: data.total,
+        processed: data.processed,
+        percentage: data.percentage,
+        message: data.message,
+        currentStudent: data.current_student
+      });
+      
+      if (data.status === 'completed') {
+        toast.success(data.message);
+        setIsSendingSMS(false);
+      }
     });
     
     setSocket(newSocket);
@@ -168,6 +269,13 @@ const BatchManagement = () => {
         console.log('Batch students data structure:', response.data.data);
         setBatchStudents(response.data.data);
         setSelectedStudents([]); // Clear any previous selections
+        
+        // Find and set the selected batch
+        const batch = batches.find(b => b.id === batchId);
+        if (batch) {
+          setSelectedBatch(batch);
+        }
+        
         setShowBatchDetails(true);
       }
     } catch (error) {
@@ -505,6 +613,68 @@ const BatchManagement = () => {
     }
   };
 
+  const handleSendEmails = async () => {
+    if (!selectedBatch) {
+      toast.error('No batch selected');
+      return;
+    }
+
+    setIsSendingEmails(true);
+    setEmailProgress({
+      status: 'started',
+      total: 0,
+      processed: 0,
+      percentage: 0,
+      message: 'Starting email sending...',
+      currentStudent: null
+    });
+
+    try {
+      const response = await api.post(`/batch-management/batch/${selectedBatch.id}/send-emails`);
+      if (response.data.success) {
+        toast.success(response.data.message);
+      } else {
+        toast.error(response.data.message || 'Failed to send emails');
+        setIsSendingEmails(false);
+      }
+    } catch (error) {
+      console.error('Error sending emails:', error);
+      toast.error('Failed to send emails. Please try again.');
+      setIsSendingEmails(false);
+    }
+  };
+
+  const handleSendSMS = async () => {
+    if (!selectedBatch) {
+      toast.error('No batch selected');
+      return;
+    }
+
+    setIsSendingSMS(true);
+    setSmsProgress({
+      status: 'started',
+      total: 0,
+      processed: 0,
+      percentage: 0,
+      message: 'Starting SMS sending...',
+      currentStudent: null
+    });
+
+    try {
+      const response = await api.post(`/batch-management/batch/${selectedBatch.id}/send-sms`);
+      if (response.data.success) {
+        toast.success(response.data.message);
+      } else {
+        toast.error(response.data.message || 'Failed to send SMS');
+        setIsSendingSMS(false);
+      }
+    } catch (error) {
+      console.error('Error sending SMS:', error);
+      toast.error('Failed to send SMS. Please try again.');
+      setIsSendingSMS(false);
+    }
+  };
+
   if (loading) {
     return (
       <main className="p-6 flex items-center justify-center min-h-[calc(100vh-4rem)]">
@@ -755,9 +925,7 @@ const BatchManagement = () => {
                      percentage: 0,
                      message: '',
                      currentStudent: null,
-                     error: false,
-                     emailWarning: false,
-                     emailError: null
+                     error: false
                    });
                 }} 
                 className="absolute top-4 right-4 text-gray-400 hover:text-red-600 text-2xl font-bold transition-colors"
@@ -859,7 +1027,6 @@ const BatchManagement = () => {
                      <motion.div
                        className={`h-3 rounded-full ${
                          uploadProgress.error ? 'bg-red-500' : 
-                         uploadProgress.emailWarning ? 'bg-orange-500' :
                          uploadProgress.status === 'completed' ? 'bg-green-500' :
                          uploadProgress.status === 'completed_with_errors' ? 'bg-yellow-500' :
                          'bg-blue-500'
@@ -871,20 +1038,13 @@ const BatchManagement = () => {
                    </div>
                   
                                      {/* Status Message */}
-                   <div className={`text-sm ${uploadProgress.emailWarning ? 'text-orange-700' : 'text-blue-700'}`}>
+                   <div className="text-sm text-blue-700">
                      <div className="flex items-center gap-2">
                        {uploadProgress.status === 'started' && (
                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
                        )}
                        {uploadProgress.status === 'processing' && (
-                         <div className={`w-2 h-2 rounded-full animate-pulse ${
-                           uploadProgress.emailWarning ? 'bg-orange-500' : 'bg-blue-500'
-                         }`} />
-                       )}
-                       {uploadProgress.status === 'sending_emails' && (
-                         <div className={`w-2 h-2 rounded-full animate-pulse ${
-                           uploadProgress.emailWarning ? 'bg-orange-500' : 'bg-green-500'
-                         }`} />
+                         <div className="w-2 h-2 rounded-full animate-pulse bg-blue-500" />
                        )}
                        {uploadProgress.status === 'completed' && (
                          <div className="w-2 h-2 bg-green-500 rounded-full" />
@@ -896,21 +1056,24 @@ const BatchManagement = () => {
                      </div>
                    </div>
                   
-                                     {/* Current Student Info */}
-                   {uploadProgress.currentStudent && (
-                     <div className={`mt-2 p-2 bg-white rounded border ${
-                       uploadProgress.emailWarning ? 'border-orange-200' : 'border-blue-200'
-                     }`}>
-                       <div className="text-xs text-gray-600">
-                         <strong>Current:</strong> {uploadProgress.currentStudent.name} ({uploadProgress.currentStudent.email})
-                         {uploadProgress.emailWarning && (
-                           <div className="text-orange-600 mt-1">
-                             ⚠️ Email sending failed - Student created successfully
-                           </div>
-                         )}
-                       </div>
-                     </div>
-                   )}
+                  {/* Current Student Info */}
+                  {uploadProgress.currentStudent && (
+                    <div className="mt-2 p-2 bg-white rounded border border-blue-200">
+                      <div className="text-xs text-gray-600">
+                        <strong>Processing:</strong> {uploadProgress.currentStudent.name} ({uploadProgress.currentStudent.email || 'No email'})
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Progress Details */}
+                  {uploadProgress.status === 'processing' && (
+                    <div className="mt-2 text-xs text-blue-600">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                        <span>Processing students... {uploadProgress.processed} of {uploadProgress.total}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               
@@ -937,9 +1100,7 @@ const BatchManagement = () => {
                      percentage: 0,
                      message: '',
                      currentStudent: null,
-                     error: false,
-                     emailWarning: false,
-                     emailError: null
+                     error: false
                    });
                   }}
                   className="px-6 py-3 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 font-medium"
@@ -952,8 +1113,7 @@ const BatchManagement = () => {
                   disabled={uploadingStudents || !selectedBatch || !uploadFile}
                 >
                   {uploadingStudents ? (
-                    uploadProgress.status === 'sending_emails' ? 'Sending Emails...' :
-                    uploadProgress.status === 'processing' ? 'Processing...' :
+                    uploadProgress.status === 'processing' ? 'Uploading...' :
                     'Uploading...'
                   ) : 'Upload Students'}
                 </button>
@@ -1148,7 +1308,25 @@ const BatchManagement = () => {
               </div>
 
               {/* Enhanced Footer */}
-              <div className="px-8 py-6 border-t border-gray-100 bg-gradient-to-r from-gray-50 to-gray-100 flex items-center justify-end gap-4">
+              <div className="px-8 py-6 border-t border-gray-100 bg-gradient-to-r from-gray-50 to-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleSendEmails}
+                    disabled={isSendingEmails || batchStudents.length === 0}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-xl transition-all duration-200 font-semibold flex items-center gap-2 hover:shadow-md"
+                  >
+                    <Mail className="h-4 w-4" />
+                    {isSendingEmails ? 'Sending...' : 'Send Emails'}
+                  </button>
+                  <button
+                    onClick={handleSendSMS}
+                    disabled={isSendingSMS || batchStudents.length === 0}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white rounded-xl transition-all duration-200 font-semibold flex items-center gap-2 hover:shadow-md"
+                  >
+                    <Phone className="h-4 w-4" />
+                    {isSendingSMS ? 'Sending...' : 'Send SMS'}
+                  </button>
+                </div>
                 <button
                   onClick={() => setShowBatchDetails(false)}
                   className="px-6 py-3 text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-200 font-semibold hover:shadow-md"
@@ -1236,6 +1414,7 @@ const BatchManagement = () => {
         {showUploadResults && uploadResults && (
           <StudentUploadResults
             results={uploadResults}
+            batchId={selectedBatch?.id}
             onClose={() => {
               setShowUploadResults(false);
               setUploadResults(null);

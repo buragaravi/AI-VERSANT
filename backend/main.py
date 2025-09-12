@@ -1,8 +1,9 @@
 import os
 import gc
 import psutil
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from socketio_instance import socketio
+from flask_socketio import join_room
 from config.shared import bcrypt
 from config.constants import JWT_ACCESS_TOKEN_EXPIRES, JWT_REFRESH_TOKEN_EXPIRES
 from flask_jwt_extended import JWTManager
@@ -40,6 +41,38 @@ def create_app():
     jwt = JWTManager(app)
     bcrypt.init_app(app)
     socketio.init_app(app)
+    
+    # Socket.IO authentication middleware
+    @socketio.on('connect')
+    def handle_connect(auth=None):
+        """Handle Socket.IO connection with optional authentication"""
+        try:
+            # For now, allow all connections (can add JWT validation later if needed)
+            print(f"✅ Socket.IO client connected")
+            return True
+        except Exception as e:
+            print(f"❌ Socket.IO connection error: {e}")
+            return False
+    
+    @socketio.on('disconnect')
+    def handle_disconnect():
+        """Handle Socket.IO disconnection"""
+        print(f"🔌 Socket.IO client disconnected")
+    
+    @socketio.on('join_room')
+    def handle_join_room(data):
+        """Handle user joining a room for progress updates"""
+        try:
+            user_id = data.get('user_id')
+            if user_id:
+                join_room(str(user_id))
+                print(f"✅ User {user_id} joined room for progress updates")
+                return {'success': True, 'message': f'Joined room {user_id}'}
+            else:
+                return {'success': False, 'message': 'User ID required'}
+        except Exception as e:
+            print(f"❌ Error joining room: {e}")
+            return {'success': False, 'message': str(e)}
 
     # Initialize AWS S3 connection
     print("🔧 Initializing AWS S3 connection...")

@@ -20,8 +20,8 @@ worker_connections = 2000  # High connection limit
 max_requests = 1000  # Higher to reduce worker recycling
 max_requests_jitter = 100
 
-# Timeout settings - optimized for concurrent processing
-timeout = 180  # Longer timeout for complex operations
+# Timeout settings - optimized for bulk operations (1000+ students)
+timeout = 300  # 5 minutes for large uploads
 keepalive = 10  # Keep connections alive longer
 graceful_timeout = 60
 

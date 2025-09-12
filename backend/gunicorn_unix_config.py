@@ -16,8 +16,8 @@ worker_connections = 2000  # Higher connection limit for Unix
 max_requests = 1000  # Higher request limit for Unix
 max_requests_jitter = 100
 
-# Timeout settings - optimized for Unix
-timeout = 120
+# Timeout settings - optimized for bulk operations (1000+ students)
+timeout = 300  # 5 minutes for large uploads
 keepalive = 5
 graceful_timeout = 30
 
