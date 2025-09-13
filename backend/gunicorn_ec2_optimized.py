@@ -18,12 +18,17 @@ workers = 5  # Fixed 5 workers for 2GB RAM system
 worker_class = "sync"  # Use sync workers for better memory management
 worker_connections = 1500  # Increased for 2GB RAM
 
-# Performance tuning for 2GB RAM with long-running operations
+# Performance tuning for 2GB RAM with large database operations
 max_requests = 800  # Increased for 2GB RAM - restart workers after 800 requests
 max_requests_jitter = 80
-timeout = 600  # 10 minutes for bulk operations (1000+ students, question uploads)
+timeout = 900  # 15 minutes for large database operations (bulk uploads, complex queries)
 keepalive = 8  # Increased keepalive for 2GB RAM
-graceful_timeout = 60  # Increased graceful timeout for long operations
+graceful_timeout = 120  # 2 minutes graceful timeout for large operations
+
+# Additional timeout settings for large database operations
+worker_timeout = 900  # 15 minutes worker timeout for large operations
+worker_keepalive = 8  # Worker keepalive
+worker_connections = 1500  # Worker connections
 
 # Memory management for 2GB RAM
 preload_app = True  # Enable preload for better performance on 2GB RAM
@@ -43,10 +48,10 @@ limit_request_field_size = 16384  # Increased for 2GB RAM
 # Memory limits - optimized for 2GB RAM (5 workers × 200MB = 1GB total)
 worker_memory_limit = 200 * 1024 * 1024  # 200MB per worker (5 workers = 1GB total)
 
-# Long-running operation timeouts
-long_operation_timeout = 600  # 10 minutes for bulk operations
-bulk_upload_timeout = 900  # 15 minutes for very large uploads (1000+ students)
-question_upload_timeout = 720  # 12 minutes for question bank uploads
+# Long-running operation timeouts for large database operations
+long_operation_timeout = 900  # 15 minutes for bulk operations
+bulk_upload_timeout = 1200  # 20 minutes for very large uploads (1000+ students)
+question_upload_timeout = 900  # 15 minutes for question bank uploads
 
 def on_starting(server):
     print("🚀 Starting OPTIMIZED Study Edge Backend on AWS EC2 with 2GB RAM...")
@@ -55,19 +60,20 @@ def on_starting(server):
     print(f"   Worker Class: {worker_class}")
     print(f"   Worker Connections: {worker_connections}")
     print(f"   Max Requests: {max_requests}")
-    print(f"   Timeout: {timeout}s (10 minutes for long operations)")
+    print(f"   Timeout: {timeout}s (15 minutes for large database operations)")
     print(f"   Keepalive: {keepalive}s")
     print(f"   Graceful Timeout: {graceful_timeout}s")
     print(f"   Memory per Worker: {worker_memory_limit // (1024*1024)}MB")
     print(f"   Total Memory Allocation: {(worker_memory_limit * workers) // (1024*1024)}MB (5 workers × 200MB)")
-    print(f"   Long Operation Timeout: {long_operation_timeout}s")
-    print(f"   Bulk Upload Timeout: {bulk_upload_timeout}s")
-    print(f"   Question Upload Timeout: {question_upload_timeout}s")
+    print(f"   Long Operation Timeout: {long_operation_timeout}s (15 minutes)")
+    print(f"   Bulk Upload Timeout: {bulk_upload_timeout}s (20 minutes)")
+    print(f"   Question Upload Timeout: {question_upload_timeout}s (15 minutes)")
     print("   🎯 Target: 200+ concurrent users on 2GB RAM EC2")
     print("   ⚡ Memory Optimized for 2GB RAM (5 workers × 200MB)")
-    print("   🔄 Long-running operations supported (2-15 minutes)")
+    print("   🔄 Large database operations supported (15-20 minutes)")
     print("   🧹 Automatic memory cleanup enabled")
     print("   📊 Memory monitoring without hard limits")
+    print("   🗄️ Optimized for bulk uploads and complex queries")
 
 def on_reload(server):
     print("🔄 Reloading OPTIMIZED Study Edge Backend...")

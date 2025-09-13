@@ -40,20 +40,21 @@ class DatabaseConfig:
             if not DatabaseConfig.MONGODB_URI:
                 raise ValueError("MONGODB_URI environment variable is not set")
             
-            # Windows-optimized client options to prevent socket buffer exhaustion
+            # Large operations optimized client options for bulk uploads and complex queries
             client_options = {
-                'connectTimeoutMS': 10000,  # Reduced timeout
-                'socketTimeoutMS': 10000,   # Reduced timeout
-                'serverSelectionTimeoutMS': 10000,  # Reduced timeout
-                'maxPoolSize': 20,  # Reduced for Windows stability
-                'minPoolSize': 2,   # Reduced minimum connections
-                'maxIdleTimeMS': 60000,  # Increased idle time
-                'waitQueueTimeoutMS': 5000,  # Add queue timeout
+                'connectTimeoutMS': 120000,  # 2 minutes for initial connection
+                'socketTimeoutMS': 300000,   # 5 minutes for large operations (bulk uploads, complex queries)
+                'serverSelectionTimeoutMS': 60000,  # 1 minute for server selection
+                'maxPoolSize': 100,  # Increased for large operations
+                'minPoolSize': 10,   # Increased minimum connections
+                'maxIdleTimeMS': 600000,  # 10 minutes idle time
+                'waitQueueTimeoutMS': 120000,  # 2 minutes queue timeout
                 'retryWrites': True,
                 'retryReads': True,
                 'w': 'majority',
-                'appName': 'Versant',
-                'heartbeatFrequencyMS': 10000
+                'appName': 'Versant-LargeOps',
+                'heartbeatFrequencyMS': 30000,  # 30 seconds heartbeat
+                'maxConnecting': 20  # Allow more concurrent connections
             }
             
             # Ensure required parameters are in the connection string

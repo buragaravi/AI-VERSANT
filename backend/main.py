@@ -2,6 +2,7 @@ import os
 import gc
 import psutil
 from flask import Flask, jsonify, request
+from datetime import datetime
 from socketio_instance import socketio
 from flask_socketio import join_room
 from config.shared import bcrypt
@@ -194,12 +195,47 @@ def create_app():
     # Health check endpoint
     @app.route('/health')
     def health_check():
-        """Health check endpoint for monitoring"""
-        return jsonify({
-            'success': True,
-            'status': 'healthy',
-            'timestamp': '2024-01-01T00:00:00Z'
-        }), 200
+        """Health check endpoint for monitoring with timeout diagnostics"""
+        try:
+            import time
+            import psutil
+            from utils.connection_manager import get_mongo_database
+            
+            start_time = time.time()
+            
+            # Test database connection
+            db = get_mongo_database()
+            db_start = time.time()
+            db.users.find_one({})
+            db_time = time.time() - db_start
+            
+            # Get system metrics
+            memory = psutil.virtual_memory()
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            
+            total_time = time.time() - start_time
+            
+            return jsonify({
+                'success': True,
+                'status': 'healthy',
+                'timestamp': datetime.now().isoformat(),
+                'response_time': f"{total_time:.3f}s",
+                'database_time': f"{db_time:.3f}s",
+                'system': {
+                    'memory_usage': f"{memory.percent:.1f}%",
+                    'cpu_usage': f"{cpu_percent:.1f}%",
+                    'available_memory': f"{memory.available // (1024*1024)}MB"
+                },
+                'timeout_status': 'OK' if total_time < 10.0 else 'SLOW'
+            }), 200
+            
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'status': 'unhealthy',
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }), 500
 
     # CORS test endpoint
     @app.route('/cors-test')
