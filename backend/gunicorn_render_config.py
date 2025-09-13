@@ -9,8 +9,10 @@ import multiprocessing
 port = os.getenv('PORT', '5000')
 bind = f"0.0.0.0:{port}"
 
-# Worker processes - optimized for Render.com
-workers = min(multiprocessing.cpu_count() * 2, 4)  # Conservative for Render
+# Worker processes - CPU-based optimization for Render.com
+# For I/O-bound Flask apps with gevent: (2 * CPU cores) + 1
+cpu_count = multiprocessing.cpu_count()
+workers = min((cpu_count * 2) + 1, 6)  # Conservative for Render, cap at 6 workers
 worker_class = "gevent"
 worker_connections = 1000
 max_requests = 500

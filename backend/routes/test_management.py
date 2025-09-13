@@ -3434,17 +3434,70 @@ def upload_questions():
             if current_question:
                 questions.append(current_question)
         
-        # Validate questions
+        # Validate questions and check for duplicates
         valid_questions = []
-        for q in questions:
-            if (q['question'] and q['optionA'] and q['optionB'] and 
-                q['optionC'] and q['optionD'] and q['answer']):
-                valid_questions.append(q)
+        duplicate_questions = []
+        invalid_questions = []
+        
+        # Get existing questions for duplicate checking
+        existing_questions = list(mongo_db.question_bank.find(
+            {'module_id': module_id, 'level_id': level_id, 'question_type': question_type},
+            {'question': 1, '_id': 0}
+        ))
+        existing_question_texts = {q['question'].strip().lower() for q in existing_questions}
+        
+        # Track questions within the file to detect duplicates
+        seen_questions_in_file = set()
+        
+        for i, q in enumerate(questions):
+            # Basic validation
+            if not (q['question'] and q['optionA'] and q['optionB'] and 
+                   q['optionC'] and q['optionD'] and q['answer']):
+                invalid_questions.append({
+                    'index': i + 1,
+                    'question': q.get('question', ''),
+                    'reason': 'Missing required fields (question, options, or answer)'
+                })
+                continue
+            
+            # Check for duplicates within the file first
+            question_text = q['question'].strip().lower()
+            if question_text in seen_questions_in_file:
+                duplicate_questions.append({
+                    'index': i + 1,
+                    'question': q['question'],
+                    'reason': 'Duplicate question within the same file'
+                })
+                continue
+            
+            # Check for duplicates against database
+            if question_text in existing_question_texts:
+                duplicate_questions.append({
+                    'index': i + 1,
+                    'question': q['question'],
+                    'reason': 'Question already exists in database'
+                })
+                continue
+            
+            # Add to valid questions and mark as seen
+            valid_questions.append(q)
+            seen_questions_in_file.add(question_text)
         
         if not valid_questions:
-            return jsonify({'success': False, 'message': 'No valid questions found in file'}), 400
+            return jsonify({
+                'success': False, 
+                'message': 'No valid questions found in file',
+                'details': {
+                    'total_questions': len(questions),
+                    'valid_questions': 0,
+                    'duplicate_questions': len(duplicate_questions),
+                    'invalid_questions': len(invalid_questions),
+                    'duplicates': duplicate_questions,
+                    'invalid': invalid_questions
+                }
+            }), 400
         
-        # Store questions in database
+        # Store valid questions in database
         upload_session_id = str(uuid.uuid4())
         inserted_count = 0
         
@@ -3470,11 +3523,22 @@ def upload_questions():
             mongo_db.question_bank.insert_one(doc)
             inserted_count += 1
         
-        return jsonify({
+        # Prepare detailed response
+        response_data = {
             'success': True,
             'message': f'Successfully uploaded {inserted_count} questions',
-            'count': inserted_count
-        }), 201
+            'count': inserted_count,
+            'details': {
+                'total_questions': len(questions),
+                'valid_questions': len(valid_questions),
+                'duplicate_questions': len(duplicate_questions),
+                'invalid_questions': len(invalid_questions),
+                'duplicates': duplicate_questions,
+                'invalid': invalid_questions
+            }
+        }
+        
+        return jsonify(response_data), 201
         
     except Exception as e:
         current_app.logger.error(f"Error uploading questions: {e}")
@@ -3764,22 +3828,110 @@ def upload_technical_questions():
                     }
                 questions.append(question)
         
-        # Validate questions
+        # Validate questions and check for duplicates
         valid_questions = []
-        for q in questions:
+        duplicate_questions = []
+        invalid_questions = []
+        
+        # Get existing questions for duplicate checking
+        if question_type == 'compiler':
+            existing_questions = list(mongo_db.question_bank.find(
+                {'module_id': module_id, 'level_id': level_id, 'question_type': 'compiler_integrated'},
+                {'questionTitle': 1, '_id': 0}
+            ))
+            existing_question_titles = {q['questionTitle'].strip().lower() for q in existing_questions}
+        else:
+            existing_questions = list(mongo_db.question_bank.find(
+                {'module_id': module_id, 'level_id': level_id, 'question_type': 'mcq'},
+                {'question': 1, '_id': 0}
+            ))
+            existing_question_texts = {q['question'].strip().lower() for q in existing_questions}
+        
+        # Track questions within the file to detect duplicates
+        seen_questions_in_file = set()
+        
+        for i, q in enumerate(questions):
+            # Basic validation
             if question_type == 'compiler':
-                if (q['questionTitle'] and q['problemStatement'] and 
-                    q['language'] and q['testCases']):
-                    valid_questions.append(q)
+                if not (q['questionTitle'] and q['problemStatement'] and 
+                       q['language'] and q['testCases']):
+                    invalid_questions.append({
+                        'index': i + 1,
+                        'question': q.get('questionTitle', ''),
+                        'reason': 'Missing required fields (title, statement, language, or test cases)'
+                    })
+                    continue
+                
+                # Check for duplicates within the file first
+                question_title = q['questionTitle'].strip().lower()
+                if question_title in seen_questions_in_file:
+                    duplicate_questions.append({
+                        'index': i + 1,
+                        'question': q['questionTitle'],
+                        'reason': 'Duplicate question within the same file'
+                    })
+                    continue
+                
+                # Check for duplicates against database
+                if question_title in existing_question_titles:
+                    duplicate_questions.append({
+                        'index': i + 1,
+                        'question': q['questionTitle'],
+                        'reason': 'Question title already exists in database'
+                    })
+                    continue
+                
+                # Add to valid questions and mark as seen
+                valid_questions.append(q)
+                seen_questions_in_file.add(question_title)
             else:
-                if (q['question'] and q['optionA'] and q['optionB'] and 
-                    q['optionC'] and q['optionD'] and q['answer']):
-                    valid_questions.append(q)
+                if not (q['question'] and q['optionA'] and q['optionB'] and 
+                       q['optionC'] and q['optionD'] and q['answer']):
+                    invalid_questions.append({
+                        'index': i + 1,
+                        'question': q.get('question', ''),
+                        'reason': 'Missing required fields (question, options, or answer)'
+                    })
+                    continue
+                
+                # Check for duplicates within the file first
+                question_text = q['question'].strip().lower()
+                if question_text in seen_questions_in_file:
+                    duplicate_questions.append({
+                        'index': i + 1,
+                        'question': q['question'],
+                        'reason': 'Duplicate question within the same file'
+                    })
+                    continue
+                
+                # Check for duplicates against database
+                if question_text in existing_question_texts:
+                    duplicate_questions.append({
+                        'index': i + 1,
+                        'question': q['question'],
+                        'reason': 'Question already exists in database'
+                    })
+                    continue
+                
+                # Add to valid questions and mark as seen
+                valid_questions.append(q)
+                seen_questions_in_file.add(question_text)
         
         if not valid_questions:
-            return jsonify({'success': False, 'message': 'No valid questions found in file'}), 400
+            return jsonify({
+                'success': False, 
+                'message': 'No valid questions found in file',
+                'details': {
+                    'total_questions': len(questions),
+                    'valid_questions': 0,
+                    'duplicate_questions': len(duplicate_questions),
+                    'invalid_questions': len(invalid_questions),
+                    'duplicates': duplicate_questions,
+                    'invalid': invalid_questions
+                }
+            }), 400
         
-        # Store questions in database
+        # Store valid questions in database
         upload_session_id = str(uuid.uuid4())
         inserted_count = 0
         
@@ -3848,11 +4000,22 @@ def upload_technical_questions():
             mongo_db.question_bank.insert_one(doc)
             inserted_count += 1
         
-        return jsonify({
+        # Prepare detailed response
+        response_data = {
             'success': True,
             'message': f'Successfully uploaded {inserted_count} technical questions',
-            'count': inserted_count
-        }), 201
+            'count': inserted_count,
+            'details': {
+                'total_questions': len(questions),
+                'valid_questions': len(valid_questions),
+                'duplicate_questions': len(duplicate_questions),
+                'invalid_questions': len(invalid_questions),
+                'duplicates': duplicate_questions,
+                'invalid': invalid_questions
+            }
+        }
+        
+        return jsonify(response_data), 201
         
     except Exception as e:
         current_app.logger.error(f"Error uploading technical questions: {e}")

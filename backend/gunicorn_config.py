@@ -10,8 +10,10 @@ import multiprocessing
 bind = f"0.0.0.0:{os.getenv('PORT', '5000')}"
 backlog = 2048
 
-# Worker processes - optimized for high concurrency
-workers = min(multiprocessing.cpu_count() * 4, 16)  # Cap at 16 workers
+# Worker processes - CPU-based optimization
+# For I/O-bound Flask apps with SocketIO: (2 * CPU cores) + 1
+cpu_count = multiprocessing.cpu_count()
+workers = min((cpu_count * 2) + 1, 8)  # More conservative, cap at 8 workers
 worker_class = "eventlet"
 max_requests = 500  # Reduced to prevent memory leaks
 max_requests_jitter = 50
