@@ -14,7 +14,7 @@ bind = f"0.0.0.0:{port}"
 # Worker processes - CPU-based optimization for 2GB RAM EC2
 # For I/O-bound Flask apps: (2 * CPU cores) + 1
 cpu_count = multiprocessing.cpu_count()
-workers = min((cpu_count * 2) + 1, 6)  # Conservative for 2GB RAM, cap at 6 workers
+workers = 5  # Fixed 5 workers for 2GB RAM system
 worker_class = "sync"  # Use sync workers for better memory management
 worker_connections = 1500  # Increased for 2GB RAM
 
@@ -40,8 +40,8 @@ limit_request_line = 8192  # Increased for 2GB RAM
 limit_request_fields = 200  # Increased for 2GB RAM
 limit_request_field_size = 16384  # Increased for 2GB RAM
 
-# Memory limits - optimized for 2GB RAM (conservative approach)
-worker_memory_limit = 200 * 1024 * 1024  # 200MB per worker (6 workers = 1.2GB total)
+# Memory limits - optimized for 2GB RAM (5 workers × 200MB = 1GB total)
+worker_memory_limit = 200 * 1024 * 1024  # 200MB per worker (5 workers = 1GB total)
 
 # Long-running operation timeouts
 long_operation_timeout = 600  # 10 minutes for bulk operations
@@ -59,14 +59,15 @@ def on_starting(server):
     print(f"   Keepalive: {keepalive}s")
     print(f"   Graceful Timeout: {graceful_timeout}s")
     print(f"   Memory per Worker: {worker_memory_limit // (1024*1024)}MB")
-    print(f"   Total Memory Allocation: {(worker_memory_limit * workers) // (1024*1024)}MB")
+    print(f"   Total Memory Allocation: {(worker_memory_limit * workers) // (1024*1024)}MB (5 workers × 200MB)")
     print(f"   Long Operation Timeout: {long_operation_timeout}s")
     print(f"   Bulk Upload Timeout: {bulk_upload_timeout}s")
     print(f"   Question Upload Timeout: {question_upload_timeout}s")
     print("   🎯 Target: 200+ concurrent users on 2GB RAM EC2")
-    print("   ⚡ Memory Optimized for 2GB RAM (Conservative)")
+    print("   ⚡ Memory Optimized for 2GB RAM (5 workers × 200MB)")
     print("   🔄 Long-running operations supported (2-15 minutes)")
     print("   🧹 Automatic memory cleanup enabled")
+    print("   📊 Memory monitoring without hard limits")
 
 def on_reload(server):
     print("🔄 Reloading OPTIMIZED Study Edge Backend...")
@@ -80,13 +81,14 @@ def pre_fork(server, worker):
 def post_fork(server, worker):
     print(f"✅ Worker {worker.pid} spawned")
     
-    # Set memory limit for worker (2GB RAM optimization)
+    # Memory monitoring (without hard limits to prevent boot failures)
     try:
-        import resource
-        resource.setrlimit(resource.RLIMIT_AS, (worker_memory_limit, worker_memory_limit))
-        print(f"🔒 Memory limit set for worker {worker.pid}: {worker_memory_limit // (1024*1024)}MB")
+        import psutil
+        process = psutil.Process()
+        memory_info = process.memory_info()
+        print(f"📊 Worker {worker.pid} memory usage: {memory_info.rss // (1024*1024)}MB")
     except Exception as e:
-        print(f"⚠️ Could not set memory limit for worker {worker.pid}: {e}")
+        print(f"⚠️ Could not monitor memory for worker {worker.pid}: {e}")
     
     # Configure worker for long-running operations and memory management
     try:
