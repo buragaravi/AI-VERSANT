@@ -13,9 +13,10 @@ backlog = 2048
 # Ensure we're using the correct port
 print(f"🌐 Binding to port: {port}")
 
-# Worker processes - optimized for cloud platforms
-# Cloud platforms typically have limited resources
-workers = min(multiprocessing.cpu_count() * 2, 8)  # Conservative for cloud
+# Worker processes - CPU-based optimization for cloud platforms
+# For I/O-bound Flask apps with gevent: (2 * CPU cores) + 1
+cpu_count = multiprocessing.cpu_count()
+workers = min((cpu_count * 2) + 1, 8)  # Conservative for cloud, cap at 8 workers
 worker_class = "gevent"  # Best for I/O intensive apps
 worker_connections = 1000  # Conservative for cloud
 max_requests = 500  # Lower to prevent memory leaks

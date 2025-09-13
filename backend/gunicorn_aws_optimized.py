@@ -12,9 +12,10 @@ import threading
 bind = f"0.0.0.0:{os.getenv('PORT', '5000')}"
 backlog = 4096  # Increased for better concurrency
 
-# Worker processes - optimized for AWS EC2 free tier
-# Free tier typically has 1 vCPU, so we use more workers with eventlet
-workers = min(multiprocessing.cpu_count() * 8, 32)  # Aggressive for free tier
+# Worker processes - CPU-based optimization for AWS EC2
+# For I/O-bound Flask apps with SocketIO: (2 * CPU cores) + 1
+cpu_count = multiprocessing.cpu_count()
+workers = min((cpu_count * 2) + 1, 12)  # More balanced approach, cap at 12 workers
 worker_class = "eventlet"  # Best for I/O intensive Flask apps
 worker_connections = 2000  # High connection limit
 max_requests = 1000  # Higher to reduce worker recycling

@@ -37,6 +37,8 @@ const TechnicalUpload = ({ moduleName, levelId, onUploadSuccess }) => {
   const [questionType, setQuestionType] = useState('compiler'); // 'compiler' or 'mcq'
   const [language, setLanguage] = useState('python');
   const [difficulty, setDifficulty] = useState('medium'); // 'easy', 'medium', 'hard'
+  const [uploadResponse, setUploadResponse] = useState(null);
+  const [isResponseModalOpen, setIsResponseModalOpen] = useState(false);
 
   // Enhanced technical question validation
   const validateTechnicalQuestion = (question) => {
@@ -261,13 +263,19 @@ const TechnicalUpload = ({ moduleName, levelId, onUploadSuccess }) => {
 
         const response = await uploadTechnicalQuestions(formData);
 
-        if (handleUploadSuccess(response, moduleName, levelId)) {
+        if (response.data.success) {
+          setUploadResponse(response.data);
+          setIsResponseModalOpen(true);
           setSuccess('Upload completed successfully');
           setFile(null);
           setIsPreviewModalOpen(false);
           if (onUploadSuccess) {
             onUploadSuccess();
           }
+        } else {
+          setUploadResponse(response.data);
+          setIsResponseModalOpen(true);
+          setError(response.data.message || 'Upload failed');
         }
       } catch (error) {
         handleUploadError(error, 'Failed to upload technical questions');
@@ -671,6 +679,138 @@ const TechnicalUpload = ({ moduleName, levelId, onUploadSuccess }) => {
           </div>
         </div>
       </PreviewModal>
+
+      {/* Upload Response Modal */}
+      {uploadResponse && isResponseModalOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => {
+            setIsResponseModalOpen(false);
+            setUploadResponse(null);
+          }}
+        >
+          <div 
+            className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Upload Results
+              </h3>
+              <button
+                onClick={() => {
+                  setIsResponseModalOpen(false);
+                  setUploadResponse(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-blue-600">
+                  {uploadResponse.details?.total_questions || 0}
+                </div>
+                <div className="text-sm text-blue-800">Total Questions</div>
+              </div>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-green-600">
+                  {uploadResponse.details?.valid_questions || 0}
+                </div>
+                <div className="text-sm text-green-800">Successfully Uploaded</div>
+              </div>
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-yellow-600">
+                  {uploadResponse.details?.duplicate_questions || 0}
+                </div>
+                <div className="text-sm text-yellow-800">Duplicates Skipped</div>
+              </div>
+              <div className="bg-red-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-red-600">
+                  {uploadResponse.details?.invalid_questions || 0}
+                </div>
+                <div className="text-sm text-red-800">Invalid Questions</div>
+              </div>
+            </div>
+
+            {/* Duplicate Questions */}
+            {uploadResponse.details?.duplicates && uploadResponse.details.duplicates.length > 0 && (
+              <div className="mb-6">
+                <h4 className="text-md font-semibold text-gray-900 mb-3 flex items-center">
+                  <AlertCircle className="h-5 w-5 text-yellow-500 mr-2" />
+                  Duplicate Questions (Skipped)
+                </h4>
+                <div className="max-h-48 overflow-y-auto space-y-2">
+                  {uploadResponse.details.duplicates.map((duplicate, index) => (
+                    <div key={index} className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-yellow-800">
+                            Question #{duplicate.index}
+                          </div>
+                          <div className="text-sm text-yellow-700 mt-1">
+                            {duplicate.question}
+                          </div>
+                          <div className="text-xs text-yellow-600 mt-1">
+                            {duplicate.reason}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Invalid Questions */}
+            {uploadResponse.details?.invalid && uploadResponse.details.invalid.length > 0 && (
+              <div className="mb-6">
+                <h4 className="text-md font-semibold text-gray-900 mb-3 flex items-center">
+                  <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
+                  Invalid Questions (Skipped)
+                </h4>
+                <div className="max-h-48 overflow-y-auto space-y-2">
+                  {uploadResponse.details.invalid.map((invalid, index) => (
+                    <div key={index} className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-red-800">
+                            Question #{invalid.index}
+                          </div>
+                          <div className="text-sm text-red-700 mt-1">
+                            {invalid.question || 'Empty question'}
+                          </div>
+                          <div className="text-xs text-red-600 mt-1">
+                            {invalid.reason}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setIsResponseModalOpen(false);
+                  setUploadResponse(null);
+                }}
+                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

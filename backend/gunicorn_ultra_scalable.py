@@ -25,15 +25,18 @@ def get_optimal_workers():
         cpu_count = multiprocessing.cpu_count()
         memory_gb = psutil.virtual_memory().total / (1024**3)
         
-        # Calculate workers based on resources
+        # Calculate workers based on resources - CPU-based optimization
+        # For I/O-bound Flask apps: (2 * CPU cores) + 1, adjusted for memory
+        base_workers = (cpu_count * 2) + 1
+        
         if memory_gb >= 16:  # High-memory system
-            workers = min(cpu_count * 8, 64)  # Up to 64 workers
+            workers = min(base_workers * 2, 24)  # Up to 24 workers
         elif memory_gb >= 8:  # Medium-memory system
-            workers = min(cpu_count * 6, 48)  # Up to 48 workers
+            workers = min(base_workers * 1.5, 18)  # Up to 18 workers
         elif memory_gb >= 4:  # Low-memory system
-            workers = min(cpu_count * 4, 32)  # Up to 32 workers
+            workers = min(base_workers, 12)  # Up to 12 workers
         else:  # Very low memory
-            workers = min(cpu_count * 2, 16)  # Up to 16 workers
+            workers = min(base_workers * 0.75, 8)  # Up to 8 workers
         
         logger.info(f"🖥️ System Resources: {cpu_count} CPUs, {memory_gb:.1f}GB RAM")
         logger.info(f"👥 Calculated Workers: {workers}")

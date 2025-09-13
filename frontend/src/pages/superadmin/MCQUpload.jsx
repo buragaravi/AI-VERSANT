@@ -91,7 +91,13 @@ export default function MCQUpload({ questions, setQuestions, onNext, onBack, mod
     
     // Show summary
     if (duplicateCount > 0) {
-      toast.warning(`${duplicateCount} duplicate questions found and will be skipped.`);
+      toast(`${duplicateCount} duplicate questions found and will be skipped.`, {
+        icon: '⚠️',
+        style: {
+          background: '#fbbf24',
+          color: '#1f2937',
+        },
+      });
     }
     if (newCount > 0) {
       toast.success(`${newCount} new questions will be uploaded.`);

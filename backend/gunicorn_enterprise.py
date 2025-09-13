@@ -11,8 +11,10 @@ import os
 bind = "0.0.0.0:8000"
 backlog = 2048
 
-# Worker processes
-workers = min(32, (multiprocessing.cpu_count() * 4) + 1)  # 32 workers max
+# Worker processes - CPU-based optimization for Enterprise
+# For I/O-bound Flask apps with eventlet: (2 * CPU cores) + 1
+cpu_count = multiprocessing.cpu_count()
+workers = min((cpu_count * 2) + 1, 16)  # Balanced for enterprise, cap at 16 workers
 worker_class = "eventlet"
 worker_connections = 5000  # Increased for high concurrency
 max_requests = 1000

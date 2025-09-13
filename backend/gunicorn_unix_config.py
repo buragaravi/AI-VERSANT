@@ -9,8 +9,10 @@ import multiprocessing
 bind = f"0.0.0.0:{os.getenv('PORT', '5000')}"
 backlog = 4096  # Increased for Unix
 
-# Worker processes - optimized for Unix systems
-workers = min(multiprocessing.cpu_count() * 4, 32)  # More workers for Unix
+# Worker processes - CPU-based optimization for Unix systems
+# For I/O-bound Flask apps with gevent: (2 * CPU cores) + 1
+cpu_count = multiprocessing.cpu_count()
+workers = min((cpu_count * 2) + 1, 12)  # Balanced for Unix, cap at 12 workers
 worker_class = "gevent"  # Best performance on Unix
 worker_connections = 2000  # Higher connection limit for Unix
 max_requests = 1000  # Higher request limit for Unix
