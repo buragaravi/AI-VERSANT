@@ -574,50 +574,69 @@ def get_student_count():
                 for student in students:
                     user = mongo_db.users.find_one({'_id': student['user_id']})
                     if user:
+                        # Get course name
+                        course = mongo_db.courses.find_one({'_id': student.get('course_id')})
+                        course_name = course.get('name', 'Unknown Course') if course else 'Unknown Course'
+                        
                         student_list.append({
                             'id': str(student['_id']),
                             'name': user.get('name', ''),
                             'email': user.get('email', ''),
                             'roll_number': student.get('roll_number', ''),
+                            'course_name': course_name,
                             'source': 'batch_course_instance'
                         })
         
-        # Approach 2: If no students found, try direct batch query
-        if not student_list and batch_ids:
-            current_app.logger.info("Trying direct batch query")
-            students = list(mongo_db.students.find({'batch_id': {'$in': [ObjectId(bid) for bid in batch_ids]}}))
-            current_app.logger.info(f"Found {len(students)} students via direct batch query")
+        # Approach 2: If no students found, try direct batch query with course filter
+        if not student_list and batch_ids and course_ids:
+            current_app.logger.info("Trying direct batch query with course filter")
+            query = {'batch_id': {'$in': [ObjectId(bid) for bid in batch_ids]}}
+            query['course_id'] = {'$in': [ObjectId(cid) for cid in course_ids]}
+            students = list(mongo_db.students.find(query))
+            current_app.logger.info(f"Found {len(students)} students via direct batch+course query")
             
             for student in students:
                 user = mongo_db.users.find_one({'_id': student['user_id']})
                 if user:
+                    # Get course name
+                    course = mongo_db.courses.find_one({'_id': student.get('course_id')})
+                    course_name = course.get('name', 'Unknown Course') if course else 'Unknown Course'
+                    
                     student_list.append({
                         'id': str(student['_id']),
                         'name': user.get('name', ''),
                         'email': user.get('email', ''),
                         'roll_number': student.get('roll_number', ''),
-                        'source': 'direct_batch'
+                        'course_name': course_name,
+                        'source': 'direct_batch_course'
                     })
         
-        # Approach 3: If still no students, try campus-wide query
-        if not student_list:
-            current_app.logger.info("Trying campus-wide query")
+        # Approach 3: If still no students, try campus-wide query with course filter
+        if not student_list and course_ids:
+            current_app.logger.info("Trying campus-wide query with course filter")
             # Get all batches for this campus
             campus_batches = list(mongo_db.batches.find({'campus_id': ObjectId(campus_id)}))
             if campus_batches:
                 batch_ids_campus = [str(batch['_id']) for batch in campus_batches]
-                students = list(mongo_db.students.find({'batch_id': {'$in': [ObjectId(bid) for bid in batch_ids_campus]}}))
-                current_app.logger.info(f"Found {len(students)} students via campus-wide query")
+                query = {'batch_id': {'$in': [ObjectId(bid) for bid in batch_ids_campus]}}
+                query['course_id'] = {'$in': [ObjectId(cid) for cid in course_ids]}
+                students = list(mongo_db.students.find(query))
+                current_app.logger.info(f"Found {len(students)} students via campus-wide+course query")
                 
                 for student in students:
                     user = mongo_db.users.find_one({'_id': student['user_id']})
                     if user:
+                        # Get course name
+                        course = mongo_db.courses.find_one({'_id': student.get('course_id')})
+                        course_name = course.get('name', 'Unknown Course') if course else 'Unknown Course'
+                        
                         student_list.append({
                             'id': str(student['_id']),
                             'name': user.get('name', ''),
                             'email': user.get('email', ''),
                             'roll_number': student.get('roll_number', ''),
-                            'source': 'campus_wide'
+                            'course_name': course_name,
+                            'source': 'campus_wide_course'
                         })
         
         # Remove duplicates based on student ID
@@ -827,12 +846,118 @@ def upload_module_questions():
         if not module_id.startswith('CRT_') and not level_id:
             return jsonify({'success': False, 'message': 'level_id is required for non-CRT modules.'}), 400
         
+        # Validate questions and check for duplicates
+        valid_questions = []
+        duplicate_questions = []
+        invalid_questions = []
+        
+        # Get existing questions for duplicate checking
+        query_filter = {'module_id': module_id}
+        if topic_id:
+            query_filter['topic_id'] = ObjectId(topic_id)
+        elif level_id:
+            query_filter['level_id'] = level_id
+            
+        existing_questions = list(mongo_db.question_bank.find(
+            query_filter,
+            {'question': 1, 'questionTitle': 1, '_id': 0}
+        ))
+        
+        # Create sets for duplicate checking based on question type
+        existing_question_texts = set()
+        existing_question_titles = set()
+        
+        for q in existing_questions:
+            if 'question' in q and q['question']:
+                existing_question_texts.add(q['question'].strip().lower())
+            if 'questionTitle' in q and q['questionTitle']:
+                existing_question_titles.add(q['questionTitle'].strip().lower())
+        
+        # Track questions within the file to detect duplicates
+        seen_questions_in_file = set()
+        seen_titles_in_file = set()
+        
+        for i, q in enumerate(questions):
+            # Basic validation based on module type
+            is_valid = True
+            validation_reason = ""
+            
+            if module_id == 'CRT_TECHNICAL' or level_id == 'CRT_TECHNICAL':
+                question_type = q.get('questionType', 'technical')
+                if question_type == 'technical':
+                    # Compiler-integrated technical question
+                    if not (q.get('question') and q.get('testCases') and q.get('expectedOutput')):
+                        is_valid = False
+                        validation_reason = "Missing required fields (question, testCases, or expectedOutput)"
+                else:
+                    # MCQ technical question
+                    if not (q.get('question') and q.get('optionA') and q.get('optionB') and 
+                           q.get('optionC') and q.get('optionD') and q.get('answer')):
+                        is_valid = False
+                        validation_reason = "Missing required fields (question, options, or answer)"
+            else:
+                # CRT_APTITUDE and CRT_REASONING - MCQ format
+                if not (q.get('question') and q.get('optionA') and q.get('optionB') and 
+                       q.get('optionC') and q.get('optionD') and q.get('answer')):
+                    is_valid = False
+                    validation_reason = "Missing required fields (question, options, or answer)"
+            
+            if not is_valid:
+                invalid_questions.append({
+                    'index': i + 1,
+                    'question': q.get('question', q.get('questionTitle', '')),
+                    'reason': validation_reason
+                })
+                continue
+            
+            # Check for duplicates within the file first
+            question_text = q.get('question', '').strip().lower()
+            question_title = q.get('questionTitle', '').strip().lower()
+            
+            if question_text in seen_questions_in_file or question_title in seen_titles_in_file:
+                duplicate_questions.append({
+                    'index': i + 1,
+                    'question': q.get('question', q.get('questionTitle', '')),
+                    'reason': 'Duplicate question within the same file'
+                })
+                continue
+            
+            # Check for duplicates against database
+            if question_text in existing_question_texts or question_title in existing_question_titles:
+                duplicate_questions.append({
+                    'index': i + 1,
+                    'question': q.get('question', q.get('questionTitle', '')),
+                    'reason': 'Question already exists in database'
+                })
+                continue
+            
+            # Add to valid questions and mark as seen
+            valid_questions.append(q)
+            if question_text:
+                seen_questions_in_file.add(question_text)
+            if question_title:
+                seen_titles_in_file.add(question_title)
+        
+        if not valid_questions:
+            return jsonify({
+                'success': False, 
+                'message': 'No valid questions found in upload',
+                'details': {
+                    'total_questions': len(questions),
+                    'valid_questions': 0,
+                    'duplicate_questions': len(duplicate_questions),
+                    'invalid_questions': len(invalid_questions),
+                    'duplicates': duplicate_questions,
+                    'invalid': invalid_questions
+                }
+            }), 400
+        
         # Generate upload session ID
         upload_session_id = str(uuid.uuid4())
         
-        # Store each question in a question_bank collection
+        # Store valid questions in question_bank collection
         inserted = []
-        for q in questions:
+        for q in valid_questions:
             doc = {
                 'module_id': module_id,
                 'level_id': level_id,
@@ -904,7 +1029,22 @@ def upload_module_questions():
         
         current_app.logger.info(f"Successfully uploaded {len(inserted)} questions to module bank")
         
-        return jsonify({'success': True, 'message': f'Uploaded {len(inserted)} questions to module bank.'}), 201
+        # Prepare detailed response
+        response_data = {
+            'success': True,
+            'message': f'Successfully uploaded {len(inserted)} questions to module bank',
+            'count': len(inserted),
+            'details': {
+                'total_questions': len(questions),
+                'valid_questions': len(valid_questions),
+                'duplicate_questions': len(duplicate_questions),
+                'invalid_questions': len(invalid_questions),
+                'duplicates': duplicate_questions,
+                'invalid': invalid_questions
+            }
+        }
+        
+        return jsonify(response_data), 201
     except Exception as e:
         current_app.logger.error(f"Error uploading module questions: {e}")
         return jsonify({'success': False, 'message': f'Upload failed: {e}'}), 500
@@ -2855,9 +2995,109 @@ def add_questions_to_topic(topic_id):
                 'message': 'Topic not found'
             }), 404
         
-        # Process and insert questions
+        # Validate questions and check for duplicates
+        valid_questions = []
+        duplicate_questions = []
+        invalid_questions = []
+        
+        # Get existing questions for duplicate checking within this topic
+        existing_questions = list(mongo_db.question_bank.find(
+            {'topic_id': ObjectId(topic_id)},
+            {'question': 1, 'questionTitle': 1, '_id': 0}
+        ))
+        
+        # Create sets for duplicate checking based on question type
+        existing_question_texts = set()
+        existing_question_titles = set()
+        
+        for q in existing_questions:
+            if 'question' in q and q['question']:
+                existing_question_texts.add(q['question'].strip().lower())
+            if 'questionTitle' in q and q['questionTitle']:
+                existing_question_titles.add(q['questionTitle'].strip().lower())
+        
+        # Track questions within the file to detect duplicates
+        seen_questions_in_file = set()
+        seen_titles_in_file = set()
+        
+        for i, question in enumerate(questions):
+            # Basic validation based on topic's module type
+            is_valid = True
+            validation_reason = ""
+            
+            if topic['module_id'] == 'CRT_TECHNICAL':
+                question_type = question.get('questionType', 'compiler_integrated')
+                if question_type == 'compiler_integrated':
+                    # Compiler-integrated technical question
+                    if not (question.get('question') and question.get('testCases') and question.get('expectedOutput')):
+                        is_valid = False
+                        validation_reason = "Missing required fields (question, testCases, or expectedOutput)"
+                else:
+                    # MCQ technical question
+                    if not (question.get('question') and question.get('optionA') and question.get('optionB') and 
+                           question.get('optionC') and question.get('optionD') and question.get('answer')):
+                        is_valid = False
+                        validation_reason = "Missing required fields (question, options, or answer)"
+            else:
+                # CRT_APTITUDE and CRT_REASONING - MCQ format
+                if not (question.get('question') and question.get('optionA') and question.get('optionB') and 
+                       question.get('optionC') and question.get('optionD') and question.get('answer')):
+                    is_valid = False
+                    validation_reason = "Missing required fields (question, options, or answer)"
+            
+            if not is_valid:
+                invalid_questions.append({
+                    'index': i + 1,
+                    'question': question.get('question', question.get('questionTitle', '')),
+                    'reason': validation_reason
+                })
+                continue
+            
+            # Check for duplicates within the file first
+            question_text = question.get('question', '').strip().lower()
+            question_title = question.get('questionTitle', '').strip().lower()
+            
+            if question_text in seen_questions_in_file or question_title in seen_titles_in_file:
+                duplicate_questions.append({
+                    'index': i + 1,
+                    'question': question.get('question', question.get('questionTitle', '')),
+                    'reason': 'Duplicate question within the same file'
+                })
+                continue
+            
+            # Check for duplicates against database
+            if question_text in existing_question_texts or question_title in existing_question_titles:
+                duplicate_questions.append({
+                    'index': i + 1,
+                    'question': question.get('question', question.get('questionTitle', '')),
+                    'reason': 'Question already exists in this topic'
+                })
+                continue
+            
+            # Add to valid questions and mark as seen
+            valid_questions.append(question)
+            if question_text:
+                seen_questions_in_file.add(question_text)
+            if question_title:
+                seen_titles_in_file.add(question_title)
+        
+        if not valid_questions:
+            return jsonify({
+                'success': False, 
+                'message': 'No valid questions found in upload',
+                'details': {
+                    'total_questions': len(questions),
+                    'valid_questions': 0,
+                    'duplicate_questions': len(duplicate_questions),
+                    'invalid_questions': len(invalid_questions),
+                    'duplicates': duplicate_questions,
+                    'invalid': invalid_questions
+                }
+            }), 400
+        
+        # Process and insert valid questions
         processed_questions = []
-        for question in questions:
+        for question in valid_questions:
             # Add topic_id to each question
             question['topic_id'] = ObjectId(topic_id)
             question['created_at'] = datetime.utcnow()
@@ -2899,19 +3139,39 @@ def add_questions_to_topic(topic_id):
         if processed_questions:
             result = mongo_db.question_bank.insert_many(processed_questions)
             
-            return jsonify({
+            # Prepare detailed response
+            response_data = {
                 'success': True,
                 'message': f'Successfully added {len(result.inserted_ids)} questions to topic',
+                'count': len(result.inserted_ids),
                 'data': {
                     'inserted_count': len(result.inserted_ids),
                     'topic_id': topic_id,
                     'topic_name': topic['topic_name']
+                },
+                'details': {
+                    'total_questions': len(questions),
+                    'valid_questions': len(valid_questions),
+                    'duplicate_questions': len(duplicate_questions),
+                    'invalid_questions': len(invalid_questions),
+                    'duplicates': duplicate_questions,
+                    'invalid': invalid_questions
                 }
-            }), 201
+            }
+            
+            return jsonify(response_data), 201
         else:
             return jsonify({
                 'success': False,
-                'message': 'No valid questions to add'
+                'message': 'No valid questions to add',
+                'details': {
+                    'total_questions': len(questions),
+                    'valid_questions': 0,
+                    'duplicate_questions': len(duplicate_questions),
+                    'invalid_questions': len(invalid_questions),
+                    'duplicates': duplicate_questions,
+                    'invalid': invalid_questions
+                }
             }), 400
         
     except Exception as e:

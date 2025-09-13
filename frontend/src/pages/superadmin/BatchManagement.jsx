@@ -56,6 +56,11 @@ const BatchManagement = () => {
   const [isDeletingStudents, setIsDeletingStudents] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
+  // Course filtering states
+  const [availableCourses, setAvailableCourses] = useState([]);
+  const [selectedCourseFilter, setSelectedCourseFilter] = useState('');
+  const [filteredStudents, setFilteredStudents] = useState([]);
+  
   // Email/SMS sending states
   const [isSendingEmails, setIsSendingEmails] = useState(false);
   const [isSendingSMS, setIsSendingSMS] = useState(false);
@@ -268,7 +273,13 @@ const BatchManagement = () => {
       if (response.data.success) {
         console.log('Batch students data structure:', response.data.data);
         setBatchStudents(response.data.data);
+        setFilteredStudents(response.data.data); // Initialize filtered students
         setSelectedStudents([]); // Clear any previous selections
+        
+        // Extract unique courses from students
+        const uniqueCourses = [...new Set(response.data.data.map(student => student.course_name).filter(Boolean))];
+        setAvailableCourses(uniqueCourses);
+        setSelectedCourseFilter(''); // Reset course filter
         
         // Find and set the selected batch
         const batch = batches.find(b => b.id === batchId);
@@ -282,6 +293,29 @@ const BatchManagement = () => {
       console.error('Error fetching batch students:', error);
       toast.error('Failed to fetch batch students');
     }
+  };
+
+  // Course filtering functions
+  const handleCourseFilterChange = (courseName) => {
+    setSelectedCourseFilter(courseName);
+    
+    if (courseName === '') {
+      // Show all students
+      setFilteredStudents(batchStudents);
+    } else {
+      // Filter by course
+      const filtered = batchStudents.filter(student => student.course_name === courseName);
+      setFilteredStudents(filtered);
+    }
+    
+    // Clear selected students when filtering
+    setSelectedStudents([]);
+  };
+
+  const clearCourseFilter = () => {
+    setSelectedCourseFilter('');
+    setFilteredStudents(batchStudents);
+    setSelectedStudents([]);
   };
 
   const handleCreateBatch = async (e) => {
@@ -505,10 +539,10 @@ const BatchManagement = () => {
 
   // Bulk deletion functions
   const handleSelectAllStudents = () => {
-    if (selectedStudents.length === batchStudents.length) {
+    if (selectedStudents.length === filteredStudents.length) {
       setSelectedStudents([]);
     } else {
-      setSelectedStudents(batchStudents.map((_, index) => index));
+      setSelectedStudents(filteredStudents.map((_, index) => index));
     }
   };
 
@@ -530,7 +564,7 @@ const BatchManagement = () => {
     try {
       // Get actual user IDs from the selected indices
       const studentIds = selectedStudents.map(index => {
-        const student = batchStudents[index];
+        const student = filteredStudents[index];
         // Use user_id for bulk deletion (required by backend)
         return student.user_id || student._id || student.id;
       }).filter(id => id); // Filter out any undefined IDs
@@ -619,20 +653,32 @@ const BatchManagement = () => {
       return;
     }
 
+    if (filteredStudents.length === 0) {
+      toast.error('No students to send emails to');
+      return;
+    }
+
     setIsSendingEmails(true);
     setEmailProgress({
       status: 'started',
-      total: 0,
+      total: filteredStudents.length,
       processed: 0,
       percentage: 0,
-      message: 'Starting email sending...',
+      message: `Starting email sending to ${filteredStudents.length} students...`,
       currentStudent: null
     });
 
     try {
-      const response = await api.post(`/batch-management/batch/${selectedBatch.id}/send-emails`);
+      // Send emails to filtered students only
+      const studentIds = filteredStudents.map(student => student.user_id || student._id || student.id).filter(Boolean);
+      
+      const response = await api.post(`/batch-management/batch/${selectedBatch.id}/send-emails`, {
+        student_ids: studentIds,
+        course_filter: selectedCourseFilter || null
+      });
+      
       if (response.data.success) {
-        toast.success(response.data.message);
+        toast.success(`Emails sent to ${filteredStudents.length} students successfully`);
       } else {
         toast.error(response.data.message || 'Failed to send emails');
         setIsSendingEmails(false);
@@ -650,20 +696,32 @@ const BatchManagement = () => {
       return;
     }
 
+    if (filteredStudents.length === 0) {
+      toast.error('No students to send SMS to');
+      return;
+    }
+
     setIsSendingSMS(true);
     setSmsProgress({
       status: 'started',
-      total: 0,
+      total: filteredStudents.length,
       processed: 0,
       percentage: 0,
-      message: 'Starting SMS sending...',
+      message: `Starting SMS sending to ${filteredStudents.length} students...`,
       currentStudent: null
     });
 
     try {
-      const response = await api.post(`/batch-management/batch/${selectedBatch.id}/send-sms`);
+      // Send SMS to filtered students only
+      const studentIds = filteredStudents.map(student => student.user_id || student._id || student.id).filter(Boolean);
+      
+      const response = await api.post(`/batch-management/batch/${selectedBatch.id}/send-sms`, {
+        student_ids: studentIds,
+        course_filter: selectedCourseFilter || null
+      });
+      
       if (response.data.success) {
-        toast.success(response.data.message);
+        toast.success(`SMS sent to ${filteredStudents.length} students successfully`);
       } else {
         toast.error(response.data.message || 'Failed to send SMS');
         setIsSendingSMS(false);
@@ -673,6 +731,65 @@ const BatchManagement = () => {
       toast.error('Failed to send SMS. Please try again.');
       setIsSendingSMS(false);
     }
+  };
+
+  // Export functions
+  const handleExportCSV = () => {
+    if (filteredStudents.length === 0) {
+      toast.error('No students to export');
+      return;
+    }
+
+    const csvData = filteredStudents.map(student => ({
+      'Name': student.name || '',
+      'Roll Number': student.roll_number || '',
+      'Email': student.email || '',
+      'Mobile': student.mobile_number || '',
+      'Course': student.course_name || '',
+      'Campus': student.campus_name || ''
+    }));
+
+    const csv = Papa.unparse(csvData);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `batch_students_${selectedBatch?.name || 'export'}_${selectedCourseFilter ? selectedCourseFilter.replace(/\s+/g, '_') : 'all_courses'}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success(`Exported ${filteredStudents.length} students to CSV`);
+  };
+
+  const handleExportExcel = () => {
+    if (filteredStudents.length === 0) {
+      toast.error('No students to export');
+      return;
+    }
+
+    const excelData = filteredStudents.map(student => ({
+      'Name': student.name || '',
+      'Roll Number': student.roll_number || '',
+      'Email': student.email || '',
+      'Mobile': student.mobile_number || '',
+      'Course': student.course_name || '',
+      'Campus': student.campus_name || ''
+    }));
+
+    const csv = Papa.unparse(excelData);
+    const blob = new Blob([csv], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `batch_students_${selectedBatch?.name || 'export'}_${selectedCourseFilter ? selectedCourseFilter.replace(/\s+/g, '_') : 'all_courses'}.xlsx`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success(`Exported ${filteredStudents.length} students to Excel`);
   };
 
   if (loading) {
@@ -1150,6 +1267,11 @@ const BatchManagement = () => {
                       </h2>
                       <p className="text-gray-600 mt-1">
                         {batchStudents.length} student{batchStudents.length !== 1 ? 's' : ''} in this batch
+                        {selectedCourseFilter && (
+                          <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                            Filtered by: {selectedCourseFilter}
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -1174,9 +1296,68 @@ const BatchManagement = () => {
                 </div>
               </div>
 
+              {/* Course Filter Section */}
+              <div className="px-8 py-4 bg-gray-50 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-5 w-5 text-blue-600" />
+                      <span className="text-sm font-semibold text-gray-700">Filter by Course:</span>
+                    </div>
+                    <select
+                      value={selectedCourseFilter}
+                      onChange={(e) => handleCourseFilterChange(e.target.value)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                    >
+                      <option value="">All Courses ({batchStudents.length})</option>
+                      {availableCourses.map((course, index) => {
+                        const courseCount = batchStudents.filter(s => s.course_name === course).length;
+                        return (
+                          <option key={index} value={course}>
+                            {course} ({courseCount})
+                          </option>
+                        );
+                      })}
+                    </select>
+                    {selectedCourseFilter && (
+                      <button
+                        onClick={clearCourseFilter}
+                        className="px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all duration-200 flex items-center gap-1"
+                      >
+                        <X className="h-4 w-4" />
+                        Clear Filter
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-sm text-gray-600">
+                      Showing {filteredStudents.length} of {batchStudents.length} students
+                    </div>
+                    {filteredStudents.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleExportCSV}
+                          className="px-3 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all duration-200 flex items-center gap-1"
+                        >
+                          <Download className="h-4 w-4" />
+                          Export CSV
+                        </button>
+                        <button
+                          onClick={handleExportExcel}
+                          className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all duration-200 flex items-center gap-1"
+                        >
+                          <Download className="h-4 w-4" />
+                          Export Excel
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Enhanced Table Content */}
               <div className="flex-1 overflow-y-auto p-8" style={{ minHeight: '400px', maxHeight: 'calc(95vh - 200px)' }}>
-                {batchStudents.length > 0 ? (
+                {filteredStudents.length > 0 ? (
                   <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-lg">
                     <div className="overflow-x-auto">
                       <table className="w-full">
@@ -1187,7 +1368,7 @@ const BatchManagement = () => {
                                 onClick={handleSelectAllStudents}
                                 className="flex items-center justify-center w-6 h-6 rounded border-2 border-gray-300 hover:border-blue-500 transition-colors"
                               >
-                                {selectedStudents.length === batchStudents.length && batchStudents.length > 0 ? (
+                                {selectedStudents.length === filteredStudents.length && filteredStudents.length > 0 ? (
                                   <CheckSquare className="h-4 w-4 text-blue-600" />
                                 ) : (
                                   <Square className="h-4 w-4 text-gray-400" />
@@ -1218,10 +1399,16 @@ const BatchManagement = () => {
                                 Mobile
                               </div>
                             </th>
+                            <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
+                              <div className="flex items-center gap-2">
+                                <BookOpen className="h-4 w-4 text-green-600" />
+                                Course
+                              </div>
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {batchStudents.map((student, index) => (
+                          {filteredStudents.map((student, index) => (
                             <motion.tr
                               key={index}
                               initial={{ opacity: 0, y: 10 }}
@@ -1286,6 +1473,17 @@ const BatchManagement = () => {
                                   )}
                                 </div>
                               </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  {student.course_name ? (
+                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                                      {student.course_name}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-400 italic">N/A</span>
+                                  )}
+                                </div>
+                              </td>
                             </motion.tr>
                           ))}
                         </tbody>
@@ -1301,8 +1499,23 @@ const BatchManagement = () => {
                     <div className="mx-auto w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-4">
                       <Users className="h-12 w-12 text-gray-400" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Students Found</h3>
-                    <p className="text-gray-600">This batch doesn't have any students yet.</p>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      {selectedCourseFilter ? 'No Students Found for Selected Course' : 'No Students Found'}
+                    </h3>
+                    <p className="text-gray-600 mb-4">
+                      {selectedCourseFilter 
+                        ? `No students found for "${selectedCourseFilter}". Try selecting a different course or clear the filter.`
+                        : 'This batch doesn\'t have any students yet.'
+                      }
+                    </p>
+                    {selectedCourseFilter && (
+                      <button
+                        onClick={clearCourseFilter}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Clear Filter
+                      </button>
+                    )}
                   </motion.div>
                 )}
               </div>
@@ -1312,19 +1525,19 @@ const BatchManagement = () => {
                 <div className="flex items-center gap-3">
                   <button
                     onClick={handleSendEmails}
-                    disabled={isSendingEmails || batchStudents.length === 0}
+                    disabled={isSendingEmails || filteredStudents.length === 0}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-xl transition-all duration-200 font-semibold flex items-center gap-2 hover:shadow-md"
                   >
                     <Mail className="h-4 w-4" />
-                    {isSendingEmails ? 'Sending...' : 'Send Emails'}
+                    {isSendingEmails ? 'Sending...' : `Send Emails (${filteredStudents.length})`}
                   </button>
                   <button
                     onClick={handleSendSMS}
-                    disabled={isSendingSMS || batchStudents.length === 0}
+                    disabled={isSendingSMS || filteredStudents.length === 0}
                     className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white rounded-xl transition-all duration-200 font-semibold flex items-center gap-2 hover:shadow-md"
                   >
                     <Phone className="h-4 w-4" />
-                    {isSendingSMS ? 'Sending...' : 'Send SMS'}
+                    {isSendingSMS ? 'Sending...' : `Send SMS (${filteredStudents.length})`}
                   </button>
                 </div>
                 <button

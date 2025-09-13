@@ -54,6 +54,10 @@ const CRTUpload = () => {
   const [selectedTopicForView, setSelectedTopicForView] = useState(null);
   const [topicQuestions, setTopicQuestions] = useState([]);
   const [viewMode, setViewMode] = useState('upload'); // 'upload', 'topics', 'topic-questions'
+  
+  // Upload response states
+  const [uploadResponse, setUploadResponse] = useState(null);
+  const [isResponseModalOpen, setIsResponseModalOpen] = useState(false);
 
   useEffect(() => {
     fetchUploadedFiles();
@@ -490,10 +494,17 @@ const CRTUpload = () => {
         });
 
         if (response.data.success) {
-          toast.success(`Questions uploaded successfully to topic!`);
+          setUploadResponse(response.data);
+          setIsResponseModalOpen(true);
           handleUploadSuccess();
         } else {
-          toast.error(response.data.message || 'Upload failed');
+          // Handle detailed error response
+          if (response.data.details) {
+            setUploadResponse(response.data);
+            setIsResponseModalOpen(true);
+          } else {
+            toast.error(response.data.message || 'Upload failed');
+          }
         }
       } else {
         // Send questions to general CRT endpoint
@@ -507,10 +518,17 @@ const CRTUpload = () => {
         const response = await api.post('/test-management/module-question-bank/upload', payload);
 
         if (response.data.success) {
-          toast.success('Questions uploaded successfully!');
+          setUploadResponse(response.data);
+          setIsResponseModalOpen(true);
           handleUploadSuccess();
         } else {
-          toast.error(response.data.message || 'Upload failed');
+          // Handle detailed error response
+          if (response.data.details) {
+            setUploadResponse(response.data);
+            setIsResponseModalOpen(true);
+          } else {
+            toast.error(response.data.message || 'Upload failed');
+          }
         }
       }
     } catch (error) {
@@ -1498,6 +1516,14 @@ const CRTUpload = () => {
         topicName={newTopicName}
         setTopicName={setNewTopicName}
       />
+      <UploadResponseModal
+        isOpen={isResponseModalOpen}
+        onClose={() => {
+          setIsResponseModalOpen(false);
+          setUploadResponse(null);
+        }}
+        response={uploadResponse}
+      />
         </>
   );
 };
@@ -2063,6 +2089,126 @@ const EditTopicModal = ({ isOpen, onClose, onSave, topic, topicName, setTopicNam
               {isChecking ? 'Checking...' : 'Save Changes'}
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Upload Response Modal Component
+const UploadResponseModal = ({ isOpen, onClose, response }) => {
+  if (!isOpen || !response) return null;
+
+  const { success, message, details } = response;
+  const { total_questions, valid_questions, duplicate_questions, invalid_questions, duplicates, invalid } = details || {};
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">
+            Upload Results
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="text-2xl font-bold text-blue-600">{total_questions || 0}</div>
+            <div className="text-sm text-blue-800">Total Questions</div>
+          </div>
+          <div className="bg-green-50 p-4 rounded-lg">
+            <div className="text-2xl font-bold text-green-600">{valid_questions || 0}</div>
+            <div className="text-sm text-green-800">Valid Questions</div>
+          </div>
+          <div className="bg-yellow-50 p-4 rounded-lg">
+            <div className="text-2xl font-bold text-yellow-600">{duplicate_questions || 0}</div>
+            <div className="text-sm text-yellow-800">Duplicates</div>
+          </div>
+          <div className="bg-red-50 p-4 rounded-lg">
+            <div className="text-2xl font-bold text-red-600">{invalid_questions || 0}</div>
+            <div className="text-sm text-red-800">Invalid</div>
+          </div>
+        </div>
+
+        {/* Status Message */}
+        <div className={`p-4 rounded-lg mb-6 ${
+          success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+        }`}>
+          <div className={`flex items-center ${success ? 'text-green-800' : 'text-red-800'}`}>
+            {success ? (
+              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            )}
+            <span className="font-medium">{message}</span>
+          </div>
+        </div>
+
+        {/* Duplicate Questions */}
+        {duplicates && duplicates.length > 0 && (
+          <div className="mb-6">
+            <h4 className="text-lg font-semibold text-gray-900 mb-3">Duplicate Questions</h4>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-h-60 overflow-y-auto">
+              {duplicates.map((dup, index) => (
+                <div key={index} className="mb-3 last:mb-0">
+                  <div className="flex items-start">
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 mr-2">
+                      #{dup.index}
+                    </span>
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-800 font-medium">{dup.question}</p>
+                      <p className="text-xs text-yellow-700 mt-1">{dup.reason}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Invalid Questions */}
+        {invalid && invalid.length > 0 && (
+          <div className="mb-6">
+            <h4 className="text-lg font-semibold text-gray-900 mb-3">Invalid Questions</h4>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 max-h-60 overflow-y-auto">
+              {invalid.map((inv, index) => (
+                <div key={index} className="mb-3 last:mb-0">
+                  <div className="flex items-start">
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 mr-2">
+                      #{inv.index}
+                    </span>
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-800 font-medium">{inv.question}</p>
+                      <p className="text-xs text-red-700 mt-1">{inv.reason}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Close Button */}
+        <div className="flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

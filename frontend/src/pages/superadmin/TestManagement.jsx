@@ -3816,7 +3816,7 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated, uploadedQu
                         <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Name</th>
                         <th className="px-4 py-2 text-left font-semibold text-gray-700 border-b">Email</th>
                         <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">Roll Number</th>
-                        <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">Source</th>
+                        <th className="px-4 py-2 text-center font-semibold text-gray-700 border-b">Course</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3825,10 +3825,16 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated, uploadedQu
                           <td className="px-4 py-2 text-gray-900 border-b align-middle">{s.name}</td>
                           <td className="px-4 py-2 text-gray-900 border-b align-middle">{s.email}</td>
                           <td className="px-4 py-2 text-gray-900 border-b align-middle text-center">{s.roll_number || '-'}</td>
-                          <td className="px-4 py-2 text-gray-600 border-b align-middle text-center text-xs">
-                            {s.source === 'batch_course_instance' ? 'Batch-Course' :
-                              s.source === 'direct_batch' ? 'Direct Batch' :
-                                s.source === 'campus_wide' ? 'Campus' : 'Unknown'}
+                          <td className="px-4 py-2 text-gray-600 border-b align-middle text-center">
+                            {s.course_name && s.course_name !== 'Unknown Course' ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                                {s.course_name}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                                {s.course_name || 'Unknown Course'}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}
