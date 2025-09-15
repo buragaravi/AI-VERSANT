@@ -5,6 +5,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { User, Mail, Hash, Building, BookOpen, Users, Briefcase, ArrowLeft, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import ReleasedFormData from '../../components/student/ReleasedFormData';
 
 const ProfileCard = ({ icon, title, value }) => (
     <motion.div 
@@ -99,6 +100,16 @@ const StudentProfile = () => {
                         <ProfileCard icon={<Mail />} title="Email" value={profile.email} />
                     </div>
                 </div>
+            </motion.div>
+
+            {/* Released Form Data Section */}
+            <motion.div 
+                initial={{ opacity: 0, y: 20 }} 
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className="mt-8"
+            >
+                <ReleasedFormData />
             </motion.div>
         </div>
     );

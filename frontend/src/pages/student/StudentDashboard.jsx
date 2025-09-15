@@ -5,12 +5,17 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useNotification } from '../../contexts/NotificationContext'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import EmailCollectionPrompt from '../../components/common/EmailCollectionPrompt'
+import FormPortalPopup from '../../components/common/FormPortalPopup'
+import { useFormPortal } from '../../contexts/FormPortalContext'
+import FormStats from '../../components/student/FormStats'
+import ReleasedFormData from '../../components/student/ReleasedFormData'
 import api from '../../services/api'
 import { BrainCircuit, BookOpen } from 'lucide-react'
 
 const StudentDashboard = () => {
   const { user } = useAuth()
   const { success, error } = useNotification()
+  const { hasIncompleteRequiredForms, hasIncompleteForms, loading: formLoading } = useFormPortal()
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
   const [progressData, setProgressData] = useState(null)
@@ -97,13 +102,27 @@ const StudentDashboard = () => {
     }
   }
 
-  if (loading) {
+  if (loading || formLoading) {
     return <LoadingSpinner size="lg" />
   }
 
+  // Block dashboard content if there are any incomplete forms (required or optional)
+  const shouldBlockDashboard = hasIncompleteForms()
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+      {/* Block dashboard content if forms are required */}
+      {shouldBlockDashboard && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 z-30 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-8 max-w-md mx-4 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Please Complete All Forms</h3>
+            <p className="text-gray-600">You need to complete all pending forms before accessing the dashboard.</p>
+          </div>
+        </div>
+      )}
+      
+      <div className={`max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 ${shouldBlockDashboard ? 'pointer-events-none opacity-50' : ''}`}>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -242,6 +261,24 @@ const StudentDashboard = () => {
 
           {/* Right Column */}
           <div className="space-y-8">
+            {/* Form Stats */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+            >
+              <FormStats />
+            </motion.div>
+
+            {/* Released Form Data */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.45 }}
+            >
+              <ReleasedFormData />
+            </motion.div>
+
             {/* Recent Activity */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -327,6 +364,9 @@ const StudentDashboard = () => {
         user={userProfile || user} 
         onEmailUpdated={handleEmailUpdated}
       />
+      
+      {/* Form Portal Popup */}
+      <FormPortalPopup />
     </div>
   )
 }

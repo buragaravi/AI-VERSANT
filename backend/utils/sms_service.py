@@ -369,7 +369,7 @@ def check_sms_balance() -> Dict:
             'balance': response.text
         }
         
-    except Exception as e:
+    except Exception as e: 
         logger.error(f"Error checking SMS balance: {e}")
         return {'success': False, 'error': str(e)}
 

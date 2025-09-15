@@ -99,6 +99,14 @@ PyPDF2>=3.0.0
 # Task scheduling
 apscheduler>=3.10.0
 
+# PDF and DOCX processing
+PyPDF2 
+python-docx
+
+# Task scheduling   
+apscheduler>=3.10.0
+
+
 # Additional Python 3.13 compatible packages
 typing-extensions>=4.8.0
 packaging>=23.0

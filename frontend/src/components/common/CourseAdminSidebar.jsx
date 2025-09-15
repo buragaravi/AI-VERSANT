@@ -5,6 +5,7 @@ import {
   FilePlus, BarChart, Activity, LogOut, BookOpen
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useFeatures } from '../../contexts/FeatureContext'
 import { motion } from 'framer-motion'
 import api from '../../services/api'
 
@@ -12,6 +13,7 @@ const CourseAdminSidebar = () => {
   const location = useLocation()
   const navigate = useNavigate()
   const { logout, user } = useAuth()
+  const { generateNavLinks, loading: featuresLoading } = useFeatures()
   const [userPermissions, setUserPermissions] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -50,67 +52,42 @@ const CourseAdminSidebar = () => {
 
   // Define navigation based on course admin permissions
   const getNavigation = () => {
-    if (loading || !userPermissions) {
+    if (loading || !userPermissions || featuresLoading) {
       return []
     }
 
-    const navigation = []
-
-    // Dashboard - always available
-    if (userPermissions.modules?.includes('dashboard')) {
-      navigation.push({ 
-        name: 'Dashboard', 
-        path: '/course-admin/dashboard', 
-        icon: LayoutDashboard 
-      })
+    // Get feature-based navigation
+    const featureNavLinks = generateNavLinks('course_admin')
+    
+    // Map icon names to actual components
+    const iconMap = {
+      LayoutDashboard,
+      GraduationCap,
+      Users,
+      FilePlus,
+      BarChart,
+      Activity,
+      BookOpen
     }
+    
+    const navigation = featureNavLinks.map(link => ({
+      ...link,
+      icon: iconMap[link.icon] || LayoutDashboard
+    }))
 
-    // Batch Management - course admin can manage batches
-    if (userPermissions.modules?.includes('batch_management')) {
-      navigation.push({ 
-        name: 'Batch Management', 
-        path: '/course-admin/batches', 
-        icon: GraduationCap 
-      })
-    }
-
-    // Student Management - course admin can manage students
-    if (userPermissions.modules?.includes('student_management')) {
-      navigation.push({ 
-        name: 'Student Management', 
-        path: '/course-admin/students', 
-        icon: Users 
-      })
-    }
-
-    // Test Management - course admin can manage tests
-    if (userPermissions.modules?.includes('test_management')) {
-      navigation.push({ 
-        name: 'Test Management', 
-        path: '/course-admin/tests', 
-        icon: FilePlus 
-      })
-    }
-
-    // Results Management - course admin can view results
-    if (userPermissions.modules?.includes('results_management')) {
-      navigation.push({ 
-        name: 'Results Management', 
-        path: '/course-admin/results', 
-        icon: BarChart 
-      })
-    }
-
-    // Analytics - course admin can view analytics
-    if (userPermissions.modules?.includes('analytics')) {
-      navigation.push({ 
-        name: 'Analytics', 
-        path: '/course-admin/analytics', 
-        icon: Activity 
-      })
-    }
-
-    return navigation
+    // Filter by permissions as well
+    return navigation.filter(link => {
+      const moduleMap = {
+        'dashboard': 'dashboard',
+        'batch_management': 'batch_management',
+        'student_management': 'student_management',
+        'test_management': 'test_management',
+        'reports': 'reports'
+      }
+      
+      const requiredModule = moduleMap[link.feature]
+      return !requiredModule || userPermissions.modules?.includes(requiredModule)
+    })
   }
 
   const navigation = getNavigation()
