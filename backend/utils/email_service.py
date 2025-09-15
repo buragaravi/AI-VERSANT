@@ -87,7 +87,7 @@ def create_student_credentials_fallback(context):
     username = context.get('username', 'N/A')
     email = context.get('email', 'N/A')
     password = context.get('password', 'N/A')
-    login_url = context.get('login_url', 'https://pydah-studyedge.vercel.app/login')
+    login_url = context.get('login_url', 'https://crt.pydahsoft.in/login')
     
     return f"""
     <html>

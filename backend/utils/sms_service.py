@@ -24,9 +24,9 @@ ADMIN_CREDENTIAL_TEMPLATE_ID = os.getenv('ADMIN_CREDENTIAL_TEMPLATE_ID', "170717
 ADMIN_CREDENTIAL_TEMPLATE = "Welcome to PYDAH HOSTEL. Your Account is created with UserID: {#var#} Password: {#var#} login with link: {#var#} -Pydah"
 
 # Study Edge Apex specific templates
-STUDENT_CREDENTIALS_TEMPLATE = "Welcome to {#var#}, Your Credentials\nusername: {#var#}\npassword: {#var#}\nLogin with {#var#} - Pydah {#var#}"
+STUDENT_CREDENTIALS_TEMPLATE = "Welcome to Pydah Campus Recruitment Training, Your Credentials username: {#var#} password: {#var#} \nLogin with https://crt.pydahsoft.in/login - Pydah College"
 TEST_SCHEDULED_TEMPLATE = "A new test {#var#} has been scheduled at {#var#} for you. Please make sure to attempt it within 24hours.\nexam link: {#var#} - Pydah {#var#}"
-TEST_REMINDER_TEMPLATE = "you haven't attempted your scheduled test {#var#} yet. Please complete it as soon as possible.\nexam link:{#var#} - Pydah {#var#}"
+TEST_REMINDER_TEMPLATE = "you haven't attempted your scheduled test {#var#} yet. Please complete it as soon as possible. \nexam link: https://crt.pydahsoft.in/student/exam/{#var#} - Pydah College"
 
 # Check if SMS service is available
 SMS_AVAILABLE = bool(BULKSMS_API_KEY and BULKSMS_SENDER_ID and BULKSMS_ENGLISH_API_URL)
@@ -103,11 +103,8 @@ def send_student_credentials_sms(phone: str, student_name: str, username: str, p
         logger.info(f"📱 Sending student credentials SMS to: {phone}")
         
         # Replace template variables: Welcome to {#var#}, Your Credentials\nusername: {#var#}\npassword: {#var#}\nLogin with {#var#} - Pydah {#var#}
-        message = STUDENT_CREDENTIALS_TEMPLATE.replace('{#var#}', 'Pydah Apex', 1) \
-                                             .replace('{#var#}', username, 1) \
-                                             .replace('{#var#}', password, 1) \
-                                             .replace('{#var#}', login_url, 1) \
-                                             .replace('{#var#}', 'Apex', 1)
+        message = STUDENT_CREDENTIALS_TEMPLATE.replace('{#var#}', username, 1) \
+                                             .replace('{#var#}', password, 1) 
         
         params = {
             'apikey': BULKSMS_API_KEY,
@@ -151,8 +148,7 @@ def send_test_scheduled_sms(phone_number: str, test_name: str, start_time: str, 
         # Replace template variables: A new test {#var#} has been scheduled at {#var#} for you. Please make sure to attempt it within 24hours.\nexam link: {#var#} - Pydah {#var#}
         message = TEST_SCHEDULED_TEMPLATE.replace('{#var#}', test_name, 1) \
                                        .replace('{#var#}', start_time, 1) \
-                                       .replace('{#var#}', exam_link, 1) \
-                                       .replace('{#var#}', 'Apex', 1)
+                                       .replace('{#var#}', exam_link, 1)
         
         params = {
             'apikey': BULKSMS_API_KEY,

@@ -20,10 +20,15 @@ import {
     BookOpen,
     Search,
     X,
-    Filter
+    Filter,
+    FileText,
+    FileSpreadsheet as ExcelIcon
 } from 'lucide-react';
 import { useNotification } from '../../contexts/NotificationContext';
 import api from '../../services/api';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 // Test Details View Component
 const TestDetailsView = ({ 
@@ -670,6 +675,7 @@ const ResultsManagement = () => {
     const [exportLoading, setExportLoading] = useState(false);
     const [currentView, setCurrentView] = useState('list'); // 'list' or 'test-details'
     const [selectedTest, setSelectedTest] = useState(null);
+    const [studentExportLoading, setStudentExportLoading] = useState(false);
     const { error, success } = useNotification();
 
     useEffect(() => {
@@ -736,6 +742,7 @@ const ResultsManagement = () => {
         try {
             const response = await api.get(`/superadmin/student-attempts/${studentId}/${testId}`);
             if (response.data.success) {
+                console.log("student attempt details",response.data);
                 setStudentAttemptDetails(response.data.data);
                 setSelectedStudent(studentId);
                 setShowDetailsModal(true);
@@ -752,6 +759,417 @@ const ResultsManagement = () => {
         setShowDetailsModal(false);
         setStudentAttemptDetails(null);
         setSelectedStudent(null);
+    };
+
+    // Export functions for student attempt details
+    const exportStudentAttemptToExcel = async () => {
+        if (!studentAttemptDetails || studentAttemptDetails.length === 0) {
+            error('No attempt details available to export');
+            return;
+        }
+
+        setStudentExportLoading(true);
+        try {
+            // Get student information from the first attempt
+            const firstAttempt = studentAttemptDetails[0];
+            const studentInfo = {
+                'Student Name': firstAttempt.student_name || 'N/A',
+                'Roll Number': firstAttempt.roll_number || 'N/A',
+                'Email': firstAttempt.email || 'N/A',
+                'Test Name': firstAttempt.test_name || 'N/A',
+                'Total Attempts': studentAttemptDetails.length,
+                'Export Date': new Date().toLocaleString()
+            };
+
+            // Prepare comprehensive question-wise data
+            const questionData = [];
+            let totalCorrect = 0;
+            let totalIncorrect = 0;
+            let totalScore = 0;
+            let totalQuestions = 0;
+
+            studentAttemptDetails.forEach((attempt, attemptIndex) => {
+                if (attempt.detailed_results && attempt.detailed_results.length > 0) {
+                    totalQuestions = attempt.detailed_results.length; // Get total questions from first attempt
+                    
+                    attempt.detailed_results.forEach((result, questionIndex) => {
+                        const marksObtained = result.marks_obtained || (result.is_correct ? 1 : 0);
+                        
+                        questionData.push({
+                            'Attempt': attemptIndex + 1,
+                            'Question #': questionIndex + 1,
+                            'Question Text': String(result.question_text || 'N/A'),
+                            'Question Type': String(result.question_type || 'N/A'),
+                            'Student Answer': String(result.student_answer || result.selected_answer || 'No answer provided'),
+                            'Correct Answer': String(result.correct_answer_text || result.correct_answer || 'N/A'),
+                            'Status': result.is_correct ? 'Correct' : 'Incorrect',
+                            'Marks Obtained': marksObtained,
+                            'Max Marks': result.max_marks || 1,
+                            'Similarity Score': result.similarity_score ? `${result.similarity_score.toFixed(1)}%` : 'N/A',
+                            'Student Transcript': String(result.student_text || 'N/A'),
+                            'Original Text': String(result.original_text || 'N/A'),
+                            'Submitted At': attempt.submitted_at ? new Date(attempt.submitted_at).toLocaleString() : 'N/A',
+                            'Time Taken': attempt.time_taken ? `${attempt.time_taken} min` : 'N/A',
+                            'Attempt Score': attempt.score_percentage ? `${attempt.score_percentage.toFixed(1)}%` : '0%'
+                        });
+
+                        if (result.is_correct) totalCorrect++;
+                        else totalIncorrect++;
+                        totalScore += marksObtained;
+                    });
+                }
+            });
+
+            // Calculate summary statistics
+            const totalAttempts = studentAttemptDetails.length;
+            const averageScore = totalAttempts > 0 ? (totalScore / totalAttempts).toFixed(1) : 0;
+            const accuracy = totalQuestions > 0 ? ((totalCorrect / (totalQuestions * totalAttempts)) * 100).toFixed(1) : 0;
+
+            // Summary data
+            const summaryData = [
+                { 'Metric': 'Total Questions', 'Value': totalQuestions },
+                { 'Metric': 'Total Attempts', 'Value': totalAttempts },
+                { 'Metric': 'Total Correct Answers', 'Value': totalCorrect },
+                { 'Metric': 'Total Incorrect Answers', 'Value': totalIncorrect },
+                { 'Metric': 'Total Score', 'Value': totalScore },
+                { 'Metric': 'Average Score per Attempt', 'Value': averageScore },
+                { 'Metric': 'Overall Accuracy', 'Value': `${accuracy}%` },
+                { 'Metric': 'Export Date', 'Value': new Date().toLocaleString() }
+            ];
+
+            // Create workbook
+            const wb = XLSX.utils.book_new();
+            
+            // Add student info sheet
+            const studentInfoWS = XLSX.utils.json_to_sheet([studentInfo]);
+            XLSX.utils.book_append_sheet(wb, studentInfoWS, 'Student Information');
+
+            // Add questions sheet with better formatting
+            const questionsWS = XLSX.utils.json_to_sheet(questionData);
+            
+            // Set column widths
+            const colWidths = [
+                { wch: 8 },   // Attempt
+                { wch: 10 },  // Question #
+                { wch: 50 },  // Question Text
+                { wch: 15 },  // Question Type
+                { wch: 30 },  // Student Answer
+                { wch: 30 },  // Correct Answer
+                { wch: 12 },  // Status
+                { wch: 12 },  // Marks Obtained
+                { wch: 10 },  // Max Marks
+                { wch: 15 },  // Similarity Score
+                { wch: 30 },  // Student Transcript
+                { wch: 30 },  // Original Text
+                { wch: 20 },  // Submitted At
+                { wch: 12 },  // Time Taken
+                { wch: 15 }   // Attempt Score
+            ];
+            questionsWS['!cols'] = colWidths;
+            
+            XLSX.utils.book_append_sheet(wb, questionsWS, 'Question Details');
+
+            // Add summary sheet
+            const summaryWS = XLSX.utils.json_to_sheet(summaryData);
+            XLSX.utils.book_append_sheet(wb, summaryWS, 'Summary');
+
+            // Generate filename
+            const studentName = (firstAttempt.student_name || 'Student').replace(/[^a-zA-Z0-9]/g, '_');
+            const testName = (firstAttempt.test_name || 'Test').replace(/[^a-zA-Z0-9]/g, '_');
+            const filename = `${studentName}_${testName}_AttemptDetails_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+            // Save file
+            XLSX.writeFile(wb, filename);
+            success('Excel file exported successfully!');
+        } catch (err) {
+            console.error('Error exporting to Excel:', err);
+            error('Failed to export Excel file');
+        } finally {
+            setStudentExportLoading(false);
+        }
+    };
+
+    const exportStudentAttemptToPDF = async () => {
+        if (!studentAttemptDetails || studentAttemptDetails.length === 0) {
+            error('No attempt details available to export');
+            return;
+        }
+    
+        setStudentExportLoading(true);
+        try {
+            const firstAttempt = studentAttemptDetails[0];
+            const studentName = firstAttempt.student_name || 'N/A';
+            const testName = firstAttempt.test_name || 'N/A';
+            
+            // Create PDF in landscape orientation
+            const pdf = new jsPDF('l', 'mm', 'a4');
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            let yPosition = 20;
+    
+            // Color scheme: Green, White, Black
+            const colors = {
+                primary: [34, 139, 34],      // Forest Green
+                secondary: [240, 248, 240],  // Light Green
+                accent: [0, 100, 0],         // Dark Green
+                text: [0, 0, 0],             // Black
+                white: [255, 255, 255],      // White
+                lightGray: [245, 245, 245]   // Light Gray
+            };
+    
+            // Helper function to add text with word wrap and alignment
+            const addText = (text, x, y, maxWidth = pageWidth - 40, color = colors.text, fontSize = 10, fontStyle = 'normal', align = 'left') => {
+                pdf.setFontSize(fontSize);
+                pdf.setFont('helvetica', fontStyle);
+                pdf.setTextColor(color[0], color[1], color[2]);
+                
+                // For center alignment, calculate text width directly
+                if (align === 'center') {
+                    const textWidth = pdf.getStringUnitWidth(String(text)) * fontSize / pdf.internal.scaleFactor;
+                    const centerX = x - (textWidth / 2);
+                    pdf.text(String(text), centerX, y);
+                    return y + (fontSize * 0.35);
+                }
+                
+                const lines = pdf.splitTextToSize(String(text), maxWidth);
+                
+                // Handle text alignment
+                lines.forEach((line, index) => {
+                    let textX = x;
+                    if (align === 'right') {
+                        const textWidth = pdf.getStringUnitWidth(line) * fontSize / pdf.internal.scaleFactor;
+                        textX = x + (maxWidth - textWidth);
+                    }
+                    
+                    pdf.text(line, textX, y + (index * (fontSize * 0.35)));
+                });
+                
+                return y + (lines.length * (fontSize * 0.35));
+            };
+    
+            // Helper function to add a new page if needed
+            const checkNewPage = (requiredSpace = 20) => {
+                if (yPosition + requiredSpace > pageHeight - 20) {
+                    pdf.addPage();
+                    yPosition = 20;
+                    return true;
+                }
+                return false;
+            };
+    
+            // Helper function to draw a rectangle with color
+            const drawRect = (x, y, width, height, fillColor = colors.white, strokeColor = colors.primary) => {
+                pdf.setFillColor(fillColor[0], fillColor[1], fillColor[2]);
+                pdf.setDrawColor(strokeColor[0], strokeColor[1], strokeColor[2]);
+                pdf.rect(x, y, width, height, 'FD');
+            };
+    
+            // Helper function to draw a table cell with proper alignment
+            const drawTableCell = (x, y, width, height, text, textColor = colors.text, fontSize = 9, fontStyle = 'normal', align = 'left', fillColor = colors.white) => {
+                drawRect(x, y, width, height, fillColor, colors.primary);
+                
+                const textY = y + height/2 + fontSize/3;
+                
+                if (align === 'center') {
+                    const textWidth = pdf.getStringUnitWidth(String(text)) * fontSize / pdf.internal.scaleFactor;
+                    const centerX = x + (width - textWidth) / 2;
+                    pdf.setFontSize(fontSize);
+                    pdf.setFont('helvetica', fontStyle);
+                    pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
+                    pdf.text(String(text), centerX, textY);
+                } else {
+                    const textX = align === 'right' ? x + width - 3 : x + 3;
+                    addText(text, textX, textY, width - 6, textColor, fontSize, fontStyle, align);
+                }
+            };
+    
+            // Helper function to calculate required row height based on text length
+            const calculateRowHeight = (text, maxWidth, fontSize = 6) => {
+                const lines = pdf.splitTextToSize(String(text), maxWidth);
+                return Math.max(8, lines.length * (fontSize * 0.4) + 4);
+            };
+    
+            // Title with green background - properly centered
+            drawRect(10, 10, pageWidth - 20, 15, colors.primary);
+            addText(`${studentName}'s TEST ATTEMPT DETAILS`, pageWidth/2, 12, undefined, colors.white, 14, 'bold', 'center');
+            yPosition = 30;
+    
+             // Student Information Box - optimized for A4 landscape
+             const margin = 10; // Reduced margin for A4
+             const infoBoxHeight = 30;
+             drawRect(margin, yPosition, pageWidth - (margin * 2), infoBoxHeight, colors.secondary);
+            
+            // Student Information Title - centered
+            addText('STUDENT INFORMATION', pageWidth/2, yPosition + 7, undefined, colors.accent, 11, 'bold', 'center');
+            
+            // Student details in three columns for landscape
+            const colWidth = (pageWidth - (margin * 2) - 20) / 3;
+            const col1 = margin + 10;
+            const col2 = col1 + colWidth;
+            const col3 = col2 + colWidth;
+            
+            // First row of details
+            addText(`Student Name: ${studentName}`, col1, yPosition + 15, colWidth - 5, colors.text, 9);
+            addText(`Roll Number: ${firstAttempt.roll_number || 'N/A'}`, col2, yPosition + 15, colWidth - 5, colors.text, 9);
+            addText(`Email: ${firstAttempt.email || 'N/A'}`, col3, yPosition + 15, colWidth - 5, colors.text, 9);
+            
+            // Second row of details
+            addText(`Test Name: ${testName}`, col1, yPosition + 22, colWidth - 5, colors.text, 9);
+            addText(`Total Attempts: ${studentAttemptDetails.length}`, col2, yPosition + 22, colWidth - 5, colors.text, 9);
+            addText(`Export Date: ${new Date().toLocaleString()}`, col3, yPosition + 22, colWidth - 5, colors.text, 9);
+            
+            yPosition += infoBoxHeight + 10;
+    
+            // Process each attempt
+            let totalCorrect = 0;
+            let totalIncorrect = 0;
+            let totalScore = 0;
+            let totalQuestions = 0;
+    
+            studentAttemptDetails.forEach((attempt, attemptIndex) => {
+                checkNewPage(50);
+                
+                 // Attempt header with green background - A4 optimized
+                 drawRect(10, yPosition, pageWidth - 20, 10, colors.primary);
+                 addText(`ATTEMPT ${attemptIndex + 1}`, pageWidth/2, yPosition + 6, pageWidth - 40, colors.white, 12, 'bold', 'center');
+                 yPosition += 13;
+    
+                // Attempt details - A4 optimized margins
+                addText(`Submitted: ${attempt.submitted_at ? new Date(attempt.submitted_at).toLocaleString() : 'N/A'}`, 15, yPosition, pageWidth - 30, colors.text, 10);
+                yPosition += 5;
+                addText(`Time Taken: ${attempt.time_taken || 'N/A'} min`, 15, yPosition, pageWidth - 30, colors.text, 10);
+                yPosition += 5;
+                addText(`Score: ${attempt.score_percentage?.toFixed(1) || 0}%`, 15, yPosition, pageWidth - 30, colors.text, 10);
+                yPosition += 10;
+    
+                if (attempt.detailed_results && attempt.detailed_results.length > 0) {
+                    totalQuestions = attempt.detailed_results.length;
+                    
+                     // Questions table header - optimized for A4 landscape
+                     const tableMargin = 10; // Reduced margin for A4
+                     const tableX = tableMargin;
+                     const tableWidth = pageWidth - (tableMargin * 2); // 277mm for A4 landscape
+                     
+                     // Column widths optimized for A4 landscape (277mm total width)
+                     const colWidths = [
+                         15,  // Q# 
+                         120, // Question (main content)
+                         50,  // Student Answer
+                         50,  // Correct Answer
+                         15,  // Score
+                         20   // Status
+                     ]; // Total: 270mm (fits in 277mm with 7mm buffer)
+                    
+                    const headerRowHeight = 8;
+                    const headerY = yPosition;
+    
+                    // Table header with centered text
+                    drawRect(tableX, headerY, tableWidth, headerRowHeight, colors.accent);
+                    addText('Q#', tableX + colWidths[0]/2, headerY + 5, colWidths[0], colors.white, 7, 'bold', 'center');
+                    addText('Question', tableX + colWidths[0] + colWidths[1]/2, headerY + 5, colWidths[1], colors.white, 7, 'bold', 'center');
+                    addText('Student Answer', tableX + colWidths[0] + colWidths[1] + colWidths[2]/2, headerY + 5, colWidths[2], colors.white, 7, 'bold', 'center');
+                    addText('Correct Answer', tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3]/2, headerY + 5, colWidths[3], colors.white, 7, 'bold', 'center');
+                    addText('Score', tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4]/2, headerY + 5, colWidths[4], colors.white, 7, 'bold', 'center');
+                    addText('Status', tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + colWidths[5]/2, headerY + 5, colWidths[5], colors.white, 7, 'bold', 'center');
+                    
+                    yPosition += headerRowHeight;
+    
+                    // Process each question
+                    attempt.detailed_results.forEach((result, questionIndex) => {
+                        const isCorrect = result.is_correct;
+                        const score = isCorrect ? 1 : 0;
+                        
+                        // Color scheme for correct/incorrect
+                        const correctColor = [200, 255, 200]; // Light green background
+                        const incorrectColor = [255, 200, 200]; // Light red background
+                        const scoreTextColor = isCorrect ? [0, 100, 0] : [150, 0, 0];
+                        
+                        // Get full text for height calculation
+                        const questionText = String(result.question_text || 'N/A');
+                        const studentAnswer = String(result.student_answer || result.selected_answer || 'No answer');
+                        const correctAnswer = String(result.correct_answer_text || result.correct_answer || 'N/A');
+                        
+                        // Calculate dynamic row height based on longest text
+                        const questionHeight = calculateRowHeight(questionText, colWidths[1] - 4, 6);
+                        const studentHeight = calculateRowHeight(studentAnswer, colWidths[2] - 4, 6);
+                        const correctHeight = calculateRowHeight(correctAnswer, colWidths[3] - 4, 6);
+                        const rowHeight = Math.max(questionHeight, studentHeight, correctHeight, 8);
+                        
+                        checkNewPage(rowHeight + 5);
+                        
+                        // Row background color based on correctness
+                        const rowFillColor = isCorrect ? correctColor : incorrectColor;
+                        const statusText = isCorrect ? 'Correct' : 'Incorrect';
+                        
+                        // Question number (centered)
+                        drawTableCell(tableX, yPosition, colWidths[0], rowHeight, 
+                                     (questionIndex + 1).toString(), colors.text, 7, 'bold', 'center', rowFillColor);
+                        
+                        // Question text (left aligned)
+                        drawTableCell(tableX + colWidths[0], yPosition, colWidths[1], rowHeight, 
+                                     questionText, colors.text, 6, 'normal', 'left', rowFillColor);
+                        
+                        // Student answer (left aligned)
+                        drawTableCell(tableX + colWidths[0] + colWidths[1], yPosition, colWidths[2], rowHeight, 
+                                     studentAnswer, colors.text, 6, 'normal', 'left', rowFillColor);
+                        
+                        // Correct answer (left aligned)
+                        drawTableCell(tableX + colWidths[0] + colWidths[1] + colWidths[2], yPosition, colWidths[3], rowHeight, 
+                                     correctAnswer, colors.text, 6, 'normal', 'left', rowFillColor);
+                        
+                        // Score (centered)
+                        drawTableCell(tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], yPosition, colWidths[4], rowHeight, 
+                                     score.toString(), scoreTextColor, 7, 'bold', 'center', rowFillColor);
+                        
+                        // Status (centered)
+                        drawTableCell(tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4], yPosition, colWidths[5], rowHeight, 
+                                     statusText, scoreTextColor, 6, 'bold', 'center', rowFillColor);
+                        
+                        yPosition += rowHeight;
+    
+                        if (isCorrect) totalCorrect++;
+                        else totalIncorrect++;
+                        totalScore += score;
+                    });
+                }
+                yPosition += 15;
+            });
+    
+            // Summary section with green background
+            checkNewPage(50);
+            drawRect(margin, yPosition, pageWidth - (margin * 2), 10, colors.primary);
+            addText('SUMMARY', pageWidth/2, yPosition + 6, undefined, colors.white, 12, 'bold', 'center');
+            yPosition += 15;
+    
+            // Summary details in a nice box
+            const summaryBoxHeight = 30;
+            drawRect(margin, yPosition, pageWidth - (margin * 2), summaryBoxHeight, colors.secondary);
+            
+            const totalAttempts = studentAttemptDetails.length;
+            const averageScore = totalAttempts > 0 ? (totalScore / (totalQuestions * totalAttempts) * 100).toFixed(1) : 0;
+            const accuracy = totalQuestions > 0 ? ((totalCorrect / (totalQuestions * totalAttempts)) * 100).toFixed(1) : 0;
+    
+            // Summary details in three columns
+            addText(`Total Questions: ${totalQuestions}`, col1, yPosition + 8, colWidth, colors.text, 10, 'bold');
+            addText(`Total Attempts: ${totalAttempts}`, col2, yPosition + 8, colWidth, colors.text, 10, 'bold');
+            addText(`Total Correct: ${totalCorrect}`, col3, yPosition + 8, colWidth, colors.accent, 10, 'bold');
+            
+            addText(`Total Incorrect: ${totalIncorrect}`, col1, yPosition + 16, colWidth, colors.text, 10, 'bold');
+            addText(`Total Score: ${totalScore}/${totalQuestions * totalAttempts}`, col2, yPosition + 16, colWidth, colors.text, 10, 'bold');
+            addText(`Average Score: ${averageScore}%`, col3, yPosition + 16, colWidth, colors.text, 10, 'bold');
+            
+            addText(`Overall Accuracy: ${accuracy}%`, col1, yPosition + 24, colWidth, colors.accent, 11, 'bold');
+    
+            // Save PDF
+            const filename = `${studentName.replace(/[^a-zA-Z0-9]/g, '_')}_${testName.replace(/[^a-zA-Z0-9]/g, '_')}_AttemptDetails_${new Date().toISOString().split('T')[0]}.pdf`;
+            pdf.save(filename);
+            success('PDF file exported successfully!');
+        } catch (err) {
+            console.error('Error exporting to PDF:', err);
+            error('Failed to export PDF file: ' + err.message);
+        } finally {
+            setStudentExportLoading(false);
+        }
     };
 
     const handleExportTestResults = async (testId, testName, format = 'excel') => {
@@ -953,12 +1371,31 @@ const ResultsManagement = () => {
                                 <h3 className="text-xl font-semibold text-gray-900">
                                     Student Attempt Details
                                 </h3>
-                                <button
-                                    onClick={closeDetailsModal}
-                                    className="text-gray-400 hover:text-gray-600 transition-colors"
-                                >
-                                    <XCircle className="w-6 h-6" />
-                                </button>
+                                <div className="flex items-center gap-3">
+                                    {/* Export Buttons */}
+                                        <button
+                                        onClick={exportStudentAttemptToExcel}
+                                        disabled={studentExportLoading}
+                                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <ExcelIcon className="w-4 h-4" />
+                                        {studentExportLoading ? 'Exporting...' : 'Export Excel'}
+                                        </button>
+                                        <button
+                                        onClick={exportStudentAttemptToPDF}
+                                        disabled={studentExportLoading}
+                                        className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <FileText className="w-4 h-4" />
+                                        {studentExportLoading ? 'Exporting...' : 'Export PDF'}
+                                        </button>
+                                    <button
+                                        onClick={closeDetailsModal}
+                                        className="text-gray-400 hover:text-gray-600 transition-colors p-2"
+                                    >
+                                        <XCircle className="w-6 h-6" />
+                                    </button>
+                                </div>
                             </div>
                         </div>
 

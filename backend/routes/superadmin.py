@@ -1732,30 +1732,64 @@ def get_student_attempts(student_id, test_id):
         student_object_id = ObjectId(student_id)
         test_object_id = ObjectId(test_id)
         
-        # Get the student attempt directly from student_test_attempts
-        # Try multiple possible student ID fields
-        attempt = mongo_db.student_test_attempts.find_one({
-            'student_id': student_object_id,
-            'test_id': test_object_id,
-            'status': 'completed'
-        })
+        # Also try the string version for compatibility
+        student_id_string = student_id
         
-        if not attempt:
-            # Try with user_id field
-            attempt = mongo_db.student_test_attempts.find_one({
-                'user_id': student_object_id,
-                'test_id': test_object_id,
-                'status': 'completed'
+        # Use the same logic as test-attempts endpoint
+        # First, find the student document to get both _id and user_id
+        student = mongo_db.students.find_one({'_id': student_object_id})
+        if not student:
+            # Try finding by user_id if _id doesn't work
+            student = mongo_db.students.find_one({'user_id': student_object_id})
+        
+        if not student:
+            return jsonify({
+                'success': False,
+                'message': 'Student not found'
+            }), 404
+        
+        # Get both student _id and user_id for flexible matching
+        student_doc_id = student['_id']
+        student_user_id = student.get('user_id')
+        
+        # Find attempts using the same logic as test-attempts endpoint
+        attempt = mongo_db.student_test_attempts.find_one({
+            'test_id': test_object_id,
+            'test_type': 'online',
+            'status': 'completed',
+            '$or': [
+                {'student_id': student_doc_id},
+                {'student_id': student_user_id},
+                {'user_id': student_doc_id},
+                {'user_id': student_user_id}
+            ]
             })
         
         if not attempt:
-            # Try to find any attempt for this test and student (regardless of status)
+            # Try without status filter (for attempts that weren't properly marked as completed)
             attempt = mongo_db.student_test_attempts.find_one({
+                'test_id': test_object_id,
+                'test_type': 'online',
                 '$or': [
-                    {'student_id': student_object_id, 'test_id': test_object_id},
-                    {'user_id': student_object_id, 'test_id': test_object_id}
+                    {'student_id': student_doc_id},
+                    {'student_id': student_user_id},
+                    {'user_id': student_doc_id},
+                    {'user_id': student_user_id}
                 ]
             })
+        
+        # If we found an attempt but it doesn't have status='completed', 
+        # check if it was actually submitted (has submitted_at or end_time)
+        if attempt and attempt.get('status') != 'completed':
+            if attempt.get('submitted_at') or attempt.get('end_time'):
+                # This is a completed attempt, just missing the status field
+                # Update it to have the correct status
+                mongo_db.student_test_attempts.update_one(
+                    {'_id': attempt['_id']},
+                    {'$set': {'status': 'completed'}}
+                )
+                attempt['status'] = 'completed'
+                current_app.logger.info(f"Updated attempt {attempt['_id']} status to 'completed'")
         
         current_app.logger.info(f"Looking for student attempt: student_id={student_id}, test_id={test_id}")
         current_app.logger.info(f"Found attempt: {attempt is not None}")
@@ -1777,16 +1811,7 @@ def get_student_attempts(student_id, test_id):
                 'message': 'Test not found'
             }), 404
         
-        # Get student details - try both user_id and _id fields
-        student = mongo_db.students.find_one({'user_id': student_object_id})
-        if not student:
-            student = mongo_db.students.find_one({'_id': student_object_id})
-        if not student:
-            current_app.logger.warning(f"Student not found for student_id: {student_id}")
-            return jsonify({
-                'success': False,
-                'message': 'Student not found'
-            }), 404
+        # Student details already retrieved above
         
         # Get campus, course, and batch details
         campus = mongo_db.campuses.find_one({'_id': student.get('campus_id')}) if student.get('campus_id') else None
