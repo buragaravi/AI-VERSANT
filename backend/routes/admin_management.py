@@ -112,8 +112,35 @@ def create_admin():
         # Insert admin user
         user_id = mongo_db.users.insert_one(admin_user).inserted_id
         
-        # Send welcome email
+        # Send welcome email with credentials
         try:
+            # Get campus/course information for the email
+            campus_name = "N/A"
+            course_name = "N/A"
+            
+            if admin_role == 'campus_admin' and campus_id:
+                campus = mongo_db.campuses.find_one({'_id': ObjectId(campus_id)})
+                if campus:
+                    campus_name = campus.get('name', 'Unknown Campus')
+            elif admin_role == 'course_admin' and course_id:
+                course = mongo_db.courses.find_one({'_id': ObjectId(course_id)})
+                if course:
+                    course_name = course.get('name', 'Unknown Course')
+                    # Also get campus name for course admin
+                    if course.get('campus_id'):
+                        campus = mongo_db.campuses.find_one({'_id': course['campus_id']})
+                        if campus:
+                            campus_name = campus.get('name', 'Unknown Campus')
+            
+            # Console logging for verification
+            print(f"📧 Sending admin credentials email:")
+            print(f"   Admin: {admin_name} ({admin_email})")
+            print(f"   Role: {admin_role}")
+            print(f"   Username: {admin_name}")
+            print(f"   Password: {admin_password}")
+            print(f"   Campus: {campus_name}")
+            print(f"   Course: {course_name}")
+            
             template_name = 'campus_admin_credentials.html' if admin_role == 'campus_admin' else 'course_admin_credentials.html'
             html_content = render_template(
                 template_name,
@@ -122,17 +149,24 @@ def create_admin():
                     'username': admin_name,
                     'email': admin_email,
                     'password': admin_password,
-                    'login_url': "https://pydah-studyedge.vercel.app/login"
+                    'login_url': "https://crt.pydahsoft.in/login",
+                    'campus_name': campus_name,
+                    'course_name': course_name
                 }
             )
+            
             send_email(
                 to_email=admin_email,
                 to_name=admin_name,
                 subject=f"Welcome to Study Edge - Your {admin_role.replace('_', ' ').title()} Credentials",
                 html_content=html_content
             )
+            
+            print(f"✅ Admin credentials email sent successfully to {admin_email}")
+            
         except Exception as e:
-            print(f"Failed to send welcome email to {admin_email}: {e}")
+            print(f"❌ Failed to send welcome email to {admin_email}: {e}")
+            # Don't fail the admin creation if email fails
         
         return jsonify({
             'success': True,
@@ -223,23 +257,55 @@ def delete_admin(admin_id):
                 'message': 'Access denied. Super admin privileges required.'
             }), 403
         
+        # Validate admin_id format
+        try:
+            admin_object_id = ObjectId(admin_id)
+        except Exception:
+            return jsonify({
+                'success': False,
+                'message': 'Invalid admin ID format'
+            }), 400
+        
         # Check if admin exists
-        admin = mongo_db.users.find_one({'_id': ObjectId(admin_id)})
+        admin = mongo_db.users.find_one({'_id': admin_object_id})
         if not admin:
             return jsonify({
                 'success': False,
                 'message': 'Admin not found'
             }), 404
         
+        # Prevent deletion of super admin
+        if admin.get('role') == 'superadmin':
+            return jsonify({
+                'success': False,
+                'message': 'Cannot delete super admin account'
+            }), 403
+        
+        # Log the deletion for audit purposes
+        admin_name = admin.get('name', 'Unknown')
+        admin_email = admin.get('email', 'Unknown')
+        admin_role = admin.get('role', 'Unknown')
+        
+        print(f"🗑️ Deleting admin: {admin_name} ({admin_email}) - Role: {admin_role}")
+        
         # Delete admin
-        mongo_db.users.delete_one({'_id': ObjectId(admin_id)})
+        result = mongo_db.users.delete_one({'_id': admin_object_id})
+        
+        if result.deleted_count == 0:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to delete admin'
+            }), 500
+        
+        print(f"✅ Admin deleted successfully: {admin_name}")
         
         return jsonify({
             'success': True,
-            'message': 'Admin deleted successfully'
+            'message': f'Admin {admin_name} deleted successfully'
         }), 200
         
     except Exception as e:
+        print(f"❌ Error deleting admin: {e}")
         return jsonify({
             'success': False,
             'message': f'Failed to delete admin: {str(e)}'

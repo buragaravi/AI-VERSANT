@@ -242,15 +242,46 @@ def create_test_with_instances():
 
 @test_management_bp.route('/tests/<test_id>', methods=['GET'])
 @jwt_required()
-@require_superadmin
 def get_single_test(test_id):
     """Route to appropriate test retrieval endpoint based on module type"""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Authentication required.'
+            }), 401
+        
+        # Check if user has admin privileges
+        if user.get('role') not in ['superadmin', 'campus_admin', 'course_admin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
         current_app.logger.info(f"Fetching full details for test_id: {test_id}")
         test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
         if not test:
             current_app.logger.warning(f"Test not found for id: {test_id}")
             return jsonify({'success': False, 'message': 'Test not found'}), 404
+        
+        # Check if user has permission to view this test
+        if user.get('role') == 'campus_admin':
+            campus_id = user.get('campus_id')
+            if campus_id and ObjectId(campus_id) not in test.get('campus_ids', []):
+                return jsonify({
+                    'success': False,
+                    'message': 'Access denied. You can only view tests for your campus.'
+                }), 403
+        elif user.get('role') == 'course_admin':
+            course_id = user.get('course_id')
+            if course_id and ObjectId(course_id) not in test.get('course_ids', []):
+                return jsonify({
+                    'success': False,
+                    'message': 'Access denied. You can only view tests for your course.'
+                }), 403
 
         module_id = test.get('module_id')
         
@@ -417,10 +448,49 @@ def get_test_data():
 
 @test_management_bp.route('/tests', methods=['GET'])
 @jwt_required()
-@require_superadmin
 def get_all_tests():
     """Get all created tests with detailed information."""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Authentication required.'
+            }), 401
+        
+        # Check if user has admin privileges
+        if user.get('role') not in ['superadmin', 'campus_admin', 'course_admin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
+        # Build match stage based on user role
+        match_stage = {}
+        if user.get('role') == 'campus_admin':
+            # Campus admin can only see tests for their campus
+            campus_id = user.get('campus_id')
+            if campus_id:
+                match_stage['campus_ids'] = ObjectId(campus_id)
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': 'No campus assigned to this admin.'
+                }), 400
+        elif user.get('role') == 'course_admin':
+            # Course admin can only see tests for their course
+            course_id = user.get('course_id')
+            if course_id:
+                match_stage['course_ids'] = ObjectId(course_id)
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': 'No course assigned to this admin.'
+                }), 400
+        # Super admin can see all tests (no match stage needed)
+        
         pipeline = [
             {
                 '$lookup': {
@@ -445,7 +515,14 @@ def get_all_tests():
                     'foreignField': '_id',
                     'as': 'course_info'
                 }
-            },
+            }
+        ]
+        
+        # Add match stage if needed (for campus/course admins)
+        if match_stage:
+            pipeline.append({'$match': match_stage})
+        
+        pipeline.extend([
             {
                 '$project': {
                     '_id': 1,
@@ -464,7 +541,7 @@ def get_all_tests():
                 }
             },
             {'$sort': {'created_at': -1}}
-        ]
+        ])
 
         tests = list(mongo_db.tests.aggregate(pipeline))
 
@@ -493,13 +570,44 @@ def get_all_tests():
 
 @test_management_bp.route('/tests/<test_id>', methods=['DELETE'])
 @jwt_required()
-@require_superadmin
 def delete_test(test_id):
     """Delete a test and its associated S3 audio files (if any)."""
     try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Authentication required.'
+            }), 401
+        
+        # Check if user has admin privileges
+        if user.get('role') not in ['superadmin', 'campus_admin', 'course_admin']:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied. Admin privileges required.'
+            }), 403
+        
         test_to_delete = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
         if not test_to_delete:
             return jsonify({'success': False, 'message': 'Test not found'}), 404
+        
+        # Check if user has permission to delete this test
+        if user.get('role') == 'campus_admin':
+            campus_id = user.get('campus_id')
+            if campus_id and ObjectId(campus_id) not in test_to_delete.get('campus_ids', []):
+                return jsonify({
+                    'success': False,
+                    'message': 'Access denied. You can only delete tests for your campus.'
+                }), 403
+        elif user.get('role') == 'course_admin':
+            course_id = user.get('course_id')
+            if course_id and ObjectId(course_id) not in test_to_delete.get('course_ids', []):
+                return jsonify({
+                    'success': False,
+                    'message': 'Access denied. You can only delete tests for your course.'
+                }), 403
 
         # Only delete S3 audio files when the test is actually deleted
         # This ensures audio files persist until test deletion

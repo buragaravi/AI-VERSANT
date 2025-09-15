@@ -51,7 +51,7 @@ DEFAULT_PERMISSIONS = {
         'can_view_all_data': False
     },
     'course_admin': {
-        'modules': ['dashboard', 'batch_management', 'student_management', 'test_management', 'question_bank_upload', 'crt_upload', 'results_management', 'analytics', 'reports'],
+        'modules': ['dashboard', 'course_management', 'batch_management', 'student_management', 'test_management', 'question_bank_upload', 'crt_upload', 'results_management', 'analytics', 'reports'],
         'can_create_campus': False,
         'can_create_course': False,
         'can_create_batch': True,

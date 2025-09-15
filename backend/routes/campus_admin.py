@@ -171,30 +171,56 @@ def get_student_progress():
 @jwt_required()
 @require_permission(module='batch_management')
 def get_batches():
-    """List all batches for the campus admin's campus"""
+    """List all batches for the campus admin's campus or course admin's course"""
     try:
         current_user_id = get_jwt_identity()
         user = mongo_db.find_user_by_id(current_user_id)
         
-        if not user or user.get('role') != 'campus_admin':
+        if not user or user.get('role') not in ['campus_admin', 'course_admin']:
             return jsonify({'success': False, 'message': 'Access denied'}), 403
         
-        campus_id = user.get('campus_id')
-        if not campus_id:
-            return jsonify({'success': False, 'message': 'Campus not assigned'}), 400
-        
-        batches = list(mongo_db.batches.find({'campus_ids': ObjectId(campus_id)}))
         batch_list = []
         
-        for batch in batches:
-            course_objs = list(mongo_db.courses.find({'_id': {'$in': batch.get('course_ids', [])}}))
-            student_count = mongo_db.students.count_documents({'batch_id': batch['_id']})
-            batch_list.append({
-                'id': str(batch['_id']),
-                'name': batch['name'],
-                'courses': [{'id': str(c['_id']), 'name': c['name']} for c in course_objs],
-                'student_count': student_count
-            })
+        if user.get('role') == 'campus_admin':
+            # Campus admin: get batches for their campus
+            campus_id = user.get('campus_id')
+            if not campus_id:
+                return jsonify({'success': False, 'message': 'Campus not assigned'}), 400
+            
+            batches = list(mongo_db.batches.find({'campus_ids': ObjectId(campus_id)}))
+            
+            for batch in batches:
+                course_objs = list(mongo_db.courses.find({'_id': {'$in': batch.get('course_ids', [])}}))
+                student_count = mongo_db.students.count_documents({'batch_id': batch['_id']})
+                batch_list.append({
+                    'id': str(batch['_id']),
+                    'name': batch['name'],
+                    'courses': [{'id': str(c['_id']), 'name': c['name']} for c in course_objs],
+                    'student_count': student_count
+                })
+        
+        elif user.get('role') == 'course_admin':
+            # Course admin: get batches for their course
+            course_id = user.get('course_id')
+            if not course_id:
+                return jsonify({'success': False, 'message': 'Course not assigned'}), 400
+            
+            batches = list(mongo_db.batches.find({'course_ids': ObjectId(course_id)}))
+            
+            for batch in batches:
+                # Get campus info for this batch
+                campus_objs = list(mongo_db.campuses.find({'_id': {'$in': batch.get('campus_ids', [])}}))
+                # Count only students for this specific course in this batch
+                student_count = mongo_db.students.count_documents({
+                    'batch_id': batch['_id'],
+                    'course_id': ObjectId(course_id)
+                })
+                batch_list.append({
+                    'id': str(batch['_id']),
+                    'name': batch['name'],
+                    'campuses': [{'id': str(c['_id']), 'name': c['name']} for c in campus_objs],
+                    'student_count': student_count
+                })
         
         return jsonify({'success': True, 'data': batch_list}), 200
         
@@ -273,23 +299,46 @@ def delete_batch(batch_id):
 @jwt_required()
 @require_permission(module='course_management')
 def get_courses():
-    """List all courses for the campus admin's campus"""
+    """List all courses for the campus admin's campus or course admin's course"""
     try:
         current_user_id = get_jwt_identity()
         user = mongo_db.find_user_by_id(current_user_id)
         
-        if not user or user.get('role') != 'campus_admin':
+        if not user or user.get('role') not in ['campus_admin', 'course_admin']:
             return jsonify({'success': False, 'message': 'Access denied'}), 403
         
-        campus_id = user.get('campus_id')
-        courses = list(mongo_db.courses.find({'campus_id': ObjectId(campus_id)}))
         course_list = []
         
-        for course in courses:
-            course_list.append({
-                'id': str(course['_id']),
-                'name': course.get('name')
-            })
+        if user.get('role') == 'campus_admin':
+            # Campus admin: get courses for their campus
+            campus_id = user.get('campus_id')
+            if not campus_id:
+                return jsonify({'success': False, 'message': 'Campus not assigned'}), 400
+            
+            courses = list(mongo_db.courses.find({'campus_id': ObjectId(campus_id)}))
+            
+            for course in courses:
+                course_list.append({
+                    'id': str(course['_id']),
+                    'name': course.get('name')
+                })
+        
+        elif user.get('role') == 'course_admin':
+            # Course admin: get only their assigned course
+            course_id = user.get('course_id')
+            if not course_id:
+                return jsonify({'success': False, 'message': 'Course not assigned'}), 400
+            
+            course = mongo_db.courses.find_one({'_id': ObjectId(course_id)})
+            if course:
+                # Get campus info for this course
+                campus = mongo_db.campuses.find_one({'_id': course.get('campus_id')})
+                course_list.append({
+                    'id': str(course['_id']),
+                    'name': course.get('name'),
+                    'campus_id': str(course.get('campus_id')),
+                    'campus_name': campus.get('name') if campus else 'Unknown Campus'
+                })
         
         return jsonify({'success': True, 'data': course_list}), 200
         
