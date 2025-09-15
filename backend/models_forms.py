@@ -82,25 +82,29 @@ class FormResponse:
         }
 
 class FormSubmission:
-    def __init__(self, form_id: ObjectId, student_id: ObjectId, responses: List[FormResponse], 
-                 status: str = "draft", ip_address: str = ""):
+    def __init__(self, form_id: ObjectId, student_id: ObjectId, student_roll_number: str, responses: List[FormResponse], 
+                 status: str = "draft", ip_address: str = "", is_released_to_student: bool = False):
         self.submission_id = ObjectId()
         self.form_id = form_id
         self.student_id = student_id
+        self.student_roll_number = student_roll_number  # Primary identifier
         self.responses = responses
         self.status = status  # draft, submitted
         self.submitted_at = datetime.utcnow() if status == "submitted" else None
         self.ip_address = ip_address
+        self.is_released_to_student = is_released_to_student
 
     def to_dict(self):
         return {
             "submission_id": str(self.submission_id),
             "form_id": str(self.form_id),
             "student_id": str(self.student_id),
+            "student_roll_number": self.student_roll_number,  # Primary identifier
             "responses": [response.to_dict() for response in self.responses],
             "status": self.status,
             "submitted_at": self.submitted_at,
-            "ip_address": self.ip_address
+            "ip_address": self.ip_address,
+            "is_released_to_student": self.is_released_to_student
         }
 
 # Collection names

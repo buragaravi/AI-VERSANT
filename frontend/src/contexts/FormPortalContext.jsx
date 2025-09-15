@@ -15,9 +15,11 @@ export const FormPortalProvider = ({ children }) => {
     if (!authLoading && user && user.role === 'student') {
       fetchAvailableForms();
     } else if (!authLoading && !user) {
+      // Clear all form data when user logs out
       setAvailableForms([]);
       setFormCompletionStatus({});
       setLoading(false);
+      setError(null);
     }
   }, [user, authLoading]);
 

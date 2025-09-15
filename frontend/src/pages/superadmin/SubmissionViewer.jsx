@@ -173,6 +173,37 @@ const SubmissionViewer = () => {
     }
   };
 
+  const handleToggleRelease = async (submissionId, studentName, currentStatus) => {
+    const action = currentStatus ? 'withdraw from' : 'release to';
+    const result = await Swal.fire({
+      title: `${action.charAt(0).toUpperCase() + action.slice(1)} Submission`,
+      text: `Are you sure you want to ${action} students the submission from ${studentName}?`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: currentStatus ? '#f59e0b' : '#10b981',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: `Yes, ${action}!`
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const response = await api.patch(`/form-submissions/admin/submissions/${submissionId}/toggle-release`);
+        if (response.data.success) {
+          const newStatus = response.data.data.is_released_to_student;
+          Swal.fire(
+            'Success!', 
+            `Submission ${newStatus ? 'released to' : 'withdrawn from'} students.`, 
+            'success'
+          );
+          fetchSubmissions();
+        }
+      } catch (error) {
+        console.error('Error toggling release status:', error);
+        Swal.fire('Error', 'Failed to update release status', 'error');
+      }
+    }
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -367,6 +398,9 @@ const SubmissionViewer = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Submitted
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Released
+                  </th>
                   {form?.fields?.slice(0, 3).map(field => (
                     <th key={field.field_id} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {field.label}
@@ -414,6 +448,19 @@ const SubmissionViewer = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {submission.submitted_at ? formatDate(submission.submitted_at) : 'N/A'}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {submission.is_released_to_student ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Released
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          <Clock className="w-3 h-3 mr-1" />
+                          Not Released
+                        </span>
+                      )}
+                    </td>
                     {form?.fields?.slice(0, 3).map(field => (
                       <td key={field.field_id} className="px-6 py-4 text-sm text-gray-900">
                         <div className="max-w-xs truncate">
@@ -423,6 +470,27 @@ const SubmissionViewer = () => {
                     ))}
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end space-x-2">
+                        <button
+                          onClick={() => handleToggleRelease(submission._id, submission.student_name, submission.is_released_to_student)}
+                          className={`${
+                            submission.is_released_to_student 
+                              ? 'text-orange-600 hover:text-orange-900' 
+                              : 'text-green-600 hover:text-green-900'
+                          }`}
+                          title={submission.is_released_to_student ? 'Withdraw from Students' : 'Release to Students'}
+                        >
+                          {submission.is_released_to_student ? (
+                            <span className="flex items-center">
+                              <Clock className="w-4 h-4 mr-1" />
+                              Withdraw
+                            </span>
+                          ) : (
+                            <span className="flex items-center">
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              Release
+                            </span>
+                          )}
+                        </button>
                         <button
                           onClick={() => navigate(`/superadmin/submission-detail/${submission._id}`)}
                           className="text-blue-600 hover:text-blue-900"

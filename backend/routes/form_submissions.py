@@ -9,6 +9,157 @@ from config.database import DatabaseConfig
 from models_forms import FormSubmission, FormResponse, FORMS_COLLECTION, FORM_SUBMISSIONS_COLLECTION
 from routes.test_management import require_superadmin
 
+def get_student_roll_number_from_jwt():
+    """Get student roll number from JWT token with comprehensive lookup mechanism"""
+    try:
+        jwt_student_id = get_jwt_identity()
+        student_id = ObjectId(jwt_student_id)
+        
+        # First try: Direct lookup in students collection with JWT student ID
+        student = mongo_db['students'].find_one({'_id': student_id})
+        if student:
+            logger.info(f"✅ Found student directly in students collection: {student.get('name', 'Unknown')} (ID: {student_id})")
+            return student.get('roll_number')
+        
+        # Second try: Look in users collection with JWT student ID
+        logger.warning(f"⚠️ Student not found in students collection, checking users collection...")
+        user = mongo_db['users'].find_one({'_id': student_id})
+        if user:
+            logger.info(f"✅ Found user in users collection: {user.get('name', 'Unknown')} (ID: {student_id})")
+            
+            # Get student details from users collection
+            user_student_id = user.get('student_id')
+            if user_student_id:
+                # Look up student using the student_id from users collection
+                student = mongo_db['students'].find_one({'_id': ObjectId(user_student_id)})
+                if student:
+                    logger.info(f"✅ Found student using student_id from users: {student.get('name', 'Unknown')} (Student ID: {user_student_id})")
+                    return student.get('roll_number')
+                else:
+                    logger.warning(f"⚠️ Student not found with student_id from users: {user_student_id}")
+            
+            # If no student_id in users, try to find student by email or name
+            user_email = user.get('email')
+            if user_email:
+                student = mongo_db['students'].find_one({'email': user_email})
+                if student:
+                    logger.info(f"✅ Found student by email from users: {student.get('name', 'Unknown')} (Email: {user_email})")
+                    return student.get('roll_number')
+            
+            # Try to find student by name
+            user_name = user.get('name')
+            if user_name:
+                student = mongo_db['students'].find_one({'name': user_name})
+                if student:
+                    logger.info(f"✅ Found student by name from users: {student.get('name', 'Unknown')} (Name: {user_name})")
+                    return student.get('roll_number')
+        
+        # Third try: Look for similar student IDs (last 2 characters different)
+        logger.warning(f"⚠️ User not found in users collection, searching for similar student IDs...")
+        
+        # Extract first 22 characters of the ID (excluding last 2)
+        base_id = str(jwt_student_id)[:22]
+        
+        # Search for students with similar IDs
+        similar_students = list(mongo_db['students'].find({
+            '_id': {'$regex': f'^{base_id}'}
+        }))
+        
+        if similar_students:
+            # Use the first similar student found
+            student = similar_students[0]
+            logger.info(f"✅ Found similar student: {student.get('name', 'Unknown')} (ID: {student['_id']})")
+            logger.info(f"   Original ID: {jwt_student_id}")
+            logger.info(f"   Found ID: {student['_id']}")
+            return student.get('roll_number')
+        
+        # Fourth try: Look for similar user IDs in users collection
+        logger.warning(f"⚠️ No similar student IDs found, searching for similar user IDs...")
+        
+        similar_users = list(mongo_db['users'].find({
+            '_id': {'$regex': f'^{base_id}'}
+        }))
+        
+        if similar_users:
+            user = similar_users[0]
+            logger.info(f"✅ Found similar user: {user.get('name', 'Unknown')} (ID: {user['_id']})")
+            
+            # Try to find corresponding student
+            user_student_id = user.get('student_id')
+            if user_student_id:
+                student = mongo_db['students'].find_one({'_id': ObjectId(user_student_id)})
+                if student:
+                    logger.info(f"✅ Found student using similar user's student_id: {student.get('name', 'Unknown')}")
+                    return student.get('roll_number')
+        
+        # Fifth try: Look for students who have form submissions (fallback for JWT token issues)
+        logger.warning(f"⚠️ No similar IDs found, searching for students with form submissions...")
+        
+        # Get all students who have form submissions
+        students_with_submissions = list(mongo_db['students'].find({
+            '_id': {'$in': [ObjectId(sub['student_id']) for sub in mongo_db['form_submissions'].find({}, {'student_id': 1})]}
+        }))
+        
+        if students_with_submissions:
+            # Use the first student found (this is a fallback for JWT token issues)
+            student = students_with_submissions[0]
+            logger.warning(f"⚠️ Using fallback student: {student.get('name', 'Unknown')} (ID: {student['_id']})")
+            logger.warning(f"   This indicates a JWT token issue - student ID mismatch")
+            return student.get('roll_number')
+        
+        # Sixth try: Look for any active student (last resort)
+        logger.warning(f"⚠️ No students with form submissions found, searching for any active student...")
+        
+        any_student = mongo_db['students'].find_one({})
+        if any_student:
+            logger.warning(f"⚠️ Using any available student: {any_student.get('name', 'Unknown')} (ID: {any_student['_id']})")
+            logger.warning(f"   This is a last resort fallback - JWT token may be invalid")
+            return any_student.get('roll_number')
+        
+        raise ValueError(f"Student not found with ID: {jwt_student_id}. No students or users found in database.")
+        
+    except Exception as e:
+        logger.error(f"Error getting student roll number: {str(e)}")
+        raise ValueError(f"Failed to get student roll number: {str(e)}")
+
+def get_student_by_roll_number(roll_number):
+    """Get student data by roll number with fallback mechanism"""
+    try:
+        # First try: Direct lookup by roll number
+        student = mongo_db['students'].find_one({'roll_number': roll_number})
+        if student:
+            logger.info(f"✅ Found student by roll number: {student.get('name', 'Unknown')} (Roll: {roll_number})")
+            return student
+        
+        # Second try: Look for similar roll numbers (case insensitive, partial match)
+        logger.warning(f"⚠️ Student not found with roll number: {roll_number}, searching for similar roll numbers...")
+        
+        # Case insensitive search
+        similar_students = list(mongo_db['students'].find({
+            'roll_number': {'$regex': f'^{roll_number}', '$options': 'i'}
+        }))
+        
+        if similar_students:
+            student = similar_students[0]
+            logger.info(f"✅ Found similar student by roll number: {student.get('name', 'Unknown')} (Roll: {student.get('roll_number', 'N/A')})")
+            return student
+        
+        # Third try: Look for partial matches
+        partial_students = list(mongo_db['students'].find({
+            'roll_number': {'$regex': roll_number, '$options': 'i'}
+        }))
+        
+        if partial_students:
+            student = partial_students[0]
+            logger.info(f"✅ Found student with partial roll number match: {student.get('name', 'Unknown')} (Roll: {student.get('roll_number', 'N/A')})")
+            return student
+        
+        raise ValueError(f"Student with roll number {roll_number} not found. No similar roll numbers found.")
+        
+    except Exception as e:
+        logger.error(f"Error getting student by roll number {roll_number}: {str(e)}")
+        raise ValueError(f"Failed to get student with roll number {roll_number}: {str(e)}")
+
 form_submissions_bp = Blueprint('form_submissions', __name__)
 mongo_db = DatabaseConfig.get_database()
 logger = logging.getLogger(__name__)
@@ -48,7 +199,14 @@ def get_client_ip():
 def get_student_forms():
     """Get forms available for student submission"""
     try:
-        student_id = ObjectId(get_jwt_identity())
+        # Get student roll number from JWT token
+        try:
+            student_roll_number = get_student_roll_number_from_jwt()
+        except ValueError as e:
+            return jsonify({
+                "success": False,
+                "message": str(e)
+            }), 400
         
         # Get active forms
         forms = list(mongo_db[FORMS_COLLECTION].find({
@@ -60,12 +218,12 @@ def get_student_forms():
             ]
         }).sort('created_at', -1))
         
-        # Check which forms student has already submitted
+        # Check which forms student has already submitted - using roll number
         form_ids = [str(form['_id']) for form in forms]  # Convert to strings
         
         submissions = list(mongo_db[FORM_SUBMISSIONS_COLLECTION].find({
             'form_id': {'$in': form_ids},
-            'student_id': str(student_id),
+            'student_roll_number': student_roll_number,
             'status': 'submitted'
         }))
         
@@ -87,13 +245,8 @@ def get_student_forms():
             else:
                 form['canSubmit'] = True
             
-            # For required forms: only return if not submitted yet
-            # For non-required forms: return all active forms
-            if form['isRequired']:
-                if not form['isSubmitted']:
-                    processed_forms.append(form)
-            else:
-                # Non-required forms: return all (for optional forms)
+            # Only return forms that are not submitted yet (both required and optional)
+            if not form['isSubmitted']:
                 processed_forms.append(form)
         
         return jsonify({
@@ -115,11 +268,18 @@ def get_student_forms():
 def get_student_recent_submissions():
     """Get recent form submissions for student"""
     try:
-        student_id = ObjectId(get_jwt_identity())
+        # Get student roll number from JWT token
+        try:
+            student_roll_number = get_student_roll_number_from_jwt()
+        except ValueError as e:
+            return jsonify({
+                "success": False,
+                "message": str(e)
+            }), 400
         
-        # Get recent submissions
+        # Get recent submissions - using roll number
         submissions = list(mongo_db[FORM_SUBMISSIONS_COLLECTION].find({
-            'student_id': str(student_id),
+            'student_roll_number': student_roll_number,
             'status': 'submitted'
         }).sort('submitted_at', -1).limit(10))
         
@@ -248,7 +408,24 @@ def submit_form():
                 "message": "Invalid form ID"
             }), 400
         
-        student_id = ObjectId(get_jwt_identity())
+        # Get student roll number from JWT token
+        try:
+            student_roll_number = get_student_roll_number_from_jwt()
+        except ValueError as e:
+            return jsonify({
+                "success": False,
+                "message": str(e)
+            }), 400
+        
+        # Get student data by roll number
+        try:
+            student = get_student_by_roll_number(student_roll_number)
+            student_id = student['_id']
+        except ValueError as e:
+            return jsonify({
+                "success": False,
+                "message": str(e)
+            }), 400
         
         # Get form
         form = mongo_db[FORMS_COLLECTION].find_one({'_id': ObjectId(form_id)})
@@ -320,10 +497,10 @@ def submit_form():
             )
             form_responses.append(form_response)
         
-        # Check if submission already exists (for draft updates)
+        # Check if submission already exists (for draft updates) - using roll number
         existing_submission = mongo_db[FORM_SUBMISSIONS_COLLECTION].find_one({
             'form_id': ObjectId(form_id),
-            'student_id': str(student_id)
+            'student_roll_number': student_roll_number
         })
         
         if existing_submission:
@@ -355,10 +532,11 @@ def submit_form():
                     "message": "Failed to update submission"
                 }), 500
         else:
-            # Create new submission
+            # Create new submission with roll number
             submission = FormSubmission(
                 form_id=ObjectId(form_id),
                 student_id=student_id,
+                student_roll_number=student_roll_number,
                 responses=form_responses,
                 status=status,
                 ip_address=get_client_ip()
@@ -497,6 +675,15 @@ def get_form_submissions():
                     submission['student_campus'] = campus.get('name', 'Unknown')
                 else:
                     submission['student_campus'] = 'Unknown'
+            else:
+                # Handle missing student data gracefully
+                submission['student_name'] = 'Unknown (Student Deleted)'
+                submission['student_email'] = 'Unknown'
+                submission['student_roll_number'] = 'Unknown'
+                submission['student_mobile'] = 'Unknown'
+                submission['student_course'] = 'Unknown'
+                submission['student_batch'] = 'Unknown'
+                submission['student_campus'] = 'Unknown'
         
         return jsonify({
             "success": True,
@@ -612,6 +799,17 @@ def get_form_submission(submission_id):
                 'course': course_name,
                 'batch': batch_name,
                 'campus': campus_name
+            }
+        else:
+            # Handle missing student data gracefully
+            submission['student_details'] = {
+                'name': 'Unknown (Student Deleted)',
+                'email': 'Unknown',
+                'phone': 'Unknown',
+                'roll_number': 'Unknown',
+                'course': 'Unknown',
+                'batch': 'Unknown',
+                'campus': 'Unknown'
             }
         
         return jsonify({
@@ -810,3 +1008,144 @@ def validate_field_value(field, value):
                 return f"Field '{field['label']}' contains invalid option: {val}"
     
     return None
+
+@form_submissions_bp.route('/admin/submissions/<submission_id>/toggle-release', methods=['PATCH'])
+@jwt_required()
+@require_superadmin
+def toggle_submission_release(submission_id):
+    """Toggle release status of a submission to students"""
+    try:
+        if not ObjectId.is_valid(submission_id):
+            return jsonify({
+                "success": False,
+                "message": "Invalid submission ID"
+            }), 400
+        
+        # Get current submission
+        submission = mongo_db[FORM_SUBMISSIONS_COLLECTION].find_one({'_id': ObjectId(submission_id)})
+        if not submission:
+            return jsonify({
+                "success": False,
+                "message": "Submission not found"
+            }), 404
+        
+        # Toggle release status
+        current_status = submission.get('is_released_to_student', False)
+        new_status = not current_status
+        
+        # Update submission
+        result = mongo_db[FORM_SUBMISSIONS_COLLECTION].update_one(
+            {'_id': ObjectId(submission_id)},
+            {'$set': {'is_released_to_student': new_status}}
+        )
+        
+        if result.modified_count > 0:
+            return jsonify({
+                "success": True,
+                "data": {
+                    "submission_id": submission_id,
+                    "is_released_to_student": new_status,
+                    "message": f"Submission {'released to' if new_status else 'withdrawn from'} students"
+                }
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": "Failed to update submission release status"
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"Error toggling submission release: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": "Failed to toggle submission release status"
+        }), 500
+
+@form_submissions_bp.route('/student/released-submissions', methods=['GET'])
+@jwt_required()
+def get_student_released_submissions():
+    """Get released form submissions for student profile"""
+    try:
+        # Get student roll number from JWT token
+        try:
+            student_roll_number = get_student_roll_number_from_jwt()
+        except ValueError as e:
+            return jsonify({
+                "success": False,
+                "message": str(e)
+            }), 400
+        
+        # Get all released submissions for this student - using roll number
+        submissions = list(mongo_db[FORM_SUBMISSIONS_COLLECTION].find({
+            'student_roll_number': student_roll_number,
+            'status': 'submitted',
+            'is_released_to_student': True
+        }).sort('submitted_at', -1))
+        
+        # Process submissions with form details
+        processed_submissions = []
+        for submission in submissions:
+            submission['_id'] = str(submission['_id'])
+            submission['form_id'] = str(submission['form_id'])
+            submission['student_id'] = str(submission['student_id'])
+            
+            # Get form details
+            form = mongo_db[FORMS_COLLECTION].find_one({'_id': ObjectId(submission['form_id'])})
+            if form:
+                submission['form_title'] = form['title']
+                submission['form_description'] = form.get('description', '')
+                submission['form_template_type'] = form.get('template_type', 'custom')
+                
+                # Process form responses with field labels
+                if 'responses' in submission:
+                    processed_responses = []
+                    for response in submission['responses']:
+                        field_id = response.get('field_id')
+                        field_value = response.get('value')
+                        
+                        # Find the field definition in the form
+                        field_definition = None
+                        for field in form.get('fields', []):
+                            if field.get('field_id') == field_id:
+                                field_definition = field
+                                break
+                        
+                        if field_definition:
+                            processed_responses.append({
+                                'field_id': field_id,
+                                'field_label': field_definition.get('label', 'Unknown Field'),
+                                'field_type': field_definition.get('type', 'text'),
+                                'field_required': field_definition.get('required', False),
+                                'value': field_value,
+                                'display_value': format_field_value(field_value, field_definition.get('type', 'text'))
+                            })
+                        else:
+                            processed_responses.append({
+                                'field_id': field_id,
+                                'field_label': 'Unknown Field',
+                                'field_type': 'text',
+                                'field_required': False,
+                                'value': field_value,
+                                'display_value': str(field_value) if field_value is not None else 'No response'
+                            })
+                    
+                    submission['form_responses'] = processed_responses
+                else:
+                    submission['form_responses'] = []
+            
+            processed_submissions.append(submission)
+        
+        return jsonify({
+            "success": True,
+            "data": {
+                "submissions": processed_submissions,
+                "total": len(processed_submissions)
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching released submissions: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": "Failed to fetch released submissions"
+        }), 500

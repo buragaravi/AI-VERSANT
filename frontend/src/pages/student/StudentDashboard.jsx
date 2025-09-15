@@ -8,6 +8,7 @@ import EmailCollectionPrompt from '../../components/common/EmailCollectionPrompt
 import FormPortalPopup from '../../components/common/FormPortalPopup'
 import { useFormPortal } from '../../contexts/FormPortalContext'
 import FormStats from '../../components/student/FormStats'
+import ReleasedFormData from '../../components/student/ReleasedFormData'
 import api from '../../services/api'
 import { BrainCircuit, BookOpen } from 'lucide-react'
 
@@ -267,6 +268,15 @@ const StudentDashboard = () => {
               transition={{ duration: 0.5, delay: 0.4 }}
             >
               <FormStats />
+            </motion.div>
+
+            {/* Released Form Data */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.45 }}
+            >
+              <ReleasedFormData />
             </motion.div>
 
             {/* Recent Activity */}
