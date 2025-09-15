@@ -5,6 +5,7 @@ import {
   FilePlus, BarChart, Activity, LogOut, Building2
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useFeatures } from '../../contexts/FeatureContext'
 import { motion } from 'framer-motion'
 import api from '../../services/api'
 
@@ -12,6 +13,7 @@ const CampusAdminSidebar = () => {
   const location = useLocation()
   const navigate = useNavigate()
   const { logout, user } = useAuth()
+  const { generateNavLinks, loading: featuresLoading } = useFeatures()
   const [userPermissions, setUserPermissions] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -48,87 +50,45 @@ const CampusAdminSidebar = () => {
     }
   }
 
-  // Define navigation based on campus admin permissions
+  // Define navigation based on campus admin permissions and feature settings
   const getNavigation = () => {
-    if (loading || !userPermissions) {
+    if (loading || !userPermissions || featuresLoading) {
       return []
     }
 
-    const navigation = []
-
-    // Dashboard - always available
-    if (userPermissions.modules?.includes('dashboard')) {
-      navigation.push({ 
-        name: 'Dashboard', 
-        path: '/campus-admin/dashboard', 
-        icon: LayoutDashboard 
-      })
+    // Get feature-based navigation
+    const featureNavLinks = generateNavLinks('campus_admin')
+    
+    // Map icon names to actual components
+    const iconMap = {
+      LayoutDashboard,
+      BookCopy,
+      GraduationCap,
+      Users,
+      FilePlus,
+      BarChart,
+      Activity,
+      Building2
     }
+    
+    const navigation = featureNavLinks.map(link => ({
+      ...link,
+      icon: iconMap[link.icon] || LayoutDashboard
+    }))
 
-    // Course Management - campus admin can manage courses
-    if (userPermissions.modules?.includes('course_management')) {
-      navigation.push({ 
-        name: 'Course Management', 
-        path: '/campus-admin/courses', 
-        icon: BookCopy 
-      })
-    }
-
-    // Batch Management - campus admin can manage batches
-    if (userPermissions.modules?.includes('batch_management')) {
-      navigation.push({ 
-        name: 'Batch Management', 
-        path: '/campus-admin/batches', 
-        icon: GraduationCap 
-      })
-    }
-
-    // Student Management - campus admin can manage students
-    if (userPermissions.modules?.includes('student_management')) {
-      navigation.push({ 
-        name: 'Student Management', 
-        path: '/campus-admin/students', 
-        icon: Users 
-      })
-    }
-
-    // Test Management - campus admin can manage tests
-    if (userPermissions.modules?.includes('test_management')) {
-      navigation.push({ 
-        name: 'Test Management', 
-        path: '/campus-admin/tests', 
-        icon: FilePlus 
-      })
-    }
-
-    // Results Management - campus admin can view results
-    if (userPermissions.modules?.includes('results_management')) {
-      navigation.push({ 
-        name: 'Results Management', 
-        path: '/campus-admin/results', 
-        icon: BarChart 
-      })
-    }
-
-    // Analytics - campus admin can view analytics
-    if (userPermissions.modules?.includes('analytics')) {
-      navigation.push({ 
-        name: 'Analytics', 
-        path: '/campus-admin/analytics', 
-        icon: Activity 
-      })
-    }
-
-    // Reports - campus admin can view reports
-    if (userPermissions.modules?.includes('reports')) {
-      navigation.push({ 
-        name: 'Reports', 
-        path: '/campus-admin/reports', 
-        icon: BarChart 
-      })
-    }
-
-    return navigation
+    // Filter by permissions as well
+    return navigation.filter(link => {
+      const moduleMap = {
+        'dashboard': 'dashboard',
+        'student_management': 'student_management',
+        'test_management': 'test_management',
+        'batch_management': 'batch_management',
+        'reports': 'reports'
+      }
+      
+      const requiredModule = moduleMap[link.feature]
+      return !requiredModule || userPermissions.modules?.includes(requiredModule)
+    })
   }
 
   const navigation = getNavigation()

@@ -4,6 +4,8 @@ import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from './contexts/AuthContext'
 import { DashboardProvider } from './contexts/DashboardContext'
 import { NotificationProvider } from './contexts/NotificationContext'
+import { FeatureProvider } from './contexts/FeatureContext'
+import { FormPortalProvider } from './contexts/FormPortalContext'
 
 // Auth Pages
 import Login from './pages/auth/Login'
@@ -18,11 +20,15 @@ import AdminPermissions from './pages/superadmin/AdminPermissions'
 import TestManagement from './pages/superadmin/TestManagement'
 import StudentManagement from './pages/superadmin/StudentManagement'
 import ResultsManagement from './pages/superadmin/ResultsManagement'
+import GlobalSettings from './pages/superadmin/GlobalSettings'
 import BatchDetails from './pages/superadmin/BatchDetails'
 import QuestionBankUpload from './pages/superadmin/QuestionBankUpload'
 import CRTUpload from './pages/superadmin/CRTUpload'
 import BatchCourseInstances from './pages/superadmin/BatchCourseInstances'
 import BatchManagement from './pages/superadmin/BatchManagement'
+import FormManagement from './pages/superadmin/FormManagement'
+import SubmissionViewer from './pages/superadmin/SubmissionViewer'
+// import UnifiedTestManagement from './pages/superadmin/UnifiedTestManagement'
 
 // Campus Admin Pages
 import CampusAdminDashboard from './pages/campus-admin/CampusAdminDashboard'
@@ -50,6 +56,7 @@ import TestResult from './pages/student/TestResult'
 import PracticeModuleTaking from './pages/student/PracticeModuleTaking'
 import TechnicalTestTaking from './pages/student/TechnicalTestTaking'
 import WritingTestTaking from './pages/student/WritingTestTaking'
+// import UnifiedTestTaking from './pages/student/UnifiedTestTaking'
 
 // Components
 import ProtectedRoute from './components/common/ProtectedRoute'
@@ -70,6 +77,8 @@ function App() {
       <AuthProvider>
         <DashboardProvider>
           <NotificationProvider>
+            <FeatureProvider>
+            <FormPortalProvider>
             <div className="min-h-screen bg-gray-50">
               <Toaster 
                 position="top-right"
@@ -110,6 +119,7 @@ function App() {
                     <Route path="courses" element={<CourseManagement />} />
 
                     <Route path="admin-permissions" element={<AdminPermissions />} />
+                    <Route path="global-settings" element={<GlobalSettings />} />
                     <Route path="students" element={<StudentManagement />} />
                     <Route path="results" element={<ResultsManagement />} />
                     <Route path="batches/:batchId" element={<BatchDetails />} />
@@ -119,6 +129,10 @@ function App() {
                     <Route path="crt-upload" element={<CRTUpload />} />
                     <Route path="batch-course-instances" element={<BatchCourseInstances />} />
                     <Route path="batch-management" element={<BatchManagement />} />
+                    {/* Form Portal Routes */}
+                    <Route path="form-management" element={<FormManagement />} />
+                    <Route path="form-submissions/:formId" element={<SubmissionViewer />} />
+                    {/* <Route path="unified-tests" element={<UnifiedTestManagement />} /> */}
                     <Route path="profile" element={<SuperAdminProfile />} />
                   </Route>
 
@@ -162,12 +176,16 @@ function App() {
                   <Route path="practice-modules/:testId" element={<PracticeModuleTaking />} />
                   <Route path="technical-test/:testId" element={<TechnicalTestTaking />} />
                   <Route path="writing-test/:testId" element={<WritingTestTaking />} />
+            {/* <Route path="unified-tests" element={<UnifiedTestTaking />} />
+            <Route path="unified-test/:testId" element={<UnifiedTestTaking />} /> */}
                 </Route>
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>
+            </FormPortalProvider>
+            </FeatureProvider>
           </NotificationProvider>
         </DashboardProvider>
       </AuthProvider>

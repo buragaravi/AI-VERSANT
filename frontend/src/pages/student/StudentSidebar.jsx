@@ -2,23 +2,34 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { Home, Book, Calendar, BarChart2, PieChart, User, Menu, X, Bell } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useFeatures } from '../../contexts/FeatureContext';
 import { motion } from 'framer-motion';
 
 const StudentSidebar = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const { user, logout } = useAuth();
+    const { generateNavLinks, loading: featuresLoading } = useFeatures();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
 
-    const navLinks = [
-        { name: 'Dashboard', path: '/student', icon: Home },
-        { name: 'Practice Modules', path: '/student/practice', icon: Book },
-        { name: 'CRT Modules', path: '/student/crt', icon: Book },
-        { name: 'Online Exams', path: '/student/exams', icon: Calendar },
-        { name: 'Test History', path: '/student/history', icon: BarChart2 },
-        { name: 'Progress', path: '/student/progress', icon: PieChart },
-    ];
+    // Generate navigation links based on enabled features
+    const baseNavLinks = generateNavLinks('student');
+    
+    // Map icon names to actual components
+    const iconMap = {
+        Home,
+        Book,
+        Calendar,
+        BarChart2,
+        PieChart,
+        User
+    };
+    
+    const navLinks = baseNavLinks.map(link => ({
+        ...link,
+        icon: iconMap[link.icon] || Book
+    }));
 
     const handleLogout = () => {
         console.log('StudentSidebar logout initiated')

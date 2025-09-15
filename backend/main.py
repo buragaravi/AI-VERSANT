@@ -182,7 +182,12 @@ def create_app():
                 'course_admin': '/course-admin',
                 'student': '/student',
                 'test_management': '/test-management',
-
+                'unified_test_management': '/unified-test-management',
+                'unified_test_taking': '/unified-test-taking',
+                'global_settings': '/global-settings',
+                'forms': '/forms',
+                'form_submissions': '/form-submissions',
+                'form_analytics': '/form-analytics',
                 'analytics': '/analytics',
                 'campus_management': '/campus-management',
                 'course_management': '/course-management',
@@ -279,6 +284,11 @@ def create_app():
     # Register SMS management blueprint
     from routes.sms_management import sms_bp
     
+    # Register Unified Test System blueprints
+    from routes.unified_test_management import unified_test_management_bp
+    from routes.unified_test_taking import unified_test_taking_bp
+    from routes.global_settings import global_settings_bp
+    
     # Register async routes
     from routes.async_auth import async_auth_bp
     
@@ -310,6 +320,22 @@ def create_app():
     
     # Register SMS management blueprint
     app.register_blueprint(sms_bp, url_prefix='/sms-management')
+    
+    # Register Unified Test System blueprints
+    app.register_blueprint(unified_test_management_bp, url_prefix='/unified-test-management')
+    app.register_blueprint(unified_test_taking_bp, url_prefix='/unified-test-taking')
+    
+    # Register Global Settings blueprint
+    app.register_blueprint(global_settings_bp, url_prefix='/global-settings')
+    
+    # Register Form Portal blueprints
+    from routes.forms import forms_bp
+    from routes.form_submissions import form_submissions_bp
+    from routes.form_analytics import form_analytics_bp
+    
+    app.register_blueprint(forms_bp, url_prefix='/forms')
+    app.register_blueprint(form_submissions_bp, url_prefix='/form-submissions')
+    app.register_blueprint(form_analytics_bp, url_prefix='/form-analytics')
     
     # Register async routes
     app.register_blueprint(async_auth_bp, url_prefix='/async-auth')

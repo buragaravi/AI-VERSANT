@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
-import { Users, FilePlus, Building2, BarChart, LayoutDashboard, BookCopy, GraduationCap, Shield, Menu, X } from 'lucide-react'
+import { Users, FilePlus, Building2, BarChart, LayoutDashboard, BookCopy, GraduationCap, Shield, Settings, Menu, X, FormInput, ClipboardList, BarChart3 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
@@ -101,7 +101,7 @@ const SuperAdminSidebar = () => {
       // For super admin, set permissions immediately without API call
       if (user.role === 'superadmin') {
         const superAdminPermissions = {
-          modules: ['dashboard', 'campus_management', 'course_management', 'batch_management', 'user_management', 'admin_permissions', 'test_management', 'question_bank_upload', 'crt_upload', 'student_management', 'results_management'],
+          modules: ['dashboard', 'campus_management', 'course_management', 'batch_management', 'user_management', 'admin_permissions', 'global_settings', 'test_management', 'question_bank_upload', 'crt_upload', 'student_management', 'results_management'],
           can_upload_tests: true,
           can_upload_questions: true
         }
@@ -120,7 +120,7 @@ const SuperAdminSidebar = () => {
       // Use default permissions based on role
       const defaultPermissions = {
         super_admin: {
-          modules: ['dashboard', 'campus_management', 'course_management', 'batch_management', 'user_management', 'admin_permissions', 'test_management', 'question_bank_upload', 'crt_upload', 'student_management', 'results_management'],
+          modules: ['dashboard', 'campus_management', 'course_management', 'batch_management', 'user_management', 'admin_permissions', 'global_settings', 'test_management', 'question_bank_upload', 'crt_upload', 'student_management', 'results_management'],
           can_upload_tests: true,
           can_upload_questions: true
         },
@@ -168,11 +168,16 @@ const SuperAdminSidebar = () => {
         { name: 'Batch Management', path: '/superadmin/batch-management', icon: GraduationCap, module: 'batch_management' },
 
         { name: 'Admin Permissions', path: '/superadmin/admin-permissions', icon: Shield, module: 'admin_permissions' },
+        { name: 'Global Settings', path: '/superadmin/global-settings', icon: Settings, module: 'global_settings' },
         { name: 'Test Management', path: '/superadmin/tests', icon: FilePlus, module: 'test_management' },
+        // { name: 'Unified Tests', path: '/superadmin/unified-tests', icon: FilePlus, module: 'unified_test_management' },
         { name: 'Versant Upload', path: '/superadmin/question-bank-upload', icon: FilePlus, module: 'question_bank_upload', isUpload: true },
         { name: 'CRT Upload', path: '/superadmin/crt-upload', icon: FilePlus, module: 'crt_upload', isUpload: true },
         { name: 'Student Management', path: '/superadmin/students', icon: GraduationCap, module: 'student_management' },
         { name: 'Results Management', path: '/superadmin/results', icon: BarChart, module: 'results_management' },
+        
+        // Form Portal
+        { name: 'Form Management', path: '/superadmin/form-management', icon: ClipboardList, module: 'form_management' },
       ]
     }
 
@@ -189,10 +194,14 @@ const SuperAdminSidebar = () => {
 
       { name: 'Admin Permissions', path: '/superadmin/admin-permissions', icon: Shield, module: 'admin_permissions' },
       { name: 'Test Management', path: '/superadmin/tests', icon: FilePlus, module: 'test_management' },
+      // { name: 'Unified Tests', path: '/superadmin/unified-tests', icon: FilePlus, module: 'unified_test_management' },
       { name: 'Versant Upload', path: '/superadmin/question-bank-upload', icon: FilePlus, module: 'question_bank_upload', isUpload: true },
       { name: 'CRT Upload', path: '/superadmin/crt-upload', icon: FilePlus, module: 'crt_upload', isUpload: true },
       { name: 'Student Management', path: '/superadmin/students', icon: GraduationCap, module: 'student_management' },
       { name: 'Results Management', path: '/superadmin/results', icon: BarChart, module: 'results_management' },
+      
+      // Form Portal
+      { name: 'Form Management', path: '/superadmin/form-management', icon: ClipboardList, module: 'form_management' },
     ]
 
     // Filter navigation based on user permissions
