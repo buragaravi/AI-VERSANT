@@ -669,6 +669,9 @@ const BatchManagement = () => {
     });
 
     try {
+      // Simulate progress for better UX
+      setEmailProgress(prev => ({ ...prev, percentage: 25, message: 'Sending emails to students...' }));
+      
       // Send emails to filtered students only
       const studentIds = filteredStudents.map(student => student.user_id || student._id || student.id).filter(Boolean);
       
@@ -677,16 +680,55 @@ const BatchManagement = () => {
         course_filter: selectedCourseFilter || null
       });
       
+      setEmailProgress(prev => ({ ...prev, percentage: 75, message: 'Processing email responses...' }));
+      
       if (response.data.success) {
-        toast.success(`Emails sent to ${filteredStudents.length} students successfully`);
+        const successfulCount = response.data.successful_emails || filteredStudents.length;
+        const failedCount = response.data.failed_emails || 0;
+        
+        setEmailProgress(prev => ({ 
+          ...prev, 
+          percentage: 100, 
+          status: 'completed',
+          message: `Emails sent successfully! ${successfulCount} sent, ${failedCount} failed`
+        }));
+        
+        if (successfulCount > 0) {
+          toast.success(`Successfully sent emails to ${successfulCount} students!`);
+        }
+        if (failedCount > 0) {
+          toast.error(`${failedCount} emails failed to send.`);
+        }
       } else {
+        setEmailProgress(prev => ({ 
+          ...prev, 
+          percentage: 100, 
+          status: 'completed',
+          message: 'Email sending failed.'
+        }));
         toast.error(response.data.message || 'Failed to send emails');
-        setIsSendingEmails(false);
       }
     } catch (error) {
       console.error('Error sending emails:', error);
+      setEmailProgress(prev => ({ 
+        ...prev, 
+        percentage: 100, 
+        status: 'completed',
+        message: 'Email sending failed.'
+      }));
       toast.error('Failed to send emails. Please try again.');
+    } finally {
       setIsSendingEmails(false);
+      setTimeout(() => {
+        setEmailProgress({
+          status: 'idle',
+          total: 0,
+          processed: 0,
+          percentage: 0,
+          message: '',
+          currentStudent: null
+        });
+      }, 5000);
     }
   };
 
@@ -712,6 +754,9 @@ const BatchManagement = () => {
     });
 
     try {
+      // Simulate progress for better UX
+      setSmsProgress(prev => ({ ...prev, percentage: 25, message: 'Sending SMS to students...' }));
+      
       // Send SMS to filtered students only
       const studentIds = filteredStudents.map(student => student.user_id || student._id || student.id).filter(Boolean);
       
@@ -720,16 +765,55 @@ const BatchManagement = () => {
         course_filter: selectedCourseFilter || null
       });
       
+      setSmsProgress(prev => ({ ...prev, percentage: 75, message: 'Processing SMS responses...' }));
+      
       if (response.data.success) {
-        toast.success(`SMS sent to ${filteredStudents.length} students successfully`);
+        const successfulCount = response.data.successful_sms || filteredStudents.length;
+        const failedCount = response.data.failed_sms || 0;
+        
+        setSmsProgress(prev => ({ 
+          ...prev, 
+          percentage: 100, 
+          status: 'completed',
+          message: `SMS sent successfully! ${successfulCount} sent, ${failedCount} failed`
+        }));
+        
+        if (successfulCount > 0) {
+          toast.success(`Successfully sent SMS to ${successfulCount} students!`);
+        }
+        if (failedCount > 0) {
+          toast.error(`${failedCount} SMS failed to send.`);
+        }
       } else {
+        setSmsProgress(prev => ({ 
+          ...prev, 
+          percentage: 100, 
+          status: 'completed',
+          message: 'SMS sending failed.'
+        }));
         toast.error(response.data.message || 'Failed to send SMS');
-        setIsSendingSMS(false);
       }
     } catch (error) {
       console.error('Error sending SMS:', error);
+      setSmsProgress(prev => ({ 
+        ...prev, 
+        percentage: 100, 
+        status: 'completed',
+        message: 'SMS sending failed.'
+      }));
       toast.error('Failed to send SMS. Please try again.');
+    } finally {
       setIsSendingSMS(false);
+      setTimeout(() => {
+        setSmsProgress({
+          status: 'idle',
+          total: 0,
+          processed: 0,
+          percentage: 0,
+          message: '',
+          currentStudent: null
+        });
+      }, 5000);
     }
   };
 
@@ -1519,6 +1603,57 @@ const BatchManagement = () => {
                   </motion.div>
                 )}
               </div>
+
+              {/* Progress Indicators */}
+              {(isSendingEmails || isSendingSMS || emailProgress.status !== 'idle' || smsProgress.status !== 'idle') && (
+                <div className="px-8 py-4 bg-white border-t border-gray-200">
+                  <div className="space-y-4">
+                    {/* Email Progress */}
+                    {(isSendingEmails || emailProgress.status !== 'idle') && (
+                      <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-lg font-semibold text-blue-900 flex items-center gap-2">
+                            <Mail className="h-5 w-5" />
+                            Sending Emails
+                          </h3>
+                          <span className="text-sm text-blue-600 font-medium">
+                            {emailProgress.percentage}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-blue-200 rounded-full h-2 mb-2">
+                          <div 
+                            className="h-2 rounded-full bg-blue-600 transition-all duration-300"
+                            style={{ width: `${emailProgress.percentage}%` }}
+                          ></div>
+                        </div>
+                        <p className="text-sm text-blue-700">{emailProgress.message}</p>
+                      </div>
+                    )}
+
+                    {/* SMS Progress */}
+                    {(isSendingSMS || smsProgress.status !== 'idle') && (
+                      <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-lg font-semibold text-green-900 flex items-center gap-2">
+                            <Phone className="h-5 w-5" />
+                            Sending SMS
+                          </h3>
+                          <span className="text-sm text-green-600 font-medium">
+                            {smsProgress.percentage}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-green-200 rounded-full h-2 mb-2">
+                          <div 
+                            className="h-2 rounded-full bg-green-600 transition-all duration-300"
+                            style={{ width: `${smsProgress.percentage}%` }}
+                          ></div>
+                        </div>
+                        <p className="text-sm text-green-700">{smsProgress.message}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Enhanced Footer */}
               <div className="px-8 py-6 border-t border-gray-100 bg-gradient-to-r from-gray-50 to-gray-100 flex items-center justify-between">

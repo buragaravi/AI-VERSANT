@@ -385,6 +385,57 @@ class StudentNotificationManager:
             logger.error(f"Error sending credentials SMS to {student.get('mobile_number', student.get('phone_number', 'N/A'))}: {e}")
             return {'success': False, 'error': str(e)}
     
+    def send_sms_only_credentials(self, student: Dict) -> Dict:
+        """Send SMS-only credentials to student (no email)"""
+        try:
+            # Generate password using the same pattern as during upload
+            password = self.generate_password(student['name'], student.get('roll_number', ''))
+            username = student.get('username', student.get('roll_number', ''))
+            
+            # Check for both possible field names
+            phone_number = student.get('mobile_number') or student.get('phone_number')
+            if not phone_number:
+                return {
+                    'success': False, 
+                    'password': password,
+                    'error': 'No mobile number available'
+                }
+            
+            # Log credentials before sending SMS
+            print(f"📱 Sending SMS to: {student['name']} ({phone_number})")
+            print(f"   Username: {username}")
+            print(f"   Password: {password}")
+            print(f"   Roll Number: {student.get('roll_number', 'N/A')}")
+            print("-" * 50)
+            
+            sms_result = send_student_credentials_sms(
+                phone=phone_number,
+                student_name=student['name'],
+                username=username,
+                password=password,
+                login_url=self.login_url
+            )
+            
+            if sms_result['success']:
+                print(f"✅ SMS sent successfully to {student['name']}")
+            else:
+                print(f"❌ Failed to send SMS to {student['name']}: {sms_result.get('error', 'Unknown error')}")
+            
+            return {
+                'success': sms_result['success'],
+                'password': password,
+                'error': sms_result.get('error') if not sms_result['success'] else None
+            }
+            
+        except Exception as e:
+            logger.error(f"Error sending SMS-only credentials to {student.get('mobile_number', student.get('phone_number', 'N/A'))}: {e}")
+            print(f"❌ Error sending SMS to {student['name']}: {e}")
+            return {
+                'success': False,
+                'password': password if 'password' in locals() else None,
+                'error': str(e)
+            }
+    
     def send_test_scheduled_sms(self, student: Dict, test: Dict) -> Dict:
         """Send test scheduled SMS to student"""
         try:
@@ -458,20 +509,40 @@ class StudentNotificationManager:
             
             try:
                 if action == 'welcome_email':
-                    email_result = self.send_welcome_email(student)
-                    result['success'] = email_result['success']
-                    result['error'] = email_result['error']
-                    result['password'] = email_result['password']
+                    # Check if student has email before sending welcome email
+                    if not student.get('email'):
+                        result['success'] = False
+                        result['error'] = 'No email address available - skipping email'
+                        result['skipped_email'] = True
+                        print(f"⚠️  Skipping email for {student['name']} - no email address")
+                    else:
+                        email_result = self.send_welcome_email(student)
+                        result['success'] = email_result['success']
+                        result['error'] = email_result['error']
+                        result['password'] = email_result['password']
                     
-                    # Also send SMS if email was successful
-                    if email_result['success'] and student.get('mobile_number'):
-                        sms_result = self.send_credentials_sms(student, email_result['password'])
+                    # Always try to send SMS if student has phone number (regardless of email success)
+                    phone_number = student.get('mobile_number') or student.get('phone_number')
+                    if phone_number:
+                        # Use password from email if available, otherwise generate new one
+                        password = result.get('password') or self.generate_password(student['name'], student.get('roll_number', ''))
+                        sms_result = self.send_credentials_sms(student, password)
                         result['sms_sent'] = sms_result['success']
                         result['sms_error'] = sms_result.get('error')
                         if sms_result['success']:
-                            print(f"📱 SMS sent to {student['name']} ({student['mobile_number']})")
+                            print(f"📱 SMS sent to {student['name']} ({phone_number})")
                         else:
                             print(f"❌ SMS failed for {student['name']}: {sms_result.get('error', 'Unknown error')}")
+                    else:
+                        result['sms_sent'] = False
+                        result['sms_error'] = 'No mobile number available'
+                        print(f"⚠️  No mobile number for {student['name']} - skipping SMS")
+                    
+                elif action == 'sms_only_credentials':
+                    sms_result = self.send_sms_only_credentials(student)
+                    result['success'] = sms_result['success']
+                    result['error'] = sms_result['error']
+                    result['password'] = sms_result['password']
                     
                 elif action == 'test_notification' and test_id:
                     test = self.db.tests.find_one({'_id': ObjectId(test_id)})
@@ -565,11 +636,12 @@ def display_menu():
     print("🎓 VERSANT Student Notification Manager")
     print("="*60)
     print("1. Send Welcome Emails + SMS (with credentials)")
-    print("2. Send Test Notifications + SMS")
-    print("3. Send Exam Reminders + SMS")
-    print("4. View Students by Filter")
-    print("5. View Available Tests")
-    print("6. Exit")
+    print("2. Send SMS Only - Credentials")
+    print("3. Send Test Notifications + SMS")
+    print("4. Send Exam Reminders + SMS")
+    print("5. View Students by Filter")
+    print("6. View Available Tests")
+    print("7. Exit")
     print("="*60)
 
 def get_user_selection(prompt: str, options: List[Dict], display_key: str = 'name') -> Optional[Dict]:
@@ -614,7 +686,7 @@ def main():
     while True:
         try:
             display_menu()
-            choice = input("\nEnter your choice (1-6): ").strip()
+            choice = input("\nEnter your choice (1-7): ").strip()
             
             if choice == '1':
                 # Send Welcome Emails
@@ -681,6 +753,98 @@ def main():
                                 print(f"  - {result['name']}: {result['error']}")
             
             elif choice == '2':
+                # Send SMS Only - Credentials
+                print("\n📱 SMS Only - Credentials Sender")
+                print("-" * 30)
+                
+                # Get filter criteria
+                campuses = manager.get_campuses()
+                if not campuses:
+                    print("No campuses found.")
+                    continue
+                
+                campus = get_user_selection("Select Campus", campuses)
+                if not campus:
+                    continue
+                
+                courses = manager.get_courses(campus['id'])
+                if not courses:
+                    print("No courses found for this campus.")
+                    continue
+                
+                course = get_user_selection("Select Course", courses)
+                if not course:
+                    continue
+                
+                batches = manager.get_batches(campus['id'], course['id'])
+                if not batches:
+                    print("No batches found for this campus and course.")
+                    continue
+                
+                batch = get_user_selection("Select Batch", batches)
+                if not batch:
+                    continue
+                
+                # Display batch details
+                print(f"\nSelected Batch: {batch['name']}")
+                print(f"Campus: {', '.join(batch.get('campus_names', []))}")
+                print(f"Course: {', '.join(batch.get('course_names', []))}")
+                
+                # Get students
+                students = manager.get_students(campus['id'], course['id'], batch['id'])
+                if not students:
+                    print("No students found for the selected criteria.")
+                    continue
+                
+                # Filter students who have mobile numbers
+                students_with_mobile = [s for s in students if s.get('mobile_number') or s.get('phone_number')]
+                students_without_mobile = [s for s in students if not (s.get('mobile_number') or s.get('phone_number'))]
+                
+                print(f"\nFound {len(students)} students:")
+                print(f"  - {len(students_with_mobile)} students with mobile numbers")
+                print(f"  - {len(students_without_mobile)} students without mobile numbers")
+                
+                if students_without_mobile:
+                    print(f"\n⚠️  Students without mobile numbers (will be skipped):")
+                    for student in students_without_mobile:
+                        print(f"  - {student['name']} ({student['email']})")
+                
+                if not students_with_mobile:
+                    print("No students with mobile numbers found.")
+                    continue
+                
+                print(f"\nStudents with mobile numbers:")
+                for student in students_with_mobile:
+                    phone_display = student.get('mobile_number') or student.get('phone_number')
+                    print(f"  - {student['name']} ({phone_display})")
+                
+                confirm = input(f"\nSend SMS credentials to {len(students_with_mobile)} students? (y/N): ").strip().lower()
+                if confirm == 'y':
+                    print("\nSending SMS credentials...")
+                    results = manager.process_students(students_with_mobile, 'sms_only_credentials')
+                    
+                    print(f"\n✅ Results:")
+                    print(f"  Total: {results['total_students']}")
+                    print(f"  Successful: {results['successful']}")
+                    print(f"  Failed: {results['failed']}")
+                    
+                    if results['failed'] > 0:
+                        print("\n❌ Failed SMS:")
+                        for result in results['results']:
+                            if not result['success']:
+                                print(f"  - {result['name']}: {result['error']}")
+                    
+                    if results['successful'] > 0:
+                        print(f"\n📋 CREDENTIALS SENT VIA SMS:")
+                        print("-" * 40)
+                        for result in results['results']:
+                            if result['success'] and 'password' in result:
+                                print(f"✅ {result['name']} ({result['mobile_number']})")
+                                print(f"   Username: {result.get('username', 'N/A')}")
+                                print(f"   Password: {result['password']}")
+                                print()
+            
+            elif choice == '3':
                 # Send Test Notifications
                 print("\n📝 Test Notification Sender")
                 print("-" * 30)
@@ -914,12 +1078,12 @@ def main():
                     print(f"     ID: {test['_id']}")
                     print()
             
-            elif choice == '6':
+            elif choice == '7':
                 print("\n👋 Goodbye!")
                 break
             
             else:
-                print("Invalid choice. Please enter 1-6.")
+                print("Invalid choice. Please enter 1-7.")
             
             input("\nPress Enter to continue...")
             

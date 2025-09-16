@@ -582,7 +582,7 @@ def get_form_submissions():
         # Build query
         query = {}
         if form_id and ObjectId.is_valid(form_id):
-            query['form_id'] = form_id  # form_id is stored as string, not ObjectId
+            query['form_id'] = ObjectId(form_id)  # form_id is stored as ObjectId
         if student_id and ObjectId.is_valid(student_id):
             query['student_id'] = student_id  # student_id is stored as string, not ObjectId
         if status:

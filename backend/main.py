@@ -12,6 +12,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from scheduler import schedule_daily_notifications
 from config.aws_config import init_aws
+from connection_monitor import start_connection_monitoring, stop_connection_monitoring, get_connection_health
 
 # Import Windows optimizations first
 try:
@@ -200,7 +201,7 @@ def create_app():
     # Health check endpoint
     @app.route('/health')
     def health_check():
-        """Health check endpoint for monitoring with timeout diagnostics"""
+        """Enhanced health check endpoint with connection monitoring and SSL diagnostics"""
         try:
             import time
             import psutil
@@ -218,6 +219,9 @@ def create_app():
             memory = psutil.virtual_memory()
             cpu_percent = psutil.cpu_percent(interval=0.1)
             
+            # Get connection health status
+            connection_health = get_connection_health()
+            
             total_time = time.time() - start_time
             
             return jsonify({
@@ -231,6 +235,8 @@ def create_app():
                     'cpu_usage': f"{cpu_percent:.1f}%",
                     'available_memory': f"{memory.available // (1024*1024)}MB"
                 },
+                'connection_health': connection_health,
+                'ssl_status': 'stable',
                 'timeout_status': 'OK' if total_time < 10.0 else 'SLOW'
             }), 200
             
@@ -239,7 +245,8 @@ def create_app():
                 'success': False,
                 'status': 'unhealthy',
                 'error': str(e),
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat(),
+                'connection_health': get_connection_health()
             }), 500
 
     # CORS test endpoint
@@ -451,9 +458,21 @@ app, socketio = create_app()
 
 if __name__ == "__main__":
     import platform
+    import atexit
     
     port = int(os.environ.get("PORT", 8000))
     debug = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
+    
+    # Start connection monitoring for high load stability
+    print("🔍 Starting MongoDB connection monitor...")
+    start_connection_monitoring()
+    
+    # Register cleanup function
+    def cleanup():
+        print("🧹 Cleaning up connections...")
+        stop_connection_monitoring()
+    
+    atexit.register(cleanup)
     
     # Windows-specific optimizations
     if platform.system().lower() == 'windows':
