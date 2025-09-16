@@ -2726,12 +2726,35 @@ def send_batch_emails(batch_id):
         for student in students:
             user_detail = mongo_db.users.find_one({'_id': student['user_id']})
             if user_detail:
+                # Generate password if not present (same logic as manual_student_notifications.py)
+                existing_password = user_detail.get('password', '')
+                if not existing_password:
+                    # Generate password using the same pattern as during upload
+                    first_name = student['name'].split()[0] if student['name'].split() else student['name']
+                    roll_number = student.get('roll_number', '')
+                    if first_name and roll_number:
+                        generated_password = f"{first_name[:4].lower()}{roll_number[-4:]}"
+                    else:
+                        # Fallback to random password
+                        import secrets
+                        import string
+                        generated_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
+                    
+                    # Update the user record with the generated password
+                    mongo_db.users.update_one(
+                        {'_id': student['user_id']},
+                        {'$set': {'password': generated_password}}
+                    )
+                    password = generated_password
+                else:
+                    password = existing_password
+                
                 student_details.append({
                     'student_id': str(student['_id']),
                     'name': student['name'],
                     'email': student.get('email'),
                     'username': user_detail.get('username', ''),
-                    'password': user_detail.get('password', '')
+                    'password': password
                 })
 
         # Filter students with email addresses
@@ -2868,12 +2891,35 @@ def send_batch_sms(batch_id):
         for student in students:
             user_detail = mongo_db.users.find_one({'_id': student['user_id']})
             if user_detail:
+                # Generate password if not present (same logic as manual_student_notifications.py)
+                existing_password = user_detail.get('password', '')
+                if not existing_password:
+                    # Generate password using the same pattern as during upload
+                    first_name = student['name'].split()[0] if student['name'].split() else student['name']
+                    roll_number = student.get('roll_number', '')
+                    if first_name and roll_number:
+                        generated_password = f"{first_name[:4].lower()}{roll_number[-4:]}"
+                    else:
+                        # Fallback to random password
+                        import secrets
+                        import string
+                        generated_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
+                    
+                    # Update the user record with the generated password
+                    mongo_db.users.update_one(
+                        {'_id': student['user_id']},
+                        {'$set': {'password': generated_password}}
+                    )
+                    password = generated_password
+                else:
+                    password = existing_password
+                
                 student_details.append({
                     'student_id': str(student['_id']),
                     'name': student['name'],
                     'mobile_number': student.get('mobile_number'),
                     'username': user_detail.get('username', ''),
-                    'password': user_detail.get('password', '')
+                    'password': password
                 })
 
         # Filter students with mobile numbers

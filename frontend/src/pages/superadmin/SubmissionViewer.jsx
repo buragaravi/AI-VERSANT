@@ -204,6 +204,72 @@ const SubmissionViewer = () => {
     }
   };
 
+  const handleUniversalRelease = async () => {
+    const result = await Swal.fire({
+      title: 'Release All Submissions',
+      text: `Are you sure you want to release ALL ${submissions.length} submissions to students? This action will make all submissions visible to their respective students.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#10b981',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, release all!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const unreleasedSubmissions = submissions.filter(sub => !sub.is_released_to_student);
+        const promises = unreleasedSubmissions.map(submission => 
+          api.patch(`/form-submissions/admin/submissions/${submission._id}/toggle-release`)
+        );
+        
+        await Promise.all(promises);
+        
+        Swal.fire(
+          'Success!', 
+          `All ${unreleasedSubmissions.length} submissions have been released to students.`, 
+          'success'
+        );
+        fetchSubmissions();
+      } catch (error) {
+        console.error('Error releasing all submissions:', error);
+        Swal.fire('Error', 'Failed to release all submissions', 'error');
+      }
+    }
+  };
+
+  const handleUniversalWithdraw = async () => {
+    const result = await Swal.fire({
+      title: 'Withdraw All Submissions',
+      text: `Are you sure you want to withdraw ALL ${submissions.length} submissions from students? This action will hide all submissions from their respective students.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#f59e0b',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, withdraw all!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const releasedSubmissions = submissions.filter(sub => sub.is_released_to_student);
+        const promises = releasedSubmissions.map(submission => 
+          api.patch(`/form-submissions/admin/submissions/${submission._id}/toggle-release`)
+        );
+        
+        await Promise.all(promises);
+        
+        Swal.fire(
+          'Success!', 
+          `All ${releasedSubmissions.length} submissions have been withdrawn from students.`, 
+          'success'
+        );
+        fetchSubmissions();
+      } catch (error) {
+        console.error('Error withdrawing all submissions:', error);
+        Swal.fire('Error', 'Failed to withdraw all submissions', 'error');
+      }
+    }
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -371,8 +437,34 @@ const SubmissionViewer = () => {
             <p className="text-gray-500">No students have submitted this form yet.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
+          <>
+            {/* Universal Release Button */}
+            <div className="mb-4 flex justify-between items-center px-6 py-4 bg-gray-50 border-b">
+              <div className="text-sm text-gray-600">
+                {submissions.length} submission{submissions.length !== 1 ? 's' : ''} found
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={handleUniversalRelease}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  title="Release all submissions to students"
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Release All to Students
+                </button>
+                <button
+                  onClick={handleUniversalWithdraw}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+                  title="Withdraw all submissions from students"
+                >
+                  <Clock className="w-4 h-4 mr-2" />
+                  Withdraw All from Students
+                </button>
+              </div>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left">
@@ -511,7 +603,8 @@ const SubmissionViewer = () => {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </div>
 

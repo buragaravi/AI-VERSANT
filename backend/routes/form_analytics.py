@@ -100,20 +100,20 @@ def get_form_stats(form_id):
                 "message": "Form not found"
             }), 404
         
-        # Get submission statistics (form_id is stored as string)
-        total_submissions = mongo_db['form_submissions'].count_documents({'form_id': form_id})
+        # Get submission statistics (form_id is stored as ObjectId)
+        total_submissions = mongo_db['form_submissions'].count_documents({'form_id': ObjectId(form_id)})
         submitted_count = mongo_db['form_submissions'].count_documents({
-            'form_id': form_id,
+            'form_id': ObjectId(form_id),
             'status': 'submitted'
         })
         draft_count = mongo_db['form_submissions'].count_documents({
-            'form_id': form_id,
+            'form_id': ObjectId(form_id),
             'status': 'draft'
         })
         
         # Get unique students who submitted this form
         unique_students = len(mongo_db['form_submissions'].distinct('student_id', {
-            'form_id': form_id,
+            'form_id': ObjectId(form_id),
             'status': 'submitted'
         }))
         
@@ -127,7 +127,7 @@ def get_form_stats(form_id):
             end_of_day = start_of_day + timedelta(days=1)
             
             count = mongo_db['form_submissions'].count_documents({
-                'form_id': form_id,
+                'form_id': ObjectId(form_id),
                 'status': 'submitted',
                 'submitted_at': {'$gte': start_of_day, '$lt': end_of_day}
             })
@@ -145,7 +145,7 @@ def get_form_stats(form_id):
             
             # Get responses for this field
             pipeline = [
-                {'$match': {'form_id': form_id, 'status': 'submitted'}},
+                {'$match': {'form_id': ObjectId(form_id), 'status': 'submitted'}},
                 {'$unwind': '$responses'},
                 {'$match': {'responses.field_id': field_id}},
                 {'$group': {'_id': '$responses.value', 'count': {'$sum': 1}}},
@@ -320,15 +320,15 @@ def get_completion_rates():
             form_id = form['_id']
             form_title = form['title']
             
-            # Get total submissions for this form (form_id is stored as string)
+            # Get total submissions for this form (form_id is stored as ObjectId)
             total_submissions = mongo_db['form_submissions'].count_documents({
-                'form_id': str(form_id),
+                'form_id': ObjectId(form_id),
                 'status': 'submitted'
             })
             
             # Get unique students who submitted this form
             unique_students = len(mongo_db['form_submissions'].distinct('student_id', {
-                'form_id': str(form_id),
+                'form_id': ObjectId(form_id),
                 'status': 'submitted'
             }))
             

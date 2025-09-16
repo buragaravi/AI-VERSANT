@@ -450,6 +450,7 @@ def delete_form(form_id):
             }), 404
         
         # Delete form and all its submissions
+        # form_id in form_submissions is stored as ObjectId, so we need to convert
         mongo_db[FORMS_COLLECTION].delete_one({'_id': ObjectId(form_id)})
         mongo_db[FORM_SUBMISSIONS_COLLECTION].delete_many({'form_id': ObjectId(form_id)})
         
