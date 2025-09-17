@@ -942,32 +942,91 @@ def export_form_submissions(form_id):
                 "message": "Form not found"
             }), 404
         
-        # Get all submissions for this form
-        submissions = list(mongo_db[FORM_SUBMISSIONS_COLLECTION].find({
-            'form_id': ObjectId(form_id),
+        # Get all submissions for this form (handle both string and ObjectId formats)
+        query = {
+            '$or': [
+                {'form_id': ObjectId(form_id)},
+                {'form_id': form_id}
+            ],
             'status': 'submitted'
-        }).sort('submitted_at', -1))
+        }
+        print(f"🔍 Export query: {query}")
+        
+        submissions = list(mongo_db[FORM_SUBMISSIONS_COLLECTION].find(query).sort('submitted_at', -1))
+        print(f"📊 Found {len(submissions)} submissions for export")
         
         # Prepare export data
         export_data = []
         for submission in submissions:
-            # Get student details
-            student = mongo_db['students'].find_one({'_id': ObjectId(submission['student_id'])})
-            student_name = student.get('name', 'Unknown') if student else 'Unknown'
-            student_email = student.get('email', 'Unknown') if student else 'Unknown'
+            # Get student details using roll_number (same logic as submission viewer)
+            student_roll_number = submission.get('student_roll_number')
+            student = None
+            student_name = 'Unknown'
+            student_email = 'Unknown'
+            student_roll = 'Unknown'
+            student_mobile = 'Unknown'
+            student_course = 'Unknown'
+            student_batch = 'Unknown'
+            student_campus = 'Unknown'
             
-            # Create row data
+            if student_roll_number:
+                try:
+                    student = get_student_by_roll_number(student_roll_number)
+                    student_name = student.get('name', 'Unknown')
+                    student_email = student.get('email', 'Unknown')
+                    student_roll = student.get('roll_number', 'Unknown')
+                    student_mobile = student.get('mobile_number', 'Unknown')
+                    
+                    # Get course details
+                    course = mongo_db['courses'].find_one({'_id': student.get('course_id')})
+                    if course:
+                        student_course = course.get('name', 'Unknown')
+                    
+                    # Get batch details
+                    batch = mongo_db['batches'].find_one({'_id': student.get('batch_id')})
+                    if batch:
+                        student_batch = batch.get('name', 'Unknown')
+                    
+                    # Get campus details
+                    campus = mongo_db['campuses'].find_one({'_id': student.get('campus_id')})
+                    if campus:
+                        student_campus = campus.get('name', 'Unknown')
+                except Exception as e:
+                    print(f"❌ Error looking up student by roll number: {str(e)}")
+                    # Fallback: try to find by student_id if available
+                    student_id = submission.get('student_id')
+                    if student_id:
+                        try:
+                            if isinstance(student_id, str):
+                                student_id = ObjectId(student_id)
+                            student = mongo_db['students'].find_one({'_id': student_id})
+                            if student:
+                                student_name = student.get('name', 'Unknown')
+                                student_email = student.get('email', 'Unknown')
+                                student_roll = student.get('roll_number', 'Unknown')
+                                student_mobile = student.get('mobile_number', 'Unknown')
+                        except Exception as e2:
+                            print(f"❌ Fallback student lookup also failed: {str(e2)}")
+            
+            # Create row data with only essential student information and form fields
+            # Order: Roll Number, Name, Campus, Course, Batch, Mobile, Email, then form fields
             row = {
+                'Student Roll Number': student_roll,
                 'Student Name': student_name,
-                'Student Email': student_email,
-                'Submission Date': submission['submitted_at'].strftime('%Y-%m-%d %H:%M:%S') if submission['submitted_at'] else 'N/A',
-                'IP Address': submission.get('ip_address', 'N/A')
+                'Student Campus': student_campus,
+                'Student Course': student_course,
+                'Student Batch': student_batch,
+                'Student Mobile': student_mobile,
+                'Student Email': student_email
             }
             
+            # Process form responses (handle both 'responses' and 'form_responses' formats)
+            responses_data = submission.get('responses', []) or submission.get('form_responses', [])
+            
             # Add form field responses
-            for response in submission['responses']:
-                field_id = response['field_id']
-                value = response['value']
+            for response in responses_data:
+                field_id = response.get('field_id')
+                value = response.get('value')
                 
                 # Find field label
                 field_label = field_id

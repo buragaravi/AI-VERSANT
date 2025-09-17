@@ -105,35 +105,78 @@ const SubmissionViewer = () => {
     }
   };
 
-  const handleExportSubmissions = async () => {
+  const handleExportSubmissions = () => {
     try {
-      const response = await api.get(`/form-submissions/admin/export/${formId}`);
-      if (response.data.success) {
-        const data = response.data.data.submissions;
-        if (data.length === 0) {
-          Swal.fire('Info', 'No submissions found for this form', 'info');
-          return;
+      if (submissions.length === 0) {
+        Swal.fire('Info', 'No submissions found for this form', 'info');
+        return;
+      }
+
+      // Define the exact column order as requested
+      const orderedColumns = [
+        'Student Roll Number',
+        'Student Name',
+        'Student Campus',
+        'Student Course',
+        'Student Batch',
+        'Student Mobile',
+        'Student Email'
+      ];
+
+      // Get form field columns (dynamic based on form fields)
+      const formFieldColumns = form?.fields?.map(field => field.label) || [];
+
+      // Combine all columns in the correct order
+      const allColumns = [...orderedColumns, ...formFieldColumns];
+
+      // Create CSV data with proper column order
+      const csvData = submissions.map(submission => {
+        const row = {};
+        
+        // Add student details in the correct order
+        row['Student Roll Number'] = submission.student_roll_number || '';
+        row['Student Name'] = submission.student_name || '';
+        row['Student Campus'] = submission.student_campus || '';
+        row['Student Course'] = submission.student_course || '';
+        row['Student Batch'] = submission.student_batch || '';
+        row['Student Mobile'] = submission.student_mobile || '';
+        row['Student Email'] = submission.student_email || '';
+
+        // Add form field responses
+        if (submission.form_responses && submission.form_responses.length > 0) {
+          submission.form_responses.forEach(response => {
+            const fieldLabel = response.field_label || response.field_id;
+            row[fieldLabel] = response.value || response.display_value || '';
+          });
         }
 
-        // Create and download CSV file
-        const headers = Object.keys(data[0]);
-        const csvContent = [
-          headers.join(','),
-          ...data.map(row => headers.map(header => `"${row[header] || ''}"`).join(','))
-        ].join('\n');
+        return row;
+      });
 
-        const blob = new Blob([csvContent], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${form?.title?.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'form'}_submissions.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
+      // Create CSV content with proper escaping
+      const csvContent = [
+        allColumns.join(','),
+        ...csvData.map(row => 
+          allColumns.map(column => {
+            const value = row[column] || '';
+            // Escape quotes and wrap in quotes
+            return `"${String(value).replace(/"/g, '""')}"`;
+          }).join(',')
+        )
+      ].join('\n');
 
-        Swal.fire('Success', 'Submissions exported successfully', 'success');
-      }
+      // Create and download CSV file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${form?.title?.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'form'}_submissions.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      Swal.fire('Success', `Exported ${submissions.length} submissions successfully`, 'success');
     } catch (error) {
       console.error('Error exporting submissions:', error);
       Swal.fire('Error', 'Failed to export submissions', 'error');

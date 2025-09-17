@@ -154,22 +154,73 @@ const FormManagement = () => {
 
   const handleExportSubmissions = async (formId, formTitle) => {
     try {
-      const response = await api.get(`/form-submissions/admin/export/${formId}`);
+      // Get submissions data from the admin submissions endpoint
+      const response = await api.get(`/form-submissions/admin/submissions?form_id=${formId}&limit=1000`);
       if (response.data.success) {
-        // Create and download CSV file
-        const data = response.data.data.submissions;
-        if (data.length === 0) {
+        const submissions = response.data.data.submissions;
+        if (submissions.length === 0) {
           Swal.fire('Info', 'No submissions found for this form', 'info');
           return;
         }
 
-        const headers = Object.keys(data[0]);
+        // Get form details to get field labels
+        const formResponse = await api.get(`/forms/${formId}`);
+        const form = formResponse.data.data.form;
+
+        // Define the exact column order as requested
+        const orderedColumns = [
+          'Student Roll Number',
+          'Student Name',
+          'Student Campus',
+          'Student Course',
+          'Student Batch',
+          'Student Mobile',
+          'Student Email'
+        ];
+
+        // Get form field columns (dynamic based on form fields)
+        const formFieldColumns = form?.fields?.map(field => field.label) || [];
+
+        // Combine all columns in the correct order
+        const allColumns = [...orderedColumns, ...formFieldColumns];
+
+        // Create CSV data with proper column order
+        const csvData = submissions.map(submission => {
+          const row = {};
+          
+          // Add student details in the correct order
+          row['Student Roll Number'] = submission.student_roll_number || '';
+          row['Student Name'] = submission.student_name || '';
+          row['Student Campus'] = submission.student_campus || '';
+          row['Student Course'] = submission.student_course || '';
+          row['Student Batch'] = submission.student_batch || '';
+          row['Student Mobile'] = submission.student_mobile || '';
+          row['Student Email'] = submission.student_email || '';
+
+          // Add form field responses
+          if (submission.form_responses && submission.form_responses.length > 0) {
+            submission.form_responses.forEach(response => {
+              const fieldLabel = response.field_label || response.field_id;
+              row[fieldLabel] = response.value || response.display_value || '';
+            });
+          }
+
+          return row;
+        });
+
+        // Create CSV content with proper escaping
         const csvContent = [
-          headers.join(','),
-          ...data.map(row => headers.map(header => `"${row[header] || ''}"`).join(','))
+          allColumns.join(','),
+          ...csvData.map(row => 
+            allColumns.map(column => {
+              const value = row[column] || '';
+              // Escape quotes and wrap in quotes
+              return `"${String(value).replace(/"/g, '""')}"`;
+            }).join(',')
+          )
         ].join('\n');
 
-        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
