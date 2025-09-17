@@ -53,6 +53,16 @@ const DynamicFormRenderer = ({
         }
         break;
       
+      case 'phone':
+        // Remove any non-digit characters for validation
+        const cleanPhone = value.replace(/\D/g, '');
+        if (cleanPhone.length < 7) {
+          fieldErrors.push('Phone number must be at least 7 digits');
+        } else if (cleanPhone.length > 20) {
+          fieldErrors.push('Phone number must be no more than 20 digits');
+        }
+        break;
+      
       case 'number':
         if (isNaN(value) || value === '') {
           fieldErrors.push('Please enter a valid number');
@@ -194,6 +204,20 @@ const DynamicFormRenderer = ({
               placeholder={field.placeholder}
               className={baseInputClasses}
               disabled={isSubmitting}
+            />
+          );
+
+        case 'phone':
+          return (
+            <input
+              type="tel"
+              value={value}
+              onChange={(e) => handleFieldChange(field.field_id, e.target.value)}
+              onBlur={() => handleFieldBlur(field.field_id)}
+              placeholder={field.placeholder || "Enter phone number"}
+              className={baseInputClasses}
+              disabled={isSubmitting}
+              maxLength={20}
             />
           );
 

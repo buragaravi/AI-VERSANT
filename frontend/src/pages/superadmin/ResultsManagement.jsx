@@ -901,8 +901,8 @@ const ResultsManagement = () => {
             const studentName = firstAttempt.student_name || 'N/A';
             const testName = firstAttempt.test_name || 'N/A';
             
-            // Create PDF in landscape orientation
-            const pdf = new jsPDF('l', 'mm', 'a4');
+            // Create PDF in portrait orientation
+            const pdf = new jsPDF('p', 'mm', 'a4');
             const pageWidth = pdf.internal.pageSize.getWidth();
             const pageHeight = pdf.internal.pageSize.getHeight();
             let yPosition = 20;
@@ -994,29 +994,30 @@ const ResultsManagement = () => {
             addText(`${studentName}'s TEST ATTEMPT DETAILS`, pageWidth/2, 12, undefined, colors.white, 14, 'bold', 'center');
             yPosition = 30;
     
-             // Student Information Box - optimized for A4 landscape
-             const margin = 10; // Reduced margin for A4
-             const infoBoxHeight = 30;
-             drawRect(margin, yPosition, pageWidth - (margin * 2), infoBoxHeight, colors.secondary);
+            // Student Information Box - optimized for A4 portrait
+            const margin = 15; // Standard margin for A4 portrait
+            const infoBoxHeight = 35;
+            drawRect(margin, yPosition, pageWidth - (margin * 2), infoBoxHeight, colors.secondary);
             
             // Student Information Title - centered
-            addText('STUDENT INFORMATION', pageWidth/2, yPosition + 7, undefined, colors.accent, 11, 'bold', 'center');
+            addText('STUDENT INFORMATION', pageWidth/2, yPosition + 8, undefined, colors.accent, 12, 'bold', 'center');
             
-            // Student details in three columns for landscape
-            const colWidth = (pageWidth - (margin * 2) - 20) / 3;
+            // Student details in two columns for portrait (better fit)
+            const colWidth = (pageWidth - (margin * 2) - 20) / 2;
             const col1 = margin + 10;
             const col2 = col1 + colWidth;
-            const col3 = col2 + colWidth;
             
             // First row of details
-            addText(`Student Name: ${studentName}`, col1, yPosition + 15, colWidth - 5, colors.text, 9);
-            addText(`Roll Number: ${firstAttempt.roll_number || 'N/A'}`, col2, yPosition + 15, colWidth - 5, colors.text, 9);
-            addText(`Email: ${firstAttempt.email || 'N/A'}`, col3, yPosition + 15, colWidth - 5, colors.text, 9);
+            addText(`Student Name: ${studentName}`, col1, yPosition + 18, colWidth - 5, colors.text, 10);
+            addText(`Roll Number: ${firstAttempt.roll_number || 'N/A'}`, col2, yPosition + 18, colWidth - 5, colors.text, 10);
             
             // Second row of details
-            addText(`Test Name: ${testName}`, col1, yPosition + 22, colWidth - 5, colors.text, 9);
-            addText(`Total Attempts: ${studentAttemptDetails.length}`, col2, yPosition + 22, colWidth - 5, colors.text, 9);
-            addText(`Export Date: ${new Date().toLocaleString()}`, col3, yPosition + 22, colWidth - 5, colors.text, 9);
+            addText(`Email: ${firstAttempt.email || 'N/A'}`, col1, yPosition + 25, colWidth - 5, colors.text, 10);
+            addText(`Test Name: ${testName}`, col2, yPosition + 25, colWidth - 5, colors.text, 10);
+            
+            // Third row of details
+            addText(`Total Attempts: ${studentAttemptDetails.length}`, col1, yPosition + 32, colWidth - 5, colors.text, 10);
+            addText(`Export Date: ${new Date().toLocaleString()}`, col2, yPosition + 32, colWidth - 5, colors.text, 10);
             
             yPosition += infoBoxHeight + 10;
     
@@ -1027,103 +1028,87 @@ const ResultsManagement = () => {
             let totalQuestions = 0;
     
             studentAttemptDetails.forEach((attempt, attemptIndex) => {
-                checkNewPage(50);
+                checkNewPage(40);
                 
-                 // Attempt header with green background - A4 optimized
-                 drawRect(10, yPosition, pageWidth - 20, 10, colors.primary);
-                 addText(`ATTEMPT ${attemptIndex + 1}`, pageWidth/2, yPosition + 6, pageWidth - 40, colors.white, 12, 'bold', 'center');
-                 yPosition += 13;
+                 // Attempt header with green background - A4 portrait optimized
+                 drawRect(margin, yPosition, pageWidth - (margin * 2), 12, colors.primary);
+                 addText(`ATTEMPT ${attemptIndex + 1}`, pageWidth/2, yPosition + 7, pageWidth - (margin * 2), colors.white, 12, 'bold', 'center');
+                 yPosition += 15;
     
-                // Attempt details - A4 optimized margins
-                addText(`Submitted: ${attempt.submitted_at ? new Date(attempt.submitted_at).toLocaleString() : 'N/A'}`, 15, yPosition, pageWidth - 30, colors.text, 10);
-                yPosition += 5;
-                addText(`Time Taken: ${attempt.time_taken || 'N/A'} min`, 15, yPosition, pageWidth - 30, colors.text, 10);
-                yPosition += 5;
-                addText(`Score: ${attempt.score_percentage?.toFixed(1) || 0}%`, 15, yPosition, pageWidth - 30, colors.text, 10);
-                yPosition += 10;
+                // Attempt details - A4 portrait optimized margins
+                addText(`Submitted: ${attempt.submitted_at ? new Date(attempt.submitted_at).toLocaleString() : 'N/A'}`, margin + 5, yPosition, pageWidth - (margin * 2) - 10, colors.text, 10);
+                yPosition += 6;
+                addText(`Time Taken: ${attempt.time_taken || 'N/A'} min`, margin + 5, yPosition, pageWidth - (margin * 2) - 10, colors.text, 10);
+                yPosition += 6;
+                addText(`Score: ${attempt.score_percentage?.toFixed(1) || 0}%`, margin + 5, yPosition, pageWidth - (margin * 2) - 10, colors.text, 10);
+                yPosition += 12;
     
                 if (attempt.detailed_results && attempt.detailed_results.length > 0) {
                     totalQuestions = attempt.detailed_results.length;
                     
-                     // Questions table header - optimized for A4 landscape
-                     const tableMargin = 10; // Reduced margin for A4
-                     const tableX = tableMargin;
-                     const tableWidth = pageWidth - (tableMargin * 2); // 277mm for A4 landscape
-                     
-                     // Column widths optimized for A4 landscape (277mm total width)
-                     const colWidths = [
-                         15,  // Q# 
-                         120, // Question (main content)
-                         50,  // Student Answer
-                         50,  // Correct Answer
-                         15,  // Score
-                         20   // Status
-                     ]; // Total: 270mm (fits in 277mm with 7mm buffer)
+                    // Questions table - optimized for A4 portrait
+                    const tableX = margin;
+                    const tableWidth = pageWidth - (margin * 2);
                     
-                    const headerRowHeight = 8;
-                    const headerY = yPosition;
-    
-                    // Table header with centered text
-                    drawRect(tableX, headerY, tableWidth, headerRowHeight, colors.accent);
-                    addText('Q#', tableX + colWidths[0]/2, headerY + 5, colWidths[0], colors.white, 7, 'bold', 'center');
-                    addText('Question', tableX + colWidths[0] + colWidths[1]/2, headerY + 5, colWidths[1], colors.white, 7, 'bold', 'center');
-                    addText('Student Answer', tableX + colWidths[0] + colWidths[1] + colWidths[2]/2, headerY + 5, colWidths[2], colors.white, 7, 'bold', 'center');
-                    addText('Correct Answer', tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3]/2, headerY + 5, colWidths[3], colors.white, 7, 'bold', 'center');
-                    addText('Score', tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4]/2, headerY + 5, colWidths[4], colors.white, 7, 'bold', 'center');
-                    addText('Status', tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + colWidths[5]/2, headerY + 5, colWidths[5], colors.white, 7, 'bold', 'center');
+                    // Column widths for portrait (210mm total width - 30mm margins = 180mm available)
+                    const colWidths = [
+                        15,  // Q# (15mm)
+                        80,  // Question (80mm)
+                        40,  // Student Answer (40mm)
+                        40,  // Correct Answer (40mm)
+                        5    // Status (5mm)
+                    ]; // Total: 180mm
+                    
+                    const headerRowHeight = 10;
+                    const rowHeight = 12;
+                    
+                    // Table header
+                    checkNewPage(headerRowHeight + (attempt.detailed_results.length * rowHeight) + 10);
+                    
+                    drawRect(tableX, yPosition, tableWidth, headerRowHeight, colors.accent);
+                    addText('Q#', tableX + colWidths[0]/2, yPosition + 6, colWidths[0], colors.white, 8, 'bold', 'center');
+                    addText('Question', tableX + colWidths[0] + colWidths[1]/2, yPosition + 6, colWidths[1], colors.white, 8, 'bold', 'center');
+                    addText('Student Answer', tableX + colWidths[0] + colWidths[1] + colWidths[2]/2, yPosition + 6, colWidths[2], colors.white, 8, 'bold', 'center');
+                    addText('Correct Answer', tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3]/2, yPosition + 6, colWidths[3], colors.white, 8, 'bold', 'center');
+                    addText('✓/✗', tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4]/2, yPosition + 6, colWidths[4], colors.white, 8, 'bold', 'center');
                     
                     yPosition += headerRowHeight;
     
-                    // Process each question
+                    // Process each question in table format
                     attempt.detailed_results.forEach((result, questionIndex) => {
                         const isCorrect = result.is_correct;
                         const score = isCorrect ? 1 : 0;
                         
-                        // Color scheme for correct/incorrect
-                        const correctColor = [200, 255, 200]; // Light green background
-                        const incorrectColor = [255, 200, 200]; // Light red background
-                        const scoreTextColor = isCorrect ? [0, 100, 0] : [150, 0, 0];
-                        
-                        // Get full text for height calculation
-                        const questionText = String(result.question_text || 'N/A');
-                        const studentAnswer = String(result.student_answer || result.selected_answer || 'No answer');
-                        const correctAnswer = String(result.correct_answer_text || result.correct_answer || 'N/A');
-                        
-                        // Calculate dynamic row height based on longest text
-                        const questionHeight = calculateRowHeight(questionText, colWidths[1] - 4, 6);
-                        const studentHeight = calculateRowHeight(studentAnswer, colWidths[2] - 4, 6);
-                        const correctHeight = calculateRowHeight(correctAnswer, colWidths[3] - 4, 6);
-                        const rowHeight = Math.max(questionHeight, studentHeight, correctHeight, 8);
-                        
+                        // Check if we need a new page
                         checkNewPage(rowHeight + 5);
                         
                         // Row background color based on correctness
-                        const rowFillColor = isCorrect ? correctColor : incorrectColor;
-                        const statusText = isCorrect ? 'Correct' : 'Incorrect';
+                        const rowFillColor = isCorrect ? [240, 255, 240] : [255, 240, 240]; // Light green/red
+                        const textColor = isCorrect ? [0, 100, 0] : [150, 0, 0];
                         
                         // Question number (centered)
                         drawTableCell(tableX, yPosition, colWidths[0], rowHeight, 
-                                     (questionIndex + 1).toString(), colors.text, 7, 'bold', 'center', rowFillColor);
+                                     (questionIndex + 1).toString(), colors.text, 8, 'bold', 'center', rowFillColor);
                         
-                        // Question text (left aligned)
+                        // Question text (left aligned, wrapped)
+                        const questionText = String(result.question_text || 'N/A');
                         drawTableCell(tableX + colWidths[0], yPosition, colWidths[1], rowHeight, 
-                                     questionText, colors.text, 6, 'normal', 'left', rowFillColor);
+                                     questionText, colors.text, 7, 'normal', 'left', rowFillColor);
                         
-                        // Student answer (left aligned)
+                        // Student answer (left aligned, wrapped)
+                        const studentAnswer = String(result.student_answer || result.selected_answer || 'No answer');
                         drawTableCell(tableX + colWidths[0] + colWidths[1], yPosition, colWidths[2], rowHeight, 
-                                     studentAnswer, colors.text, 6, 'normal', 'left', rowFillColor);
+                                     studentAnswer, textColor, 7, 'normal', 'left', rowFillColor);
                         
-                        // Correct answer (left aligned)
+                        // Correct answer (left aligned, wrapped)
+                        const correctAnswer = String(result.correct_answer_text || result.correct_answer || 'N/A');
                         drawTableCell(tableX + colWidths[0] + colWidths[1] + colWidths[2], yPosition, colWidths[3], rowHeight, 
-                                     correctAnswer, colors.text, 6, 'normal', 'left', rowFillColor);
-                        
-                        // Score (centered)
-                        drawTableCell(tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], yPosition, colWidths[4], rowHeight, 
-                                     score.toString(), scoreTextColor, 7, 'bold', 'center', rowFillColor);
+                                     correctAnswer, colors.text, 7, 'normal', 'left', rowFillColor);
                         
                         // Status (centered)
-                        drawTableCell(tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4], yPosition, colWidths[5], rowHeight, 
-                                     statusText, scoreTextColor, 6, 'bold', 'center', rowFillColor);
+                        const statusSymbol = isCorrect ? '✓' : '✗';
+                        drawTableCell(tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], yPosition, colWidths[4], rowHeight, 
+                                     statusSymbol, textColor, 10, 'bold', 'center', rowFillColor);
                         
                         yPosition += rowHeight;
     
@@ -1136,29 +1121,30 @@ const ResultsManagement = () => {
             });
     
             // Summary section with green background
-            checkNewPage(50);
-            drawRect(margin, yPosition, pageWidth - (margin * 2), 10, colors.primary);
-            addText('SUMMARY', pageWidth/2, yPosition + 6, undefined, colors.white, 12, 'bold', 'center');
+            checkNewPage(40);
+            drawRect(margin, yPosition, pageWidth - (margin * 2), 12, colors.primary);
+            addText('SUMMARY', pageWidth/2, yPosition + 7, undefined, colors.white, 12, 'bold', 'center');
             yPosition += 15;
     
             // Summary details in a nice box
-            const summaryBoxHeight = 30;
+            const summaryBoxHeight = 40;
             drawRect(margin, yPosition, pageWidth - (margin * 2), summaryBoxHeight, colors.secondary);
             
             const totalAttempts = studentAttemptDetails.length;
             const averageScore = totalAttempts > 0 ? (totalScore / (totalQuestions * totalAttempts) * 100).toFixed(1) : 0;
             const accuracy = totalQuestions > 0 ? ((totalCorrect / (totalQuestions * totalAttempts)) * 100).toFixed(1) : 0;
     
-            // Summary details in three columns
-            addText(`Total Questions: ${totalQuestions}`, col1, yPosition + 8, colWidth, colors.text, 10, 'bold');
-            addText(`Total Attempts: ${totalAttempts}`, col2, yPosition + 8, colWidth, colors.text, 10, 'bold');
-            addText(`Total Correct: ${totalCorrect}`, col3, yPosition + 8, colWidth, colors.accent, 10, 'bold');
+            // Summary details in two columns for portrait
+            addText(`Total Questions: ${totalQuestions}`, col1, yPosition + 10, colWidth, colors.text, 10, 'bold');
+            addText(`Total Attempts: ${totalAttempts}`, col2, yPosition + 10, colWidth, colors.text, 10, 'bold');
             
-            addText(`Total Incorrect: ${totalIncorrect}`, col1, yPosition + 16, colWidth, colors.text, 10, 'bold');
-            addText(`Total Score: ${totalScore}/${totalQuestions * totalAttempts}`, col2, yPosition + 16, colWidth, colors.text, 10, 'bold');
-            addText(`Average Score: ${averageScore}%`, col3, yPosition + 16, colWidth, colors.text, 10, 'bold');
+            addText(`Total Correct: ${totalCorrect}`, col1, yPosition + 18, colWidth, colors.accent, 10, 'bold');
+            addText(`Total Incorrect: ${totalIncorrect}`, col2, yPosition + 18, colWidth, colors.text, 10, 'bold');
             
-            addText(`Overall Accuracy: ${accuracy}%`, col1, yPosition + 24, colWidth, colors.accent, 11, 'bold');
+            addText(`Total Score: ${totalScore}/${totalQuestions * totalAttempts}`, col1, yPosition + 26, colWidth, colors.text, 10, 'bold');
+            addText(`Average Score: ${averageScore}%`, col2, yPosition + 26, colWidth, colors.text, 10, 'bold');
+            
+            addText(`Overall Accuracy: ${accuracy}%`, col1, yPosition + 34, colWidth, colors.accent, 11, 'bold');
     
             // Save PDF
             const filename = `${studentName.replace(/[^a-zA-Z0-9]/g, '_')}_${testName.replace(/[^a-zA-Z0-9]/g, '_')}_AttemptDetails_${new Date().toISOString().split('T')[0]}.pdf`;

@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from mongo import mongo_db
+from config.database_simple import DatabaseConfig
 from bson import ObjectId
 from config.constants import GRAMMAR_CATEGORIES, MODULES, LEVELS
 import logging
@@ -37,6 +38,14 @@ def safe_object_id_conversion(user_id):
     except Exception as e:
         current_app.logger.error(f"Invalid user ID format: {user_id} - {e}")
         raise ValueError(f"Invalid user ID format: {user_id}")
+
+def get_db():
+    """Get database connection"""
+    try:
+        return DatabaseConfig.get_database()
+    except Exception as e:
+        current_app.logger.error(f"Database connection error: {e}")
+        return None
 
 def safe_isoformat(date_obj):
     """Safely convert a date object to ISO format string, handling various types."""
@@ -247,12 +256,13 @@ def dashboard():
             }), 403
         
         # Check if student_progress collection exists
-        if not hasattr(mongo_db, 'student_progress'):
+        db = get_db()
+        if not db or 'student_progress' not in db.list_collection_names():
             current_app.logger.warning("student_progress collection not found, using empty progress")
             progress = []
         else:
             # Get student progress
-            progress = list(mongo_db.student_progress.find({'student_id': current_user_id}))
+            progress = list(db.student_progress.find({'student_id': current_user_id}))
         
         dashboard_data = {
             'user_id': str(current_user_id),
@@ -951,8 +961,9 @@ def get_grammar_progress():
             all_results = []
             
             # Check test_results collection
-            if hasattr(mongo_db, 'test_results'):
-                test_results = list(mongo_db.test_results.find({
+            db = get_db()
+            if db and 'test_results' in db.list_collection_names():
+                test_results = list(db.test_results.find({
                     'student_id': ObjectId(current_user_id),
                     'module_id': 'GRAMMAR'
                 }))
@@ -960,8 +971,8 @@ def get_grammar_progress():
                 current_app.logger.info(f"Found {len(test_results)} grammar results in test_results collection")
             
             # Check student_test_attempts collection
-            if hasattr(mongo_db, 'student_test_attempts'):
-                attempt_results = list(mongo_db.student_test_attempts.find({
+            if db and 'student_test_attempts' in db.list_collection_names():
+                attempt_results = list(db.student_test_attempts.find({
                     'student_id': current_user_id,
                     'test_type': 'practice'
                 }))
@@ -1670,7 +1681,7 @@ def get_test_history():
                     { '$sort': { 'end_time': -1, 'submitted_at': -1 } }
                 ]
                 
-                all_attempts = list(mongo_db.student_test_attempts.aggregate(pipeline))
+                all_attempts = list(db.student_test_attempts.aggregate(pipeline))
                 current_app.logger.info(f"Found {len(all_attempts)} completed attempts in student_test_attempts collection")
             else:
                 current_app.logger.warning("student_test_attempts collection not found")
@@ -1896,7 +1907,7 @@ def get_practice_results():
                     }
                 ]
                 
-                attempt_results = list(mongo_db.student_test_attempts.aggregate(pipeline))
+                attempt_results = list(db.student_test_attempts.aggregate(pipeline))
                 all_results.extend(attempt_results)
                 current_app.logger.info(f"Found {len(attempt_results)} practice results in student_test_attempts collection")
             else:
@@ -1950,9 +1961,6 @@ def get_practice_results():
 
 @student_bp.route('/grammar-detailed-results', methods=['GET'])
 @jwt_required()
-@async_route(timeout=10.0)
-@performance_monitor(threshold=1.5)
-@cached_async_result(ttl=180)  # Cache for 3 minutes
 def get_grammar_detailed_results():
     """Get detailed grammar practice results by subcategory"""
     try:
@@ -1969,7 +1977,8 @@ def get_grammar_detailed_results():
         
         # Try to get from test_results collection
         try:
-            if hasattr(mongo_db, 'test_results'):
+            db = get_db()
+            if db and 'test_results' in db.list_collection_names():
                 pipeline = [
                     {
                         '$match': {
@@ -2016,7 +2025,7 @@ def get_grammar_detailed_results():
                     }
                 ]
                 
-                test_results = list(mongo_db.test_results.aggregate(pipeline))
+                test_results = list(db.test_results.aggregate(pipeline))
                 all_results.extend(test_results)
                 current_app.logger.info(f"Found {len(test_results)} grammar results in test_results collection")
             else:
@@ -2026,7 +2035,8 @@ def get_grammar_detailed_results():
         
         # Also get from student_test_attempts collection
         try:
-            if hasattr(mongo_db, 'student_test_attempts'):
+            db = get_db()
+            if db and 'student_test_attempts' in db.list_collection_names():
                 pipeline = [
                     {
                         '$match': {
@@ -2077,7 +2087,7 @@ def get_grammar_detailed_results():
                     }
                 ]
                 
-                attempt_results = list(mongo_db.student_test_attempts.aggregate(pipeline))
+                attempt_results = list(db.student_test_attempts.aggregate(pipeline))
                 all_results.extend(attempt_results)
                 current_app.logger.info(f"Found {len(attempt_results)} grammar results in student_test_attempts collection")
             else:
@@ -2139,9 +2149,6 @@ def get_grammar_detailed_results():
 
 @student_bp.route('/vocabulary-detailed-results', methods=['GET'])
 @jwt_required()
-@async_route(timeout=10.0)
-@performance_monitor(threshold=1.5)
-@cached_async_result(ttl=180)  # Cache for 3 minutes
 def get_vocabulary_detailed_results():
     """Get detailed vocabulary practice results"""
     try:
@@ -2158,7 +2165,8 @@ def get_vocabulary_detailed_results():
         
         # Try to get from test_results collection
         try:
-            if hasattr(mongo_db, 'test_results'):
+            db = get_db()
+            if db and 'test_results' in db.list_collection_names():
                 pipeline = [
                     {
                         '$match': {
@@ -2205,7 +2213,7 @@ def get_vocabulary_detailed_results():
                     }
                 ]
                 
-                test_results = list(mongo_db.test_results.aggregate(pipeline))
+                test_results = list(db.test_results.aggregate(pipeline))
                 all_results.extend(test_results)
                 current_app.logger.info(f"Found {len(test_results)} vocabulary results in test_results collection")
             else:
@@ -2215,7 +2223,8 @@ def get_vocabulary_detailed_results():
         
         # Also get from student_test_attempts collection
         try:
-            if hasattr(mongo_db, 'student_test_attempts'):
+            db = get_db()
+            if db and 'student_test_attempts' in db.list_collection_names():
                 pipeline = [
                     {
                         '$match': {
@@ -2266,7 +2275,7 @@ def get_vocabulary_detailed_results():
                     }
                 ]
                 
-                attempt_results = list(mongo_db.student_test_attempts.aggregate(pipeline))
+                attempt_results = list(db.student_test_attempts.aggregate(pipeline))
                 all_results.extend(attempt_results)
                 current_app.logger.info(f"Found {len(attempt_results)} vocabulary results in student_test_attempts collection")
             else:
@@ -2328,9 +2337,6 @@ def get_vocabulary_detailed_results():
 
 @student_bp.route('/progress-summary', methods=['GET'])
 @jwt_required()
-@async_route(timeout=15.0)
-@performance_monitor(threshold=2.0)
-@cached_async_result(ttl=300)  # Cache for 5 minutes
 def get_progress_summary():
     """Get comprehensive progress summary for student"""
     try:
@@ -2348,8 +2354,9 @@ def get_progress_summary():
         
         # Try to get from test_results collection
         try:
-            if hasattr(mongo_db, 'test_results'):
-                total_results += mongo_db.test_results.count_documents({
+            db = get_db()
+            if db and 'test_results' in db.list_collection_names():
+                total_results += db.test_results.count_documents({
                     'student_id': user_object_id,
                     'test_type': 'practice'
                 })
@@ -2384,7 +2391,7 @@ def get_progress_summary():
                     }
                 ]
                 
-                module_stats = list(mongo_db.test_results.aggregate(pipeline))
+                module_stats = list(db.test_results.aggregate(pipeline))
                 all_modules.extend(module_stats)
                 current_app.logger.info(f"Found {len(module_stats)} modules in test_results collection")
             else:
@@ -2394,8 +2401,9 @@ def get_progress_summary():
         
         # Also get from student_test_attempts collection
         try:
-            if hasattr(mongo_db, 'student_test_attempts'):
-                total_results += mongo_db.student_test_attempts.count_documents({
+            db = get_db()
+            if db and 'student_test_attempts' in db.list_collection_names():
+                total_results += db.student_test_attempts.count_documents({
                     'student_id': current_user_id,
                     'test_type': 'practice'
                 })
@@ -2430,7 +2438,7 @@ def get_progress_summary():
                     }
                 ]
                 
-                attempt_module_stats = list(mongo_db.student_test_attempts.aggregate(pipeline))
+                attempt_module_stats = list(db.student_test_attempts.aggregate(pipeline))
                 all_modules.extend(attempt_module_stats)
                 current_app.logger.info(f"Found {len(attempt_module_stats)} modules in student_test_attempts collection")
             else:

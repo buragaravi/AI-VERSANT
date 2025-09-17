@@ -6,7 +6,7 @@ import logging
 import re
 
 from config.database import DatabaseConfig
-from models_forms import Form, FormField, FormSettings, FORMS_COLLECTION, FORM_TEMPLATES, FIELD_VALIDATION_RULES
+from models_forms import Form, FormField, FormSettings, FORMS_COLLECTION, FORM_SUBMISSIONS_COLLECTION, FORM_TEMPLATES, FIELD_VALIDATION_RULES
 from routes.test_management import require_superadmin
 
 forms_bp = Blueprint('forms', __name__)

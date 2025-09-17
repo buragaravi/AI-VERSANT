@@ -392,7 +392,10 @@ def submit_form():
     """Submit form response"""
     try:
         data = request.get_json()
+        print(f"🔍 Form submission request received: {data}")
+        
         if not data:
+            print("❌ No data provided in request")
             return jsonify({
                 "success": False,
                 "message": "No data provided"
@@ -402,7 +405,12 @@ def submit_form():
         responses = data.get('responses', [])
         status = data.get('status', 'submitted')  # draft or submitted
         
+        print(f"📋 Form ID: {form_id}")
+        print(f"📋 Responses: {responses}")
+        print(f"📋 Status: {status}")
+        
         if not form_id or not ObjectId.is_valid(form_id):
+            print(f"❌ Invalid form ID: {form_id}")
             return jsonify({
                 "success": False,
                 "message": "Invalid form ID"
@@ -411,7 +419,9 @@ def submit_form():
         # Get student roll number from JWT token
         try:
             student_roll_number = get_student_roll_number_from_jwt()
+            print(f"👤 Student roll number: {student_roll_number}")
         except ValueError as e:
+            print(f"❌ Error getting student roll number: {str(e)}")
             return jsonify({
                 "success": False,
                 "message": str(e)
@@ -421,7 +431,9 @@ def submit_form():
         try:
             student = get_student_by_roll_number(student_roll_number)
             student_id = student['_id']
+            print(f"👤 Student found: {student.get('name', 'Unknown')} (ID: {student_id})")
         except ValueError as e:
+            print(f"❌ Error getting student data: {str(e)}")
             return jsonify({
                 "success": False,
                 "message": str(e)
@@ -467,20 +479,29 @@ def submit_form():
         validation_errors = []
         form_fields = {field['field_id']: field for field in form['fields']}
         
+        print(f"🔍 Form fields: {list(form_fields.keys())}")
+        print(f"🔍 Response fields: {[r.get('field_id') for r in responses]}")
+        
         for response in responses:
             field_id = response.get('field_id')
             value = response.get('value')
             
+            print(f"🔍 Validating field {field_id} with value: {value}")
+            
             if field_id not in form_fields:
-                validation_errors.append(f"Unknown field: {field_id}")
+                error_msg = f"Unknown field: {field_id}"
+                print(f"❌ {error_msg}")
+                validation_errors.append(error_msg)
                 continue
             
             field = form_fields[field_id]
             error = validate_field_value(field, value)
             if error:
+                print(f"❌ Validation error for {field_id}: {error}")
                 validation_errors.append(error)
         
         if validation_errors:
+            print(f"❌ Validation failed with errors: {validation_errors}")
             return jsonify({
                 "success": False,
                 "message": "Validation errors",
@@ -970,15 +991,53 @@ def validate_field_value(field, value):
         if not re.match(pattern, value):
             return f"Field '{field['label']}' must be a valid email address"
     
+    # Phone/Mobile validation
+    elif field_type == 'phone':
+        if not isinstance(value, str):
+            value = str(value)
+        
+        # Remove any non-digit characters for validation
+        clean_value = ''.join(filter(str.isdigit, value))
+        
+        if len(clean_value) < 7:
+            return f"Field '{field['label']}' must be at least 7 digits"
+        elif len(clean_value) > 20:
+            return f"Field '{field['label']}' must be no more than 20 digits"
+        
+        # Check if it's a valid number
+        if not clean_value.isdigit():
+            return f"Field '{field['label']}' must contain only numbers"
+    
     # Number validation
     elif field_type == 'number':
         try:
-            num_value = float(value)
-            min_val = validation.get('min', 0)
-            max_val = validation.get('max', 999999)
+            # Check if it's a mobile number field (common patterns)
+            is_mobile_field = any(keyword in field['label'].lower() for keyword in ['mobile', 'phone', 'contact', 'number'])
             
-            if num_value < min_val or num_value > max_val:
-                return f"Field '{field['label']}' must be between {min_val} and {max_val}"
+            if is_mobile_field:
+                # Mobile number validation - allow up to 20 digits
+                if not isinstance(value, str):
+                    value = str(value)
+                
+                # Remove any non-digit characters for validation
+                clean_value = ''.join(filter(str.isdigit, value))
+                
+                if len(clean_value) < 7:
+                    return f"Field '{field['label']}' must be at least 7 digits"
+                elif len(clean_value) > 20:
+                    return f"Field '{field['label']}' must be no more than 20 digits"
+                
+                # Check if it's a valid number
+                if not clean_value.isdigit():
+                    return f"Field '{field['label']}' must contain only numbers"
+            else:
+                # Regular number validation
+                num_value = float(value)
+                min_val = validation.get('min', 0)
+                max_val = validation.get('max', 999999999999)  # Increased default max
+                
+                if num_value < min_val or num_value > max_val:
+                    return f"Field '{field['label']}' must be between {min_val} and {max_val}"
         except (ValueError, TypeError):
             return f"Field '{field['label']}' must be a number"
     

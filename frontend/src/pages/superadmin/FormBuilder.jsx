@@ -27,6 +27,7 @@ const FormBuilder = ({ editingFormId = null, onFormSaved = null, onCancel = null
   const fieldTypes = [
     { value: 'text', label: 'Text Input', icon: '📝' },
     { value: 'email', label: 'Email Input', icon: '📧' },
+    { value: 'phone', label: 'Phone Number', icon: '📱' },
     { value: 'number', label: 'Number Input', icon: '🔢' },
     { value: 'textarea', label: 'Text Area', icon: '📄' },
     { value: 'dropdown', label: 'Dropdown', icon: '📋' },

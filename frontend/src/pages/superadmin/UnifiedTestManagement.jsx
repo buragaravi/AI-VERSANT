@@ -71,7 +71,7 @@ const UnifiedTestManagement = () => {
   // Handle test status change
   const handleStatusChange = async (testId, newStatus) => {
     try {
-      const response = await api.put(`/unified-test-management/unified-tests/${testId}`, {
+      const response = await api.post(`/unified-test-management/unified-tests/${testId}/update-status`, {
         status: newStatus
       });
 
@@ -118,7 +118,7 @@ const UnifiedTestManagement = () => {
 
     if (result.isConfirmed) {
       try {
-        const response = await api.delete(`/unified-test-management/unified-tests/${testId}`);
+        const response = await api.post(`/unified-test-management/unified-tests/${testId}/delete`);
 
         if (response.data.success) {
           await fetchTests();

@@ -43,6 +43,13 @@ const FormSubmission = ({ formId, onComplete, isProcessing = false, showProgress
     try {
       setSubmitting(true);
       
+      // Debug logging
+      console.log('🚀 Submitting form with data:', {
+        form_id: formId,
+        responses: responses,
+        status: status
+      });
+      
       const response = await api.post('/form-submissions/student/submit', {
         form_id: formId,
         responses: responses,
@@ -79,8 +86,48 @@ const FormSubmission = ({ formId, onComplete, isProcessing = false, showProgress
         Swal.fire('Error', response.data.message || 'Failed to submit form', 'error');
       }
     } catch (err) {
-      console.error('Error submitting form:', err);
-      Swal.fire('Error', 'Failed to submit form. Please try again.', 'error');
+      console.error('❌ Error submitting form:', err);
+      
+      // Extract detailed error information
+      let errorMessage = 'Failed to submit form. Please try again.';
+      let errorDetails = '';
+      
+      if (err.response?.data) {
+        const errorData = err.response.data;
+        errorMessage = errorData.message || errorMessage;
+        
+        if (errorData.errors && Array.isArray(errorData.errors)) {
+          errorDetails = errorData.errors.join('\n');
+        }
+      }
+      
+      console.log('📋 Error details:', {
+        status: err.response?.status,
+        message: errorMessage,
+        errors: errorDetails,
+        fullError: err.response?.data
+      });
+      
+      // Show detailed error message
+      if (errorDetails) {
+        Swal.fire({
+          title: 'Validation Error',
+          text: errorMessage,
+          html: `<div class="text-left">
+            <p class="mb-2">${errorMessage}</p>
+            <div class="bg-red-50 p-3 rounded border">
+              <p class="text-sm font-medium text-red-800 mb-1">Details:</p>
+              <ul class="text-sm text-red-700 list-disc list-inside">
+                ${(err.response?.data?.errors || []).map(error => `<li>${error}</li>`).join('')}
+              </ul>
+            </div>
+          </div>`,
+          icon: 'error',
+          confirmButtonText: 'OK'
+        });
+      } else {
+        Swal.fire('Error', errorMessage, 'error');
+      }
     } finally {
       setSubmitting(false);
     }

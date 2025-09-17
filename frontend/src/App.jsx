@@ -28,7 +28,7 @@ import BatchCourseInstances from './pages/superadmin/BatchCourseInstances'
 import BatchManagement from './pages/superadmin/BatchManagement'
 import FormManagement from './pages/superadmin/FormManagement'
 import SubmissionViewer from './pages/superadmin/SubmissionViewer'
-// import UnifiedTestManagement from './pages/superadmin/UnifiedTestManagement'
+import UnifiedTestManagement from './pages/superadmin/UnifiedTestManagement'
 
 // Campus Admin Pages
 import CampusAdminDashboard from './pages/campus-admin/CampusAdminDashboard'
@@ -56,7 +56,7 @@ import TestResult from './pages/student/TestResult'
 import PracticeModuleTaking from './pages/student/PracticeModuleTaking'
 import TechnicalTestTaking from './pages/student/TechnicalTestTaking'
 import WritingTestTaking from './pages/student/WritingTestTaking'
-// import UnifiedTestTaking from './pages/student/UnifiedTestTaking'
+import UnifiedTestTaking from './pages/student/UnifiedTestTaking'
 
 // Components
 import ProtectedRoute from './components/common/ProtectedRoute'
@@ -132,7 +132,7 @@ function App() {
                     {/* Form Portal Routes */}
                     <Route path="form-management" element={<FormManagement />} />
                     <Route path="form-submissions/:formId" element={<SubmissionViewer />} />
-                    {/* <Route path="unified-tests" element={<UnifiedTestManagement />} /> */}
+                    <Route path="unified-tests" element={<UnifiedTestManagement />} />
                     <Route path="profile" element={<SuperAdminProfile />} />
                   </Route>
 
@@ -176,8 +176,8 @@ function App() {
                   <Route path="practice-modules/:testId" element={<PracticeModuleTaking />} />
                   <Route path="technical-test/:testId" element={<TechnicalTestTaking />} />
                   <Route path="writing-test/:testId" element={<WritingTestTaking />} />
-            {/* <Route path="unified-tests" element={<UnifiedTestTaking />} />
-            <Route path="unified-test/:testId" element={<UnifiedTestTaking />} /> */}
+                  <Route path="unified-tests" element={<UnifiedTestTaking />} />
+                  <Route path="unified-test/:testId" element={<UnifiedTestTaking />} />
                 </Route>
 
                 {/* Fallback */}

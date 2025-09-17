@@ -10,10 +10,12 @@ import {
   GraduationCap
 } from 'lucide-react';
 import api from '../../services/api';
+import { safeGet, validateFormSubmission, getErrorMessage, retryApiCall } from '../../utils/apiHelpers';
 
 const ReleasedFormData = () => {
   const [releasedSubmissions, setReleasedSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchReleasedSubmissions();
@@ -22,12 +24,34 @@ const ReleasedFormData = () => {
   const fetchReleasedSubmissions = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/form-submissions/student/released-submissions');
-      if (response.data.success) {
-        setReleasedSubmissions(response.data.data.submissions);
+      setError(null);
+      
+      // Use retry mechanism for better reliability
+      const response = await retryApiCall(
+        () => api.get('/form-submissions/student/released-submissions'),
+        3, // max retries
+        1000 // initial delay
+      );
+      
+      // Use safeGet to extract data with fallbacks
+      const submissions = safeGet(response, 'data.data.submissions', []);
+      
+      // Validate and sanitize each submission
+      const validatedSubmissions = Array.isArray(submissions) 
+        ? submissions.map(validateFormSubmission)
+        : [];
+      
+      setReleasedSubmissions(validatedSubmissions);
+      
+      if (validatedSubmissions.length === 0) {
+        console.info('No released submissions found');
       }
+      
     } catch (error) {
       console.error('Error fetching released submissions:', error);
+      const errorMessage = getErrorMessage(error, 'load form data');
+      setError(errorMessage);
+      setReleasedSubmissions([]);
     } finally {
       setLoading(false);
     }
@@ -69,7 +93,27 @@ const ReleasedFormData = () => {
     );
   }
 
-  if (releasedSubmissions.length === 0) {
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="text-center py-8">
+          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <FileText className="w-6 h-6 text-red-600" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Form Data</h3>
+          <p className="text-gray-500 mb-4">{error}</p>
+          <button
+            onClick={fetchReleasedSubmissions}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!releasedSubmissions || releasedSubmissions.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="text-center py-8">
@@ -123,10 +167,14 @@ const ReleasedFormData = () => {
 
             {/* Form Responses - Ultra Precise Dynamic Layout */}
             <div className="flex flex-wrap gap-4">
-              {submission.form_responses.map((response, index) => {
-                const value = response.display_value || 'No response provided';
-                const valueLength = value.length;
-                const labelLength = response.field_label.length;
+              {(submission.form_responses || [])
+                .filter(response => response && typeof response === 'object')
+                .map((response, index) => {
+                // Use validateFormResponse for consistent data handling
+                const validatedResponse = validateFormResponse(response);
+                const value = validatedResponse.display_value;
+                const valueLength = String(value).length;
+                const labelLength = String(validatedResponse.field_label).length;
                 
                 // Ultra precise width calculation with dramatic differences
                 const charWidth = 9; // Character width
@@ -163,10 +211,12 @@ const ReleasedFormData = () => {
                 const totalWidth = textWidth + iconSpace + cardPadding;
                 
                 // Determine if this should be full width
-                const shouldBeFullWidth = response.field_type === 'textarea' || 
-                                        response.field_label.toLowerCase().includes('message') ||
-                                        response.field_label.toLowerCase().includes('description') ||
-                                        response.field_label.toLowerCase().includes('comment') ||
+                const fieldType = validatedResponse.field_type;
+                const fieldLabel = validatedResponse.field_label.toLowerCase();
+                const shouldBeFullWidth = fieldType === 'textarea' || 
+                                        fieldLabel.includes('message') ||
+                                        fieldLabel.includes('description') ||
+                                        fieldLabel.includes('comment') ||
                                         valueLength > 40 ||
                                         totalWidth > 400;
                 
@@ -200,12 +250,12 @@ const ReleasedFormData = () => {
                     <div className="flex items-start space-x-3 h-full">
                       <div className="flex-shrink-0 mt-1">
                         <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                          {getFieldIcon(response.field_type)}
+                          {getFieldIcon(fieldType)}
                         </div>
                       </div>
                       <div className="flex-1 min-w-0 flex flex-col">
                         <h4 className="text-sm font-medium text-gray-700 mb-1 truncate">
-                          {response.field_label}
+                          {validatedResponse.field_label}
                         </h4>
                         <p className="text-base text-gray-900 font-medium break-words flex-1">
                           {value}

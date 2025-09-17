@@ -20,7 +20,9 @@ const TestCreationWizard = ({ onClose, onSave }) => {
     sections: [],
     campus_ids: [],
     course_ids: [],
-    batch_ids: []
+    batch_ids: [],
+    start_date: '',
+    end_date: ''
   });
   
   const [availableModules, setAvailableModules] = useState([]);
@@ -28,6 +30,14 @@ const TestCreationWizard = ({ onClose, onSave }) => {
   const [availableTopics, setAvailableTopics] = useState([]);
   const [questionBankStats, setQuestionBankStats] = useState({});
   const [loading, setLoading] = useState(false);
+  const [showQuestionDialog, setShowQuestionDialog] = useState(false);
+  const [fetchedQuestions, setFetchedQuestions] = useState([]);
+  const [selectedQuestions, setSelectedQuestions] = useState([]);
+  const [currentQuestionSource, setCurrentQuestionSource] = useState(null);
+  const [currentSectionId, setCurrentSectionId] = useState(null);
+  const [fetchingQuestions, setFetchingQuestions] = useState(false);
+  const [showQuestionPreview, setShowQuestionPreview] = useState(false);
+  const [selectedBankQuestions, setSelectedBankQuestions] = useState([]);
 
   // Fetch modules and levels
   useEffect(() => {
@@ -89,6 +99,234 @@ const TestCreationWizard = ({ onClose, onSave }) => {
       console.error('Error fetching question bank stats:', error);
     }
   };
+
+  // Fetch questions using test management logic and endpoints
+  const fetchQuestions = async (source, sectionId) => {
+    try {
+      setFetchingQuestions(true);
+      
+      // Use the first module_id as the main module (like test management)
+      const moduleId = source.module_ids?.[0];
+      const levelId = source.level_ids?.[0];
+      const topicId = source.topic_ids?.[0];
+      
+      if (!moduleId) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Module Required',
+          text: 'Please select a module to fetch questions'
+        });
+        return;
+      }
+
+      // Determine the correct level_id based on module type (exactly like test management)
+      let finalLevelId = levelId;
+      let subcategory = null;
+
+      if (moduleId.startsWith('CRT_')) {
+        // For CRT modules, don't set level_id unless it's specifically needed
+        finalLevelId = null;
+        subcategory = null;
+      } else if (moduleId === 'GRAMMAR') {
+        // For Grammar, use level as level_id (since level contains the grammar category)
+        finalLevelId = levelId;
+        subcategory = null;
+      } else {
+        // For other modules (VOCABULARY, READING, LISTENING, SPEAKING, WRITING)
+        finalLevelId = levelId;
+        subcategory = null;
+      }
+
+      console.log('Fetching questions for unified test:', {
+        module_id: moduleId,
+        level_id: finalLevelId,
+        subcategory: subcategory,
+        topic_id: topicId,
+        question_count: source.question_count || 10,
+        original_level: levelId,
+        isCRT: moduleId.startsWith('CRT_')
+      });
+
+      // Use the test management bulk selection endpoint
+      const payload = {
+        module_id: moduleId,
+        level_id: finalLevelId,
+        subcategory: subcategory,
+        topic_id: topicId,
+        question_count: source.question_count || 10,
+        page: 1,
+        limit: source.question_count || 10
+      };
+
+      let response = await api.post('/test-management/question-bank/bulk-selection', payload);
+
+      // If no questions found and it's Grammar, try with subcategory as level_id
+      if (moduleId === 'GRAMMAR' && (!response.data.success || !response.data.questions || response.data.questions.length === 0)) {
+        console.log('No questions found with level, trying with subcategory as level_id');
+        payload.level_id = subcategory;
+        payload.subcategory = null;
+        response = await api.post('/test-management/question-bank/bulk-selection', payload);
+      }
+
+      // If no questions found for CRT_TECHNICAL, try without level_id
+      if (moduleId === 'CRT_TECHNICAL' && (!response.data.success || !response.data.questions || response.data.questions.length === 0)) {
+        console.log('No questions found for CRT_TECHNICAL with level_id, trying without level_id');
+        delete payload.level_id;
+        response = await api.post('/test-management/question-bank/bulk-selection', payload);
+      }
+
+      if (response.data.success) {
+        const questions = response.data.questions || [];
+        const totalQuestions = response.data.total_count || 0;
+
+        console.log('Successfully fetched questions for unified test:', {
+          questionsCount: questions.length,
+          totalQuestions: totalQuestions,
+          firstQuestion: questions[0] ? questions[0].question?.substring(0, 100) : 'No questions',
+          module: moduleId,
+          level: levelId,
+          topic_id: topicId
+        });
+
+        if (questions.length > 0) {
+          // Add repeat count information to each question (like test management)
+          const questionsWithRepeatInfo = questions.map(question => {
+            const historicalUsage = question.used_count || 0;
+            const currentUsage = historicalUsage + 1;
+
+            // Determine repetition status
+            let repetitionStatus = '';
+            if (currentUsage === 1) {
+              repetitionStatus = 'first_time';
+            } else if (currentUsage === 2) {
+              repetitionStatus = 'repeating_first_time';
+            } else if (currentUsage === 3) {
+              repetitionStatus = 'repeating_second_time';
+            } else {
+              repetitionStatus = `repeating_${currentUsage - 1}_time`;
+            }
+
+            return {
+              ...question,
+              repeatCount: historicalUsage,
+              currentUsage: currentUsage,
+              repetitionStatus: repetitionStatus
+            };
+          });
+
+          setSelectedBankQuestions(questionsWithRepeatInfo);
+          setCurrentQuestionSource(source);
+          setCurrentSectionId(sectionId);
+          setShowQuestionPreview(true);
+        } else {
+          Swal.fire({
+            icon: 'warning',
+            title: 'No Questions Found',
+            text: 'No questions match your current criteria. Try adjusting your selection.'
+          });
+        }
+      } else {
+        console.error('Failed to fetch questions:', response.data.message);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: response.data.message || 'Failed to fetch questions from bank'
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching questions from bank:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: error.response?.data?.message || 'Failed to fetch questions from bank'
+      });
+    } finally {
+      setFetchingQuestions(false);
+    }
+  };
+
+
+  // Handle confirm button click
+  const handleConfirmQuestions = (sectionId, sourceId) => {
+    const section = testData.sections.find(s => s.section_id === sectionId);
+    const source = section?.question_sources.find(s => s.source_id === sourceId);
+    
+    if (!source) return;
+
+    // Validate required fields
+    if (source.source_type === 'question_bank') {
+      if (!source.module_ids?.length && !source.level_ids?.length && !source.topic_ids?.length) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Selection Required',
+          text: 'Please select at least one module, level, or topic'
+        });
+        return;
+      }
+    }
+
+    if (source.question_count <= 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Invalid Count',
+        text: 'Please enter a valid question count'
+      });
+      return;
+    }
+
+    fetchQuestions(source, sectionId);
+  };
+
+  // Handle preview confirmation (like test management)
+  const handlePreviewConfirm = () => {
+    if (selectedBankQuestions.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'No Questions Selected',
+        text: 'Please select at least one question to add'
+      });
+      return;
+    }
+
+    // Update the question source with selected questions
+    const updatedSource = {
+      ...currentQuestionSource,
+      selected_questions: selectedBankQuestions,
+      actual_question_count: selectedBankQuestions.length
+    };
+
+    // Update the section
+    const updatedSections = testData.sections.map(section => {
+      if (section.section_id === currentSectionId) {
+        return {
+          ...section,
+          question_sources: section.question_sources.map(source => 
+            source.source_id === currentQuestionSource.source_id ? updatedSource : source
+          ),
+          question_count: section.question_sources.reduce((total, source) => {
+            if (source.source_id === currentQuestionSource.source_id) {
+              return total + selectedBankQuestions.length;
+            }
+            return total + (source.actual_question_count || 0);
+          }, 0)
+        };
+      }
+      return section;
+    });
+
+    setTestData(prev => ({ ...prev, sections: updatedSections }));
+    setShowQuestionPreview(false);
+    setSelectedBankQuestions([]);
+    setCurrentQuestionSource(null);
+    setCurrentSectionId(null);
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Questions Added',
+      text: `${selectedBankQuestions.length} questions added to the section`
+    });
+  };
+
 
   const addSection = () => {
     const newSection = {
@@ -259,6 +497,34 @@ const TestCreationWizard = ({ onClose, onSave }) => {
           className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           min="1"
         />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Start Date (Optional)
+          </label>
+          <input
+            type="datetime-local"
+            value={testData.start_date}
+            onChange={(e) => setTestData(prev => ({ ...prev, start_date: e.target.value }))}
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+          <p className="text-xs text-gray-500 mt-1">Leave empty to make test always available</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            End Date (Optional)
+          </label>
+          <input
+            type="datetime-local"
+            value={testData.end_date}
+            onChange={(e) => setTestData(prev => ({ ...prev, end_date: e.target.value }))}
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+          <p className="text-xs text-gray-500 mt-1">Leave empty for no end date</p>
+        </div>
       </div>
     </div>
   );
@@ -477,17 +743,35 @@ const TestCreationWizard = ({ onClose, onSave }) => {
                               <option value="Paragraph">Paragraph</option>
                             </select>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id={`randomize_${source.source_id}`}
-                              checked={source.randomize}
-                              onChange={(e) => updateQuestionSource(section.section_id, source.source_id, { randomize: e.target.checked })}
-                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                            />
-                            <label htmlFor={`randomize_${source.source_id}`} className="text-xs text-gray-600">
-                              Randomize questions
-                            </label>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id={`randomize_${source.source_id}`}
+                                checked={source.randomize}
+                                onChange={(e) => updateQuestionSource(section.section_id, source.source_id, { randomize: e.target.checked })}
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                              />
+                              <label htmlFor={`randomize_${source.source_id}`} className="text-xs text-gray-600">
+                                Randomize questions
+                              </label>
+                            </div>
+                            <button
+                              onClick={() => handleConfirmQuestions(section.section_id, source.source_id)}
+                              disabled={fetchingQuestions}
+                              className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-3 py-1 rounded text-xs flex items-center space-x-1"
+                            >
+                              {fetchingQuestions ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                  <span>Fetching...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span>Confirm</span>
+                                </>
+                              )}
+                            </button>
                           </div>
                         </>
                       )}
@@ -711,6 +995,196 @@ const TestCreationWizard = ({ onClose, onSave }) => {
           </div>
         </div>
       </div>
+
+      {/* Question Preview Modal - Exactly like Test Management */}
+      {showQuestionPreview && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Preview Questions ({selectedBankQuestions.length} selected)
+                </h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Review the questions that will be added to this section
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowQuestionPreview(false);
+                  setSelectedBankQuestions([]);
+                  setCurrentQuestionSource(null);
+                  setCurrentSectionId(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {selectedBankQuestions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="text-gray-500 mb-4">
+                      <svg className="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.29-1.009-5.824-2.709" />
+                      </svg>
+                      <p className="text-lg font-medium">No questions found</p>
+                      <p className="text-sm">No questions are available in the question bank for this selection.</p>
+                    </div>
+                  </div>
+                ) : (
+                  selectedBankQuestions.map((question, index) => (
+                    <div key={index} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-500">Question {index + 1}</span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Randomly Selected</span>
+                          {question.repetitionStatus === 'first_time' && (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                              First Time
+                            </span>
+                          )}
+                          {question.repetitionStatus === 'repeating_first_time' && (
+                            <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                              Repeating First Time
+                            </span>
+                          )}
+                          {question.repetitionStatus === 'repeating_second_time' && (
+                            <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                              Repeating Second Time
+                            </span>
+                          )}
+                          {question.repetitionStatus && question.repetitionStatus.startsWith('repeating_') && question.repetitionStatus !== 'repeating_first_time' && question.repetitionStatus !== 'repeating_second_time' && (
+                            <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                              {question.repetitionStatus.replace('repeating_', 'Repeating ').replace('_', ' ').replace('time', 'Time')}
+                            </span>
+                          )}
+                          {question.question_type === 'compiler_integrated' && (
+                            <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                              Compiler
+                            </span>
+                          )}
+                          {question.question_type === 'mcq' && (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                              MCQ
+                            </span>
+                          )}
+                          {(currentQuestionSource?.module_ids?.some(id => id === 'LISTENING') || currentQuestionSource?.module_ids?.some(id => id === 'SPEAKING') || question.question_type === 'sentence') && (
+                            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                              Sentence
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Display based on question type */}
+                      {question.question_type === 'compiler_integrated' ? (
+                        <div>
+                          <div className="mb-3">
+                            <h4 className="font-medium text-gray-800 mb-2">{question.questionTitle || question.question}</h4>
+                            <p className="text-gray-700">{question.problemStatement || question.statement}</p>
+                          </div>
+                          <div className="grid grid-cols-1 gap-2 text-sm">
+                            <div className="bg-gray-50 p-2 rounded">
+                              <span className="font-medium">Language:</span> {question.language || 'python'}
+                            </div>
+                            {question.instructions && (
+                              <div className="bg-gray-50 p-2 rounded">
+                                <span className="font-medium">Instructions:</span> {question.instructions}
+                              </div>
+                            )}
+                            {question.testCases && question.testCases.length > 0 && (
+                              <div className="bg-gray-50 p-2 rounded">
+                                <span className="font-medium">Test Cases:</span> {question.testCases.length} case(s)
+                                <div className="mt-2 space-y-1">
+                                  {Array.isArray(question.testCases) ? (
+                                    question.testCases.map((testCase, idx) => (
+                                      <div key={idx} className="text-xs bg-white p-1 rounded border">
+                                        <div><strong>Input:</strong> {testCase.input || testCase}</div>
+                                        <div><strong>Expected:</strong> {testCase.expectedOutput || 'N/A'}</div>
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="text-xs bg-white p-1 rounded border">
+                                      <div><strong>Test Cases:</strong> {question.testCases}</div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (currentQuestionSource?.module_ids?.some(id => id === 'LISTENING') || currentQuestionSource?.module_ids?.some(id => id === 'SPEAKING') || question.question_type === 'sentence') ? (
+                        <div>
+                          <p className="text-gray-800 mb-3">{question.text || question.question || question.questionTitle || question.statement || question.problemStatement || 'Sentence text not available'}</p>
+                          <div className="bg-blue-50 p-3 rounded">
+                            <div className="text-sm text-blue-800">
+                              <strong>Type:</strong> Sentence-based Question
+                            </div>
+                            {currentQuestionSource?.module_ids?.some(id => id === 'LISTENING') && (
+                              <div className="mt-2 text-sm">
+                                <strong>Audio Status:</strong> 🎵 Audio will be auto-generated for listening test
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-gray-800 mb-3">{question.question || question.questionTitle || question.statement || question.problemStatement || 'Question text not available'}</p>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div className="bg-gray-50 p-2 rounded">
+                              <span className="font-medium">A:</span> {question.optionA || question.options?.[0] || 'N/A'}
+                            </div>
+                            <div className="bg-gray-50 p-2 rounded">
+                              <span className="font-medium">B:</span> {question.optionB || question.options?.[1] || 'N/A'}
+                            </div>
+                            <div className="bg-gray-50 p-2 rounded">
+                              <span className="font-medium">C:</span> {question.optionC || question.options?.[2] || 'N/A'}
+                            </div>
+                            <div className="bg-gray-50 p-2 rounded">
+                              <span className="font-medium">D:</span> {question.optionD || question.options?.[3] || 'N/A'}
+                            </div>
+                          </div>
+                          <div className="mt-2 text-sm">
+                            <span className="font-medium text-green-600">Answer:</span> {question.answer || question.correct_answer || 'N/A'}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-end space-x-3 p-6 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setShowQuestionPreview(false);
+                  setSelectedBankQuestions([]);
+                  setCurrentQuestionSource(null);
+                  setCurrentSectionId(null);
+                }}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePreviewConfirm}
+                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+              >
+                Use These Questions
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

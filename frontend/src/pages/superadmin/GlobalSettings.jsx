@@ -51,6 +51,12 @@ const GlobalSettings = () => {
         category: 'Modules'
       },
       { 
+        key: 'unified_tests', 
+        name: 'Unified Tests', 
+        description: 'Allow students to take comprehensive unified tests with multiple sections',
+        category: 'Testing'
+      },
+      { 
         key: 'progress_tracking', 
         name: 'Progress Tracking', 
         description: 'Show student progress analytics and statistics',
@@ -80,6 +86,12 @@ const GlobalSettings = () => {
         key: 'test_management', 
         name: 'Test Management', 
         description: 'Create and manage tests',
+        category: 'Management'
+      },
+      { 
+        key: 'unified_test_management', 
+        name: 'Unified Test Management', 
+        description: 'Create and manage comprehensive unified tests with multiple sections',
         category: 'Management'
       },
       { 
@@ -118,6 +130,12 @@ const GlobalSettings = () => {
         key: 'test_management', 
         name: 'Test Management', 
         description: 'Create and manage tests',
+        category: 'Management'
+      },
+      { 
+        key: 'unified_test_management', 
+        name: 'Unified Test Management', 
+        description: 'Create and manage comprehensive unified tests with multiple sections',
         category: 'Management'
       },
       { 
