@@ -9,6 +9,47 @@ from config.database import DatabaseConfig
 from models_forms import FormSubmission, FormResponse, FORMS_COLLECTION, FORM_SUBMISSIONS_COLLECTION
 from routes.test_management import require_superadmin
 
+def process_submission_responses(submission, form):
+    """Process form responses and convert to enhanced format"""
+    # Handle both 'responses' and 'form_responses' structures
+    responses_data = submission.get('responses', []) or submission.get('form_responses', [])
+    
+    if not responses_data:
+        return []
+    
+    processed_responses = []
+    for response in responses_data:
+        field_id = response.get('field_id')
+        field_value = response.get('value')
+        
+        # Find the field definition in the form
+        field_definition = None
+        for field in form.get('fields', []):
+            if field.get('field_id') == field_id:
+                field_definition = field
+                break
+        
+        if field_definition:
+            processed_responses.append({
+                'field_id': field_id,
+                'field_label': field_definition.get('label', 'Unknown Field'),
+                'field_type': field_definition.get('type', 'text'),
+                'field_required': field_definition.get('required', False),
+                'value': field_value,
+                'display_value': format_field_value(field_value, field_definition.get('type', 'text'))
+            })
+        else:
+            processed_responses.append({
+                'field_id': field_id,
+                'field_label': 'Unknown Field',
+                'field_type': 'text',
+                'field_required': False,
+                'value': field_value,
+                'display_value': str(field_value) if field_value is not None else 'No response'
+            })
+    
+    return processed_responses
+
 def get_student_roll_number_from_jwt():
     """Get student roll number from JWT token with comprehensive lookup mechanism"""
     try:
@@ -602,10 +643,20 @@ def get_form_submissions():
         
         # Build query
         query = {}
+        
+        # Handle form_id condition
         if form_id and ObjectId.is_valid(form_id):
-            query['form_id'] = ObjectId(form_id)  # form_id is stored as ObjectId
+            # Handle both string and ObjectId formats for form_id
+            query['$or'] = [
+                {'form_id': ObjectId(form_id)},
+                {'form_id': form_id}
+            ]
+        
+        # Handle student_id condition
         if student_id and ObjectId.is_valid(student_id):
-            query['student_id'] = student_id  # student_id is stored as string, not ObjectId
+            query['student_id'] = ObjectId(student_id)  # student_id is stored as ObjectId
+        
+        # Handle status condition
         if status:
             query['status'] = status
         
@@ -619,6 +670,10 @@ def get_form_submissions():
                           .skip(skip)
                           .limit(limit))
         
+        print(f"🔍 Found {len(submissions)} submissions for query: {query}")
+        for i, sub in enumerate(submissions):
+            print(f"🔍 Submission {i+1}: ID={sub.get('_id')}, student_id={sub.get('student_id')}, status={sub.get('status')}")
+        
         # Convert ObjectId to string and populate form/student details
         for submission in submissions:
             submission['_id'] = str(submission['_id'])
@@ -631,45 +686,33 @@ def get_form_submissions():
                 submission['form_title'] = form['title']
                 submission['form_template_type'] = form.get('template_type', 'custom')
                 
-                # Process form responses with field labels
-                if 'responses' in submission:
-                    processed_responses = []
-                    for response in submission['responses']:
-                        field_id = response.get('field_id')
-                        field_value = response.get('value')
-                        
-                        # Find the field definition in the form
-                        field_definition = None
-                        for field in form.get('fields', []):
-                            if field.get('field_id') == field_id:
-                                field_definition = field
-                                break
-                        
-                        if field_definition:
-                            processed_responses.append({
-                                'field_id': field_id,
-                                'field_label': field_definition.get('label', 'Unknown Field'),
-                                'field_type': field_definition.get('type', 'text'),
-                                'field_required': field_definition.get('required', False),
-                                'value': field_value,
-                                'display_value': format_field_value(field_value, field_definition.get('type', 'text'))
-                            })
-                        else:
-                            processed_responses.append({
-                                'field_id': field_id,
-                                'field_label': 'Unknown Field',
-                                'field_type': 'text',
-                                'field_required': False,
-                                'value': field_value,
-                                'display_value': str(field_value) if field_value is not None else 'No response'
-                            })
-                    
-                    submission['form_responses'] = processed_responses
-                else:
-                    submission['form_responses'] = []
+                # Process form responses with field labels using the new function
+                submission['form_responses'] = process_submission_responses(submission, form)
             
-            # Get student details with course, batch, and campus information
-            student = mongo_db['students'].find_one({'_id': ObjectId(submission['student_id'])})
+            # Get student details using roll_number from submission
+            student_roll_number = submission.get('student_roll_number')
+            print(f"🔍 Looking up student with roll number: {student_roll_number}")
+            
+            student = None
+            if student_roll_number:
+                try:
+                    student = get_student_by_roll_number(student_roll_number)
+                    print(f"✅ Student found by roll number: {student.get('name', 'Unknown')}")
+                except Exception as e:
+                    print(f"❌ Error looking up student by roll number: {str(e)}")
+                    # Fallback: try to find by student_id if available
+                    student_id = submission.get('student_id')
+                    if student_id:
+                        try:
+                            if isinstance(student_id, str):
+                                student_id = ObjectId(student_id)
+                            student = mongo_db['students'].find_one({'_id': student_id})
+                            if student:
+                                print(f"✅ Student found by student_id fallback: {student.get('name', 'Unknown')}")
+                        except Exception as e2:
+                            print(f"❌ Fallback student lookup also failed: {str(e2)}")
+            else:
+                print(f"❌ No student_roll_number found in submission")
             if student:
                 submission['student_name'] = student.get('name', 'Unknown')
                 submission['student_email'] = student.get('email', 'Unknown')
@@ -899,32 +942,91 @@ def export_form_submissions(form_id):
                 "message": "Form not found"
             }), 404
         
-        # Get all submissions for this form
-        submissions = list(mongo_db[FORM_SUBMISSIONS_COLLECTION].find({
-            'form_id': ObjectId(form_id),
+        # Get all submissions for this form (handle both string and ObjectId formats)
+        query = {
+            '$or': [
+                {'form_id': ObjectId(form_id)},
+                {'form_id': form_id}
+            ],
             'status': 'submitted'
-        }).sort('submitted_at', -1))
+        }
+        print(f"🔍 Export query: {query}")
+        
+        submissions = list(mongo_db[FORM_SUBMISSIONS_COLLECTION].find(query).sort('submitted_at', -1))
+        print(f"📊 Found {len(submissions)} submissions for export")
         
         # Prepare export data
         export_data = []
         for submission in submissions:
-            # Get student details
-            student = mongo_db['students'].find_one({'_id': ObjectId(submission['student_id'])})
-            student_name = student.get('name', 'Unknown') if student else 'Unknown'
-            student_email = student.get('email', 'Unknown') if student else 'Unknown'
+            # Get student details using roll_number (same logic as submission viewer)
+            student_roll_number = submission.get('student_roll_number')
+            student = None
+            student_name = 'Unknown'
+            student_email = 'Unknown'
+            student_roll = 'Unknown'
+            student_mobile = 'Unknown'
+            student_course = 'Unknown'
+            student_batch = 'Unknown'
+            student_campus = 'Unknown'
             
-            # Create row data
+            if student_roll_number:
+                try:
+                    student = get_student_by_roll_number(student_roll_number)
+                    student_name = student.get('name', 'Unknown')
+                    student_email = student.get('email', 'Unknown')
+                    student_roll = student.get('roll_number', 'Unknown')
+                    student_mobile = student.get('mobile_number', 'Unknown')
+                    
+                    # Get course details
+                    course = mongo_db['courses'].find_one({'_id': student.get('course_id')})
+                    if course:
+                        student_course = course.get('name', 'Unknown')
+                    
+                    # Get batch details
+                    batch = mongo_db['batches'].find_one({'_id': student.get('batch_id')})
+                    if batch:
+                        student_batch = batch.get('name', 'Unknown')
+                    
+                    # Get campus details
+                    campus = mongo_db['campuses'].find_one({'_id': student.get('campus_id')})
+                    if campus:
+                        student_campus = campus.get('name', 'Unknown')
+                except Exception as e:
+                    print(f"❌ Error looking up student by roll number: {str(e)}")
+                    # Fallback: try to find by student_id if available
+                    student_id = submission.get('student_id')
+                    if student_id:
+                        try:
+                            if isinstance(student_id, str):
+                                student_id = ObjectId(student_id)
+                            student = mongo_db['students'].find_one({'_id': student_id})
+                            if student:
+                                student_name = student.get('name', 'Unknown')
+                                student_email = student.get('email', 'Unknown')
+                                student_roll = student.get('roll_number', 'Unknown')
+                                student_mobile = student.get('mobile_number', 'Unknown')
+                        except Exception as e2:
+                            print(f"❌ Fallback student lookup also failed: {str(e2)}")
+            
+            # Create row data with only essential student information and form fields
+            # Order: Roll Number, Name, Campus, Course, Batch, Mobile, Email, then form fields
             row = {
+                'Student Roll Number': student_roll,
                 'Student Name': student_name,
-                'Student Email': student_email,
-                'Submission Date': submission['submitted_at'].strftime('%Y-%m-%d %H:%M:%S') if submission['submitted_at'] else 'N/A',
-                'IP Address': submission.get('ip_address', 'N/A')
+                'Student Campus': student_campus,
+                'Student Course': student_course,
+                'Student Batch': student_batch,
+                'Student Mobile': student_mobile,
+                'Student Email': student_email
             }
             
+            # Process form responses (handle both 'responses' and 'form_responses' formats)
+            responses_data = submission.get('responses', []) or submission.get('form_responses', [])
+            
             # Add form field responses
-            for response in submission['responses']:
-                field_id = response['field_id']
-                value = response['value']
+            for response in responses_data:
+                field_id = response.get('field_id')
+                value = response.get('value')
                 
                 # Find field label
                 field_label = field_id
@@ -1155,42 +1257,8 @@ def get_student_released_submissions():
                 submission['form_description'] = form.get('description', '')
                 submission['form_template_type'] = form.get('template_type', 'custom')
                 
-                # Process form responses with field labels
-                if 'responses' in submission:
-                    processed_responses = []
-                    for response in submission['responses']:
-                        field_id = response.get('field_id')
-                        field_value = response.get('value')
-                        
-                        # Find the field definition in the form
-                        field_definition = None
-                        for field in form.get('fields', []):
-                            if field.get('field_id') == field_id:
-                                field_definition = field
-                                break
-                        
-                        if field_definition:
-                            processed_responses.append({
-                                'field_id': field_id,
-                                'field_label': field_definition.get('label', 'Unknown Field'),
-                                'field_type': field_definition.get('type', 'text'),
-                                'field_required': field_definition.get('required', False),
-                                'value': field_value,
-                                'display_value': format_field_value(field_value, field_definition.get('type', 'text'))
-                            })
-                        else:
-                            processed_responses.append({
-                                'field_id': field_id,
-                                'field_label': 'Unknown Field',
-                                'field_type': 'text',
-                                'field_required': False,
-                                'value': field_value,
-                                'display_value': str(field_value) if field_value is not None else 'No response'
-                            })
-                    
-                    submission['form_responses'] = processed_responses
-                else:
-                    submission['form_responses'] = []
+                # Process form responses with field labels using the new function
+                submission['form_responses'] = process_submission_responses(submission, form)
             
             processed_submissions.append(submission)
         
