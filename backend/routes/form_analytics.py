@@ -27,8 +27,8 @@ def get_analytics_overview():
         submitted_count = mongo_db['form_submissions'].count_documents({'status': 'submitted'})
         draft_count = mongo_db['form_submissions'].count_documents({'status': 'draft'})
         
-        # Get unique students who submitted forms
-        unique_students = len(mongo_db['form_submissions'].distinct('student_id', {'status': 'submitted'}))
+        # Get unique students who submitted forms (using roll_number for accurate counting)
+        unique_students = len(mongo_db['form_submissions'].distinct('student_roll_number', {'status': 'submitted'}))
         
         # Get submissions in last 30 days
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
@@ -100,20 +100,35 @@ def get_form_stats(form_id):
                 "message": "Form not found"
             }), 404
         
-        # Get submission statistics (form_id is stored as ObjectId)
-        total_submissions = mongo_db['form_submissions'].count_documents({'form_id': ObjectId(form_id)})
+        # Get submission statistics (handle both string and ObjectId formats for form_id)
+        form_query = {
+            '$or': [
+                {'form_id': ObjectId(form_id)},
+                {'form_id': form_id}
+            ]
+        }
+        total_submissions = mongo_db['form_submissions'].count_documents(form_query)
         submitted_count = mongo_db['form_submissions'].count_documents({
-            'form_id': ObjectId(form_id),
+            '$or': [
+                {'form_id': ObjectId(form_id)},
+                {'form_id': form_id}
+            ],
             'status': 'submitted'
         })
         draft_count = mongo_db['form_submissions'].count_documents({
-            'form_id': ObjectId(form_id),
+            '$or': [
+                {'form_id': ObjectId(form_id)},
+                {'form_id': form_id}
+            ],
             'status': 'draft'
         })
         
-        # Get unique students who submitted this form
-        unique_students = len(mongo_db['form_submissions'].distinct('student_id', {
-            'form_id': ObjectId(form_id),
+        # Get unique students who submitted this form (using roll_number for accurate counting)
+        unique_students = len(mongo_db['form_submissions'].distinct('student_roll_number', {
+            '$or': [
+                {'form_id': ObjectId(form_id)},
+                {'form_id': form_id}
+            ],
             'status': 'submitted'
         }))
         
@@ -127,7 +142,10 @@ def get_form_stats(form_id):
             end_of_day = start_of_day + timedelta(days=1)
             
             count = mongo_db['form_submissions'].count_documents({
-                'form_id': ObjectId(form_id),
+                '$or': [
+                    {'form_id': ObjectId(form_id)},
+                    {'form_id': form_id}
+                ],
                 'status': 'submitted',
                 'submitted_at': {'$gte': start_of_day, '$lt': end_of_day}
             })
@@ -143,12 +161,34 @@ def get_form_stats(form_id):
             field_id = field['field_id']
             field_type = field['type']
             
-            # Get responses for this field
+            # Get responses for this field (handle both 'responses' and 'form_responses' formats)
             pipeline = [
-                {'$match': {'form_id': ObjectId(form_id), 'status': 'submitted'}},
-                {'$unwind': '$responses'},
-                {'$match': {'responses.field_id': field_id}},
-                {'$group': {'_id': '$responses.value', 'count': {'$sum': 1}}},
+                {'$match': {
+                    '$or': [
+                        {'form_id': ObjectId(form_id)},
+                        {'form_id': form_id}
+                    ],
+                    'status': 'submitted'
+                }},
+                {'$unwind': {'path': '$responses', 'preserveNullAndEmptyArrays': True}},
+                {'$unwind': {'path': '$form_responses', 'preserveNullAndEmptyArrays': True}},
+                {'$match': {
+                    '$or': [
+                        {'responses.field_id': field_id},
+                        {'form_responses.field_id': field_id}
+                    ]
+                }},
+                {'$project': {
+                    'value': {
+                        '$cond': {
+                            'if': {'$ne': ['$responses.field_id', None]},
+                            'then': '$responses.value',
+                            'else': '$form_responses.value'
+                        }
+                    }
+                }},
+                {'$match': {'value': {'$ne': None}}},
+                {'$group': {'_id': '$value', 'count': {'$sum': 1}}},
                 {'$sort': {'count': -1}}
             ]
             
@@ -234,29 +274,23 @@ def get_form_stats(form_id):
             "message": "Failed to fetch form statistics"
         }), 500
 
-@form_analytics_bp.route('/students/<student_id>/submissions', methods=['GET'])
+@form_analytics_bp.route('/students/<student_roll_number>/submissions', methods=['GET'])
 @jwt_required()
 @require_superadmin
-def get_student_submissions(student_id):
-    """Get all form submissions by a specific student"""
+def get_student_submissions(student_roll_number):
+    """Get all form submissions by a specific student using roll number"""
     try:
-        if not ObjectId.is_valid(student_id):
-            return jsonify({
-                "success": False,
-                "message": "Invalid student ID"
-            }), 400
-        
-        # Get student details
-        student = mongo_db['students'].find_one({'_id': ObjectId(student_id)})
+        # Get student details by roll number
+        student = mongo_db['students'].find_one({'roll_number': student_roll_number})
         if not student:
             return jsonify({
                 "success": False,
                 "message": "Student not found"
             }), 404
         
-        # Get all submissions by this student
+        # Get all submissions by this student using roll number
         submissions = list(mongo_db['form_submissions'].find({
-            'student_id': ObjectId(student_id)
+            'student_roll_number': student_roll_number
         }).sort('submitted_at', -1))
         
         # Add form details to each submission

@@ -9,6 +9,47 @@ from config.database import DatabaseConfig
 from models_forms import FormSubmission, FormResponse, FORMS_COLLECTION, FORM_SUBMISSIONS_COLLECTION
 from routes.test_management import require_superadmin
 
+def process_submission_responses(submission, form):
+    """Process form responses and convert to enhanced format"""
+    # Handle both 'responses' and 'form_responses' structures
+    responses_data = submission.get('responses', []) or submission.get('form_responses', [])
+    
+    if not responses_data:
+        return []
+    
+    processed_responses = []
+    for response in responses_data:
+        field_id = response.get('field_id')
+        field_value = response.get('value')
+        
+        # Find the field definition in the form
+        field_definition = None
+        for field in form.get('fields', []):
+            if field.get('field_id') == field_id:
+                field_definition = field
+                break
+        
+        if field_definition:
+            processed_responses.append({
+                'field_id': field_id,
+                'field_label': field_definition.get('label', 'Unknown Field'),
+                'field_type': field_definition.get('type', 'text'),
+                'field_required': field_definition.get('required', False),
+                'value': field_value,
+                'display_value': format_field_value(field_value, field_definition.get('type', 'text'))
+            })
+        else:
+            processed_responses.append({
+                'field_id': field_id,
+                'field_label': 'Unknown Field',
+                'field_type': 'text',
+                'field_required': False,
+                'value': field_value,
+                'display_value': str(field_value) if field_value is not None else 'No response'
+            })
+    
+    return processed_responses
+
 def get_student_roll_number_from_jwt():
     """Get student roll number from JWT token with comprehensive lookup mechanism"""
     try:
@@ -602,10 +643,20 @@ def get_form_submissions():
         
         # Build query
         query = {}
+        
+        # Handle form_id condition
         if form_id and ObjectId.is_valid(form_id):
-            query['form_id'] = ObjectId(form_id)  # form_id is stored as ObjectId
+            # Handle both string and ObjectId formats for form_id
+            query['$or'] = [
+                {'form_id': ObjectId(form_id)},
+                {'form_id': form_id}
+            ]
+        
+        # Handle student_id condition
         if student_id and ObjectId.is_valid(student_id):
-            query['student_id'] = student_id  # student_id is stored as string, not ObjectId
+            query['student_id'] = ObjectId(student_id)  # student_id is stored as ObjectId
+        
+        # Handle status condition
         if status:
             query['status'] = status
         
@@ -619,6 +670,10 @@ def get_form_submissions():
                           .skip(skip)
                           .limit(limit))
         
+        print(f"🔍 Found {len(submissions)} submissions for query: {query}")
+        for i, sub in enumerate(submissions):
+            print(f"🔍 Submission {i+1}: ID={sub.get('_id')}, student_id={sub.get('student_id')}, status={sub.get('status')}")
+        
         # Convert ObjectId to string and populate form/student details
         for submission in submissions:
             submission['_id'] = str(submission['_id'])
@@ -631,45 +686,33 @@ def get_form_submissions():
                 submission['form_title'] = form['title']
                 submission['form_template_type'] = form.get('template_type', 'custom')
                 
-                # Process form responses with field labels
-                if 'responses' in submission:
-                    processed_responses = []
-                    for response in submission['responses']:
-                        field_id = response.get('field_id')
-                        field_value = response.get('value')
-                        
-                        # Find the field definition in the form
-                        field_definition = None
-                        for field in form.get('fields', []):
-                            if field.get('field_id') == field_id:
-                                field_definition = field
-                                break
-                        
-                        if field_definition:
-                            processed_responses.append({
-                                'field_id': field_id,
-                                'field_label': field_definition.get('label', 'Unknown Field'),
-                                'field_type': field_definition.get('type', 'text'),
-                                'field_required': field_definition.get('required', False),
-                                'value': field_value,
-                                'display_value': format_field_value(field_value, field_definition.get('type', 'text'))
-                            })
-                        else:
-                            processed_responses.append({
-                                'field_id': field_id,
-                                'field_label': 'Unknown Field',
-                                'field_type': 'text',
-                                'field_required': False,
-                                'value': field_value,
-                                'display_value': str(field_value) if field_value is not None else 'No response'
-                            })
-                    
-                    submission['form_responses'] = processed_responses
-                else:
-                    submission['form_responses'] = []
+                # Process form responses with field labels using the new function
+                submission['form_responses'] = process_submission_responses(submission, form)
             
-            # Get student details with course, batch, and campus information
-            student = mongo_db['students'].find_one({'_id': ObjectId(submission['student_id'])})
+            # Get student details using roll_number from submission
+            student_roll_number = submission.get('student_roll_number')
+            print(f"🔍 Looking up student with roll number: {student_roll_number}")
+            
+            student = None
+            if student_roll_number:
+                try:
+                    student = get_student_by_roll_number(student_roll_number)
+                    print(f"✅ Student found by roll number: {student.get('name', 'Unknown')}")
+                except Exception as e:
+                    print(f"❌ Error looking up student by roll number: {str(e)}")
+                    # Fallback: try to find by student_id if available
+                    student_id = submission.get('student_id')
+                    if student_id:
+                        try:
+                            if isinstance(student_id, str):
+                                student_id = ObjectId(student_id)
+                            student = mongo_db['students'].find_one({'_id': student_id})
+                            if student:
+                                print(f"✅ Student found by student_id fallback: {student.get('name', 'Unknown')}")
+                        except Exception as e2:
+                            print(f"❌ Fallback student lookup also failed: {str(e2)}")
+            else:
+                print(f"❌ No student_roll_number found in submission")
             if student:
                 submission['student_name'] = student.get('name', 'Unknown')
                 submission['student_email'] = student.get('email', 'Unknown')
@@ -1155,42 +1198,8 @@ def get_student_released_submissions():
                 submission['form_description'] = form.get('description', '')
                 submission['form_template_type'] = form.get('template_type', 'custom')
                 
-                # Process form responses with field labels
-                if 'responses' in submission:
-                    processed_responses = []
-                    for response in submission['responses']:
-                        field_id = response.get('field_id')
-                        field_value = response.get('value')
-                        
-                        # Find the field definition in the form
-                        field_definition = None
-                        for field in form.get('fields', []):
-                            if field.get('field_id') == field_id:
-                                field_definition = field
-                                break
-                        
-                        if field_definition:
-                            processed_responses.append({
-                                'field_id': field_id,
-                                'field_label': field_definition.get('label', 'Unknown Field'),
-                                'field_type': field_definition.get('type', 'text'),
-                                'field_required': field_definition.get('required', False),
-                                'value': field_value,
-                                'display_value': format_field_value(field_value, field_definition.get('type', 'text'))
-                            })
-                        else:
-                            processed_responses.append({
-                                'field_id': field_id,
-                                'field_label': 'Unknown Field',
-                                'field_type': 'text',
-                                'field_required': False,
-                                'value': field_value,
-                                'display_value': str(field_value) if field_value is not None else 'No response'
-                            })
-                    
-                    submission['form_responses'] = processed_responses
-                else:
-                    submission['form_responses'] = []
+                # Process form responses with field labels using the new function
+                submission['form_responses'] = process_submission_responses(submission, form)
             
             processed_submissions.append(submission)
         
