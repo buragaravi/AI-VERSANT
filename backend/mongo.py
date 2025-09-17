@@ -24,6 +24,8 @@ class MongoDB:
         self.student_test_assignments = self.db.student_test_assignments
         self.crt_topics = self.db.crt_topics
         self.test_results = self.db.test_results
+        self.unified_tests = self.db.unified_tests
+        self.unified_test_attempts = self.db.unified_test_attempts
         
         # Create indexes for better performance (only once)
         self._create_indexes_once()

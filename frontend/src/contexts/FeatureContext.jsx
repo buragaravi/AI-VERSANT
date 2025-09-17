@@ -32,8 +32,10 @@ export const FeatureProvider = ({ children }) => {
       const response = await api.get('/global-settings/user/features');
       
       if (response.data.success) {
+        console.log('✅ Fetched user features:', response.data.data.features);
         setUserFeatures(response.data.data.features || {});
       } else {
+        console.log('❌ Failed to fetch user features:', response.data.message);
         setError(response.data.message || 'Failed to fetch user features');
       }
     } catch (err) {
@@ -41,7 +43,10 @@ export const FeatureProvider = ({ children }) => {
       setError(err.response?.data?.message || 'Failed to fetch user features');
       
       // Fallback to default features if API fails
-      setUserFeatures(getDefaultFeaturesForRole(user?.role));
+      console.log('⚠️ Using fallback features for role:', user?.role);
+      const fallbackFeatures = getDefaultFeaturesForRole(user?.role);
+      console.log('📋 Fallback features:', fallbackFeatures);
+      setUserFeatures(fallbackFeatures);
     } finally {
       setLoading(false);
     }
@@ -55,6 +60,7 @@ export const FeatureProvider = ({ children }) => {
         online_tests: { name: 'Online Tests', description: 'Take online exams and tests', required: false },
         practice_tests: { name: 'Practice Tests', description: 'Practice with Versant modules', required: false },
         crt_modules: { name: 'CRT Modules', description: 'Access CRT aptitude and technical modules', required: false },
+        unified_tests: { name: 'Unified Tests', description: 'Take comprehensive unified tests with multiple sections', required: false },
         progress_tracking: { name: 'Progress Tracking', description: 'View progress analytics and statistics', required: false },
         test_history: { name: 'Test History', description: 'View past test attempts and results', required: false },
         profile: { name: 'Profile', description: 'Manage user profile and settings', required: false }
@@ -107,12 +113,17 @@ export const FeatureProvider = ({ children }) => {
 
   // Generate navigation links based on user role and enabled features
   const generateNavLinks = (role) => {
+    console.log('🔗 Generating nav links for role:', role);
+    console.log('📊 Current userFeatures:', userFeatures);
+    console.log('🔍 isFeatureEnabled(unified_tests):', isFeatureEnabled('unified_tests'));
+    
     const allFeatures = {
       student: [
         { name: 'Dashboard', path: '/student', icon: 'Home', feature: 'dashboard', required: true },
         { name: 'Online Tests', path: '/student/exams', icon: 'Calendar', feature: 'online_tests' },
         { name: 'Practice Tests', path: '/student/practice', icon: 'Book', feature: 'practice_tests' },
         { name: 'CRT Modules', path: '/student/crt', icon: 'Book', feature: 'crt_modules' },
+        { name: 'Unified Tests', path: '/student/unified-tests', icon: 'Book', feature: 'unified_tests' },
         { name: 'Progress', path: '/student/progress', icon: 'PieChart', feature: 'progress_tracking' },
         { name: 'Test History', path: '/student/history', icon: 'BarChart2', feature: 'test_history' },
         { name: 'Profile', path: '/student/profile', icon: 'User', feature: 'profile' }
@@ -137,15 +148,21 @@ export const FeatureProvider = ({ children }) => {
 
     const roleFeatures = allFeatures[role] || [];
     
-    return roleFeatures.filter(link => {
+    const filteredLinks = roleFeatures.filter(link => {
       // Always show required features
       if (link.required) {
+        console.log(`✅ Showing required feature: ${link.name}`);
         return true;
       }
       
       // Show enabled features
-      return isFeatureEnabled(link.feature);
+      const isEnabled = isFeatureEnabled(link.feature);
+      console.log(`${isEnabled ? '✅' : '❌'} Feature ${link.name} (${link.feature}): ${isEnabled ? 'enabled' : 'disabled'}`);
+      return isEnabled;
     });
+    
+    console.log('🎯 Final filtered links:', filteredLinks.map(l => l.name));
+    return filteredLinks;
   };
 
   // Fetch features when user changes

@@ -46,7 +46,9 @@ class UnifiedTest:
         course_ids: List[str] = None,
         batch_ids: List[str] = None,
         created_by: str = None,
-        status: str = "draft"
+        status: str = "draft",
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
     ) -> Dict:
         """Create a new unified test"""
         return {
@@ -59,6 +61,8 @@ class UnifiedTest:
             'batch_ids': [ObjectId(bid) for bid in (batch_ids or [])],
             'created_by': ObjectId(created_by) if created_by else None,
             'status': status,  # draft, active, completed, archived
+            'start_date': start_date,  # Optional start date - if None, test is always available
+            'end_date': end_date,  # Optional end date - if None, test has no end date
             'total_questions': sum(section.get('question_count', 0) for section in (sections or [])),
             'total_sections': len(sections or []),
             'created_at': datetime.now(pytz.utc),

@@ -564,13 +564,7 @@ const FormManagement = () => {
                         >
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => handleDeleteForm(form._id, form.title)}
-                          className="text-red-600 hover:text-red-900"
-                          title="Delete Form"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+
                       </div>
                     </td>
                   </tr>

@@ -149,6 +149,30 @@ def create_unified_test():
                     'message': f'Missing required field: {field}'
                 }), 400
         
+        # Parse start and end dates if provided
+        start_date = None
+        end_date = None
+        
+        if data.get('start_date'):
+            try:
+                from datetime import datetime
+                start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
+            except ValueError:
+                return jsonify({
+                    'success': False,
+                    'message': 'Invalid start_date format. Use ISO format.'
+                }), 400
+        
+        if data.get('end_date'):
+            try:
+                from datetime import datetime
+                end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
+            except ValueError:
+                return jsonify({
+                    'success': False,
+                    'message': 'Invalid end_date format. Use ISO format.'
+                }), 400
+        
         # Create unified test
         test_data = UnifiedTest.create_test(
             test_name=data['test_name'],
@@ -159,7 +183,9 @@ def create_unified_test():
             course_ids=data.get('course_ids', []),
             batch_ids=data.get('batch_ids', []),
             created_by=data.get('created_by'),
-            status=data.get('status', 'draft')
+            status=data.get('status', 'draft'),
+            start_date=start_date,
+            end_date=end_date
         )
         
         # Insert into database
@@ -293,6 +319,96 @@ def delete_unified_test(test_id):
             'message': 'Failed to delete unified test'
         }), 500
 
+@unified_test_management_bp.route('/unified-tests/<test_id>/update-status', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def update_unified_test_status(test_id):
+    """Update unified test status"""
+    try:
+        data = request.get_json()
+        new_status = data.get('status')
+        
+        if not new_status:
+            return jsonify({
+                'success': False,
+                'message': 'Status is required'
+            }), 400
+        
+        # Check if test exists
+        test = mongo_db[UNIFIED_TESTS_COLLECTION].find_one({'_id': ObjectId(test_id)})
+        if not test:
+            return jsonify({
+                'success': False,
+                'message': 'Test not found'
+            }), 404
+        
+        # Update status
+        result = mongo_db[UNIFIED_TESTS_COLLECTION].update_one(
+            {'_id': ObjectId(test_id)},
+            {'$set': {'status': new_status, 'updated_at': datetime.now(pytz.utc)}}
+        )
+        
+        if result.modified_count > 0:
+            return jsonify({
+                'success': True,
+                'message': f'Test status updated to {new_status}',
+                'test_id': test_id
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'No changes made to test status'
+            }), 400
+            
+    except Exception as e:
+        logger.error(f"Error updating unified test status: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to update test status: {str(e)}'
+        }), 500
+
+@unified_test_management_bp.route('/unified-tests/<test_id>/delete', methods=['POST'])
+@jwt_required()
+@require_superadmin
+def delete_unified_test_post(test_id):
+    """Delete a unified test via POST"""
+    try:
+        # Check if test exists
+        test = mongo_db[UNIFIED_TESTS_COLLECTION].find_one({'_id': ObjectId(test_id)})
+        if not test:
+            return jsonify({
+                'success': False,
+                'message': 'Test not found'
+            }), 404
+        
+        # Check if test is active
+        if test.get('status') == 'active':
+            return jsonify({
+                'success': False,
+                'message': 'Cannot delete active test. Please deactivate it first.'
+            }), 400
+        
+        # Delete test
+        result = mongo_db[UNIFIED_TESTS_COLLECTION].delete_one({'_id': ObjectId(test_id)})
+        
+        if result.deleted_count > 0:
+            return jsonify({
+                'success': True,
+                'message': 'Test deleted successfully'
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to delete test'
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error deleting unified test: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Failed to delete test: {str(e)}'
+        }), 500
+
 @unified_test_management_bp.route('/unified-tests/<test_id>/sections', methods=['POST'])
 @require_permission('unified_test_management', 'edit_tests')
 def add_section_to_test(test_id):
@@ -367,18 +483,20 @@ def get_question_bank_questions():
         # Get query parameters
         module_ids = request.args.getlist('module_ids')
         level_ids = request.args.getlist('level_ids')
+        topic_ids = request.args.getlist('topic_ids')
         question_types = request.args.getlist('question_types')
         limit = int(request.args.get('limit', 50))
         randomize = request.args.get('randomize', 'false').lower() == 'true'
         
-        # Build query
+        # Build query - use string IDs directly like test management
         query = {}
         if module_ids:
-            query['module_id'] = {'$in': [ObjectId(mid) for mid in module_ids]}
+            query['module_id'] = {'$in': module_ids}
         if level_ids:
-            query['level_id'] = {'$in': [ObjectId(lid) for lid in level_ids]}
-        if question_types:
-            query['question_type'] = {'$in': question_types}
+            query['level_id'] = {'$in': level_ids}
+        if topic_ids:
+            query['topic_id'] = {'$in': [ObjectId(tid) for tid in topic_ids if ObjectId.is_valid(tid)]}
+        # Note: Not filtering by question_types as requested
         
         # Fetch questions
         if randomize:
@@ -393,6 +511,35 @@ def get_question_bank_questions():
         # Convert ObjectIds to strings and format for unified tests
         formatted_questions = []
         for question in questions:
+            # Get module name - handle both string IDs and ObjectIds
+            module_name = None
+            if question.get('module_id'):
+                if ObjectId.is_valid(question['module_id']):
+                    module = mongo_db.modules.find_one({'_id': ObjectId(question['module_id'])})
+                    if module:
+                        module_name = module.get('name')
+                else:
+                    # String ID like "GRAMMAR" - use the ID directly as name
+                    module_name = question['module_id']
+            
+            # Get level name - handle both string IDs and ObjectIds
+            level_name = None
+            if question.get('level_id'):
+                if ObjectId.is_valid(question['level_id']):
+                    level = mongo_db.levels.find_one({'_id': ObjectId(question['level_id'])})
+                    if level:
+                        level_name = level.get('name')
+                else:
+                    # String ID like "NOUN" - use the ID directly as name
+                    level_name = question['level_id']
+            
+            # Get topic name
+            topic_name = None
+            if question.get('topic_id'):
+                topic = mongo_db.crt_topics.find_one({'_id': ObjectId(question['topic_id'])})
+                if topic:
+                    topic_name = topic.get('topic_name')
+            
             formatted_question = {
                 'id': str(question['_id']),
                 'question_text': question.get('question_text', ''),
@@ -403,6 +550,10 @@ def get_question_bank_questions():
                 'marks': question.get('marks', 1),
                 'module_id': str(question.get('module_id', '')),
                 'level_id': str(question.get('level_id', '')),
+                'topic_id': str(question.get('topic_id', '')),
+                'module_name': module_name,
+                'level_name': level_name,
+                'topic_name': topic_name,
                 'difficulty': question.get('difficulty', 'medium'),
                 'source_type': 'question_bank',
                 'created_at': question.get('created_at', datetime.now(pytz.utc))
@@ -874,4 +1025,45 @@ def get_random_questions():
         return jsonify({
             'success': False,
             'message': f'Failed to fetch random questions: {str(e)}'
+        }), 500
+
+
+@unified_test_management_bp.route('/question-sources/test-questions', methods=['GET'])
+@jwt_required()
+@require_superadmin
+def test_questions():
+    """Test endpoint to check if questions exist in database"""
+    try:
+        # Get total count
+        total_count = mongo_db.question_bank.count_documents({})
+        
+        # Get a few sample questions
+        sample_questions = list(mongo_db.question_bank.find({}).limit(5))
+        
+        # Get module count
+        module_count = mongo_db.modules.count_documents({})
+        
+        # Get level count
+        level_count = mongo_db.levels.count_documents({})
+        
+        return jsonify({
+            'success': True,
+            'total_questions': total_count,
+            'sample_questions': len(sample_questions),
+            'module_count': module_count,
+            'level_count': level_count,
+            'sample_data': [{
+                'id': str(q['_id']),
+                'question_text': q.get('question_text', '')[:100] + '...',
+                'question_type': q.get('question_type', 'MCQ'),
+                'module_id': str(q.get('module_id', '')),
+                'level_id': str(q.get('level_id', ''))
+            } for q in sample_questions]
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error testing questions: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
         }), 500
