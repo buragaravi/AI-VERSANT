@@ -8,6 +8,7 @@ import json
 from config.database import DatabaseConfig
 from models_forms import FormSubmission, FormResponse, FORMS_COLLECTION, FORM_SUBMISSIONS_COLLECTION
 from routes.test_management import require_superadmin
+from utils.notification_queue import queue_sms, queue_email
 
 def process_submission_responses(submission, form):
     """Process form responses and convert to enhanced format"""
@@ -580,6 +581,35 @@ def submit_form():
             )
             
             if result.modified_count > 0:
+                # Queue notification if form is submitted (not draft)
+                if status == 'submitted':
+                    try:
+                        # Get student data for notification
+                        student = get_student_by_roll_number(student_roll_number)
+                        student_name = student.get('name', 'Student')
+                        student_email = student.get('email')
+                        student_mobile = student.get('mobile_number')
+                        
+                        # Queue email notification if email exists
+                        if student_email:
+                            queue_email(
+                                email=student_email,
+                                subject="Form Submission Confirmation",
+                                content=f"Dear {student_name},\n\nYour form has been submitted successfully. Thank you for your submission.\n\nBest regards,\nVERSANT Team",
+                                template_name=None
+                            )
+                        
+                        # Queue SMS notification if mobile exists
+                        if student_mobile:
+                            queue_sms(
+                                phone=student_mobile,
+                                message=f"Form submitted successfully. Thank you for your submission. - VERSANT Team",
+                                notification_type='custom'
+                            )
+                    except Exception as e:
+                        print(f"⚠️ Failed to queue notifications: {e}")
+                        # Don't fail the submission if notifications fail
+                
                 return jsonify({
                     "success": True,
                     "message": f"Form {'submitted' if status == 'submitted' else 'saved as draft'} successfully",
@@ -607,6 +637,35 @@ def submit_form():
             result = mongo_db[FORM_SUBMISSIONS_COLLECTION].insert_one(submission.to_dict())
             
             if result.inserted_id:
+                # Queue notification if form is submitted (not draft)
+                if status == 'submitted':
+                    try:
+                        # Get student data for notification
+                        student = get_student_by_roll_number(student_roll_number)
+                        student_name = student.get('name', 'Student')
+                        student_email = student.get('email')
+                        student_mobile = student.get('mobile_number')
+                        
+                        # Queue email notification if email exists
+                        if student_email:
+                            queue_email(
+                                email=student_email,
+                                subject="Form Submission Confirmation",
+                                content=f"Dear {student_name},\n\nYour form has been submitted successfully. Thank you for your submission.\n\nBest regards,\nVERSANT Team",
+                                template_name=None
+                            )
+                        
+                        # Queue SMS notification if mobile exists
+                        if student_mobile:
+                            queue_sms(
+                                phone=student_mobile,
+                                message=f"Form submitted successfully. Thank you for your submission. - VERSANT Team",
+                                notification_type='custom'
+                            )
+                    except Exception as e:
+                        print(f"⚠️ Failed to queue notifications: {e}")
+                        # Don't fail the submission if notifications fail
+                
                 return jsonify({
                     "success": True,
                     "message": f"Form {'submitted' if status == 'submitted' else 'saved as draft'} successfully",

@@ -14,6 +14,7 @@ from utils.sms_service import send_student_credentials_sms
 from utils.upload_optimizer import optimize_upload_process, cleanup_if_needed, log_upload_progress
 from utils.resilient_services import create_resilient_services
 from utils.async_processor import performance_monitor
+from utils.notification_queue import queue_student_credentials, queue_batch_notifications, get_notification_stats
 from config.shared import bcrypt
 from socketio_instance import socketio
 from routes.access_control import require_permission
@@ -869,25 +870,84 @@ def upload_students_to_batch():
                 current_app.logger.error(f"Database error for student {index + 1}: {e}")
                 continue
 
-        # Database upload completed - no email/SMS sending here
+        # Database upload completed - now queue notifications in background
         current_app.logger.info("✅ Database upload phase completed successfully!")
 
-        # Finalize all student results - only database registration matters for upload
+        # PHASE 2: QUEUE NOTIFICATIONS IN BACKGROUND
+        current_app.logger.info("🚀 PHASE 2: Queueing notifications in background...")
+        socketio.emit('upload_progress', {
+            'user_id': user_id,
+            'status': 'queueing_notifications',
+            'total': total_students,
+            'processed': total_students,
+            'percentage': 100,
+            'message': 'Database upload completed! Queueing notifications in background...'
+        }, room=str(user_id))
+
+        # Prepare students for notification queueing
+        students_for_notifications = []
+        for index, (row, student_result) in enumerate(zip(rows, detailed_results)):
+            if student_result['database_registered']:
+                # Extract student data for notifications
+                if is_v2_format:
+                    student_name = str(row.get('Student Name', '')).strip()
+                    roll_number = str(row.get('Roll Number', '')).strip()
+                    email = str(row.get('Email', '')).strip().lower() if row.get('Email') else ''
+                    mobile_number = str(row.get('Mobile Number', '')).strip()
+                else:
+                    student_name = str(row.get('Student Name', '')).strip()
+                    roll_number = str(row.get('Roll Number', '')).strip()
+                    email = str(row.get('Email', '')).strip().lower() if row.get('Email') else ''
+                    mobile_number = str(row.get('Mobile Number', '')).strip()
+
+                # Generate username and password (same logic as database registration)
+                username = roll_number
+                password = f"{student_name.split()[0][:4].lower()}{roll_number[-4:]}"
+
+                student_data = {
+                    'name': student_name,
+                    'username': username,
+                    'password': password,
+                    'email': email if email and email.strip() else None,
+                    'mobile_number': mobile_number if mobile_number and mobile_number.strip() else None,
+                    'roll_number': roll_number
+                }
+                students_for_notifications.append(student_data)
+
+        # Queue notifications in background
+        if students_for_notifications:
+            try:
+                notification_results = queue_batch_notifications(students_for_notifications, 'welcome')
+                current_app.logger.info(f"📧📱 Queued {notification_results['queued_email']} emails and {notification_results['queued_sms']} SMS notifications")
+                
+                # Update student results with notification status
+                for student_result in detailed_results:
+                    if student_result['database_registered']:
+                        student_result['notifications_queued'] = True
+                        student_result['email_queued'] = True  # Will be processed in background
+                        student_result['sms_queued'] = True    # Will be processed in background
+            except Exception as e:
+                current_app.logger.error(f"❌ Failed to queue notifications: {e}")
+                # Don't fail the upload if notifications fail
+        else:
+            current_app.logger.warning("⚠️ No students available for notification queueing")
+
+        # Finalize all student results
         for student_result in detailed_results:
             student_result['success'] = student_result['database_registered']
-            # Initialize email/SMS flags as False (not sent during upload)
-            student_result['email_sent'] = False
-            student_result['sms_sent'] = False
+            # Set notification flags based on queueing success
+            student_result['email_sent'] = student_result.get('email_queued', False)
+            student_result['sms_sent'] = student_result.get('sms_queued', False)
         
         # Send completion notification
-        current_app.logger.info("🎉 Student database upload completed successfully!")
+        current_app.logger.info("🎉 Student upload completed successfully with background notifications!")
         socketio.emit('upload_progress', {
             'user_id': user_id,
             'status': 'completed',
             'total': total_students,
             'processed': total_students,
             'percentage': 100,
-            'message': 'Database upload completed! Use Send Emails/SMS buttons to send credentials.'
+            'message': f'Upload completed! {len(students_for_notifications)} students queued for notifications.'
         }, room=str(user_id))
                     
         # Calculate summary statistics (only database registrations)
@@ -3018,3 +3078,18 @@ def send_batch_sms(batch_id):
     except Exception as e:
         current_app.logger.error(f"Error sending batch SMS: {e}")
         return jsonify({'success': False, 'message': f'Failed to send SMS: {str(e)}'}), 500
+
+@batch_management_bp.route('/notification-stats', methods=['GET'])
+@jwt_required()
+@require_permission(module='batch_management')
+def get_notification_stats_endpoint():
+    """Get notification queue statistics"""
+    try:
+        stats = get_notification_stats()
+        return jsonify({
+            'success': True,
+            'data': stats
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Error getting notification stats: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
