@@ -1,5 +1,5 @@
 """
-Question Processing Utilities for Unified Test System
+Question Processing Utilities
 Handles file upload processing, question type detection, and question parsing
 """
 

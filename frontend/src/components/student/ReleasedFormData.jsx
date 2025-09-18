@@ -10,7 +10,7 @@ import {
   GraduationCap
 } from 'lucide-react';
 import api from '../../services/api';
-import { safeGet, validateFormSubmission, getErrorMessage, retryApiCall } from '../../utils/apiHelpers';
+import { safeGet, validateFormSubmission, validateFormResponse, getErrorMessage, retryApiCall } from '../../utils/apiHelpers';
 
 const ReleasedFormData = () => {
   const [releasedSubmissions, setReleasedSubmissions] = useState([]);
@@ -58,13 +58,21 @@ const ReleasedFormData = () => {
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    try {
+      if (!dateString) return 'Unknown date';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.warn('Error formatting date:', error);
+      return 'Invalid date';
+    }
   };
 
   const getFieldIcon = (fieldType) => {
@@ -139,13 +147,20 @@ const ReleasedFormData = () => {
       </div>
 
       <div className="space-y-6">
-        {releasedSubmissions.map((submission) => (
-          <div key={submission._id} className="border border-gray-200 rounded-lg p-6">
+        {releasedSubmissions.map((submission) => {
+          // Add safety checks for submission data
+          if (!submission || !submission._id) {
+            console.warn('Invalid submission data:', submission);
+            return null;
+          }
+          
+          return (
+            <div key={submission._id} className="border border-gray-200 rounded-lg p-6">
             {/* Form Header */}
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h3 className="text-lg font-medium text-gray-900 mb-1">
-                  {submission.form_title}
+                  {submission.form_title || 'Untitled Form'}
                 </h3>
                 {submission.form_description && (
                   <p className="text-sm text-gray-600 mb-2">
@@ -170,11 +185,12 @@ const ReleasedFormData = () => {
               {(submission.form_responses || [])
                 .filter(response => response && typeof response === 'object')
                 .map((response, index) => {
-                // Use validateFormResponse for consistent data handling
-                const validatedResponse = validateFormResponse(response);
-                const value = validatedResponse.display_value;
-                const valueLength = String(value).length;
-                const labelLength = String(validatedResponse.field_label).length;
+                try {
+                  // Use validateFormResponse for consistent data handling
+                  const validatedResponse = validateFormResponse(response);
+                  const value = validatedResponse.display_value || 'No response';
+                  const valueLength = String(value).length;
+                  const labelLength = String(validatedResponse.field_label || 'Unknown Field').length;
                 
                 // Ultra precise width calculation with dramatic differences
                 const charWidth = 9; // Character width
@@ -234,40 +250,67 @@ const ReleasedFormData = () => {
                   flexBasis = calculatedWidth + 'px';
                 }
                 
-                return (
-                  <div 
-                    key={index} 
-                    className="bg-gray-50 rounded-lg p-4 transition-all duration-200 hover:shadow-md"
-                    style={{
-                      width: finalWidth,
-                      minWidth: '100px',
-                      maxWidth: shouldBeFullWidth ? '100%' : '350px',
-                      flexBasis: flexBasis,
-                      flexShrink: 0,
-                      flexGrow: shouldBeFullWidth ? 1 : 0
-                    }}
-                  >
-                    <div className="flex items-start space-x-3 h-full">
-                      <div className="flex-shrink-0 mt-1">
-                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                          {getFieldIcon(fieldType)}
+                  return (
+                    <div 
+                      key={index} 
+                      className="bg-gray-50 rounded-lg p-4 transition-all duration-200 hover:shadow-md"
+                      style={{
+                        width: finalWidth,
+                        minWidth: '100px',
+                        maxWidth: shouldBeFullWidth ? '100%' : '350px',
+                        flexBasis: flexBasis,
+                        flexShrink: 0,
+                        flexGrow: shouldBeFullWidth ? 1 : 0
+                      }}
+                    >
+                      <div className="flex items-start space-x-3 h-full">
+                        <div className="flex-shrink-0 mt-1">
+                          <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                            {getFieldIcon(fieldType)}
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col">
+                          <h4 className="text-sm font-medium text-gray-700 mb-1 truncate">
+                            {validatedResponse.field_label}
+                          </h4>
+                          <p className="text-base text-gray-900 font-medium break-words flex-1">
+                            {value}
+                          </p>
                         </div>
                       </div>
-                      <div className="flex-1 min-w-0 flex flex-col">
-                        <h4 className="text-sm font-medium text-gray-700 mb-1 truncate">
-                          {validatedResponse.field_label}
-                        </h4>
-                        <p className="text-base text-gray-900 font-medium break-words flex-1">
-                          {value}
-                        </p>
+                    </div>
+                  );
+                } catch (error) {
+                  console.warn('Error processing form response:', error, response);
+                  // Return a fallback component for invalid responses
+                  return (
+                    <div 
+                      key={index} 
+                      className="bg-red-50 rounded-lg p-4 border border-red-200"
+                    >
+                      <div className="flex items-start space-x-3">
+                        <div className="flex-shrink-0 mt-1">
+                          <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                            <FileText className="w-4 h-4 text-red-600" />
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-medium text-red-700 mb-1">
+                            Invalid Response
+                          </h4>
+                          <p className="text-sm text-red-600">
+                            Unable to display this form response
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
+                  );
+                }
               })}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

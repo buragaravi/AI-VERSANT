@@ -606,6 +606,19 @@ def submit_form():
                                 message=f"Form submitted successfully. Thank you for your submission. - VERSANT Team",
                                 notification_type='custom'
                             )
+                        
+                        # Send push notification
+                        try:
+                            from utils.push_notification_helper import push_notification_helper
+                            push_notification_helper.send_form_submission_notification(
+                                form_id=form_id,
+                                student_id=str(student_id),
+                                form_title=form.get('title', 'Form'),
+                                status=status
+                            )
+                        except Exception as push_error:
+                            print(f"⚠️ Failed to send push notification: {push_error}")
+                            # Don't fail the submission if push notification fails
                     except Exception as e:
                         print(f"⚠️ Failed to queue notifications: {e}")
                         # Don't fail the submission if notifications fail
@@ -662,6 +675,19 @@ def submit_form():
                                 message=f"Form submitted successfully. Thank you for your submission. - VERSANT Team",
                                 notification_type='custom'
                             )
+                        
+                        # Send push notification
+                        try:
+                            from utils.push_notification_helper import push_notification_helper
+                            push_notification_helper.send_form_submission_notification(
+                                form_id=form_id,
+                                student_id=str(student_id),
+                                form_title=form.get('title', 'Form'),
+                                status=status
+                            )
+                        except Exception as push_error:
+                            print(f"⚠️ Failed to send push notification: {push_error}")
+                            # Don't fail the submission if push notification fails
                     except Exception as e:
                         print(f"⚠️ Failed to queue notifications: {e}")
                         # Don't fail the submission if notifications fail

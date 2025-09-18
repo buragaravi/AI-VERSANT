@@ -25,6 +25,19 @@ def send_daily_test_notifications():
             with current_app.app_context():
                 notify_students(test_id)
             print(f"[Scheduler] Notified students for test {test_id}")
+            
+            # Send push notification for daily reminders
+            try:
+                from utils.push_notification_helper import push_notification_helper
+                push_notification_helper.send_reminder_notification(
+                    reminder_type='daily_test',
+                    title='Daily Test Reminder',
+                    message=f'Don\'t forget to complete your test "{test.get("name", "Test")}" today!',
+                    target_students=None  # Send to all students
+                )
+                print(f"[Scheduler] Push notification sent for test {test_id}")
+            except Exception as push_error:
+                print(f"[Scheduler] Failed to send push notification for test {test_id}: {push_error}")
         except Exception as e:
             print(f"[Scheduler] Failed to notify for test {test_id}: {e}")
 

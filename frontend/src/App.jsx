@@ -6,6 +6,7 @@ import { DashboardProvider } from './contexts/DashboardContext'
 import { NotificationProvider } from './contexts/NotificationContext'
 import { FeatureProvider } from './contexts/FeatureContext'
 import { FormPortalProvider } from './contexts/FormPortalContext'
+import { PushNotificationProvider } from './components/common/PushNotificationManager'
 
 // Auth Pages
 import Login from './pages/auth/Login'
@@ -28,7 +29,6 @@ import BatchCourseInstances from './pages/superadmin/BatchCourseInstances'
 import BatchManagement from './pages/superadmin/BatchManagement'
 import FormManagement from './pages/superadmin/FormManagement'
 import SubmissionViewer from './pages/superadmin/SubmissionViewer'
-import UnifiedTestManagement from './pages/superadmin/UnifiedTestManagement'
 
 // Campus Admin Pages
 import CampusAdminDashboard from './pages/campus-admin/CampusAdminDashboard'
@@ -48,6 +48,9 @@ import PracticeModules from './pages/student/PracticeModules'
 import CRTModules from './pages/student/CRTModules'
 import OnlineExams from './pages/student/OnlineExams'
 import TestHistory from './pages/student/TestHistory'
+
+// Test Pages
+import PushNotificationTest from './pages/test/PushNotificationTest'
 import ProgressTracker from './pages/student/ProgressTracker'
 import StudentProfile from './pages/student/Profile'
 import SuperAdminProfile from './pages/superadmin/Profile'
@@ -56,7 +59,6 @@ import TestResult from './pages/student/TestResult'
 import PracticeModuleTaking from './pages/student/PracticeModuleTaking'
 import TechnicalTestTaking from './pages/student/TechnicalTestTaking'
 import WritingTestTaking from './pages/student/WritingTestTaking'
-import UnifiedTestTaking from './pages/student/UnifiedTestTaking'
 
 // Components
 import ProtectedRoute from './components/common/ProtectedRoute'
@@ -79,6 +81,7 @@ function App() {
           <NotificationProvider>
             <FeatureProvider>
             <FormPortalProvider>
+            <PushNotificationProvider>
             <div className="min-h-screen bg-gray-50">
               <Toaster 
                 position="top-right"
@@ -132,7 +135,6 @@ function App() {
                     {/* Form Portal Routes */}
                     <Route path="form-management" element={<FormManagement />} />
                     <Route path="form-submissions/:formId" element={<SubmissionViewer />} />
-                    <Route path="unified-tests" element={<UnifiedTestManagement />} />
                     <Route path="profile" element={<SuperAdminProfile />} />
                   </Route>
 
@@ -176,14 +178,16 @@ function App() {
                   <Route path="practice-modules/:testId" element={<PracticeModuleTaking />} />
                   <Route path="technical-test/:testId" element={<TechnicalTestTaking />} />
                   <Route path="writing-test/:testId" element={<WritingTestTaking />} />
-                  <Route path="unified-tests" element={<UnifiedTestTaking />} />
-                  <Route path="unified-test/:testId" element={<UnifiedTestTaking />} />
                 </Route>
+
+                {/* Test Routes */}
+                <Route path="/test/push-notifications" element={<PushNotificationTest />} />
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>
+            </PushNotificationProvider>
             </FormPortalProvider>
             </FeatureProvider>
           </NotificationProvider>

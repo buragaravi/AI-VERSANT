@@ -67,14 +67,14 @@ const ProgressTracker = () => {
 
   if (!progressData) {
     return (
-      <div className="max-w-2xl mx-auto">
+      <div className="w-full">
         <p className="text-gray-600">No progress data found.</p>
       </div>
     )
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="w-full">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
