@@ -268,7 +268,7 @@ const PracticeModules = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="w-full">
       {renderContent()}
       
       <PopupModal 

@@ -121,6 +121,10 @@ packaging>=23.0
 # On macOS: brew install ffmpeg portaudio
 # On Windows: Download ffmpeg from https://ffmpeg.org/download.html
 #
+# Web Push Notifications
+pywebpush>=2.0.0
+Flask-pyWebPush>=1.1.0
+
 # Python 3.13 Compatibility:
 # - This file uses versions that have pre-built wheels for Python 3.13
 # - If you encounter build issues, consider using Python 3.11 or 3.12

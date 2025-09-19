@@ -23,7 +23,7 @@ class GlobalSettings:
                 'online_tests': {'enabled': True, 'required': False, 'name': 'Online Tests', 'description': 'Take online exams and tests'},
                 'practice_tests': {'enabled': True, 'required': False, 'name': 'Practice Tests', 'description': 'Practice with Versant modules'},
                 'crt_modules': {'enabled': True, 'required': False, 'name': 'CRT Modules', 'description': 'Access CRT aptitude and technical modules'},
-                'unified_tests': {'enabled': True, 'required': False, 'name': 'Unified Tests', 'description': 'Take comprehensive unified tests with multiple sections'},
+                '': {'enabled': True, 'required': False, 'name': 'Unified Tests', 'description': 'Take comprehensive unified tests with multiple sections'},
                 'progress_tracking': {'enabled': True, 'required': False, 'name': 'Progress Tracking', 'description': 'View progress analytics and statistics'},
                 'test_history': {'enabled': True, 'required': False, 'name': 'Test History', 'description': 'View past test attempts and results'},
                 'profile': {'enabled': True, 'required': False, 'name': 'Profile', 'description': 'Manage user profile and settings'}
@@ -32,7 +32,7 @@ class GlobalSettings:
                 'dashboard': {'enabled': True, 'required': True, 'name': 'Dashboard', 'description': 'Main dashboard view'},
                 'student_management': {'enabled': True, 'required': False, 'name': 'Student Management', 'description': 'Manage students in campus'},
                 'test_management': {'enabled': True, 'required': False, 'name': 'Test Management', 'description': 'Create and manage tests'},
-                'unified_test_management': {'enabled': True, 'required': False, 'name': 'Unified Test Management', 'description': 'Create and manage comprehensive unified tests with multiple sections'},
+                '': {'enabled': True, 'required': False, 'name': 'Unified Test Management', 'description': 'Create and manage comprehensive unified tests with multiple sections'},
                 'batch_management': {'enabled': True, 'required': False, 'name': 'Batch Management', 'description': 'Manage course batches'},
                 'reports': {'enabled': True, 'required': False, 'name': 'Reports', 'description': 'View campus reports and analytics'},
                 'profile': {'enabled': True, 'required': False, 'name': 'Profile', 'description': 'Manage admin profile and settings'}
@@ -42,7 +42,7 @@ class GlobalSettings:
                 'batch_management': {'enabled': True, 'required': False, 'name': 'Batch Management', 'description': 'Manage course batches'},
                 'student_management': {'enabled': True, 'required': False, 'name': 'Student Management', 'description': 'Manage students in course'},
                 'test_management': {'enabled': True, 'required': False, 'name': 'Test Management', 'description': 'Create and manage tests'},
-                'unified_test_management': {'enabled': True, 'required': False, 'name': 'Unified Test Management', 'description': 'Create and manage comprehensive unified tests with multiple sections'},
+                '': {'enabled': True, 'required': False, 'name': 'Unified Test Management', 'description': 'Create and manage comprehensive unified tests with multiple sections'},
                 'reports': {'enabled': True, 'required': False, 'name': 'Reports', 'description': 'View course reports and analytics'},
                 'profile': {'enabled': True, 'required': False, 'name': 'Profile', 'description': 'Manage admin profile and settings'}
             }
@@ -122,7 +122,7 @@ class GlobalSettings:
                 'online_tests': {'enabled': True, 'required': False, 'name': 'Online Tests', 'description': 'Take online exams and tests'},
                 'practice_tests': {'enabled': True, 'required': False, 'name': 'Practice Tests', 'description': 'Practice with Versant modules'},
                 'crt_modules': {'enabled': True, 'required': False, 'name': 'CRT Modules', 'description': 'Access CRT aptitude and technical modules'},
-                'unified_tests': {'enabled': True, 'required': False, 'name': 'Unified Tests', 'description': 'Take comprehensive unified tests with multiple sections'},
+                '': {'enabled': True, 'required': False, 'name': 'Unified Tests', 'description': 'Take comprehensive unified tests with multiple sections'},
                 'progress_tracking': {'enabled': True, 'required': False, 'name': 'Progress Tracking', 'description': 'View progress analytics and statistics'},
                 'test_history': {'enabled': True, 'required': False, 'name': 'Test History', 'description': 'View past test attempts and results'},
                 'profile': {'enabled': True, 'required': False, 'name': 'Profile', 'description': 'Manage user profile and settings'}
@@ -131,7 +131,7 @@ class GlobalSettings:
                 'dashboard': {'enabled': True, 'required': True, 'name': 'Dashboard', 'description': 'Main dashboard view'},
                 'student_management': {'enabled': True, 'required': False, 'name': 'Student Management', 'description': 'Manage students in campus'},
                 'test_management': {'enabled': True, 'required': False, 'name': 'Test Management', 'description': 'Create and manage tests'},
-                'unified_test_management': {'enabled': True, 'required': False, 'name': 'Unified Test Management', 'description': 'Create and manage comprehensive unified tests with multiple sections'},
+                '': {'enabled': True, 'required': False, 'name': 'Unified Test Management', 'description': 'Create and manage comprehensive unified tests with multiple sections'},
                 'batch_management': {'enabled': True, 'required': False, 'name': 'Batch Management', 'description': 'Manage course batches'},
                 'reports': {'enabled': True, 'required': False, 'name': 'Reports', 'description': 'View campus reports and analytics'},
                 'profile': {'enabled': True, 'required': False, 'name': 'Profile', 'description': 'Manage admin profile and settings'}
@@ -141,7 +141,7 @@ class GlobalSettings:
                 'batch_management': {'enabled': True, 'required': False, 'name': 'Batch Management', 'description': 'Manage course batches'},
                 'student_management': {'enabled': True, 'required': False, 'name': 'Student Management', 'description': 'Manage students in course'},
                 'test_management': {'enabled': True, 'required': False, 'name': 'Test Management', 'description': 'Create and manage tests'},
-                'unified_test_management': {'enabled': True, 'required': False, 'name': 'Unified Test Management', 'description': 'Create and manage comprehensive unified tests with multiple sections'},
+                '': {'enabled': True, 'required': False, 'name': 'Unified Test Management', 'description': 'Create and manage comprehensive unified tests with multiple sections'},
                 'reports': {'enabled': True, 'required': False, 'name': 'Reports', 'description': 'View course reports and analytics'},
                 'profile': {'enabled': True, 'required': False, 'name': 'Profile', 'description': 'Manage admin profile and settings'}
             }
