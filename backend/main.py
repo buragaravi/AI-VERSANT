@@ -341,6 +341,10 @@ def create_app():
     from routes.push_notifications import push_notifications_bp
     app.register_blueprint(push_notifications_bp, url_prefix='/notifications')
     
+    # Register OneSignal Notifications blueprint
+    from routes.onesignal_notifications import onesignal_notifications_bp
+    app.register_blueprint(onesignal_notifications_bp, url_prefix='/onesignal')
+    
     # Register async routes
     app.register_blueprint(async_auth_bp, url_prefix='/async-auth')
     

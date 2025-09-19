@@ -7,6 +7,7 @@ import { NotificationProvider } from './contexts/NotificationContext'
 import { FeatureProvider } from './contexts/FeatureContext'
 import { FormPortalProvider } from './contexts/FormPortalContext'
 import { PushNotificationProvider } from './components/common/PushNotificationManager'
+import { OneSignalProvider } from './components/common/OneSignalIntegration'
 
 // Auth Pages
 import Login from './pages/auth/Login'
@@ -51,6 +52,7 @@ import TestHistory from './pages/student/TestHistory'
 
 // Test Pages
 import PushNotificationTest from './pages/test/PushNotificationTest'
+import HybridNotificationTest from './components/test/HybridNotificationTest'
 import ProgressTracker from './pages/student/ProgressTracker'
 import StudentProfile from './pages/student/Profile'
 import SuperAdminProfile from './pages/superadmin/Profile'
@@ -82,6 +84,7 @@ function App() {
             <FeatureProvider>
             <FormPortalProvider>
             <PushNotificationProvider>
+            <OneSignalProvider>
             <div className="min-h-screen bg-gray-50">
               <Toaster 
                 position="top-right"
@@ -182,11 +185,13 @@ function App() {
 
                 {/* Test Routes */}
                 <Route path="/test/push-notifications" element={<PushNotificationTest />} />
+                <Route path="/test/hybrid-notifications" element={<HybridNotificationTest />} />
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>
+            </OneSignalProvider>
             </PushNotificationProvider>
             </FormPortalProvider>
             </FeatureProvider>
