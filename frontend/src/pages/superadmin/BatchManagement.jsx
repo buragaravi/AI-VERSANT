@@ -90,7 +90,7 @@ const BatchManagement = () => {
     const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const socketUrl = isDevelopment 
       ? 'http://localhost:8000' 
-      : (import.meta.env.VITE_SOCKET_IO_URL || 'https://crt-backend.raviburaga.shop');
+      : (import.meta.env.VITE_SOCKET_IO_URL || 'https://ravi-check-versant.onrender.com');
     const token = localStorage.getItem('token');
     
     const newSocket = io(socketUrl, {
