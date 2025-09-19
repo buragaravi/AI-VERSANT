@@ -119,9 +119,18 @@ export const PushNotificationProvider = ({ children }) => {
     setError(null);
 
     try {
-      // Register service worker
-      const registration = await navigator.serviceWorker.register('/sw.js');
-      console.log('✅ Service Worker registered:', registration);
+      // Check if service worker is already registered
+      let registration = await navigator.serviceWorker.getRegistration('/');
+      
+      if (!registration) {
+        // Register service worker with proper scope and error handling
+        registration = await navigator.serviceWorker.register('/sw.js', {
+          scope: '/'
+        });
+        console.log('✅ Service Worker registered:', registration);
+      } else {
+        console.log('✅ Service Worker already registered:', registration);
+      }
 
       // Wait for service worker to be ready
       await navigator.serviceWorker.ready;
@@ -156,8 +165,17 @@ export const PushNotificationProvider = ({ children }) => {
       return pushSubscription;
     } catch (error) {
       console.error('❌ Error subscribing to push notifications:', error);
-      setError('Failed to subscribe to push notifications');
-      toast.error('Failed to enable push notifications');
+      
+      // Check if it's a MIME type error
+      if (error.message.includes('unsupported MIME type') || error.message.includes('text/html')) {
+        setError('Service Worker configuration issue. Please try refreshing the page or contact support.');
+        console.error('🔧 MIME type error detected. Check Vercel configuration.');
+        toast.error('Service Worker configuration issue. Please refresh the page.');
+      } else {
+        setError('Failed to subscribe to push notifications');
+        toast.error('Failed to enable push notifications');
+      }
+      
       return null;
     } finally {
       setIsLoading(false);
