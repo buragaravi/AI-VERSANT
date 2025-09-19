@@ -126,7 +126,7 @@ const StudentDashboard = () => {
   const shouldBlockDashboard = hasIncompleteForms()
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className="min-h-screen bg-[#fefefe]">
       {/* Block dashboard content if forms are required */}
       {shouldBlockDashboard && (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-50 z-30 flex items-center justify-center">
@@ -150,71 +150,42 @@ const StudentDashboard = () => {
           transition={{ duration: 0.6 }}
           className="mb-8 w-full"
         >
-          <div className="bg-transparent p-6">
+          <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
               <div className="flex-1">
-                <div className="flex items-center mb-4">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                    <Trophy className="h-5 w-5 text-blue-600" />
+                <div className="flex items-center mb-6">
+                  <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mr-4 shadow-lg">
+                    <Trophy className="h-6 w-6 text-white" />
                   </div>
                   <div>
-                    <h1 className="text-xl font-semibold text-gray-800">
+                    <h1 className="text-2xl font-bold text-gray-800">
                       Welcome back, {user?.name?.split(' ')[0] || 'Student'}!
                     </h1>
-                    <p className="text-gray-600 text-sm mt-0.5">
+                    <p className="text-gray-600 text-base mt-1">
                       Ready to continue your English learning journey?
                     </p>
                   </div>
                 </div>
                 
-                {/* Quick Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-                  <div className="bg-blue-50 rounded-lg p-3">
-                    <div className="flex items-center">
-                      <Target className="h-4 w-4 text-blue-600 mr-2" />
-                      <div>
-                        <p className="text-xs text-blue-700 font-medium">Overall Progress</p>
-                        <p className="text-sm font-semibold text-blue-900">
-                          {progressData?.overall_progress ? safeToFixed(progressData.overall_progress) : '0'}%
-                        </p>
-                      </div>
+                {/* Progress Overview */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <div className="text-center p-4 bg-blue-50 rounded-xl">
+                    <div className="text-2xl font-bold text-blue-600 mb-1">
+                      {progressData?.overall_progress ? safeToFixed(progressData.overall_progress) : '0'}%
                     </div>
+                    <div className="text-sm text-blue-700 font-medium">Overall Progress</div>
                   </div>
-                  
-                  <div className="bg-green-50 rounded-lg p-3">
-                    <div className="flex items-center">
-                      <CheckCircle2 className="h-4 w-4 text-green-600 mr-2" />
-                      <div>
-                        <p className="text-xs text-green-700 font-medium">Tests Completed</p>
-                        <p className="text-sm font-semibold text-green-900">
-                          {progressData?.total_tests_completed || 0}
-                        </p>
-                      </div>
+                  <div className="text-center p-4 bg-green-50 rounded-xl">
+                    <div className="text-2xl font-bold text-green-600 mb-1">
+                      {progressData?.total_tests_completed || 0}
                     </div>
+                    <div className="text-sm text-green-700 font-medium">Tests Completed</div>
                   </div>
-                  
-                  <div className="bg-purple-50 rounded-lg p-3">
-                    <div className="flex items-center">
-                      <Award className="h-4 w-4 text-purple-600 mr-2" />
-                      <div>
-                        <p className="text-xs text-purple-700 font-medium">Best Score</p>
-                        <p className="text-sm font-semibold text-purple-900">
-                          {progressData?.highest_score ? safeToFixed(progressData.highest_score) : '0'}%
-                        </p>
-                      </div>
+                  <div className="text-center p-4 bg-purple-50 rounded-xl">
+                    <div className="text-2xl font-bold text-purple-600 mb-1">
+                      {progressData?.highest_score ? safeToFixed(progressData.highest_score) : '0'}%
                     </div>
-                  </div>
-                  
-                  <div className="bg-orange-50 rounded-lg p-3">
-                    <div className="flex items-center">
-                      <TrendingUp className="h-4 w-4 text-orange-600 mr-2" />
-                      <div>
-                        <p className="text-xs text-orange-700 font-medium">Streak</p>
-                        <p className="text-sm font-semibold text-orange-900">
-                          {progressData?.current_streak || 0} days
-                        </p>
-                      </div>
-                    </div>
+                    <div className="text-sm text-purple-700 font-medium">Best Score</div>
                   </div>
                 </div>
               </div>
@@ -229,26 +200,27 @@ const StudentDashboard = () => {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="mb-8"
         >
-          <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-            <Zap className="h-5 w-5 text-blue-600 mr-2" />
-            Quick Actions
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+            <h2 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+              <Zap className="h-5 w-5 text-blue-600 mr-2" />
+              Quick Actions
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link
               to="/student/practice"
-              className="group bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 p-5 border border-gray-100 hover:border-blue-200"
+              className="group bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 p-6 border border-blue-200 hover:border-blue-300"
             >
-              <div className="flex items-center mb-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3 group-hover:bg-blue-200 transition-colors">
-                  <PlayCircle className="h-5 w-5 text-blue-600" />
+              <div className="flex items-center mb-4">
+                <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mr-4 group-hover:bg-blue-700 transition-colors shadow-lg">
+                  <PlayCircle className="h-6 w-6 text-white" />
                 </div>
                 <div className="text-blue-600 group-hover:translate-x-1 transition-transform duration-300">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
               </div>
-              <h3 className="text-base font-semibold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors">
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-blue-700 transition-colors">
                 Practice Tests
               </h3>
               <p className="text-gray-600 text-sm">
@@ -258,19 +230,19 @@ const StudentDashboard = () => {
 
             <Link
               to="/student/exams"
-              className="group bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 p-5 border border-gray-100 hover:border-green-200"
+              className="group bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 p-6 border border-green-200 hover:border-green-300"
             >
-              <div className="flex items-center mb-3">
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3 group-hover:bg-green-200 transition-colors">
-                  <Target className="h-5 w-5 text-green-600" />
+              <div className="flex items-center mb-4">
+                <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center mr-4 group-hover:bg-green-700 transition-colors shadow-lg">
+                  <Target className="h-6 w-6 text-white" />
                 </div>
                 <div className="text-green-600 group-hover:translate-x-1 transition-transform duration-300">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
               </div>
-              <h3 className="text-base font-semibold text-gray-900 mb-1 group-hover:text-green-600 transition-colors">
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-green-700 transition-colors">
                 Online Exams
               </h3>
               <p className="text-gray-600 text-sm">
@@ -280,19 +252,19 @@ const StudentDashboard = () => {
 
             <Link
               to="/student/progress"
-              className="group bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 p-5 border border-gray-100 hover:border-purple-200"
+              className="group bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 p-6 border border-purple-200 hover:border-purple-300"
             >
-              <div className="flex items-center mb-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3 group-hover:bg-purple-200 transition-colors">
-                  <BarChart3 className="h-5 w-5 text-purple-600" />
+              <div className="flex items-center mb-4">
+                <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center mr-4 group-hover:bg-purple-700 transition-colors shadow-lg">
+                  <BarChart3 className="h-6 w-6 text-white" />
                 </div>
                 <div className="text-purple-600 group-hover:translate-x-1 transition-transform duration-300">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
               </div>
-              <h3 className="text-base font-semibold text-gray-900 mb-1 group-hover:text-purple-600 transition-colors">
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-purple-700 transition-colors">
                 Progress Tracker
               </h3>
               <p className="text-gray-600 text-sm">
@@ -302,25 +274,26 @@ const StudentDashboard = () => {
 
             <Link
               to="/student/history"
-              className="group bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 p-5 border border-gray-100 hover:border-orange-200"
+              className="group bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 p-6 border border-orange-200 hover:border-orange-300"
             >
-              <div className="flex items-center mb-3">
-                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3 group-hover:bg-orange-200 transition-colors">
-                  <Clock className="h-5 w-5 text-orange-600" />
+              <div className="flex items-center mb-4">
+                <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center mr-4 group-hover:bg-orange-700 transition-colors shadow-lg">
+                  <Clock className="h-6 w-6 text-white" />
                 </div>
                 <div className="text-orange-600 group-hover:translate-x-1 transition-transform duration-300">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
               </div>
-              <h3 className="text-base font-semibold text-gray-900 mb-1 group-hover:text-orange-600 transition-colors">
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-orange-700 transition-colors">
                 Test History
               </h3>
               <p className="text-gray-600 text-sm">
                 View your past test results
               </p>
             </Link>
+            </div>
           </div>
         </motion.div>
 

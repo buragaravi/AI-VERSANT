@@ -18,6 +18,7 @@ const StudentSidebar = () => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
     // Generate navigation based on user features
     const navigationItems = generateNavLinks(user?.role || 'student');
@@ -75,6 +76,7 @@ const StudentSidebar = () => {
         const handleResize = () => {
             const newIsDesktop = window.innerWidth >= 1024;
             setIsDesktop(newIsDesktop);
+            setWindowWidth(window.innerWidth);
             if (newIsDesktop && isMobileMenuOpen) {
                 setIsMobileMenuOpen(false);
             }
@@ -104,24 +106,24 @@ const StudentSidebar = () => {
             <motion.div
                 initial={false}
                 animate={{ 
-                    width: isDesktop ? (isCollapsed ? 70 : 260) : (isMobileMenuOpen ? 260 : 0),
-                    x: isDesktop ? 0 : (isMobileMenuOpen ? 0 : -260)
+                    width: isDesktop ? (isCollapsed ? 70 : 260) : (isMobileMenuOpen ? Math.min(260, windowWidth * 0.8) : 0),
+                    x: isDesktop ? 0 : (isMobileMenuOpen ? 0 : -Math.min(260, windowWidth * 0.8))
                 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                className={`fixed top-0 left-0 h-screen z-50 flex flex-col ${
+                className={`fixed top-0 left-0 h-screen z-50 flex flex-col min-h-0 ${
                     isDesktop ? 'translate-x-0' : (isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full')
                 }`}
                 style={{ 
-                    background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                    background: '#fefefe',
                     boxShadow: 'inset -1px 0 0 rgba(255, 255, 255, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.05), 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
                 }}
             >
                 {/* Header with User Profile */}
-                <div className="p-3 border-b border-gray-200/50">
+                <div className="p-2 sm:p-3 border-b border-gray-200/50 flex-shrink-0">
                     <div className="flex items-center space-x-2">
                         <motion.div 
                             whileHover={{ scale: 1.05 }}
-                            className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg"
+                            className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg"
                         >
                             <User className="w-6 h-6 text-white" />
                         </motion.div>
@@ -136,7 +138,7 @@ const StudentSidebar = () => {
                                 >
                                     <div>
                                         <p className="font-semibold text-gray-800 text-sm">{user?.name || 'Student'}</p>
-                                        <p className="text-xs text-gray-500">Session ends in 9 min 5s</p>
+                                        <p className="text-xs text-gray-500">Student</p>
                                     </div>
                                 </motion.div>
                             )}
@@ -145,7 +147,7 @@ const StudentSidebar = () => {
                 </div>
 
                 {/* Navigation Items */}
-                <div className="flex-1 overflow-y-auto py-1 px-1">
+                <div className="flex-1 overflow-y-auto py-1 px-1 min-h-0 space-y-1">
                     {featuresLoading ? (
                         <div className="flex items-center justify-center py-8">
                             <div className="text-xs text-gray-500">Loading menu...</div>
@@ -167,7 +169,7 @@ const StudentSidebar = () => {
                                         <Link
                                             to={item.path}
                                             onClick={() => setIsMobileMenuOpen(false)}
-                                            className={`group flex items-center justify-center px-2 py-3 mx-1 rounded-lg transition-all duration-300 relative ${
+                                            className={`group flex items-center justify-center px-2 py-2 sm:py-3 mx-1 rounded-lg transition-all duration-300 relative ${
                                                 isActive(item.path)
                                                     ? 'bg-blue-50 text-blue-600 border border-blue-200'
                                                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'
@@ -210,12 +212,12 @@ const StudentSidebar = () => {
                 </div>
                     
                 {/* Logout Button at Bottom */}
-                <div className="p-3 border-t border-gray-200/50">
+                <div className="p-2 sm:p-3 border-t border-gray-200/50 flex-shrink-0">
                     <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         onClick={handleLogout}
-                        className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-medium px-3 py-2 rounded-lg hover:shadow-lg transition-all duration-300 shadow-md"
+                        className="w-full flex items-center justify-center gap-2 bg-red-500 text-white font-medium px-3 py-2 rounded-lg hover:bg-red-600 hover:shadow-lg transition-all duration-300 shadow-md"
                     >
                         <LogOut className="w-5 h-5" />
                         <AnimatePresence>
@@ -268,7 +270,7 @@ const StudentSidebar = () => {
             </AnimatePresence>
             
             {/* Main Content */}
-            <div className={`flex-1 bg-gray-50/95 transition-all duration-300 ${
+            <div className={`flex-1 bg-[#fefefe] transition-all duration-300 min-h-screen ${
                 isDesktop ? (isCollapsed ? 'ml-[70px]' : 'ml-[260px]') : 'ml-0'
             }`}>
                 {/* Header */}
@@ -282,14 +284,17 @@ const StudentSidebar = () => {
                                 <Menu className="h-5 w-5" />
                         </button>
                             <div className="flex items-center space-x-3">
-                                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                                <div className="w-16 h-12 bg-transparent rounded-lg flex items-center justify-center">
                             <img 
                                 src="https://static.wixstatic.com/media/bfee2e_7d499a9b2c40442e85bb0fa99e7d5d37~mv2.png/v1/fill/w_203,h_111,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/logo1.png" 
                                 alt="Logo" 
-                                        className="h-5 w-auto" 
+                                        className=" h-10 w-auto" 
                             />
                         </div>
-                                <span className="text-lg font-semibold text-gray-800">VERSANT SYSTEM</span>
+                                <span className="text-lg font-semibold text-gray-800">
+                                    <span className="hidden lg:inline">PYDAH Training and Placements Program</span>
+                                    <span className="lg:hidden">PYDAH TPO</span>
+                                </span>
                             </div>
                     </div>
                         
@@ -298,7 +303,7 @@ const StudentSidebar = () => {
                             <Bell className="h-5 w-5" />
                         </button>
                         <div className="flex items-center space-x-3">
-                                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                                 <User className="h-4 w-4 text-white" />
                                 </div>
                                 <span className="text-sm font-medium text-gray-700">{user?.name}</span>
@@ -308,7 +313,7 @@ const StudentSidebar = () => {
                 </header>
                 
                 {/* Content Area */}
-                <div className="p-4 sm:p-6 lg:p-8 min-h-screen w-full overflow-x-auto">
+                <div className="p-3 sm:p-4 lg:p-6 xl:p-8 min-h-screen w-full overflow-x-auto">
                     <Outlet />
                 </div>
             </div>
