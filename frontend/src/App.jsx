@@ -4,6 +4,9 @@ import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from './contexts/AuthContext'
 import { DashboardProvider } from './contexts/DashboardContext'
 import { NotificationProvider } from './contexts/NotificationContext'
+import { FeatureProvider } from './contexts/FeatureContext'
+import { FormPortalProvider } from './contexts/FormPortalContext'
+import { PushNotificationProvider } from './components/common/PushNotificationManager'
 
 // Auth Pages
 import Login from './pages/auth/Login'
@@ -18,11 +21,14 @@ import AdminPermissions from './pages/superadmin/AdminPermissions'
 import TestManagement from './pages/superadmin/TestManagement'
 import StudentManagement from './pages/superadmin/StudentManagement'
 import ResultsManagement from './pages/superadmin/ResultsManagement'
+import GlobalSettings from './pages/superadmin/GlobalSettings'
 import BatchDetails from './pages/superadmin/BatchDetails'
 import QuestionBankUpload from './pages/superadmin/QuestionBankUpload'
 import CRTUpload from './pages/superadmin/CRTUpload'
 import BatchCourseInstances from './pages/superadmin/BatchCourseInstances'
 import BatchManagement from './pages/superadmin/BatchManagement'
+import FormManagement from './pages/superadmin/FormManagement'
+import SubmissionViewer from './pages/superadmin/SubmissionViewer'
 
 // Campus Admin Pages
 import CampusAdminDashboard from './pages/campus-admin/CampusAdminDashboard'
@@ -42,6 +48,9 @@ import PracticeModules from './pages/student/PracticeModules'
 import CRTModules from './pages/student/CRTModules'
 import OnlineExams from './pages/student/OnlineExams'
 import TestHistory from './pages/student/TestHistory'
+
+// Test Pages
+import PushNotificationTest from './pages/test/PushNotificationTest'
 import ProgressTracker from './pages/student/ProgressTracker'
 import StudentProfile from './pages/student/Profile'
 import SuperAdminProfile from './pages/superadmin/Profile'
@@ -70,6 +79,9 @@ function App() {
       <AuthProvider>
         <DashboardProvider>
           <NotificationProvider>
+            <FeatureProvider>
+            <FormPortalProvider>
+            <PushNotificationProvider>
             <div className="min-h-screen bg-gray-50">
               <Toaster 
                 position="top-right"
@@ -110,6 +122,7 @@ function App() {
                     <Route path="courses" element={<CourseManagement />} />
 
                     <Route path="admin-permissions" element={<AdminPermissions />} />
+                    <Route path="global-settings" element={<GlobalSettings />} />
                     <Route path="students" element={<StudentManagement />} />
                     <Route path="results" element={<ResultsManagement />} />
                     <Route path="batches/:batchId" element={<BatchDetails />} />
@@ -119,6 +132,9 @@ function App() {
                     <Route path="crt-upload" element={<CRTUpload />} />
                     <Route path="batch-course-instances" element={<BatchCourseInstances />} />
                     <Route path="batch-management" element={<BatchManagement />} />
+                    {/* Form Portal Routes */}
+                    <Route path="form-management" element={<FormManagement />} />
+                    <Route path="form-submissions/:formId" element={<SubmissionViewer />} />
                     <Route path="profile" element={<SuperAdminProfile />} />
                   </Route>
 
@@ -164,10 +180,16 @@ function App() {
                   <Route path="writing-test/:testId" element={<WritingTestTaking />} />
                 </Route>
 
+                {/* Test Routes */}
+                <Route path="/test/push-notifications" element={<PushNotificationTest />} />
+
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>
+            </PushNotificationProvider>
+            </FormPortalProvider>
+            </FeatureProvider>
           </NotificationProvider>
         </DashboardProvider>
       </AuthProvider>

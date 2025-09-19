@@ -1803,6 +1803,7 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
     }
   })
   const { error } = useNotification()
+  const { user } = useAuth()
 
   const [campuses, setCampuses] = useState([])
   const [batches, setBatches] = useState([])
@@ -1817,13 +1818,36 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
   const selectedCampusId = watch('campus_id')
   const selectedBatchIds = watch('batch_ids')
 
+  // Get the appropriate API endpoint based on user role
+  const getCampusEndpoint = () => {
+    if (user?.role === 'campus_admin') {
+      return '/campus-admin/courses' // This will return courses for the campus admin's campus
+    } else if (user?.role === 'course_admin') {
+      return '/course-admin/batches' // This will return batches for the course admin's course
+    } else {
+      return '/campus-management/' // Super admin can see all campuses
+    }
+  }
+
   // Fetch Campuses on mount
   useEffect(() => {
     const fetchCampuses = async () => {
       setLoadingStates(prev => ({ ...prev, campuses: true }))
       try {
-        const res = await api.get('/campus-management/')
+        let res;
+        if (user?.role === 'campus_admin') {
+          // For campus admin, get courses (which implies campus)
+          res = await api.get('/campus-admin/courses')
         setCampuses(res.data.data.map(c => ({ label: c.name, value: c.id })))
+        } else if (user?.role === 'course_admin') {
+          // For course admin, get batches (which implies course)
+          res = await api.get('/course-admin/batches')
+          setCampuses(res.data.data.map(b => ({ label: b.name, value: b.id })))
+        } else {
+          // For super admin, get all campuses
+          res = await api.get('/campus-management/')
+          setCampuses(res.data.data.map(c => ({ label: c.name, value: c.id })))
+        }
       } catch (err) {
         error("Failed to fetch campuses")
       } finally {
@@ -1831,15 +1855,26 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
       }
     }
     fetchCampuses()
-  }, [error])
+  }, [error, user])
 
   // Fetch Batches when Campus changes
   useEffect(() => {
     const fetchBatches = async (campusId) => {
       setLoadingStates(prev => ({ ...prev, batches: true, courses: false }))
       try {
-        const res = await api.get(`/batch-management/campus/${campusId}/batches`)
+        let res;
+        if (user?.role === 'campus_admin') {
+          // For campus admin, get batches for their campus
+          res = await api.get('/campus-admin/batches')
         setBatches(res.data.data.map(b => ({ label: b.name, value: b.id })))
+        } else if (user?.role === 'course_admin') {
+          // For course admin, batches are already loaded in the "campus" dropdown
+          setBatches([]) // No additional batches to fetch
+        } else {
+          // For super admin, get batches for the selected campus
+          res = await api.get(`/batch-management/campus/${campusId}/batches`)
+          setBatches(res.data.data.map(b => ({ label: b.name, value: b.id })))
+        }
       } catch (err) {
         error("Failed to fetch batches")
         setBatches([])
@@ -1859,7 +1894,7 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
       setValue('course_ids', [])
       setCourses([])
     }
-  }, [selectedCampusId, setValue, error])
+  }, [selectedCampusId, setValue, error, user])
 
   // Fetch Courses when Batches change
   useEffect(() => {
@@ -1871,11 +1906,23 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
       }
       setLoadingStates(prev => ({ ...prev, courses: true }))
       try {
+        let allCourses = [];
+        if (user?.role === 'campus_admin') {
+          // For campus admin, get courses for their campus
+          const res = await api.get('/campus-admin/courses')
+          allCourses = res.data.data
+        } else if (user?.role === 'course_admin') {
+          // For course admin, they only have one course, so no need to fetch
+          allCourses = []
+        } else {
+          // For super admin, get courses for the selected batches
         const coursePromises = batchIds.map(batchId =>
           api.get(`/course-management/batch/${batchId}/courses`)
         )
         const courseResults = await Promise.all(coursePromises)
-        const allCourses = courseResults.flatMap(res => res.data.data)
+          allCourses = courseResults.flatMap(res => res.data.data)
+        }
+        
         const uniqueCourses = [...new Map(allCourses.map(item => [item.id, item])).values()]
         setCourses(uniqueCourses.map(c => ({ label: c.name, value: c.id })))
       } catch (err) {
@@ -1887,23 +1934,40 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
     }
 
     fetchCoursesForBatches(selectedBatchIds)
-  }, [selectedBatchIds, setValue, error])
+  }, [selectedBatchIds, setValue, error, user])
 
   const onSubmit = (data) => {
-    // Validate that we have the required selections
+    // Validate that we have the required selections based on user role
+    if (user?.role === 'course_admin') {
+      // For course admin, they only need to select batches (which are already loaded)
+      if (!data.campus_id) {
+        error("Please select a batch");
+        return;
+      }
+    } else if (user?.role === 'campus_admin') {
+      // For campus admin, they need to select batches and courses
+      if (!data.campus_id) {
+        error("Please select a course");
+        return;
+      }
+      if (!data.batch_ids || data.batch_ids.length === 0) {
+        error("Please select at least one batch");
+        return;
+      }
+    } else {
+      // For super admin, they need to select campus, batches, and courses
     if (!data.campus_id) {
       error("Please select a campus");
       return;
     }
-
     if (!data.batch_ids || data.batch_ids.length === 0) {
       error("Please select at least one batch");
       return;
     }
-
     if (!data.course_ids || data.course_ids.length === 0) {
       error("Please select at least one course");
       return;
+      }
     }
 
     const selectedCampus = campuses.find(c => c.value === data.campus_id);
@@ -1935,16 +1999,24 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Column 1: Campus */}
+          {/* Column 1: Campus/Course/Batch based on role */}
           <div className="space-y-4">
-            <h3 className="font-semibold text-lg text-gray-800">1. Select Campus</h3>
+            <h3 className="font-semibold text-lg text-gray-800">
+              {user?.role === 'course_admin' ? '1. Select Batch' : 
+               user?.role === 'campus_admin' ? '1. Select Course' : 
+               '1. Select Campus'}
+            </h3>
             {loadingStates.campuses ? <LoadingSpinner /> : (
               <>
                 <select
-                  {...register('campus_id', { required: 'Please select a campus' })}
+                  {...register('campus_id', { required: 'Please make a selection' })}
                   className="w-full p-2 border border-gray-200 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 transition"
                 >
-                  <option value="" disabled>Choose a campus</option>
+                  <option value="" disabled>
+                    {user?.role === 'course_admin' ? 'Choose a batch' : 
+                     user?.role === 'campus_admin' ? 'Choose a course' : 
+                     'Choose a campus'}
+                  </option>
                   {campuses.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
                 {errors.campus_id && <p className="text-red-500 text-xs mt-1">{errors.campus_id.message}</p>}
@@ -1952,7 +2024,8 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
             )}
           </div>
 
-          {/* Column 2: Batches */}
+          {/* Column 2: Batches (only for campus admin and super admin) */}
+          {user?.role !== 'course_admin' && (
           <div className={clsx("space-y-4", { 'opacity-50': !selectedCampusId })}>
             <h3 className="font-semibold text-lg text-gray-800">2. Select Batches</h3>
             {loadingStates.batches ? <LoadingSpinner /> : (
@@ -1980,12 +2053,18 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
                     </div>
                   )}
                 />
-              ) : <p className="text-sm text-gray-500 italic">{selectedCampusId ? 'No batches found.' : 'Select a campus to see batches.'}</p>
+                ) : <p className="text-sm text-gray-500 italic">
+                  {selectedCampusId ? 'No batches found.' : 
+                   user?.role === 'campus_admin' ? 'Select a course to see batches.' :
+                   'Select a campus to see batches.'}
+                </p>
             )}
             {errors.batch_ids && <p className="text-red-500 text-xs mt-1">{errors.batch_ids.message}</p>}
           </div>
+          )}
 
-          {/* Column 3: Courses */}
+          {/* Column 3: Courses (only for super admin) */}
+          {user?.role === 'superadmin' && (
           <div className={clsx("space-y-4", { 'opacity-50': !selectedBatchIds || selectedBatchIds.length === 0 })}>
             <h3 className="font-semibold text-lg text-gray-800">3. Select Courses</h3>
             {loadingStates.courses ? <LoadingSpinner /> : (
@@ -2017,6 +2096,7 @@ const Step4AudienceSelection = ({ nextStep, prevStep, updateTestData, testData }
             )}
             {errors.course_ids && <p className="text-red-500 text-xs mt-1">{errors.course_ids.message}</p>}
           </div>
+          )}
         </div>
 
         <div className="flex justify-between items-center pt-8 border-t mt-8 border-gray-200">

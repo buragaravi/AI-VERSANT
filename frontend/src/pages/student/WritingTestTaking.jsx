@@ -496,7 +496,7 @@ const WritingTestResults = ({ results, test, onBack }) => {
   return (
     <div className="min-h-screen bg-gray-50">
       <main className="px-6 lg:px-10 py-8">
-          <div className="bg-white rounded-lg shadow-lg p-8 max-w-4xl mx-auto">
+          <div className="bg-white rounded-lg shadow-lg p-8 w-full">
             <div className="text-center mb-8">
               <FaCheckCircle className="mx-auto h-16 w-16 text-green-500 mb-4" />
               <h1 className="text-3xl font-bold text-gray-800 mb-2">Writing Test Completed!</h1>

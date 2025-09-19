@@ -14,6 +14,7 @@ from utils.sms_service import send_student_credentials_sms
 from utils.upload_optimizer import optimize_upload_process, cleanup_if_needed, log_upload_progress
 from utils.resilient_services import create_resilient_services
 from utils.async_processor import performance_monitor
+from utils.notification_queue import queue_student_credentials, queue_batch_notifications, get_notification_stats
 from config.shared import bcrypt
 from socketio_instance import socketio
 from routes.access_control import require_permission
@@ -326,7 +327,7 @@ def create_batch():
                         'username': username,
                         'email': student['email_id'],
                         'password': password,
-                        'login_url': "https://pydah-studyedge.vercel.app/login"
+                        'login_url': "https://crt.pydahsoft.in/login"
                     }
                 )
                 send_email(
@@ -337,6 +338,30 @@ def create_batch():
                 )
             except Exception as e:
                 print(f"Failed to send welcome email to {student['email_id']}: {e}")
+
+        # Send push notification to all students in the new batch
+        try:
+            from utils.push_notification_helper import push_notification_helper
+            # Get campus and course names for the notification
+            campus = mongo_db.campuses.find_one({'_id': ObjectId(campus_id)})
+            course = mongo_db.courses.find_one({'_id': ObjectId(course_id)})
+            
+            campus_name = campus.get('name', 'Campus') if campus else 'Campus'
+            course_name = course.get('name', 'Course') if course else 'Course'
+            
+            # Get all student IDs in the new batch
+            student_ids = [str(student_doc['_id']) for student_doc in created_students]
+            
+            push_notification_helper.send_batch_creation_notification(
+                batch_name=batch_name,
+                campus_name=campus_name,
+                course_name=course_name,
+                target_students=student_ids
+            )
+            print(f"Push notification sent to {len(student_ids)} students for batch {batch_name}")
+        except Exception as push_error:
+            print(f"Failed to send push notification for batch creation: {push_error}")
+            # Don't fail the batch creation if push notification fails
 
         return jsonify({
             'success': True,
@@ -869,25 +894,84 @@ def upload_students_to_batch():
                 current_app.logger.error(f"Database error for student {index + 1}: {e}")
                 continue
 
-        # Database upload completed - no email/SMS sending here
+        # Database upload completed - now queue notifications in background
         current_app.logger.info("✅ Database upload phase completed successfully!")
 
-        # Finalize all student results - only database registration matters for upload
+        # PHASE 2: QUEUE NOTIFICATIONS IN BACKGROUND
+        current_app.logger.info("🚀 PHASE 2: Queueing notifications in background...")
+        socketio.emit('upload_progress', {
+            'user_id': user_id,
+            'status': 'queueing_notifications',
+            'total': total_students,
+            'processed': total_students,
+            'percentage': 100,
+            'message': 'Database upload completed! Queueing notifications in background...'
+        }, room=str(user_id))
+
+        # Prepare students for notification queueing
+        students_for_notifications = []
+        for index, (row, student_result) in enumerate(zip(rows, detailed_results)):
+            if student_result['database_registered']:
+                # Extract student data for notifications
+                if is_v2_format:
+                    student_name = str(row.get('Student Name', '')).strip()
+                    roll_number = str(row.get('Roll Number', '')).strip()
+                    email = str(row.get('Email', '')).strip().lower() if row.get('Email') else ''
+                    mobile_number = str(row.get('Mobile Number', '')).strip()
+                else:
+                    student_name = str(row.get('Student Name', '')).strip()
+                    roll_number = str(row.get('Roll Number', '')).strip()
+                    email = str(row.get('Email', '')).strip().lower() if row.get('Email') else ''
+                    mobile_number = str(row.get('Mobile Number', '')).strip()
+
+                # Generate username and password (same logic as database registration)
+                username = roll_number
+                password = f"{student_name.split()[0][:4].lower()}{roll_number[-4:]}"
+
+                student_data = {
+                    'name': student_name,
+                    'username': username,
+                    'password': password,
+                    'email': email if email and email.strip() else None,
+                    'mobile_number': mobile_number if mobile_number and mobile_number.strip() else None,
+                    'roll_number': roll_number
+                }
+                students_for_notifications.append(student_data)
+
+        # Queue notifications in background
+        if students_for_notifications:
+            try:
+                notification_results = queue_batch_notifications(students_for_notifications, 'welcome')
+                current_app.logger.info(f"📧📱 Queued {notification_results['queued_email']} emails and {notification_results['queued_sms']} SMS notifications")
+                
+                # Update student results with notification status
+                for student_result in detailed_results:
+                    if student_result['database_registered']:
+                        student_result['notifications_queued'] = True
+                        student_result['email_queued'] = True  # Will be processed in background
+                        student_result['sms_queued'] = True    # Will be processed in background
+            except Exception as e:
+                current_app.logger.error(f"❌ Failed to queue notifications: {e}")
+                # Don't fail the upload if notifications fail
+        else:
+            current_app.logger.warning("⚠️ No students available for notification queueing")
+
+        # Finalize all student results
         for student_result in detailed_results:
             student_result['success'] = student_result['database_registered']
-            # Initialize email/SMS flags as False (not sent during upload)
-            student_result['email_sent'] = False
-            student_result['sms_sent'] = False
+            # Set notification flags based on queueing success
+            student_result['email_sent'] = student_result.get('email_queued', False)
+            student_result['sms_sent'] = student_result.get('sms_queued', False)
         
         # Send completion notification
-        current_app.logger.info("🎉 Student database upload completed successfully!")
+        current_app.logger.info("🎉 Student upload completed successfully with background notifications!")
         socketio.emit('upload_progress', {
             'user_id': user_id,
             'status': 'completed',
             'total': total_students,
             'processed': total_students,
             'percentage': 100,
-            'message': 'Database upload completed! Use Send Emails/SMS buttons to send credentials.'
+            'message': f'Upload completed! {len(students_for_notifications)} students queued for notifications.'
         }, room=str(user_id))
                     
         # Calculate summary statistics (only database registrations)
@@ -1493,7 +1577,7 @@ def create_batch_with_students():
                     'username': student_details['username'],
                     'email': student_details['email'],
                     'password': student_details['password'],
-                    'login_url': "https://pydah-studyedge.vercel.app/login"
+                    'login_url': "https://crt.pydahsoft.in/login"
                 })
                 send_email(to_email=student_details['email'], to_name=student_details['student_name'], subject="Welcome to VERSANT - Your Student Credentials", html_content=html_content)
                 email_sent = True
@@ -1680,7 +1764,7 @@ def add_students_to_batch(batch_id):
                             'username': username,
                             'email': student['email'],
                             'password': password,
-                            'login_url': "https://pydah-studyedge.vercel.app/login"
+                            'login_url': "https://crt.pydahsoft.in/login"
                         })
                         send_email(to_email=student['email'], to_name=student['student_name'], subject="Welcome to Study Edge - Your Student Credentials", html_content=html_content)
                     except Exception as e:
@@ -1805,7 +1889,7 @@ def add_students_to_batch(batch_id):
                         'username': username,
                         'email': student['email'],
                         'password': password,
-                        'login_url': "https://pydah-studyedge.vercel.app/login"
+                        'login_url': "https://crt.pydahsoft.in/login"
                     })
                     send_email(to_email=student['email'], to_name=student['student_name'], subject="Welcome to VERSANT - Your Student Credentials", html_content=html_content)
                 except Exception as e:
@@ -1894,7 +1978,7 @@ def add_single_student():
                     'username': roll_number,
                     'email': email,
                     'password': password,
-                    'login_url': "https://pydah-studyedge.vercel.app/login"
+                    'login_url': "https://crt.pydahsoft.in/login"
                 }
             )
             send_email(
@@ -2503,7 +2587,7 @@ def send_student_credentials(student_id):
                 'username': student.get('username', ''),
                 'password': password,
                 'roll_number': student_profile.get('roll_number', '') if student_profile else '',
-                'login_url': "https://pydah-studyedge.vercel.app/login"
+                'login_url': "https://crt.pydahsoft.in/login"
             }
         )
         
@@ -2726,12 +2810,35 @@ def send_batch_emails(batch_id):
         for student in students:
             user_detail = mongo_db.users.find_one({'_id': student['user_id']})
             if user_detail:
+                # Generate password if not present (same logic as manual_student_notifications.py)
+                existing_password = user_detail.get('password', '')
+                if not existing_password:
+                    # Generate password using the same pattern as during upload
+                    first_name = student['name'].split()[0] if student['name'].split() else student['name']
+                    roll_number = student.get('roll_number', '')
+                    if first_name and roll_number:
+                        generated_password = f"{first_name[:4].lower()}{roll_number[-4:]}"
+                    else:
+                        # Fallback to random password
+                        import secrets
+                        import string
+                        generated_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
+                    
+                    # Update the user record with the generated password
+                    mongo_db.users.update_one(
+                        {'_id': student['user_id']},
+                        {'$set': {'password': generated_password}}
+                    )
+                    password = generated_password
+                else:
+                    password = existing_password
+                
                 student_details.append({
                     'student_id': str(student['_id']),
                     'name': student['name'],
                     'email': student.get('email'),
                     'username': user_detail.get('username', ''),
-                    'password': user_detail.get('password', '')
+                    'password': password
                 })
 
         # Filter students with email addresses
@@ -2773,7 +2880,7 @@ def send_batch_emails(batch_id):
                         'username': username,
                         'email': email,
                         'password': password,
-                        'login_url': "https://pydah-studyedge.vercel.app/login"
+                        'login_url': "https://crt.pydahsoft.in/login"
                     }
                 )
                 
@@ -2868,12 +2975,35 @@ def send_batch_sms(batch_id):
         for student in students:
             user_detail = mongo_db.users.find_one({'_id': student['user_id']})
             if user_detail:
+                # Generate password if not present (same logic as manual_student_notifications.py)
+                existing_password = user_detail.get('password', '')
+                if not existing_password:
+                    # Generate password using the same pattern as during upload
+                    first_name = student['name'].split()[0] if student['name'].split() else student['name']
+                    roll_number = student.get('roll_number', '')
+                    if first_name and roll_number:
+                        generated_password = f"{first_name[:4].lower()}{roll_number[-4:]}"
+                    else:
+                        # Fallback to random password
+                        import secrets
+                        import string
+                        generated_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
+                    
+                    # Update the user record with the generated password
+                    mongo_db.users.update_one(
+                        {'_id': student['user_id']},
+                        {'$set': {'password': generated_password}}
+                    )
+                    password = generated_password
+                else:
+                    password = existing_password
+                
                 student_details.append({
                     'student_id': str(student['_id']),
                     'name': student['name'],
                     'mobile_number': student.get('mobile_number'),
                     'username': user_detail.get('username', ''),
-                    'password': user_detail.get('password', '')
+                    'password': password
                 })
 
         # Filter students with mobile numbers
@@ -2913,7 +3043,7 @@ def send_batch_sms(batch_id):
                     student_name=student_name,
                     username=username,
                     password=password,
-                    login_url="https://pydah-studyedge.vercel.app/login"
+                    login_url="https://crt.pydahsoft.in/login"
                 )
                 
                 result['sms_sent'] = sms_result.get('success', False)
@@ -2972,3 +3102,18 @@ def send_batch_sms(batch_id):
     except Exception as e:
         current_app.logger.error(f"Error sending batch SMS: {e}")
         return jsonify({'success': False, 'message': f'Failed to send SMS: {str(e)}'}), 500
+
+@batch_management_bp.route('/notification-stats', methods=['GET'])
+@jwt_required()
+@require_permission(module='batch_management')
+def get_notification_stats_endpoint():
+    """Get notification queue statistics"""
+    try:
+        stats = get_notification_stats()
+        return jsonify({
+            'success': True,
+            'data': stats
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Error getting notification stats: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500

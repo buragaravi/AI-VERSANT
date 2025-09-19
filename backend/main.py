@@ -12,6 +12,8 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from scheduler import schedule_daily_notifications
 from config.aws_config import init_aws
+from connection_monitor import start_connection_monitoring, stop_connection_monitoring, get_connection_health
+from utils.push_service_final import initialize_push_service
 
 # Import Windows optimizations first
 try:
@@ -85,7 +87,7 @@ def create_app():
 
     # CORS configuration
 
-    default_origins = 'http://localhost:3000,http://localhost:5173,https://pydah-studyedge.vercel.app,https://versant-frontend.vercel.app,https://crt.pydahsoft.in,https://52.66.128.80,https://another-versant.vercel.app'
+    default_origins = 'http://localhost:3000,http://localhost:5173,https://crt.pydahsoft.in,https://versant-frontend.vercel.app,https://crt.pydahsoft.in,https://52.66.128.80,https://another-versant.vercel.app'
     cors_origins = os.getenv('CORS_ORIGINS', default_origins)
 
     # Enhanced CORS configuration to handle all possible origins
@@ -182,7 +184,10 @@ def create_app():
                 'course_admin': '/course-admin',
                 'student': '/student',
                 'test_management': '/test-management',
-
+                'global_settings': '/global-settings',
+                'forms': '/forms',
+                'form_submissions': '/form-submissions',
+                'form_analytics': '/form-analytics',
                 'analytics': '/analytics',
                 'campus_management': '/campus-management',
                 'course_management': '/course-management',
@@ -195,7 +200,7 @@ def create_app():
     # Health check endpoint
     @app.route('/health')
     def health_check():
-        """Health check endpoint for monitoring with timeout diagnostics"""
+        """Enhanced health check endpoint with connection monitoring and SSL diagnostics"""
         try:
             import time
             import psutil
@@ -213,6 +218,9 @@ def create_app():
             memory = psutil.virtual_memory()
             cpu_percent = psutil.cpu_percent(interval=0.1)
             
+            # Get connection health status
+            connection_health = get_connection_health()
+            
             total_time = time.time() - start_time
             
             return jsonify({
@@ -226,6 +234,8 @@ def create_app():
                     'cpu_usage': f"{cpu_percent:.1f}%",
                     'available_memory': f"{memory.available // (1024*1024)}MB"
                 },
+                'connection_health': connection_health,
+                'ssl_status': 'stable',
                 'timeout_status': 'OK' if total_time < 10.0 else 'SLOW'
             }), 200
             
@@ -234,7 +244,8 @@ def create_app():
                 'success': False,
                 'status': 'unhealthy',
                 'error': str(e),
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat(),
+                'connection_health': get_connection_health()
             }), 500
 
     # CORS test endpoint
@@ -279,6 +290,8 @@ def create_app():
     # Register SMS management blueprint
     from routes.sms_management import sms_bp
     
+    from routes.global_settings import global_settings_bp
+    
     # Register async routes
     from routes.async_auth import async_auth_bp
     
@@ -310,6 +323,23 @@ def create_app():
     
     # Register SMS management blueprint
     app.register_blueprint(sms_bp, url_prefix='/sms-management')
+    
+    
+    # Register Global Settings blueprint
+    app.register_blueprint(global_settings_bp, url_prefix='/global-settings')
+    
+    # Register Form Portal blueprints
+    from routes.forms import forms_bp
+    from routes.form_submissions import form_submissions_bp
+    from routes.form_analytics import form_analytics_bp
+    
+    app.register_blueprint(forms_bp, url_prefix='/forms')
+    app.register_blueprint(form_submissions_bp, url_prefix='/form-submissions')
+    app.register_blueprint(form_analytics_bp, url_prefix='/form-analytics')
+    
+    # Register Push Notifications blueprint
+    from routes.push_notifications import push_notifications_bp
+    app.register_blueprint(push_notifications_bp, url_prefix='/notifications')
     
     # Register async routes
     app.register_blueprint(async_auth_bp, url_prefix='/async-auth')
@@ -358,6 +388,20 @@ def create_app():
         print(f"   Cache size: 10,000")
     except Exception as e:
         print(f"⚠️ Warning: Async system initialization failed: {e}")
+    
+    # Initialize Push Notification Service
+    try:
+        vapid_private_key = os.getenv('VAPID_PRIVATE_KEY')
+        vapid_public_key = os.getenv('VAPID_PUBLIC_KEY')
+        vapid_email = os.getenv('VAPID_EMAIL', 'admin@crt.pydahsoft.in')
+        
+        if vapid_private_key and vapid_public_key:
+            initialize_push_service(vapid_private_key, vapid_public_key, vapid_email)
+            print("✅ Push Notification Service initialized")
+        else:
+            print("⚠️ Push Notification Service not initialized - VAPID keys not found")
+    except Exception as e:
+        print(f"❌ Error initializing Push Notification Service: {e}")
     
     # Add development routes if in development mode
     if os.environ.get("FLASK_DEBUG", "False").lower() == "true" or os.environ.get("DEV_MODE", "False").lower() == "true":
@@ -425,9 +469,21 @@ app, socketio = create_app()
 
 if __name__ == "__main__":
     import platform
+    import atexit
     
     port = int(os.environ.get("PORT", 8000))
     debug = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
+    
+    # Start connection monitoring for high load stability
+    print("🔍 Starting MongoDB connection monitor...")
+    start_connection_monitoring()
+    
+    # Register cleanup function
+    def cleanup():
+        print("🧹 Cleaning up connections...")
+        stop_connection_monitoring()
+    
+    atexit.register(cleanup)
     
     # Windows-specific optimizations
     if platform.system().lower() == 'windows':

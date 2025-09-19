@@ -27,41 +27,46 @@ class DatabaseConfig:
     
     @staticmethod
     def get_client():
-        """Get MongoDB client instance with optimized connection settings for cloud deployment"""
+        """Get MongoDB client instance with optimized connection settings for high load and SSL stability"""
         try:
             client_options = {
-                'connectTimeoutMS': 30000,
-                'socketTimeoutMS': 30000,
-                'serverSelectionTimeoutMS': 30000,
-                'maxPoolSize': 10,
-                'minPoolSize': 1,
-                'maxIdleTimeMS': 30000,
-                'waitQueueTimeoutMS': 30000,
+                # Connection timeouts - increased for stability
+                'connectTimeoutMS': 60000,  # Increased from 30s to 60s
+                'socketTimeoutMS': 60000,   # Increased from 30s to 60s
+                'serverSelectionTimeoutMS': 60000,  # Increased from 30s to 60s
+                
+                # Connection pooling for high load
+                'maxPoolSize': 50,          # Increased from 10 to 50 for high load
+                'minPoolSize': 5,           # Increased from 1 to 5
+                'maxIdleTimeMS': 300000,    # Increased from 30s to 5min
+                'waitQueueTimeoutMS': 60000, # Increased from 30s to 60s
+                'maxConnecting': 10,        # Increased from 2 to 10
+                
+                # Write concerns and retries
                 'retryWrites': True,
-                'w': 'majority',
-                'appName': 'Versant',
-                'directConnection': False,
                 'retryReads': True,
-                # SSL/TLS configuration for cloud deployment
-                'tls': True,
-                'tlsAllowInvalidCertificates': False,
-                'tlsAllowInvalidHostnames': False,
-                # Additional connection options for better stability
+                'w': 'majority',
+                'appName': 'Versant-HighLoad',
+                
+                # SSL/TLS will be handled automatically by MongoDB URI
+                
+                # Heartbeat and monitoring
                 'heartbeatFrequencyMS': 10000,
-                'maxConnecting': 2,
+                
+                # Compression for better performance
                 'compressors': ['zlib'],
-                'zlibCompressionLevel': 6
+                'zlibCompressionLevel': 6,
+                
+                # Additional stability options
+                'directConnection': False,
+                'readPreference': 'secondaryPreferred'  # Better for read-heavy workloads
             }
             
-            # Parse the URI and add SSL parameters if not present
+            # Parse the URI and add enhanced SSL parameters
             uri = DatabaseConfig.MONGODB_URI
             
-            # Add SSL parameters to the connection string if not already present
-            if 'ssl=true' not in uri.lower() and 'tls=true' not in uri.lower():
-                if '?' in uri:
-                    uri += '&ssl=true&tls=true'
-                else:
-                    uri += '?ssl=true&tls=true'
+            # Use the original URI without adding SSL parameters
+            # Let MongoDB handle SSL/TLS automatically based on the connection string
             
             return MongoClient(uri, **client_options)
         except Exception as e:
@@ -70,11 +75,30 @@ class DatabaseConfig:
     
     @staticmethod
     def get_database():
-        """Get database instance"""
-        client = DatabaseConfig.get_client()
-        db_name = DatabaseConfig.get_database_name()
-        print(f"📊 Using database: {db_name}")
-        return client[db_name]
+        """Get database instance with retry logic for connection stability"""
+        max_retries = 3
+        retry_delay = 2  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                client = DatabaseConfig.get_client()
+                db_name = DatabaseConfig.get_database_name()
+                
+                # Test connection before returning
+                client.admin.command('ping')
+                print(f"📊 Using database: {db_name} (Attempt {attempt + 1})")
+                return client[db_name]
+                
+            except Exception as e:
+                print(f"⚠️ Database connection attempt {attempt + 1} failed: {str(e)}")
+                if attempt < max_retries - 1:
+                    print(f"🔄 Retrying in {retry_delay} seconds...")
+                    import time
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    print(f"❌ All database connection attempts failed")
+                    raise e
     
     @staticmethod
     def get_collection(collection_name):

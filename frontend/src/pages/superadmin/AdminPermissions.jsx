@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNotification } from '../../contexts/NotificationContext';
+import Swal from 'sweetalert2';
 
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { 
   Shield, Users, Settings, Check, X, Edit, RotateCcw, 
   Building2, BookOpen, GraduationCap, FileText, BarChart3,
-  Eye, EyeOff, Save, AlertCircle, Plus, UserPlus, Mail, Lock, User
+  Eye, EyeOff, Save, AlertCircle, Plus, UserPlus, Mail, Lock, User, Trash2
 } from 'lucide-react';
 
 const AdminPermissions = () => {
@@ -32,6 +33,7 @@ const AdminPermissions = () => {
     role: 'campus_admin'
   });
   const [creatingAdmin, setCreatingAdmin] = useState(false);
+  const [deletingAdmin, setDeletingAdmin] = useState(null);
   const { success, error } = useNotification();
 
   useEffect(() => {
@@ -54,7 +56,18 @@ const AdminPermissions = () => {
       const response = await api.get('/access-control/admins');
       setAdmins(response.data.data);
     } catch (err) {
-      error('Failed to fetch admins');
+      await Swal.fire({
+        title: 'Fetch Failed!',
+        text: 'Failed to fetch admins. Please try again.',
+        icon: 'error',
+        confirmButtonColor: '#dc2626',
+        confirmButtonText: 'OK',
+        customClass: {
+          popup: 'rounded-2xl',
+          title: 'text-xl font-bold text-gray-900',
+          confirmButton: 'px-6 py-3 rounded-xl font-semibold'
+        }
+      });
     } finally {
       setLoading(false);
     }
@@ -65,7 +78,7 @@ const AdminPermissions = () => {
       const response = await api.get('/access-control/modules');
       setAvailableModules(response.data.data);
     } catch (err) {
-      error('Failed to fetch available modules');
+      console.error('Failed to fetch available modules:', err);
     }
   };
 
@@ -74,7 +87,7 @@ const AdminPermissions = () => {
       const response = await api.get('/campus-management/campuses');
       setCampuses(response.data.data || []);
     } catch (err) {
-      error('Failed to fetch campuses');
+      console.error('Failed to fetch campuses:', err);
     }
   };
 
@@ -83,7 +96,7 @@ const AdminPermissions = () => {
       const response = await api.get(`/course-management/courses?campus_id=${campusId}`);
       setCourses(response.data.data || []);
     } catch (err) {
-      error('Failed to fetch courses');
+      console.error('Failed to fetch courses:', err);
     }
   };
 
@@ -93,33 +106,263 @@ const AdminPermissions = () => {
       setSelectedAdmin(response.data.data);
       setIsPermissionModalOpen(true);
     } catch (err) {
-      error('Failed to fetch admin permissions');
+      await Swal.fire({
+        title: 'Fetch Failed!',
+        text: 'Failed to fetch admin permissions. Please try again.',
+        icon: 'error',
+        confirmButtonColor: '#dc2626',
+        confirmButtonText: 'OK',
+        customClass: {
+          popup: 'rounded-2xl',
+          title: 'text-xl font-bold text-gray-900',
+          confirmButton: 'px-6 py-3 rounded-xl font-semibold'
+        }
+      });
     }
   };
 
   const handleResetPermissions = async (adminId) => {
+    const admin = admins.find(a => a.id === adminId);
+    
+    const result = await Swal.fire({
+      title: 'Reset Permissions?',
+      html: `
+        <div class="text-left">
+          <p class="mb-4">Are you sure you want to reset permissions for this admin?</p>
+          <div class="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+            <div class="flex items-center mb-2">
+              <div class="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center mr-3">
+                <svg class="w-5 h-5 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                </svg>
+              </div>
+              <div>
+                <p class="font-semibold text-gray-900">${admin?.name || 'Unknown Admin'}</p>
+                <p class="text-sm text-gray-600">${admin?.email || 'Unknown Email'}</p>
+                <p class="text-xs text-gray-500">${admin?.role?.replace('_', ' ').toUpperCase() || 'UNKNOWN'}</p>
+              </div>
+            </div>
+          </div>
+          <p class="text-orange-600 font-semibold">⚠️ This will reset all permissions to default values!</p>
+        </div>
+      `,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#f59e0b',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, Reset Permissions',
+      cancelButtonText: 'Cancel',
+      reverseButtons: true,
+      focusCancel: true,
+      customClass: {
+        popup: 'rounded-2xl',
+        title: 'text-xl font-bold text-gray-900',
+        confirmButton: 'px-6 py-3 rounded-xl font-semibold',
+        cancelButton: 'px-6 py-3 rounded-xl font-semibold'
+      }
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
     try {
       await api.post(`/access-control/reset-permissions/${adminId}`);
-      success('Permissions reset successfully');
+      
+      await Swal.fire({
+        title: 'Permissions Reset!',
+        text: 'Admin permissions have been successfully reset to default values.',
+        icon: 'success',
+        confirmButtonColor: '#10b981',
+        confirmButtonText: 'OK',
+        customClass: {
+          popup: 'rounded-2xl',
+          title: 'text-xl font-bold text-gray-900',
+          confirmButton: 'px-6 py-3 rounded-xl font-semibold'
+        }
+      });
+      
       fetchAdmins();
     } catch (err) {
-      error('Failed to reset permissions');
+      await Swal.fire({
+        title: 'Reset Failed!',
+        text: err.response?.data?.message || 'Failed to reset permissions',
+        icon: 'error',
+        confirmButtonColor: '#dc2626',
+        confirmButtonText: 'OK',
+        customClass: {
+          popup: 'rounded-2xl',
+          title: 'text-xl font-bold text-gray-900',
+          confirmButton: 'px-6 py-3 rounded-xl font-semibold'
+        }
+      });
+    }
+  };
+
+  const handleDeleteAdmin = async (admin) => {
+    // SweetAlert confirmation dialog
+    const result = await Swal.fire({
+      title: 'Delete Admin?',
+      html: `
+        <div class="text-left">
+          <p class="mb-4">Are you sure you want to delete this admin?</p>
+          <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <div class="flex items-center mb-2">
+              <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                <svg class="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                </svg>
+              </div>
+              <div>
+                <p class="font-semibold text-gray-900">${admin.name}</p>
+                <p class="text-sm text-gray-600">${admin.email}</p>
+                <p class="text-xs text-gray-500">${admin.role.replace('_', ' ').toUpperCase()}</p>
+              </div>
+            </div>
+          </div>
+          <p class="text-red-600 font-semibold">⚠️ This action is permanent and cannot be undone!</p>
+        </div>
+      `,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, Delete Admin',
+      cancelButtonText: 'Cancel',
+      reverseButtons: true,
+      focusCancel: true,
+      customClass: {
+        popup: 'rounded-2xl',
+        title: 'text-xl font-bold text-gray-900',
+        confirmButton: 'px-6 py-3 rounded-xl font-semibold',
+        cancelButton: 'px-6 py-3 rounded-xl font-semibold'
+      }
+    });
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    // Second confirmation with input
+    const { value: confirmText } = await Swal.fire({
+      title: 'Final Confirmation',
+      html: `
+        <div class="text-center">
+          <p class="mb-4">To confirm deletion, please type:</p>
+          <div class="bg-gray-100 border border-gray-300 rounded-lg p-3 mb-4">
+            <code class="text-lg font-mono font-bold text-red-600">DELETE</code>
+          </div>
+        </div>
+      `,
+      input: 'text',
+      inputPlaceholder: 'Type DELETE here',
+      inputValidator: (value) => {
+        if (value !== 'DELETE') {
+          return 'You must type exactly "DELETE" to confirm!';
+        }
+      },
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Confirm Deletion',
+      cancelButtonText: 'Cancel',
+      customClass: {
+        popup: 'rounded-2xl',
+        title: 'text-xl font-bold text-gray-900',
+        input: 'rounded-xl border-gray-300 focus:border-red-500 focus:ring-red-500',
+        confirmButton: 'px-6 py-3 rounded-xl font-semibold',
+        cancelButton: 'px-6 py-3 rounded-xl font-semibold'
+      }
+    });
+
+    if (!confirmText) {
+      return;
+    }
+
+    setDeletingAdmin(admin.id);
+    try {
+      await api.delete(`/admin-management/${admin.id}`);
+      
+      // Success notification
+      await Swal.fire({
+        title: 'Admin Deleted!',
+        text: `${admin.name} has been successfully deleted.`,
+        icon: 'success',
+        confirmButtonColor: '#10b981',
+        confirmButtonText: 'OK',
+        customClass: {
+          popup: 'rounded-2xl',
+          title: 'text-xl font-bold text-gray-900',
+          confirmButton: 'px-6 py-3 rounded-xl font-semibold'
+        }
+      });
+      
+      fetchAdmins();
+    } catch (err) {
+      // Error notification
+      await Swal.fire({
+        title: 'Deletion Failed!',
+        text: err.response?.data?.message || 'Failed to delete admin',
+        icon: 'error',
+        confirmButtonColor: '#dc2626',
+        confirmButtonText: 'OK',
+        customClass: {
+          popup: 'rounded-2xl',
+          title: 'text-xl font-bold text-gray-900',
+          confirmButton: 'px-6 py-3 rounded-xl font-semibold'
+        }
+      });
+    } finally {
+      setDeletingAdmin(null);
     }
   };
 
   const handleCreateAdmin = async () => {
     if (!adminForm.name || !adminForm.email || !adminForm.password) {
-      error('Please fill all required fields');
+      await Swal.fire({
+        title: 'Missing Information!',
+        text: 'Please fill all required fields',
+        icon: 'warning',
+        confirmButtonColor: '#f59e0b',
+        confirmButtonText: 'OK',
+        customClass: {
+          popup: 'rounded-2xl',
+          title: 'text-xl font-bold text-gray-900',
+          confirmButton: 'px-6 py-3 rounded-xl font-semibold'
+        }
+      });
       return;
     }
 
     if (adminForm.role === 'campus_admin' && !selectedCampus) {
-      error('Please select a campus for campus admin');
+      await Swal.fire({
+        title: 'Campus Required!',
+        text: 'Please select a campus for campus admin',
+        icon: 'warning',
+        confirmButtonColor: '#f59e0b',
+        confirmButtonText: 'OK',
+        customClass: {
+          popup: 'rounded-2xl',
+          title: 'text-xl font-bold text-gray-900',
+          confirmButton: 'px-6 py-3 rounded-xl font-semibold'
+        }
+      });
       return;
     }
 
     if (adminForm.role === 'course_admin' && !selectedCourse) {
-      error('Please select a course for course admin');
+      await Swal.fire({
+        title: 'Course Required!',
+        text: 'Please select a course for course admin',
+        icon: 'warning',
+        confirmButtonColor: '#f59e0b',
+        confirmButtonText: 'OK',
+        customClass: {
+          popup: 'rounded-2xl',
+          title: 'text-xl font-bold text-gray-900',
+          confirmButton: 'px-6 py-3 rounded-xl font-semibold'
+        }
+      });
       return;
     }
 
@@ -141,7 +384,33 @@ const AdminPermissions = () => {
       const response = await api.post('/admin-management/create', adminData);
       
       if (response.data.success) {
-        success('Admin created successfully');
+        await Swal.fire({
+          title: 'Admin Created!',
+          html: `
+            <div class="text-center">
+              <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                </svg>
+              </div>
+              <p class="text-lg font-semibold text-gray-900 mb-2">${adminForm.name}</p>
+              <p class="text-sm text-gray-600 mb-4">${adminForm.email}</p>
+              <p class="text-xs text-gray-500 bg-gray-100 rounded-full px-3 py-1 inline-block">
+                ${adminForm.role.replace('_', ' ').toUpperCase()}
+              </p>
+              <p class="text-sm text-gray-600 mt-4">Admin has been created and credentials have been sent via email.</p>
+            </div>
+          `,
+          icon: 'success',
+          confirmButtonColor: '#10b981',
+          confirmButtonText: 'Great!',
+          customClass: {
+            popup: 'rounded-2xl',
+            title: 'text-xl font-bold text-gray-900',
+            confirmButton: 'px-6 py-3 rounded-xl font-semibold'
+          }
+        });
+        
         setIsCreateAdminModalOpen(false);
         setAdminForm({ name: '', email: '', password: '', role: 'campus_admin' });
         setSelectedCampus('');
@@ -149,7 +418,18 @@ const AdminPermissions = () => {
         fetchAdmins();
       }
     } catch (err) {
-      error(err.response?.data?.message || 'Failed to create admin');
+      await Swal.fire({
+        title: 'Creation Failed!',
+        text: err.response?.data?.message || 'Failed to create admin',
+        icon: 'error',
+        confirmButtonColor: '#dc2626',
+        confirmButtonText: 'OK',
+        customClass: {
+          popup: 'rounded-2xl',
+          title: 'text-xl font-bold text-gray-900',
+          confirmButton: 'px-6 py-3 rounded-xl font-semibold'
+        }
+      });
     } finally {
       setCreatingAdmin(false);
     }
@@ -370,6 +650,19 @@ const AdminPermissions = () => {
                               >
                                 <RotateCcw className="h-5 w-5" />
                               </button>
+                              
+                              <button
+                                onClick={() => handleDeleteAdmin(admin)}
+                                disabled={deletingAdmin === admin.id}
+                                className="p-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Delete Admin"
+                              >
+                                {deletingAdmin === admin.id ? (
+                                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-red-600 border-t-transparent" />
+                                ) : (
+                                  <Trash2 className="h-5 w-5" />
+                                )}
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -438,12 +731,36 @@ const AdminPermissions = () => {
                 await api.put(`/access-control/permissions/${selectedAdmin.admin_id}`, {
                   permissions
                 });
-                success('Permissions updated successfully');
+                
+                await Swal.fire({
+                  title: 'Permissions Updated!',
+                  text: 'Admin permissions have been successfully updated.',
+                  icon: 'success',
+                  confirmButtonColor: '#10b981',
+                  confirmButtonText: 'OK',
+                  customClass: {
+                    popup: 'rounded-2xl',
+                    title: 'text-xl font-bold text-gray-900',
+                    confirmButton: 'px-6 py-3 rounded-xl font-semibold'
+                  }
+                });
+                
                 fetchAdmins();
                 setIsPermissionModalOpen(false);
                 setSelectedAdmin(null);
               } catch (err) {
-                error('Failed to update permissions');
+                await Swal.fire({
+                  title: 'Update Failed!',
+                  text: err.response?.data?.message || 'Failed to update permissions',
+                  icon: 'error',
+                  confirmButtonColor: '#dc2626',
+                  confirmButtonText: 'OK',
+                  customClass: {
+                    popup: 'rounded-2xl',
+                    title: 'text-xl font-bold text-gray-900',
+                    confirmButton: 'px-6 py-3 rounded-xl font-semibold'
+                  }
+                });
               }
             }}
           />

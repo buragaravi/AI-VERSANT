@@ -119,7 +119,7 @@ const CRTModules = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="w-full">
       {renderContent()}
     </div>
   );

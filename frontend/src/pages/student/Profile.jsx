@@ -5,6 +5,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { User, Mail, Hash, Building, BookOpen, Users, Briefcase, ArrowLeft, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import ReleasedFormData from '../../components/student/ReleasedFormData';
 
 const ProfileCard = ({ icon, title, value }) => (
     <motion.div 
@@ -54,7 +55,7 @@ const StudentProfile = () => {
     }
 
     return (
-        <div className="max-w-6xl mx-auto">
+        <div className="w-full">
             {/* Back to Dashboard button */}
             <div className="mb-4">
                 <Link to="/student" className="inline-flex items-center px-3 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 font-medium transition-all duration-300 shadow-md hover:shadow-lg text-sm">
@@ -99,6 +100,16 @@ const StudentProfile = () => {
                         <ProfileCard icon={<Mail />} title="Email" value={profile.email} />
                     </div>
                 </div>
+            </motion.div>
+
+            {/* Released Form Data Section */}
+            <motion.div 
+                initial={{ opacity: 0, y: 20 }} 
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className="mt-8"
+            >
+                <ReleasedFormData />
             </motion.div>
         </div>
     );

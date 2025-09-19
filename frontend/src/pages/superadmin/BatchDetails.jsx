@@ -10,7 +10,7 @@ import CredentialsDisplayModal from '../../components/common/CredentialsDisplayM
 import StudentUploadVerificationModal from '../../components/common/StudentUploadVerificationModal';
 import ErrorDisplayModal from '../../components/common/ErrorDisplayModal';
 import api, { getBatchCourses } from '../../services/api';
-import { Users, ArrowLeft, Upload, Edit, Trash2, Download, X, Save, User, Mail, Key, Building, Book, ListChecks, BarChart2, CheckCircle, XCircle, Shield } from 'lucide-react';
+import { Users, ArrowLeft, Upload, Edit, Trash2, Download, X, Save, User, Mail, Key, Building, Book, ListChecks, BarChart2, CheckCircle, XCircle, Shield, MessageSquare, Send } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 
 const BatchDetails = () => {
@@ -58,6 +58,13 @@ const BatchDetails = () => {
     // Error modal state
     const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
     const [detailedErrors, setDetailedErrors] = useState([]);
+    
+    // Email/SMS sending state
+    const [isSendingEmails, setIsSendingEmails] = useState(false);
+    const [isSendingSms, setIsSendingSms] = useState(false);
+    const [emailProgress, setEmailProgress] = useState(0);
+    const [smsProgress, setSmsProgress] = useState(0);
+    const [sendingStatus, setSendingStatus] = useState('');
 
     const fetchBatchDetails = useCallback(async () => {
         try {
@@ -451,6 +458,123 @@ const BatchDetails = () => {
         }
     };
 
+    // Email and SMS sending functions
+    const handleSendEmails = async () => {
+        if (students.length === 0) {
+            error('No students found in this batch.');
+            return;
+        }
+
+        const studentsWithEmail = students.filter(s => s.email);
+        if (studentsWithEmail.length === 0) {
+            error('No students with email addresses found in this batch.');
+            return;
+        }
+
+        setIsSendingEmails(true);
+        setEmailProgress(0);
+        setSendingStatus('Preparing to send emails...');
+
+        try {
+            // Simulate progress for better UX
+            setEmailProgress(25);
+            setSendingStatus('Sending emails to students...');
+            
+            const response = await api.post(`/batch-management/batch/${batchId}/send-emails`);
+            
+            setEmailProgress(75);
+            setSendingStatus('Processing email responses...');
+            
+            if (response.data.success) {
+                const successfulCount = response.data.successful_emails || studentsWithEmail.length;
+                const failedCount = response.data.failed_emails || 0;
+                
+                setEmailProgress(100);
+                setSendingStatus(`Emails sent successfully! ${successfulCount} sent, ${failedCount} failed`);
+                
+                if (successfulCount > 0) {
+                    success(`Successfully sent emails to ${successfulCount} students!`);
+                }
+                if (failedCount > 0) {
+                    error(`${failedCount} emails failed to send.`);
+                }
+            } else {
+                setEmailProgress(100);
+                setSendingStatus('Email sending failed.');
+                error(response.data.message || 'Failed to send emails.');
+            }
+        } catch (err) {
+            console.error('Email sending error:', err);
+            setEmailProgress(100);
+            setSendingStatus('Email sending failed.');
+            error(err.response?.data?.message || 'Failed to send emails.');
+        } finally {
+            setIsSendingEmails(false);
+            setTimeout(() => {
+                setSendingStatus('');
+                setEmailProgress(0);
+            }, 5000);
+        }
+    };
+
+    const handleSendSms = async () => {
+        if (students.length === 0) {
+            error('No students found in this batch.');
+            return;
+        }
+
+        const studentsWithMobile = students.filter(s => s.mobile_number);
+        if (studentsWithMobile.length === 0) {
+            error('No students with mobile numbers found in this batch.');
+            return;
+        }
+
+        setIsSendingSms(true);
+        setSmsProgress(0);
+        setSendingStatus('Preparing to send SMS...');
+
+        try {
+            // Simulate progress for better UX
+            setSmsProgress(25);
+            setSendingStatus('Sending SMS to students...');
+            
+            const response = await api.post(`/batch-management/batch/${batchId}/send-sms`);
+            
+            setSmsProgress(75);
+            setSendingStatus('Processing SMS responses...');
+            
+            if (response.data.success) {
+                const successfulCount = response.data.successful_sms || studentsWithMobile.length;
+                const failedCount = response.data.failed_sms || 0;
+                
+                setSmsProgress(100);
+                setSendingStatus(`SMS sent successfully! ${successfulCount} sent, ${failedCount} failed`);
+                
+                if (successfulCount > 0) {
+                    success(`Successfully sent SMS to ${successfulCount} students!`);
+                }
+                if (failedCount > 0) {
+                    error(`${failedCount} SMS failed to send.`);
+                }
+            } else {
+                setSmsProgress(100);
+                setSendingStatus('SMS sending failed.');
+                error(response.data.message || 'Failed to send SMS.');
+            }
+        } catch (err) {
+            console.error('SMS sending error:', err);
+            setSmsProgress(100);
+            setSendingStatus('SMS sending failed.');
+            error(err.response?.data?.message || 'Failed to send SMS.');
+        } finally {
+            setIsSendingSms(false);
+            setTimeout(() => {
+                setSendingStatus('');
+                setSmsProgress(0);
+            }, 5000);
+        }
+    };
+
     if (loading) {
         return <div className="flex justify-center items-center h-screen"><LoadingSpinner /></div>;
     }
@@ -487,16 +611,69 @@ const BatchDetails = () => {
                                         Verify Upload
                                     </button>
                                 )}
+                                <button
+                                    onClick={handleSendEmails}
+                                    disabled={isSendingEmails || students.length === 0}
+                                    className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <Mail className="mr-2 h-5 w-5" />
+                                    {isSendingEmails ? 'Sending Emails...' : 'Send Emails'}
+                                </button>
+                                <button
+                                    onClick={handleSendSms}
+                                    disabled={isSendingSms || students.length === 0}
+                                    className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <MessageSquare className="mr-2 h-5 w-5" />
+                                    {isSendingSms ? 'Sending SMS...' : 'Send SMS'}
+                                </button>
                             </div>
                         </div>
+
+                        {/* Email/SMS Progress Indicator */}
+                        {(isSendingEmails || isSendingSms || sendingStatus) && (
+                            <div className="mb-6 bg-white rounded-lg shadow-md p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                    <h3 className="text-lg font-semibold text-gray-900">
+                                        {isSendingEmails ? 'Sending Emails' : isSendingSms ? 'Sending SMS' : 'Status'}
+                                    </h3>
+                                    <span className="text-sm text-gray-500">
+                                        {isSendingEmails ? `${emailProgress}%` : isSendingSms ? `${smsProgress}%` : ''}
+                                    </span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                                    <div 
+                                        className={`h-2 rounded-full transition-all duration-300 ${
+                                            isSendingEmails ? 'bg-blue-600' : 'bg-green-600'
+                                        }`}
+                                        style={{ 
+                                            width: `${isSendingEmails ? emailProgress : smsProgress}%` 
+                                        }}
+                                    ></div>
+                                </div>
+                                <p className="text-sm text-gray-600">{sendingStatus}</p>
+                            </div>
+                        )}
 
                         <div className="bg-white rounded-2xl shadow-lg flex justify-center">
                             <div className="w-full max-w-6xl">
                                 <div className="p-6 flex justify-between items-center">
-                                    <h3 className="text-xl font-semibold flex items-center gap-2">
-                                        <Users />
-                                        Students in this Batch ({students.length})
-                                    </h3>
+                                    <div>
+                                        <h3 className="text-xl font-semibold flex items-center gap-2">
+                                            <Users />
+                                            Students in this Batch ({students.length})
+                                        </h3>
+                                        <div className="mt-2 flex gap-4 text-sm text-gray-600">
+                                            <span className="flex items-center gap-1">
+                                                <Mail className="w-4 h-4" />
+                                                {students.filter(s => s.email).length} with email
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                                <MessageSquare className="w-4 h-4" />
+                                                {students.filter(s => s.mobile_number).length} with mobile
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="overflow-x-auto">
                                     <table className="min-w-full divide-y divide-gray-200 rounded-xl overflow-hidden mt-6">
