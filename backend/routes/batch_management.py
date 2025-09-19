@@ -339,6 +339,30 @@ def create_batch():
             except Exception as e:
                 print(f"Failed to send welcome email to {student['email_id']}: {e}")
 
+        # Send push notification to all students in the new batch
+        try:
+            from utils.push_notification_helper import push_notification_helper
+            # Get campus and course names for the notification
+            campus = mongo_db.campuses.find_one({'_id': ObjectId(campus_id)})
+            course = mongo_db.courses.find_one({'_id': ObjectId(course_id)})
+            
+            campus_name = campus.get('name', 'Campus') if campus else 'Campus'
+            course_name = course.get('name', 'Course') if course else 'Course'
+            
+            # Get all student IDs in the new batch
+            student_ids = [str(student_doc['_id']) for student_doc in created_students]
+            
+            push_notification_helper.send_batch_creation_notification(
+                batch_name=batch_name,
+                campus_name=campus_name,
+                course_name=course_name,
+                target_students=student_ids
+            )
+            print(f"Push notification sent to {len(student_ids)} students for batch {batch_name}")
+        except Exception as push_error:
+            print(f"Failed to send push notification for batch creation: {push_error}")
+            # Don't fail the batch creation if push notification fails
+
         return jsonify({
             'success': True,
             'message': 'Batch and students created successfully',

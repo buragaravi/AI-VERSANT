@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from scheduler import schedule_daily_notifications
 from config.aws_config import init_aws
 from connection_monitor import start_connection_monitoring, stop_connection_monitoring, get_connection_health
+from utils.push_service_final import initialize_push_service
 
 # Import Windows optimizations first
 try:
@@ -183,8 +184,6 @@ def create_app():
                 'course_admin': '/course-admin',
                 'student': '/student',
                 'test_management': '/test-management',
-                'unified_test_management': '/unified-test-management',
-                'unified_test_taking': '/unified-test-taking',
                 'global_settings': '/global-settings',
                 'forms': '/forms',
                 'form_submissions': '/form-submissions',
@@ -291,9 +290,6 @@ def create_app():
     # Register SMS management blueprint
     from routes.sms_management import sms_bp
     
-    # Register Unified Test System blueprints
-    from routes.unified_test_management import unified_test_management_bp
-    from routes.unified_test_taking import unified_test_taking_bp
     from routes.global_settings import global_settings_bp
     
     # Register async routes
@@ -328,9 +324,6 @@ def create_app():
     # Register SMS management blueprint
     app.register_blueprint(sms_bp, url_prefix='/sms-management')
     
-    # Register Unified Test System blueprints
-    app.register_blueprint(unified_test_management_bp, url_prefix='/unified-test-management')
-    app.register_blueprint(unified_test_taking_bp, url_prefix='/unified-test-taking')
     
     # Register Global Settings blueprint
     app.register_blueprint(global_settings_bp, url_prefix='/global-settings')
@@ -343,6 +336,14 @@ def create_app():
     app.register_blueprint(forms_bp, url_prefix='/forms')
     app.register_blueprint(form_submissions_bp, url_prefix='/form-submissions')
     app.register_blueprint(form_analytics_bp, url_prefix='/form-analytics')
+    
+    # Register Push Notifications blueprint
+    from routes.push_notifications import push_notifications_bp
+    app.register_blueprint(push_notifications_bp, url_prefix='/notifications')
+    
+    # Register OneSignal Notifications blueprint
+    from routes.onesignal_notifications import onesignal_notifications_bp
+    app.register_blueprint(onesignal_notifications_bp, url_prefix='/onesignal')
     
     # Register async routes
     app.register_blueprint(async_auth_bp, url_prefix='/async-auth')
@@ -391,6 +392,20 @@ def create_app():
         print(f"   Cache size: 10,000")
     except Exception as e:
         print(f"⚠️ Warning: Async system initialization failed: {e}")
+    
+    # Initialize Push Notification Service
+    try:
+        vapid_private_key = os.getenv('VAPID_PRIVATE_KEY')
+        vapid_public_key = os.getenv('VAPID_PUBLIC_KEY')
+        vapid_email = os.getenv('VAPID_EMAIL', 'admin@crt.pydahsoft.in')
+        
+        if vapid_private_key and vapid_public_key:
+            initialize_push_service(vapid_private_key, vapid_public_key, vapid_email)
+            print("✅ Push Notification Service initialized")
+        else:
+            print("⚠️ Push Notification Service not initialized - VAPID keys not found")
+    except Exception as e:
+        print(f"❌ Error initializing Push Notification Service: {e}")
     
     # Add development routes if in development mode
     if os.environ.get("FLASK_DEBUG", "False").lower() == "true" or os.environ.get("DEV_MODE", "False").lower() == "true":

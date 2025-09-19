@@ -258,26 +258,20 @@ const FormSubmission = ({ formId, onComplete, isProcessing = false, showProgress
   return (
     <div className="w-full">
       <div className="bg-white rounded-lg w-full">
-        {/* Header - No close button */}
-        <div className="border-b border-gray-200 px-6 py-4">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">{form.title}</h2>
-            {form.description && (
-              <p className="text-sm text-gray-600 mt-1">{form.description}</p>
-            )}
-          </div>
-        </div>
+        {/* Header removed - handled by DynamicFormRenderer */}
 
         {/* Form Content */}
         <div className="p-6">
-          {/* Existing Submission Info */}
+          {/* Existing Submission Info with Soft Design */}
           {existingSubmission && existingSubmission.status === 'draft' && (
-            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-              <div className="flex items-center">
-                <Clock className="w-5 h-5 text-yellow-600 mr-2" />
+            <div className="mb-8 p-6 bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-200 rounded-2xl shadow-sm">
+              <div className="flex items-start">
+                <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center mr-4 flex-shrink-0">
+                  <Clock className="w-5 h-5 text-yellow-600" />
+                </div>
                 <div>
-                  <h3 className="text-sm font-medium text-yellow-800">Draft Found</h3>
-                  <p className="text-sm text-yellow-700">
+                  <h3 className="text-lg font-semibold text-yellow-800 mb-2">Draft Found</h3>
+                  <p className="text-yellow-700 leading-relaxed">
                     You have a saved draft from {formatDate(existingSubmission.submitted_at)}. 
                     You can continue editing or start fresh.
                   </p>
@@ -286,14 +280,16 @@ const FormSubmission = ({ formId, onComplete, isProcessing = false, showProgress
             </div>
           )}
 
-          {/* Submission Deadline Warning */}
+          {/* Submission Deadline Warning with Soft Design */}
           {form.settings.submissionDeadline && (
-            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
-              <div className="flex items-center">
-                <Clock className="w-5 h-5 text-blue-600 mr-2" />
+            <div className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-2xl shadow-sm">
+              <div className="flex items-start">
+                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center mr-4 flex-shrink-0">
+                  <Clock className="w-5 h-5 text-blue-600" />
+                </div>
                 <div>
-                  <h3 className="text-sm font-medium text-blue-800">Submission Deadline</h3>
-                  <p className="text-sm text-blue-700">
+                  <h3 className="text-lg font-semibold text-blue-800 mb-2">Submission Deadline</h3>
+                  <p className="text-blue-700 leading-relaxed">
                     Please submit before {formatDate(form.settings.submissionDeadline)}
                   </p>
                 </div>

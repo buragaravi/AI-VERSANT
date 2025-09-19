@@ -1,0 +1,12 @@
+# Push Notification Configuration
+# Add these to your main .env file
+
+# VAPID Keys for Web Push API
+# Generate these using: python generate_vapid_keys.py
+VAPID_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY_HERE\n-----END PRIVATE KEY-----"
+VAPID_PUBLIC_KEY="YOUR_PUBLIC_KEY_HERE"
+VAPID_EMAIL="admin@crt.pydahsoft.in"
+
+# Frontend Environment Variables
+# Add these to your frontend .env file
+REACT_APP_VAPID_PUBLIC_KEY="YOUR_PUBLIC_KEY_HERE"
