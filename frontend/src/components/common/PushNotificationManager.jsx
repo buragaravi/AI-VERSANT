@@ -123,11 +123,27 @@ export const PushNotificationProvider = ({ children }) => {
       let registration = await navigator.serviceWorker.getRegistration('/');
       
       if (!registration) {
-        // Register service worker with proper scope and error handling
-        registration = await navigator.serviceWorker.register('/sw.js', {
-          scope: '/'
-        });
-        console.log('✅ Service Worker registered:', registration);
+        // Try to register service worker with multiple fallback paths
+        const swPaths = ['/sw.js', './sw.js', '/static/sw.js'];
+        let registered = false;
+        
+        for (const swPath of swPaths) {
+          try {
+            console.log(`🔄 Trying to register service worker at: ${swPath}`);
+            registration = await navigator.serviceWorker.register(swPath, {
+              scope: '/'
+            });
+            console.log('✅ Service Worker registered at:', swPath, registration);
+            registered = true;
+            break;
+          } catch (pathError) {
+            console.warn(`⚠️ Failed to register at ${swPath}:`, pathError.message);
+          }
+        }
+        
+        if (!registered) {
+          throw new Error('Failed to register service worker at any path');
+        }
       } else {
         console.log('✅ Service Worker already registered:', registration);
       }
