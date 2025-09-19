@@ -1,7 +1,7 @@
 {
   "rewrites": [
     {
-      "source": "/((?!sw\\.js|favicon\\.ico|.*\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
@@ -12,10 +12,6 @@
         {
           "key": "Content-Type",
           "value": "application/javascript"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
         }
       ]
     }
