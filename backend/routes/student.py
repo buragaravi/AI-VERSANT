@@ -1422,33 +1422,20 @@ def get_single_test(test_id):
         # --- PROCESS QUESTIONS ---
         import random
         if 'questions' in test and isinstance(test['questions'], list):
-            # For listening modules, maintain consistent question order to prevent audio mismatch
-            if test.get('module_id') == 'LISTENING':
-                # Store original question order with audio URLs for reference
-                original_questions = []
-                for q in test['questions']:
-                    original_questions.append({
-                        'question_id': q.get('question_id'),
-                        'sentence': q.get('sentence', ''),
-                        'audio_url': q.get('audio_url', ''),
-                        'question': q.get('question', '')
-                    })
-                
-                # Use a deterministic shuffle based on test_id to maintain consistency
-                test_id_str = str(test['_id'])
-                random.seed(hash(test_id_str) % 1000000)  # Use test ID as seed for consistent order
-                random.shuffle(test['questions'])
-                random.seed()  # Reset seed to prevent affecting other operations
-                current_app.logger.info(f"Questions shuffled with consistent seed for listening test: {test_id_str}")
-                
-                # Log the shuffled order for debugging
-                for idx, q in enumerate(test['questions']):
-                    current_app.logger.info(f"Shuffled question {idx + 1}: {q.get('question_id')} - {q.get('sentence', '')[:50]}...")
-            else:
-                # For other modules, shuffle normally
-                random.shuffle(test['questions'])
+            # Use consistent shuffling for all modules (same as practice tests)
+            test_id_str = str(test['_id'])
+            random.seed(hash(test_id_str) % 1000000)  # Use test ID as seed for consistent order
+            random.shuffle(test['questions'])
+            random.seed()  # Reset seed to prevent affecting other operations
+            current_app.logger.info(f"Questions shuffled with consistent seed for test: {test_id_str}")
+            
+            # Log the shuffled order for debugging
+            for idx, q in enumerate(test['questions']):
+                current_app.logger.info(f"Shuffled question {idx + 1}: {q.get('question_id', q.get('_id'))} - {q.get('question', q.get('sentence', ''))[:50]}...")
 
             processed_questions = []
+            shuffled_questions = []  # Store shuffled questions for validation
+            
             for idx, q in enumerate(test['questions']):
                 current_app.logger.info(f"Processing question {idx + 1}: {q.get('question_type', 'unknown')}")
                 
@@ -1485,6 +1472,13 @@ def get_single_test(test_id):
                     }
 
                     processed_questions.append(clean_q)
+                    
+                    # Store shuffled question data for validation
+                    shuffled_q = q.copy()
+                    shuffled_q['shuffled_options'] = new_options
+                    shuffled_q['answer_mapping'] = answer_map
+                    shuffled_q['shuffled_answer'] = answer_map.get(answer_letter)
+                    shuffled_questions.append(shuffled_q)
 
                 elif q.get('question_type') in ['sentence', 'listening', 'speaking']:
                     # Handle listening/speaking questions with proper audio support
@@ -1589,6 +1583,10 @@ def get_single_test(test_id):
                     
                     processed_questions.append(clean_q)
                     current_app.logger.info(f"Processed {q.get('question_type')} question: {clean_q['question'][:50]}...")
+                    
+                    # Store shuffled question data for validation (non-MCQ)
+                    shuffled_q = q.copy()
+                    shuffled_questions.append(shuffled_q)
 
                 else:
                     # Non-MCQ questions
@@ -1599,8 +1597,13 @@ def get_single_test(test_id):
                         "instructions": q.get('instructions', '')
                     }
                     processed_questions.append(clean_q)
+                    
+                    # Store shuffled question data for validation (non-MCQ)
+                    shuffled_q = q.copy()
+                    shuffled_questions.append(shuffled_q)
 
             test['questions'] = processed_questions
+            test['shuffled_questions'] = shuffled_questions  # Store shuffled questions for validation
             current_app.logger.info(f"Successfully processed {len(processed_questions)} questions")
 
             # Remove correct_answer before sending response

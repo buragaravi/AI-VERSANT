@@ -85,11 +85,21 @@ const PracticeModuleTaking = () => {
     try {
       const formData = new FormData();
       formData.append('test_id', module._id);
-      Object.entries(answers).forEach(([qid, ans]) => {
-        formData.append(`answer_${qid}`, ans);
+      
+      // Use question index format to match backend expectations
+      questions.forEach((question, index) => {
+        const questionId = question.question_id || question._id;
+        if (answers[questionId]) {
+          formData.append(`answer_${index}`, answers[questionId]);
+        }
       });
-      Object.entries(recordings).forEach(([qid, blob]) => {
-        formData.append(`question_${qid}`, blob, `answer_${qid}.wav`);
+      
+      // Use question index format for audio recordings
+      questions.forEach((question, index) => {
+        const questionId = question.question_id || question._id;
+        if (recordings[questionId]) {
+          formData.append(`question_${index}`, recordings[questionId], `answer_${index}.wav`);
+        }
       });
       const res = await api.post('/student/submit-practice-test', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -279,7 +289,7 @@ const ResultView = ({ result, onBack }) => {
                 <>
                   <div className="mb-2 font-semibold">{q.question}</div>
                   <div className="mb-2">Your Answer: <span className={q.is_correct ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>{q.student_answer}</span></div>
-                  <div className="mb-2">Correct Answer: <span className="font-semibold">{q.correct_answer}</span></div>
+                  <div className="mb-2">Correct Answer: <span className="font-semibold">{q.correct_answer_text || q.correct_answer}</span></div>
                 </>
               )}
             </div>

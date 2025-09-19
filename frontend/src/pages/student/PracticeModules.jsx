@@ -135,8 +135,23 @@ const PracticeModules = () => {
     }
   };
 
-  const handleModuleSubmit = (result) => {
+  const handleModuleSubmit = async (result) => {
     setModuleResult(result);
+    
+    // After submitting, refresh the scores for the current module
+    if (currentCategory?.id) {
+      try {
+        const res = await getUnlockedModules();
+        const found = res.data.data.find(m => m.module_id === currentCategory.id);
+        const levels = found ? found.levels : [];
+        const scores = {};
+        levels.forEach(lvl => { scores[lvl.level_id] = { score: lvl.score || 0, unlocked: lvl.unlocked }; });
+        setCurrentCategory(prev => ({ ...prev, levels, scores }));
+      } catch (error) {
+        console.error('Error refreshing scores:', error);
+      }
+    }
+    
     // After submitting, fetch the latest grammar progress if it was a grammar module
     if (currentCategory?.id === 'GRAMMAR') {
        fetchGrammarProgress();
@@ -1479,8 +1494,9 @@ const ResultView = ({ result, onBack }) => {
         )
     }
     
-    const { correct_answers, total_questions, average_score, score_percentage, results } = result;
-    const scorePercentage = score_percentage || (average_score * 100) || 0;
+    const { correct_answers, total_questions, average_score, score_percentage, percentage, results } = result;
+    // Use percentage first, then score_percentage, then calculate from average_score
+    const scorePercentage = percentage || score_percentage || (average_score ? average_score * 100 : 0) || 0;
     
     // Helper for word diff display
     const renderWordDiff = (expected, got) => {
@@ -1511,7 +1527,7 @@ const ResultView = ({ result, onBack }) => {
     };
 
     return (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto">
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto">
             <div className="bg-white p-6 rounded-2xl shadow-lg text-center">
                 <h1 className="text-2xl font-bold text-gray-800">Module Complete!</h1>
                 <p className="text-gray-600 mt-2">Here's how you did:</p>
@@ -1524,8 +1540,9 @@ const ResultView = ({ result, onBack }) => {
                     <p className="text-3xl font-bold text-green-600 mt-2">{scorePercentage.toFixed(0)}%</p>
                 </div>
                 
-                {/* Compact Results Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Scrollable Results Container */}
+                <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-lg p-4 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {results && Array.isArray(results) && results.length > 0 ? (
                         results.map((q, idx) => (
                             <div key={idx} className="p-4 rounded-lg border bg-gray-50 text-left">
@@ -1621,8 +1638,39 @@ const ResultView = ({ result, onBack }) => {
                                     // MCQ
                                     <>
                                         <div className="mb-2 font-semibold text-sm">{q.question || 'Question text not available'}</div>
+                                        
+                                        {/* Display all options */}
+                                        {q.options && (
+                                            <div className="mb-3">
+                                                <div className="text-xs font-medium text-gray-600 mb-2">Options:</div>
+                                                <div className="space-y-1">
+                                                    {Object.entries(q.options).map(([key, value]) => {
+                                                        const isStudentAnswer = q.student_answer === value;
+                                                        const isCorrectAnswer = q.correct_answer_text === value;
+                                                        return (
+                                                            <div
+                                                                key={key}
+                                                                className={`text-xs p-2 rounded border ${
+                                                                    isCorrectAnswer 
+                                                                        ? 'bg-green-50 border-green-300 text-green-800 font-semibold' 
+                                                                        : isStudentAnswer 
+                                                                        ? 'bg-red-50 border-red-300 text-red-800 font-semibold'
+                                                                        : 'bg-gray-50 border-gray-200 text-gray-700'
+                                                                }`}
+                                                            >
+                                                                <span className="font-bold mr-2">{key}.</span>
+                                                                <span>{value}</span>
+                                                                {isCorrectAnswer && <span className="ml-2 text-green-600 font-bold">(Correct)</span>}
+                                                                {isStudentAnswer && !isCorrectAnswer && <span className="ml-2 text-red-600 font-bold">(Your Answer)</span>}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
                                         <div className="text-xs mb-2">Your Answer: <span className={q.is_correct ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>{q.student_answer || 'N/A'}</span></div>
-                                        <div className="text-xs mb-2">Correct: <span className="font-semibold">{q.correct_answer || 'N/A'}</span></div>
+                                        <div className="text-xs mb-2">Correct: <span className="font-semibold">{q.correct_answer_text || q.correct_answer || 'N/A'}</span></div>
                                         <div className="mb-2">
                                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                                                 q.is_correct ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
@@ -1640,10 +1688,24 @@ const ResultView = ({ result, onBack }) => {
                             <p className="text-xs mt-1">Your overall score has been recorded successfully.</p>
                         </div>
                     )}
+                    </div>
                 </div>
-                <button onClick={onBack} className="mt-6 px-6 py-2 rounded-lg bg-orange-500 text-white font-semibold hover:bg-orange-600 transition text-sm">
-                    Retry Practice Test
-                </button>
+                
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row gap-3 justify-center items-center mt-6">
+                    <button 
+                        onClick={() => window.location.href = '/student/practice'} 
+                        className="px-6 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition text-sm"
+                    >
+                        Back to Modules
+                    </button>
+                    <button 
+                        onClick={onBack} 
+                        className="px-6 py-2 rounded-lg bg-orange-500 text-white font-semibold hover:bg-orange-600 transition text-sm"
+                    >
+                        Retry Practice Test
+                    </button>
+                </div>
             </div>
         </motion.div>
     );

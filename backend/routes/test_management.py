@@ -2112,6 +2112,59 @@ def submit_practice_test():
                 'message': 'Test not found'
             }), 404
         
+        # Use consistent shuffling based on test_id (same as online tests)
+        import random
+        if 'questions' in test and isinstance(test['questions'], list):
+            # Use test_id as seed for consistent shuffling (same as online tests)
+            test_id_str = str(test_id)
+            random.seed(hash(test_id_str) % 1000000)
+            
+            # Shuffle questions (same as online tests)
+            random.shuffle(test['questions'])
+            
+            # Process questions with shuffling (same as online tests)
+            shuffled_questions = []
+            
+            for idx, q in enumerate(test['questions']):
+                if q.get('question_type') == 'mcq':
+                    # Build options dict from optionA...optionD
+                    options = {}
+                    answer_letter = q.get('answer')  # e.g. "C"
+
+                    for opt_key in ['A', 'B', 'C', 'D']:
+                        opt_field = f"option{opt_key}"
+                        if q.get(opt_field) is not None:
+                            options[opt_key] = q[opt_field]
+
+                    # Shuffle options
+                    items = list(options.items())
+                    random.shuffle(items)
+
+                    new_options = {}
+                    answer_map = {}
+                    for new_idx, (old_key, value) in enumerate(items):
+                        new_key = chr(ord('A') + new_idx)
+                        new_options[new_key] = value
+                        answer_map[old_key] = new_key
+
+                    # Store shuffled question data for validation
+                    shuffled_q = q.copy()
+                    shuffled_q['shuffled_options'] = new_options
+                    shuffled_q['answer_mapping'] = answer_map
+                    shuffled_q['shuffled_answer'] = answer_map.get(answer_letter)
+                    shuffled_questions.append(shuffled_q)
+                else:
+                    # Non-MCQ questions
+                    shuffled_q = q.copy()
+                    shuffled_questions.append(shuffled_q)
+            
+            # Reset random seed
+            random.seed()
+            
+            # Store shuffled questions for validation
+            test['shuffled_questions'] = shuffled_questions
+            current_app.logger.info(f"Applied consistent shuffling to {len(shuffled_questions)} questions for practice test validation")
+        
         # Check if student has access to this test
         current_app.logger.info(f"Looking for student profile with user_id: {current_user_id}")
         
@@ -2164,79 +2217,125 @@ def submit_practice_test():
         
         current_app.logger.info(f"Access granted for student {current_user_id} to test {test_id}")
         
-        # Process questions and calculate results
-        current_app.logger.info(f"Processing {len(test['questions'])} questions for test {test_id}")
+        # Process questions and calculate results - using same logic as online tests
+        # Get shuffled questions if available, otherwise use original questions
+        shuffled_questions = test.get('shuffled_questions', [])
+        if not shuffled_questions:
+            # If no shuffled questions, use original questions but apply same validation logic
+            shuffled_questions = test.get('questions', [])
+            current_app.logger.info(f"No shuffled questions found, using original questions")
         
-        # Improved question matching - use question ID as primary key
-        current_app.logger.info(f"Processing questions with improved matching logic")
+        current_app.logger.info(f"Processing {len(shuffled_questions)} questions for test {test_id}")
+        current_app.logger.info(f"Using shuffled questions: {len(shuffled_questions) > 0}")
+        
+        # Use same validation approach as online tests
+        current_app.logger.info(f"Processing questions with standardized matching logic")
         
         results = []
         total_score = 0
         correct_answers = 0
+        total_marks = len(shuffled_questions)
         
-        for i, question in enumerate(test['questions']):
+        for i, question in enumerate(shuffled_questions):
             current_app.logger.info(f"Processing question {i}: type={question.get('question_type')}")
             current_app.logger.info(f"Question {i} data: {question}")
             
             if question.get('question_type') == 'mcq':
-                # Handle MCQ question - use question ID format (same as online tests)
-                question_id = str(question.get('_id', f'q_{i}'))
-                answer_key = f'question_{question_id}'
+                # Handle MCQ question - use answer index format (answer_0, answer_1, etc.)
+                answer_key = f'answer_{i}'
                 current_app.logger.info(f"MCQ question {i}: looking for answer key '{answer_key}' in data")
                 
                 if answer_key in data:
-                    student_answer = data[answer_key]
+                    student_answer_text = data[answer_key]
                     
-                    # For practice tests, options are shuffled, so we need to find the correct answer differently
-                    # The question should have a 'correct_answer' field with the shuffled letter
-                    correct_answer_letter = question.get('correct_answer', '')  # This is the shuffled letter
-                    correct_answer_text = ''
-                    
-                    # Map shuffled answer letter to actual option text
-                    if correct_answer_letter == 'A':
-                        correct_answer_text = question.get('optionA', '')
-                    elif correct_answer_letter == 'B':
-                        correct_answer_text = question.get('optionB', '')
-                    elif correct_answer_letter == 'C':
-                        correct_answer_text = question.get('optionC', '')
-                    elif correct_answer_letter == 'D':
-                        correct_answer_text = question.get('optionD', '')
-                    
-                    # If correct_answer field doesn't exist, fall back to original logic
-                    if not correct_answer_text and question.get('answer'):
-                        original_answer_letter = question.get('answer', '')
-                        if original_answer_letter == 'A':
+                    # Use same logic as online tests - check for shuffled data first
+                    if 'shuffled_answer' in question and 'shuffled_options' in question:
+                        # Use shuffled answer mapping (same as online tests)
+                        correct_answer_letter = question.get('shuffled_answer', '')
+                        shuffled_options = question.get('shuffled_options', {})
+                        correct_answer_text = shuffled_options.get(correct_answer_letter, '')
+                        current_app.logger.info(f"Using shuffled answer mapping: {correct_answer_letter} -> {correct_answer_text}")
+                    else:
+                        # Fall back to original answer mapping (same as online tests)
+                        correct_answer_letter = question.get('answer', '')  # A, B, C, or D
+                        correct_answer_text = ''
+                        
+                        # Map answer letter to actual option text (same as online tests)
+                        if correct_answer_letter == 'A':
                             correct_answer_text = question.get('optionA', '')
-                        elif original_answer_letter == 'B':
+                        elif correct_answer_letter == 'B':
                             correct_answer_text = question.get('optionB', '')
-                        elif original_answer_letter == 'C':
+                        elif correct_answer_letter == 'C':
                             correct_answer_text = question.get('optionC', '')
-                        elif original_answer_letter == 'D':
+                        elif correct_answer_letter == 'D':
                             correct_answer_text = question.get('optionD', '')
+                        current_app.logger.info(f"Using original answer mapping: {correct_answer_letter} -> {correct_answer_text}")
                     
-                    # Check if student answer matches correct answer text
-                    is_correct = student_answer == correct_answer_text
+                    # Check if student answer matches correct answer text (same as online tests)
+                    is_correct = student_answer_text == correct_answer_text
                     score = 1 if is_correct else 0
                     
-                    current_app.logger.info(f"MCQ question {i}: student_answer='{student_answer}', correct_answer_text='{correct_answer_text}', is_correct={is_correct}")
+                    current_app.logger.info(f"MCQ question {i}: student_answer='{student_answer_text}', correct_answer_text='{correct_answer_text}', is_correct={is_correct}")
                     current_app.logger.info(f"Question {i} structure: correct_answer='{correct_answer_letter}', original_answer='{question.get('answer', '')}', options={question.get('optionA', '')[:20]}...")
                     
                     if is_correct:
                         correct_answers += 1
                     total_score += score
                     
-                    results.append({
+                    # Store result in same format as online tests
+                    result_data = {
                         'question_index': i,
+                        'question_id': str(question.get('_id', i)),
                         'question': question['question'],
                         'question_type': 'mcq',
-                        'student_answer': student_answer,
+                        'student_answer': student_answer_text,
                         'correct_answer_letter': correct_answer_letter,
                         'correct_answer_text': correct_answer_text,
                         'is_correct': is_correct,
                         'score': score
-                    })
+                    }
+                    
+                    # Add options for display
+                    if 'shuffled_options' in question:
+                        result_data['options'] = question['shuffled_options']
+                    else:
+                        # Fallback to original options
+                        result_data['options'] = {
+                            'A': question.get('optionA', ''),
+                            'B': question.get('optionB', ''),
+                            'C': question.get('optionC', ''),
+                            'D': question.get('optionD', '')
+                        }
+                    
+                    results.append(result_data)
                 else:
-                    current_app.logger.warning(f"MCQ question {i}: answer key '{answer_key}' not found in data")
+                    current_app.logger.warning(f"MCQ question {i}: answer key '{answer_key}' not found in data. Available keys: {list(data.keys())}")
+                    # Add empty result for missing answer
+                    empty_result = {
+                        'question_index': i,
+                        'question_id': str(question.get('_id', i)),
+                        'question': question['question'],
+                        'question_type': 'mcq',
+                        'student_answer': '',
+                        'correct_answer_letter': question.get('answer', ''),
+                        'correct_answer_text': '',
+                        'is_correct': False,
+                        'score': 0
+                    }
+                    
+                    # Add options for display
+                    if 'shuffled_options' in question:
+                        empty_result['options'] = question['shuffled_options']
+                    else:
+                        # Fallback to original options
+                        empty_result['options'] = {
+                            'A': question.get('optionA', ''),
+                            'B': question.get('optionB', ''),
+                            'C': question.get('optionC', ''),
+                            'D': question.get('optionD', '')
+                        }
+                    
+                    results.append(empty_result)
             else:
                 current_app.logger.info(f"Non-MCQ question {i}: type={question.get('question_type')}")
                 # Handle audio question (Listening or Speaking)
@@ -2376,46 +2475,56 @@ def submit_practice_test():
                     'score': score
                 })
         
-        # Calculate average score and percentage
-        average_score = total_score / len(test['questions']) if test['questions'] else 0
-        score_percentage = (average_score * 100)  # Convert to percentage (0-100)
-        current_app.logger.info(f"Test results: total_score={total_score}, average_score={average_score}, score_percentage={score_percentage}%, correct_answers={correct_answers}")
+        # Calculate score and percentage - same logic as online tests
+        total_questions = len(shuffled_questions)
+        percentage = (total_score / total_questions) * 100 if total_questions > 0 else 0
+        current_app.logger.info(f"Test results: total_score={total_score}, total_questions={total_questions}, percentage={percentage:.2f}%, correct_answers={correct_answers}")
         
-        # Save test result
-        result_doc = {
+        # Create attempt record first - same approach as online tests
+        current_time = datetime.now(timezone.utc)
+        attempt_doc = {
             'test_id': test_id,
-            'student_id': current_user_id,
-            'results': results,
-            'total_score': total_score,
-            'average_score': average_score,
-            'score_percentage': score_percentage,
+            'student_id': ObjectId(current_user_id),
+            'test_type': 'practice',
+            'module_id': test.get('module_id'),
+            'subcategory': test.get('subcategory'),
+            'level_id': test.get('level_id'),
+            'start_time': current_time,
+            'end_time': current_time,
+            'status': 'completed',
+            'answers': {f'answer_{i}': data.get(f'answer_{i}', '') for i in range(total_questions)},
+            'score': total_score,
+            'total_questions': total_questions,
             'correct_answers': correct_answers,
-            'total_questions': len(test['questions']),
-            'submitted_at': datetime.utcnow(),
-            'test_type': 'practice'
+            'percentage': percentage,
+            'score_percentage': percentage,  # Add score_percentage for compatibility
+            'average_score': percentage / 100.0,  # Add average_score for compatibility
+            'detailed_results': results,
+            'duration_seconds': 0,  # Practice tests don't track time
+            'submitted_at': current_time
         }
         
-        current_app.logger.info(f"Saving test result: {result_doc}")
+        current_app.logger.info(f"Saving test attempt: {attempt_doc}")
         
         # Save to student_test_attempts collection
-        mongo_db.student_test_attempts.insert_one(result_doc)
-        current_app.logger.info("Test result saved to student_test_attempts collection")
+        mongo_db.student_test_attempts.insert_one(attempt_doc)
+        current_app.logger.info("Test attempt saved to student_test_attempts collection")
         
         # Also save to test_results collection for compatibility with existing endpoints
         test_result_doc = {
             'test_id': test_id,
             'student_id': current_user_id,
+            'test_name': test.get('name', f"Practice Test - {test.get('module_id', 'Unknown')}"),
             'test_type': 'practice',
             'module_id': test.get('module_id'),
             'subcategory': test.get('subcategory'),
             'level_id': test.get('level_id'),
-            'average_score': average_score,
-            'score_percentage': score_percentage,
+            'score': total_score,
+            'percentage': percentage,
             'correct_answers': correct_answers,
-            'total_questions': len(test['questions']),
-            'total_score': total_score,
+            'total_questions': total_questions,
             'results': results,
-            'submitted_at': datetime.utcnow(),
+            'submitted_at': current_time,
             'time_taken': None,  # Practice tests don't track time
             'status': 'completed'
         }
@@ -2432,12 +2541,13 @@ def submit_practice_test():
             'success': True,
             'message': 'Test submitted successfully',
             'data': {
-                'total_score': total_score,
-                'average_score': average_score,
-                'score_percentage': score_percentage,
+                'score': total_score,
+                'total_questions': total_questions,
                 'correct_answers': correct_answers,
-                'total_questions': len(test['questions']),
-                'results': results  # Include the detailed results array
+                'percentage': percentage,
+                'results': results,  # Include the detailed results array
+                'test_type': 'practice',
+                'module_id': test.get('module_id')
             }
         }), 200
         

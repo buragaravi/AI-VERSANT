@@ -233,8 +233,12 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
       const formData = new FormData();
       formData.append('test_id', module._id);
       
-      Object.entries(answers).forEach(([qid, ans]) => {
-        formData.append(`answer_${qid}`, ans);
+      // Use question index format to match backend expectations
+      questions.forEach((question, index) => {
+        const questionId = question.question_id || question._id;
+        if (answers[questionId]) {
+          formData.append(`answer_${index}`, answers[questionId]);
+        }
       });
       
       const res = await api.post('/student/submit-practice-test', formData, {
