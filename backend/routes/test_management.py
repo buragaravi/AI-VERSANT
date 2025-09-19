@@ -2482,13 +2482,19 @@ def submit_practice_test():
         
         # Create attempt record first - same approach as online tests
         current_time = datetime.now(timezone.utc)
+        
+        # For grammar tests, set level_id based on subcategory
+        level_id = test.get('level_id')
+        if test.get('module_id') == 'GRAMMAR' and test.get('subcategory'):
+            level_id = f'GRAMMAR_{test.get("subcategory")}'
+        
         attempt_doc = {
             'test_id': test_id,
             'student_id': ObjectId(current_user_id),
             'test_type': 'practice',
             'module_id': test.get('module_id'),
             'subcategory': test.get('subcategory'),
-            'level_id': test.get('level_id'),
+            'level_id': level_id,
             'start_time': current_time,
             'end_time': current_time,
             'status': 'completed',

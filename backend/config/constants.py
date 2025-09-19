@@ -57,31 +57,43 @@ CRT_CATEGORIES = {
 # Difficulty Levels
 LEVELS = {
     # Listening
-    'LISTENING_BEGINNER': {'name': 'Beginner', 'module_id': 'LISTENING'},
-    'LISTENING_INTERMEDIATE': {'name': 'Intermediate', 'module_id': 'LISTENING'},
-    'LISTENING_ADVANCED': {'name': 'Advanced', 'module_id': 'LISTENING'},
+    'LISTENING_BEGINNER': {'name': 'Beginner', 'module_id': 'LISTENING', 'order': 1, 'unlock_threshold': 0},
+    'LISTENING_INTERMEDIATE': {'name': 'Intermediate', 'module_id': 'LISTENING', 'order': 2, 'unlock_threshold': 60, 'depends_on': 'LISTENING_BEGINNER'},
+    'LISTENING_ADVANCED': {'name': 'Advanced', 'module_id': 'LISTENING', 'order': 3, 'unlock_threshold': 60, 'depends_on': 'LISTENING_INTERMEDIATE'},
     # Speaking
-    'SPEAKING_BEGINNER': {'name': 'Beginner', 'module_id': 'SPEAKING'},
-    'SPEAKING_INTERMEDIATE': {'name': 'Intermediate', 'module_id': 'SPEAKING'},
-    'SPEAKING_ADVANCED': {'name': 'Advanced', 'module_id': 'SPEAKING'},
+    'SPEAKING_BEGINNER': {'name': 'Beginner', 'module_id': 'SPEAKING', 'order': 1, 'unlock_threshold': 0},
+    'SPEAKING_INTERMEDIATE': {'name': 'Intermediate', 'module_id': 'SPEAKING', 'order': 2, 'unlock_threshold': 60, 'depends_on': 'SPEAKING_BEGINNER'},
+    'SPEAKING_ADVANCED': {'name': 'Advanced', 'module_id': 'SPEAKING', 'order': 3, 'unlock_threshold': 60, 'depends_on': 'SPEAKING_INTERMEDIATE'},
     # Reading
-    'READING_BEGINNER': {'name': 'Beginner', 'module_id': 'READING'},
-    'READING_INTERMEDIATE': {'name': 'Intermediate', 'module_id': 'READING'},
-    'READING_ADVANCED': {'name': 'Advanced', 'module_id': 'READING'},
+    'READING_BEGINNER': {'name': 'Beginner', 'module_id': 'READING', 'order': 1, 'unlock_threshold': 0},
+    'READING_INTERMEDIATE': {'name': 'Intermediate', 'module_id': 'READING', 'order': 2, 'unlock_threshold': 60, 'depends_on': 'READING_BEGINNER'},
+    'READING_ADVANCED': {'name': 'Advanced', 'module_id': 'READING', 'order': 3, 'unlock_threshold': 60, 'depends_on': 'READING_INTERMEDIATE'},
     # Writing
-    'WRITING_BEGINNER': {'name': 'Beginner', 'module_id': 'WRITING'},
-    'WRITING_INTERMEDIATE': {'name': 'Intermediate', 'module_id': 'WRITING'},
-    'WRITING_ADVANCED': {'name': 'Advanced', 'module_id': 'WRITING'},
+    'WRITING_BEGINNER': {'name': 'Beginner', 'module_id': 'WRITING', 'order': 1, 'unlock_threshold': 0},
+    'WRITING_INTERMEDIATE': {'name': 'Intermediate', 'module_id': 'WRITING', 'order': 2, 'unlock_threshold': 60, 'depends_on': 'WRITING_BEGINNER'},
+    'WRITING_ADVANCED': {'name': 'Advanced', 'module_id': 'WRITING', 'order': 3, 'unlock_threshold': 60, 'depends_on': 'WRITING_INTERMEDIATE'},
     # Vocabulary
-    'VOCABULARY_BEGINNER': {'name': 'Beginner', 'module_id': 'VOCABULARY'},
-    'VOCABULARY_INTERMEDIATE': {'name': 'Intermediate', 'module_id': 'VOCABULARY'},
-    'VOCABULARY_ADVANCED': {'name': 'Advanced', 'module_id': 'VOCABULARY'},
+    'VOCABULARY_BEGINNER': {'name': 'Beginner', 'module_id': 'VOCABULARY', 'order': 1, 'unlock_threshold': 0},
+    'VOCABULARY_INTERMEDIATE': {'name': 'Intermediate', 'module_id': 'VOCABULARY', 'order': 2, 'unlock_threshold': 60, 'depends_on': 'VOCABULARY_BEGINNER'},
+    'VOCABULARY_ADVANCED': {'name': 'Advanced', 'module_id': 'VOCABULARY', 'order': 3, 'unlock_threshold': 60, 'depends_on': 'VOCABULARY_INTERMEDIATE'},
     # Grammar (categories as levels)
 }
-LEVELS.update({
-    f'GRAMMAR_{cat_id}': {'name': cat_name, 'module_id': 'GRAMMAR'}
-    for cat_id, cat_name in GRAMMAR_CATEGORIES.items()
-})
+# Grammar levels with proper ordering and dependencies
+grammar_levels = {
+    'GRAMMAR_NOUN': {'name': 'Noun', 'module_id': 'GRAMMAR', 'order': 1, 'unlock_threshold': 0},
+    'GRAMMAR_PRONOUN': {'name': 'Pronoun', 'module_id': 'GRAMMAR', 'order': 2, 'unlock_threshold': 60, 'depends_on': 'GRAMMAR_NOUN'},
+    'GRAMMAR_ADJECTIVE': {'name': 'Adjective', 'module_id': 'GRAMMAR', 'order': 3, 'unlock_threshold': 60, 'depends_on': 'GRAMMAR_PRONOUN'},
+    'GRAMMAR_VERB': {'name': 'Verb', 'module_id': 'GRAMMAR', 'order': 4, 'unlock_threshold': 60, 'depends_on': 'GRAMMAR_ADJECTIVE'},
+    'GRAMMAR_ADVERB': {'name': 'Adverb', 'module_id': 'GRAMMAR', 'order': 5, 'unlock_threshold': 60, 'depends_on': 'GRAMMAR_VERB'},
+    'GRAMMAR_CONJUNCTION': {'name': 'Conjunction', 'module_id': 'GRAMMAR', 'order': 6, 'unlock_threshold': 60, 'depends_on': 'GRAMMAR_ADVERB'},
+    'GRAMMAR_QUESTION_TAG': {'name': 'Question Tag', 'module_id': 'GRAMMAR', 'order': 7, 'unlock_threshold': 60, 'depends_on': 'GRAMMAR_CONJUNCTION'},
+    'GRAMMAR_PHRASE': {'name': 'Phrase', 'module_id': 'GRAMMAR', 'order': 8, 'unlock_threshold': 60, 'depends_on': 'GRAMMAR_QUESTION_TAG'},
+    'GRAMMAR_PHRASAL_VERB': {'name': 'Phrasal Verb', 'module_id': 'GRAMMAR', 'order': 9, 'unlock_threshold': 60, 'depends_on': 'GRAMMAR_PHRASE'},
+    'GRAMMAR_ARTICLE': {'name': 'Article', 'module_id': 'GRAMMAR', 'order': 10, 'unlock_threshold': 60, 'depends_on': 'GRAMMAR_PHRASAL_VERB'},
+    'GRAMMAR_TENSE': {'name': 'Tense', 'module_id': 'GRAMMAR', 'order': 11, 'unlock_threshold': 60, 'depends_on': 'GRAMMAR_ARTICLE'},
+    'GRAMMAR_PREPOSITION': {'name': 'Preposition', 'module_id': 'GRAMMAR', 'order': 12, 'unlock_threshold': 60, 'depends_on': 'GRAMMAR_TENSE'},
+}
+LEVELS.update(grammar_levels)
 
 # CRT (categories as levels)
 LEVELS.update({

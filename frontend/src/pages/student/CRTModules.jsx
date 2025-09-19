@@ -177,11 +177,11 @@ const ModuleListView = ({ category, modules, onSelectModule, onBack }) => (
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div 
                   className="bg-blue-600 h-3 rounded-full transition-all duration-300" 
-                  style={{ width: `${module.highest_score || 0}%` }}
+                  style={{ width: `${module.completed_count && module.total_tests ? (module.completed_count / module.total_tests) * 100 : 0}%` }}
                 ></div>
               </div>
               <p className="text-right text-sm text-gray-600 mt-2">
-                Best Score: {Math.round(module.highest_score || 0)}%
+                {module.completed_count || 0}/{module.total_tests || 1} completed
               </p>
             </div>
           </motion.div>

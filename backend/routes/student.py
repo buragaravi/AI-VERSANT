@@ -510,8 +510,9 @@ def get_student_tests():
                 **({ 'batch_course_instance_id': instance_id } if instance_id else {})
             })
             
-            # Get highest score for this test
+            # Get completion count and highest score for this test
             highest_score = 0
+            completed_count = 0
             # Try both possible collections for historical results
             try:
                 attempts_primary = list(mongo_db.test_results.find({
@@ -521,15 +522,42 @@ def get_student_tests():
             except Exception:
                 attempts_primary = []
             try:
-                attempts_alt = list(mongo_db.test_results.find({
+                attempts_alt = list(mongo_db.student_test_attempts.find({
                     'test_id': test['_id'],
                     'student_id': ObjectId(current_user_id)
                 }))
             except Exception:
                 attempts_alt = []
             all_attempts = (attempts_primary or []) + (attempts_alt or [])
+            current_app.logger.info(f"Test {test['_id']}: Found {len(attempts_primary)} attempts in test_results, {len(attempts_alt)} attempts in student_test_attempts")
             if all_attempts:
-                highest_score = max(attempt.get('average_score', 0) for attempt in all_attempts)
+                # Count completed attempts (score >= 60%)
+                for attempt in all_attempts:
+                    score = attempt.get('score_percentage', 0)
+                    if score == 0:
+                        avg_score = attempt.get('average_score', 0)
+                        if avg_score > 0:
+                            score = avg_score * 100  # Convert from 0-1 to 0-100 scale
+                    if score >= 60:  # Consider 60% and above as completed
+                        completed_count += 1
+                    if score > highest_score:
+                        highest_score = score
+                current_app.logger.info(f"Test {test['_id']}: Calculated highest_score = {highest_score}, completed_count = {completed_count}")
+            else:
+                current_app.logger.info(f"Test {test['_id']}: No attempts found")
+            
+            # Get total number of tests for this module/subcategory
+            total_tests = 1  # Default to 1 for individual tests
+            if module_id and subcategory:
+                try:
+                    total_tests = mongo_db.tests.count_documents({
+                        'module_id': module_id,
+                        'subcategory': subcategory,
+                        'test_type': 'practice'
+                    })
+                except Exception as e:
+                    current_app.logger.warning(f"Error counting total tests for {module_id}/{subcategory}: {e}")
+                    total_tests = 1
             
             test_list.append({
                 '_id': str(test['_id']),
@@ -542,7 +570,9 @@ def get_student_tests():
                 'end_date': safe_isoformat(test.get('end_date')),
                 'has_attempted': existing_attempt is not None,
                 'attempt_id': str(existing_attempt['_id']) if existing_attempt else None,
-                'highest_score': highest_score
+                'highest_score': highest_score,
+                'completed_count': completed_count,
+                'total_tests': total_tests
             })
         
         # Convert any remaining ObjectId fields to strings for JSON serialization
@@ -1015,6 +1045,9 @@ def get_grammar_progress():
 
                     if subcategory and subcategory in GRAMMAR_CATEGORIES:
                         score = float(score_val)
+                        # Convert from 0-1 scale to 0-100 scale for consistency
+                        if score <= 1.0:
+                            score = score * 100
                         
                         current_max_score = scores_by_subcategory.get(subcategory, -1.0)
                         if score > current_max_score:
@@ -2780,6 +2813,23 @@ def get_completed_exams():
             'message': f'Failed to fetch completed exams: {str(e)}'
         }), 500
 
+def calculate_level_unlock_status(module_id, level_id, student_scores, levels_data):
+    """Calculate if a level should be unlocked based on dependencies and scores."""
+    level_info = levels_data.get(level_id, {})
+    
+    # If no dependency, check if it's the first level (unlock_threshold = 0)
+    if not level_info.get('depends_on'):
+        return level_info.get('unlock_threshold', 0) == 0
+    
+    # Check dependency level score
+    depends_on = level_info.get('depends_on')
+    if depends_on and depends_on in student_scores:
+        required_score = level_info.get('unlock_threshold', 60)
+        actual_score = student_scores[depends_on]
+        return actual_score >= required_score
+    
+    return False
+
 @student_bp.route('/unlocked-modules', methods=['GET'])
 @jwt_required()
 def get_unlocked_modules():
@@ -2886,118 +2936,63 @@ def get_unlocked_modules():
             
             return jsonify({'success': True, 'data': modules_status}), 200
         
-        # If student has authorized_levels, use them
-        authorized_levels = set(student.get('authorized_levels', []))
+        # Get all student scores first
+        student_scores = {}
+        try:
+            attempts = list(mongo_db.student_test_attempts.find({
+                'student_id': current_user_id,
+                'test_type': 'practice'
+            }))
+            
+            for attempt in attempts:
+                test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
+                if test:
+                    level_id = test.get('level_id')
+                    subcategory = test.get('subcategory')
+                    
+                    # Use score_percentage (0-100) as the primary score
+                    score = attempt.get('score_percentage', 0)
+                    # Convert average_score (0-1) to percentage if score_percentage is not available
+                    if score == 0:
+                        avg_score = attempt.get('average_score', 0)
+                        if avg_score > 0:
+                            score = avg_score * 100  # Convert decimal to percentage
+                    
+                    # For grammar, use subcategory as level_id
+                    if test.get('module_id') == 'GRAMMAR' and subcategory:
+                        level_id = f'GRAMMAR_{subcategory}'
+                    
+                    if level_id and score > student_scores.get(level_id, 0):
+                        student_scores[level_id] = score
+        except Exception as e:
+            current_app.logger.warning(f"Error fetching student scores: {e}")
         
         for module_id, module_name in ordered_modules:
-            if module_id in ['GRAMMAR', 'VOCABULARY']:
-                unlocked = True
-                # Filter levels for this module
-                module_levels = []
-                for level_id, level in LEVELS.items():
-                    if isinstance(level, dict) and level.get('module_id') == module_id:
-                        # Get the highest score for this level
-                        highest_score = 0
-                        try:
-                            # Try to get scores from student_test_attempts
-                            attempts = list(mongo_db.student_test_attempts.find({
-                                'student_id': current_user_id,
-                                'test_type': 'practice'
-                            }))
-                            
-                            # Find tests for this level and get highest score
-                            for attempt in attempts:
-                                test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
-                                if test and test.get('level_id') == level_id:
-                                    # Use score_percentage (0-100) as the primary score
-                                    score = attempt.get('score_percentage', 0)
-                                    # Convert average_score (0-1) to percentage if score_percentage is not available
-                                    if score == 0:
-                                        avg_score = attempt.get('average_score', 0)
-                                        if avg_score > 0:
-                                            score = avg_score * 100  # Convert decimal to percentage
-                                    if score > highest_score:
-                                        highest_score = score
-                        except Exception as e:
-                            current_app.logger.warning(f"Error fetching scores for level {level_id}: {e}")
-                        
-                        module_levels.append({
-                            'level_id': level_id,
-                            'level_name': level['name'],
-                            'unlocked': True,
-                            'score': highest_score
-                        })
-                    elif not isinstance(level, dict) and module_id == 'GRAMMAR':
-                        # Handle grammar categories as levels
-                        # Get the highest score for this grammar category
-                        highest_score = 0
-                        try:
-                            # Try to get scores from student_test_attempts
-                            attempts = list(mongo_db.student_test_attempts.find({
-                                'student_id': current_user_id,
-                                'test_type': 'practice'
-                            }))
-                            
-                            # Find tests for this grammar category and get highest score
-                            for attempt in attempts:
-                                test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
-                                if test and test.get('module_id') == 'GRAMMAR' and test.get('subcategory') == level_id:
-                                    # Use score_percentage (0-100) as the primary score
-                                    score = attempt.get('score_percentage', 0)
-                                    # Convert average_score (0-1) to percentage if score_percentage is not available
-                                    if score == 0:
-                                        avg_score = attempt.get('average_score', 0)
-                                        if avg_score > 0:
-                                            score = avg_score * 100  # Convert decimal to percentage
-                                    if score > highest_score:
-                                        highest_score = score
-                        except Exception as e:
-                            current_app.logger.warning(f"Error fetching scores for grammar category {level_id}: {e}")
-                        
-                        module_levels.append({
-                            'level_id': level_id,
-                            'level_name': str(level),
-                            'unlocked': True,
-                            'score': highest_score
-                        })
-            else:
-                # Filter levels for this module
-                module_levels = []
-                for level_id, level in LEVELS.items():
-                    if isinstance(level, dict) and level.get('module_id') == module_id:
-                        # Get the highest score for this level
-                        highest_score = 0
-                        try:
-                            # Try to get scores from student_test_attempts
-                            attempts = list(mongo_db.student_test_attempts.find({
-                                'student_id': current_user_id,
-                                'test_type': 'practice'
-                            }))
-                            
-                            # Find tests for this level and get highest score
-                            for attempt in attempts:
-                                test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
-                                if test and test.get('level_id') == level_id:
-                                    # Use score_percentage (0-100) as the primary score
-                                    score = attempt.get('score_percentage', 0)
-                                    # Convert average_score (0-1) to percentage if score_percentage is not available
-                                    if score == 0:
-                                        avg_score = attempt.get('average_score', 0)
-                                        if avg_score > 0:
-                                            score = avg_score * 100  # Convert decimal to percentage
-                                    if score > highest_score:
-                                        highest_score = score
-                        except Exception as e:
-                            current_app.logger.warning(f"Error fetching scores for level {level_id}: {e}")
-                        
-                        module_levels.append({
-                            'level_id': level_id,
-                            'level_name': level['name'],
-                            'unlocked': level_id in authorized_levels,
-                            'score': highest_score
-                        })
+            # Filter levels for this module and sort by order
+            module_levels = []
+            levels_for_module = [
+                (level_id, level) for level_id, level in LEVELS.items()
+                if isinstance(level, dict) and level.get('module_id') == module_id
+            ]
+            
+            # Sort by order
+            levels_for_module.sort(key=lambda x: x[1].get('order', 999))
+            
+            for level_id, level in levels_for_module:
+                highest_score = student_scores.get(level_id, 0)
                 
-                unlocked = any(l['unlocked'] for l in module_levels) if module_levels else False
+                # Calculate if level should be unlocked
+                is_unlocked = calculate_level_unlock_status(module_id, level_id, student_scores, LEVELS)
+                
+                module_levels.append({
+                    'level_id': level_id,
+                    'level_name': level['name'],
+                    'unlocked': is_unlocked,
+                    'score': highest_score
+                })
+            
+            # Module is unlocked if any level is unlocked
+            unlocked = any(l['unlocked'] for l in module_levels) if module_levels else False
             
             modules_status.append({
                 'module_id': module_id,

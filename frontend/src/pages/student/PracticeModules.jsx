@@ -138,8 +138,25 @@ const PracticeModules = () => {
   const handleModuleSubmit = async (result) => {
     setModuleResult(result);
     
-    // After submitting, refresh the scores for the current module
-    if (currentCategory?.id) {
+    // After submitting, refresh the module list to get updated scores
+    if (currentCategory?.id && view === 'module_list') {
+      try {
+        let params = { module: currentCategory.id };
+        // For Grammar, we use the subcategory ID
+        if (currentCategory.id === 'GRAMMAR' && currentCategory.subId) {
+           params.subcategory = currentCategory.subId;
+        }
+        
+        const res = await getStudentTests(params);
+        setModuleList(res.data.data);
+        console.log('Refreshed module list with updated scores:', res.data.data);
+      } catch (error) {
+        console.error('Error refreshing module scores:', error);
+      }
+    }
+    
+    // After submitting, refresh the scores for level-based modules
+    if (currentCategory?.id && (view === 'module_levels' || currentCategory.id === 'LISTENING')) {
       try {
         const res = await getUnlockedModules();
         const found = res.data.data.find(m => m.module_id === currentCategory.id);
@@ -148,7 +165,7 @@ const PracticeModules = () => {
         levels.forEach(lvl => { scores[lvl.level_id] = { score: lvl.score || 0, unlocked: lvl.unlocked }; });
         setCurrentCategory(prev => ({ ...prev, levels, scores }));
       } catch (error) {
-        console.error('Error refreshing scores:', error);
+        console.error('Error refreshing level scores:', error);
       }
     }
     
@@ -156,6 +173,23 @@ const PracticeModules = () => {
     if (currentCategory?.id === 'GRAMMAR') {
        fetchGrammarProgress();
     }
+    
+    // Always refresh the module list after any test submission to show updated scores
+    if (currentCategory?.id) {
+      try {
+        let params = { module: currentCategory.id };
+        if (currentCategory.id === 'GRAMMAR' && currentCategory.subId) {
+           params.subcategory = currentCategory.subId;
+        }
+        
+        const res = await getStudentTests(params);
+        setModuleList(res.data.data);
+        console.log('Refreshed module list after test submission:', res.data.data);
+      } catch (error) {
+        console.error('Error refreshing module scores after submission:', error);
+      }
+    }
+    
     setView('result');
     // If next level is unlocked, show popup
     if (result.nextLevelUnlocked) {
@@ -515,9 +549,11 @@ const ModuleListView = ({ category, modules, onSelectModule, onBack }) => {
                         </div>
                         <div className="mt-4">
                             <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${module.highest_score || 0}%` }}></div>
+                                <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${module.completed_count && module.total_tests ? (module.completed_count / module.total_tests) * 100 : 0}%` }}></div>
                             </div>
-                            <p className="text-right text-xs sm:text-sm text-gray-600 mt-1">Highest Score: {Math.round(module.highest_score || 0)}%</p>
+                            <p className="text-right text-xs sm:text-sm text-gray-600 mt-1">
+                                {module.completed_count || 0}/{module.total_tests || 1} completed
+                            </p>
                         </div>
                     </motion.div>
                 ))}
@@ -560,14 +596,8 @@ const ModuleLevelsView = ({ moduleId, levels, scores, onSelectLevel, onBack }) =
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {displayLevels.map((level, idx) => {
-          let unlocked = false;
-          if (idx === 0) {
-            unlocked = true;
-          } else {
-            // Previous level must be completed with >= 60%
-            const prev = displayLevels[idx - 1];
-            unlocked = scores[prev.level_id]?.score >= 60;
-          }
+          // Use the unlocked status from backend instead of calculating manually
+          const unlocked = level.unlocked || false;
           return (
             <motion.div
               key={level.level_id}
@@ -652,31 +682,21 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                     
                     // Only set questions if they haven't been initialized yet to prevent re-shuffling
                     if (!questionsInitialized.current) {
-                        // Check if we have stored question order in session storage
-                        const storedOrder = sessionStorage.getItem(`test_${module._id}_question_order`);
-                        let finalQuestions = res.data.data.questions;
+                        // Use shuffled questions if available (same as backend), otherwise use original questions
+                        let finalQuestions = res.data.data.shuffled_questions || res.data.data.questions;
                         
-                        if (storedOrder) {
-                            try {
-                                const orderMap = JSON.parse(storedOrder);
-                                // Reorder questions based on stored order
-                                finalQuestions = orderMap.map(id => 
-                                    res.data.data.questions.find(q => q.question_id === id)
-                                ).filter(Boolean);
-                                console.log('Restored question order from session storage');
-                            } catch (e) {
-                                console.error('Error parsing stored question order:', e);
-                            }
-                        } else {
-                            // Store the initial order
-                            const orderMap = res.data.data.questions.map(q => q.question_id);
-                            sessionStorage.setItem(`test_${module._id}_question_order`, JSON.stringify(orderMap));
-                            console.log('Stored initial question order in session storage');
-                        }
+                        // Clear any existing session storage to force fresh start
+                        sessionStorage.removeItem(`test_${module._id}_question_order`);
+                        
+                        // Store the initial order using the correct ID field
+                        const orderMap = finalQuestions.map(q => q.question_id || q._id);
+                        sessionStorage.setItem(`test_${module._id}_question_order`, JSON.stringify(orderMap));
+                        console.log('Stored initial question order in session storage:', orderMap);
                         
                         setQuestions(finalQuestions);
                         questionsInitialized.current = true;
-                        console.log('Questions initialized with order:', finalQuestions.map(q => q.question_id));
+                        console.log('Questions initialized with order:', finalQuestions.map(q => q.question_id || q._id));
+                        console.log('Final questions structure:', finalQuestions);
                     } else {
                         console.log('Questions already initialized, maintaining current order');
                     }
@@ -966,7 +986,7 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
             
             const res = await submitPracticeTest(formData);
             if (res.data.success) {
-                success("Module submitted successfully!");
+                success("Practice test submitted successfully!");
                 onSubmit(res.data.data); // Pass result data to parent
             } else {
                 showError(res.data.message || 'Failed to submit your answers.');
@@ -1078,8 +1098,14 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
 
     const currentQuestion = questions[currentQuestionIndex];
     
+    // Debug logging
+    console.log('Current question index:', currentQuestionIndex);
+    console.log('Total questions:', questions.length);
+    console.log('Current question:', currentQuestion);
+    
     // Check if question has required properties
-    if (!currentQuestion.question_id || !currentQuestion.question_type) {
+    const questionId = currentQuestion.question_id || currentQuestion._id;
+    if (!questionId || !currentQuestion.question_type) {
         return (
             <div className="text-center p-8">
                 <div className="text-red-600 font-semibold mb-2">Invalid Question Data</div>
@@ -1087,12 +1113,22 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                     This question is missing required information. Please contact your instructor.
                 </div>
                 <div className="mt-4 text-xs text-gray-500">
-                    Question ID: {currentQuestion._id || 'Missing'}<br/>
+                    Question ID: {questionId || 'Missing'}<br/>
                     Question Type: {currentQuestion.question_type || 'Missing'}<br/>
                     Question Text: {currentQuestion.question ? 'Present' : 'Missing'}
                 </div>
             </div>
         );
+    }
+    
+    // Create options object from individual option fields if not already present
+    if (currentQuestion.question_type === 'mcq' && !currentQuestion.options) {
+        currentQuestion.options = {
+            'A': currentQuestion.optionA || '',
+            'B': currentQuestion.optionB || '',
+            'C': currentQuestion.optionC || '',
+            'D': currentQuestion.optionD || ''
+        };
     }
     
     // Debug: Log the current question structure (remove in production)
@@ -1157,7 +1193,7 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                         </div>
                         
                         <audio 
-                            key={`audio-${currentQuestion.audio_id || currentQuestion.question_id}-${currentQuestionIndex}`}
+                            key={`audio-${currentQuestion.audio_id || questionId}-${currentQuestionIndex}`}
                             controls 
                             className="mx-auto mb-4 w-full max-w-md"
                             onError={(e) => {
@@ -1196,7 +1232,7 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                         {/* Debug info - remove in production */}
                         <div className="text-xs text-gray-500 text-center mb-2">
                             Audio ID: {currentQuestion.audio_id || 'N/A'} | 
-                            Question ID: {currentQuestion.question_id || 'N/A'}
+                            Question ID: {questionId || 'N/A'}
                         </div>
                         
                         {/* Audio loading status */}
@@ -1261,7 +1297,7 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                 )}
             </div>
 
-            {currentQuestion.question_type === 'mcq' && currentQuestion.options && currentQuestion.question_id && (
+            {currentQuestion.question_type === 'mcq' && currentQuestion.options && questionId && (
                 <div className="space-y-4 max-w-lg mx-auto w-full">
                     {Object.entries(currentQuestion.options).map(([key, value]) => (
                         <label 
@@ -1269,17 +1305,17 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                             className={clsx(
                                 "flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all w-full",
                                 {
-                                    'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-300': answers[currentQuestion.question_id] === value,
-                                    'border-gray-200 hover:border-indigo-400': answers[currentQuestion.question_id] !== value,
+                                    'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-300': answers[questionId] === value,
+                                    'border-gray-200 hover:border-indigo-400': answers[questionId] !== value,
                                 }
                             )}
                         >
                             <input
                                 type="radio"
-                                name={currentQuestion.question_id}
+                                name={questionId}
                                 value={value}
-                                checked={answers[currentQuestion.question_id] === value}
-                                onChange={() => handleAnswerChange(currentQuestion.question_id, value)}
+                                checked={answers[questionId] === value}
+                                onChange={() => handleAnswerChange(questionId, value)}
                                 className="h-5 w-5 mr-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                             />
                             <span className="font-semibold text-gray-700">{key}.</span>
@@ -1290,7 +1326,7 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
             )}
 
             {/* Listening Module: Voice Recording Interface */}
-            {currentQuestion.question_type === 'listening' && currentQuestion.question_id && (
+            {currentQuestion.question_type === 'listening' && questionId && (
                 <div className="flex flex-col items-center mb-4">
                     <div className="w-full max-w-2xl">
                         <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
@@ -1298,7 +1334,7 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                                 <p className="text-sm text-gray-600">Speak clearly after listening to the audio</p>
                                 
                                 {/* Recording Status Indicator */}
-                                {recordings[currentQuestion.question_id] ? (
+                                {recordings[questionId] ? (
                                     <div className="mt-2 inline-flex items-center space-x-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs">
                                         <span>✅</span>
                                         <span>Recording Saved!</span>
@@ -1312,19 +1348,19 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                             </div>
                             
                             {/* Show recorded audio if available */}
-                            {audioURLs[currentQuestion.question_id] ? (
+                            {audioURLs[questionId] ? (
                                 <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
                                     <div className="flex items-center space-x-2 mb-2">
                                         <span className="text-green-600">✅</span>
                                         <span className="font-medium text-green-800 text-sm">Your Recording</span>
                                     </div>
-                                    <audio controls src={audioURLs[currentQuestion.question_id]} className="w-full" />
+                                    <audio controls src={audioURLs[questionId]} className="w-full" />
                                 </div>
                             ) : null}
                             
                             {/* Recording Controls */}
                             <div className="flex flex-col items-center space-y-3">
-                                {isRecording && recordingQuestionId === currentQuestion.question_id ? (
+                                {isRecording && recordingQuestionId === questionId ? (
                                     <div className="text-center">
                                         <div className="flex items-center justify-center space-x-2 mb-3">
                                             <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
@@ -1345,7 +1381,7 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                                     </div>
                                 ) : (
                                     <button 
-                                        onClick={() => startRecording(currentQuestion.question_id)} 
+                                        onClick={() => startRecording(questionId)} 
                                         className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition-all duration-200 shadow-md text-base"
                                     >
                                         🎤 Start Recording
@@ -1376,52 +1412,52 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
             )}
             
             {/* Speaking Module: Record answer if no audio_url */}
-            {currentQuestion.question_type === 'audio' && !currentQuestion.audio_url && currentQuestion.question_id && (
+            {currentQuestion.question_type === 'audio' && !currentQuestion.audio_url && questionId && (
                 <div className="flex flex-col items-center mb-4 space-y-4">
-                    {audioURLs[currentQuestion.question_id] ? (
-                        <audio controls src={audioURLs[currentQuestion.question_id]} className="mb-2" />
+                    {audioURLs[questionId] ? (
+                        <audio controls src={audioURLs[questionId]} className="mb-2" />
                     ) : null}
                     
                     {/* Show transcript for speaking modules */}
-                    {currentQuestion.module_id === 'SPEAKING' && answers[currentQuestion.question_id] && (
+                    {currentQuestion.module_id === 'SPEAKING' && answers[questionId] && (
                         <div className="w-full max-w-md">
                             <h4 className="text-sm font-semibold text-gray-700 mb-2">Your Transcript:</h4>
                             <div className="bg-gray-50 p-3 rounded-lg border">
-                                <p className="text-sm text-gray-800">{answers[currentQuestion.question_id]}</p>
+                                <p className="text-sm text-gray-800">{answers[questionId]}</p>
                             </div>
                         </div>
                     )}
                     
                     {/* Show validation results for speaking modules */}
-                    {currentQuestion.module_id === 'SPEAKING' && answers[`${currentQuestion.question_id}_validation`] && (
+                    {currentQuestion.module_id === 'SPEAKING' && answers[`${questionId}_validation`] && (
                         <div className="w-full max-w-md">
                             <h4 className="text-sm font-semibold text-gray-700 mb-2">Validation Results:</h4>
                             <div className="bg-blue-50 p-3 rounded-lg border">
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="text-sm font-medium">Similarity Score:</span>
                                     <span className={`text-sm font-bold ${
-                                        answers[`${currentQuestion.question_id}_validation`].is_valid ? 'text-green-600' : 'text-red-600'
+                                        answers[`${questionId}_validation`].is_valid ? 'text-green-600' : 'text-red-600'
                                     }`}>
-                                        {Math.round(answers[`${currentQuestion.question_id}_validation`].similarity_score * 100)}%
+                                        {Math.round(answers[`${questionId}_validation`].similarity_score * 100)}%
                                     </span>
                                 </div>
                                 
-                                {answers[`${currentQuestion.question_id}_validation`].mismatched_words && (
+                                {answers[`${questionId}_validation`].mismatched_words && (
                                     <div className="mt-2">
                                         <p className="text-xs text-gray-600 mb-1">Mismatched Words:</p>
-                                        {answers[`${currentQuestion.question_id}_validation`]?.mismatched_words?.missing?.length > 0 && (
+                                        {answers[`${questionId}_validation`]?.mismatched_words?.missing?.length > 0 && (
                                             <div className="mb-1">
                                                 <span className="text-xs text-red-600">Missing: </span>
                                                 <span className="text-xs text-gray-700">
-                                                    {answers[`${currentQuestion.question_id}_validation`].mismatched_words.missing.join(', ')}
+                                                    {answers[`${questionId}_validation`].mismatched_words.missing.join(', ')}
                                                 </span>
                                             </div>
                                         )}
-                                        {answers[`${currentQuestion.question_id}_validation`]?.mismatched_words?.extra?.length > 0 && (
+                                        {answers[`${questionId}_validation`]?.mismatched_words?.extra?.length > 0 && (
                                             <div>
                                                 <span className="text-xs text-orange-600">Extra: </span>
                                                 <span className="text-xs text-gray-700">
-                                                    {answers[`${currentQuestion.question_id}_validation`].mismatched_words.extra.join(', ')}
+                                                    {answers[`${questionId}_validation`].mismatched_words.extra.join(', ')}
                                                 </span>
                                             </div>
                                         )}
@@ -1431,12 +1467,12 @@ const ModuleTakingView = ({ module, onSubmit, onBack }) => {
                         </div>
                     )}
                     
-                    {isRecording && recordingQuestionId === currentQuestion.question_id ? (
+                    {isRecording && recordingQuestionId === questionId ? (
                         <button onClick={stopRecording} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
                             Stop Recording
                         </button>
                     ) : (
-                        <button onClick={() => startRecording(currentQuestion.question_id)} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                        <button onClick={() => startRecording(questionId)} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
                             Record Answer
                         </button>
                     )}
@@ -1529,8 +1565,8 @@ const ResultView = ({ result, onBack }) => {
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto">
             <div className="bg-white p-6 rounded-2xl shadow-lg text-center">
-                <h1 className="text-2xl font-bold text-gray-800">Module Complete!</h1>
-                <p className="text-gray-600 mt-2">Here's how you did:</p>
+                <h1 className="text-2xl font-bold text-gray-800">Practice Test Submitted!</h1>
+                <p className="text-gray-600 mt-2">Here are your results:</p>
                 <div className="my-6">
                     <p className="text-4xl font-bold text-indigo-600">{correct_answers}<span className="text-2xl text-gray-500">/{total_questions}</span></p>
                     <p className="text-lg font-semibold text-gray-700">Questions Correct</p>

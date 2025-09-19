@@ -33,7 +33,9 @@ const PracticeModuleTaking = () => {
       try {
         const res = await api.get(`/student/test/${testId}`);
         setModule(res.data.data);
-        setQuestions(res.data.data.questions || []);
+        // Use shuffled questions if available (same as backend), otherwise use original questions
+        const questions = res.data.data.shuffled_questions || res.data.data.questions || [];
+        setQuestions(questions);
       } catch (err) {
         setFetchError(err.response?.data?.message || 'Failed to load module.');
         showError(err.response?.data?.message || 'Failed to load module.');
@@ -130,6 +132,16 @@ const PracticeModuleTaking = () => {
   if (questions.length === 0) return <div className="text-center p-8">This module has no questions.</div>;
 
   const currentQuestion = questions[currentQuestionIndex];
+  
+  // Create options object from individual option fields if not already present
+  if (currentQuestion && currentQuestion.question_type === 'mcq' && !currentQuestion.options) {
+    currentQuestion.options = {
+      'A': currentQuestion.optionA || '',
+      'B': currentQuestion.optionB || '',
+      'C': currentQuestion.optionC || '',
+      'D': currentQuestion.optionD || ''
+    };
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -239,8 +251,8 @@ const ResultView = ({ result, onBack }) => {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-2xl mx-auto">
       <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
-        <h1 className="text-3xl font-bold text-gray-800">Module Complete!</h1>
-        <p className="text-gray-600 mt-2">Here's how you did:</p>
+        <h1 className="text-3xl font-bold text-gray-800">Practice Test Submitted!</h1>
+        <p className="text-gray-600 mt-2">Here are your results:</p>
         <div className="my-8">
           <p className="text-6xl font-bold text-indigo-600">{correct_answers}<span className="text-4xl text-gray-500">/{total_questions}</span></p>
           <p className="text-xl font-semibold text-gray-700">Questions Correct</p>
