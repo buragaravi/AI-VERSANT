@@ -257,7 +257,7 @@ def dashboard():
         
         # Check if student_progress collection exists
         db = get_db()
-        if not db or 'student_progress' not in db.list_collection_names():
+        if db is None or 'student_progress' not in db.list_collection_names():
             current_app.logger.warning("student_progress collection not found, using empty progress")
             progress = []
         else:
@@ -962,7 +962,7 @@ def get_grammar_progress():
             
             # Check test_results collection
             db = get_db()
-            if db and 'test_results' in db.list_collection_names():
+            if db is not None and 'test_results' in db.list_collection_names():
                 test_results = list(db.test_results.find({
                     'student_id': ObjectId(current_user_id),
                     'module_id': 'GRAMMAR'
@@ -971,7 +971,7 @@ def get_grammar_progress():
                 current_app.logger.info(f"Found {len(test_results)} grammar results in test_results collection")
             
             # Check student_test_attempts collection
-            if db and 'student_test_attempts' in db.list_collection_names():
+            if db is not None and 'student_test_attempts' in db.list_collection_names():
                 attempt_results = list(db.student_test_attempts.find({
                     'student_id': current_user_id,
                     'test_type': 'practice'
@@ -1978,7 +1978,7 @@ def get_grammar_detailed_results():
         # Try to get from test_results collection
         try:
             db = get_db()
-            if db and 'test_results' in db.list_collection_names():
+            if db is not None and 'test_results' in db.list_collection_names():
                 pipeline = [
                     {
                         '$match': {
@@ -2036,7 +2036,7 @@ def get_grammar_detailed_results():
         # Also get from student_test_attempts collection
         try:
             db = get_db()
-            if db and 'student_test_attempts' in db.list_collection_names():
+            if db is not None and 'student_test_attempts' in db.list_collection_names():
                 pipeline = [
                     {
                         '$match': {
@@ -2166,7 +2166,7 @@ def get_vocabulary_detailed_results():
         # Try to get from test_results collection
         try:
             db = get_db()
-            if db and 'test_results' in db.list_collection_names():
+            if db is not None and 'test_results' in db.list_collection_names():
                 pipeline = [
                     {
                         '$match': {
@@ -2224,7 +2224,7 @@ def get_vocabulary_detailed_results():
         # Also get from student_test_attempts collection
         try:
             db = get_db()
-            if db and 'student_test_attempts' in db.list_collection_names():
+            if db is not None and 'student_test_attempts' in db.list_collection_names():
                 pipeline = [
                     {
                         '$match': {
@@ -2355,7 +2355,7 @@ def get_progress_summary():
         # Try to get from test_results collection
         try:
             db = get_db()
-            if db and 'test_results' in db.list_collection_names():
+            if db is not None and 'test_results' in db.list_collection_names():
                 total_results += db.test_results.count_documents({
                     'student_id': user_object_id,
                     'test_type': 'practice'
@@ -2402,7 +2402,7 @@ def get_progress_summary():
         # Also get from student_test_attempts collection
         try:
             db = get_db()
-            if db and 'student_test_attempts' in db.list_collection_names():
+            if db is not None and 'student_test_attempts' in db.list_collection_names():
                 total_results += db.student_test_attempts.count_documents({
                     'student_id': current_user_id,
                     'test_type': 'practice'
@@ -2808,7 +2808,13 @@ def get_unlocked_modules():
                             for attempt in attempts:
                                 test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
                                 if test and test.get('level_id') == level_id:
-                                    score = attempt.get('average_score', 0) or attempt.get('score_percentage', 0)
+                                    # Use score_percentage (0-100) as the primary score
+                                    score = attempt.get('score_percentage', 0)
+                                    # Convert average_score (0-1) to percentage if score_percentage is not available
+                                    if score == 0:
+                                        avg_score = attempt.get('average_score', 0)
+                                        if avg_score > 0:
+                                            score = avg_score * 100  # Convert decimal to percentage
                                     if score > highest_score:
                                         highest_score = score
                         except Exception as e:
@@ -2835,7 +2841,13 @@ def get_unlocked_modules():
                             for attempt in attempts:
                                 test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
                                 if test and test.get('module_id') == 'GRAMMAR' and test.get('subcategory') == level_id:
-                                    score = attempt.get('average_score', 0) or attempt.get('score_percentage', 0)
+                                    # Use score_percentage (0-100) as the primary score
+                                    score = attempt.get('score_percentage', 0)
+                                    # Convert average_score (0-1) to percentage if score_percentage is not available
+                                    if score == 0:
+                                        avg_score = attempt.get('average_score', 0)
+                                        if avg_score > 0:
+                                            score = avg_score * 100  # Convert decimal to percentage
                                     if score > highest_score:
                                         highest_score = score
                         except Exception as e:
@@ -2880,7 +2892,13 @@ def get_unlocked_modules():
                             for attempt in attempts:
                                 test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
                                 if test and test.get('level_id') == level_id:
-                                    score = attempt.get('average_score', 0) or attempt.get('score_percentage', 0)
+                                    # Use score_percentage (0-100) as the primary score
+                                    score = attempt.get('score_percentage', 0)
+                                    # Convert average_score (0-1) to percentage if score_percentage is not available
+                                    if score == 0:
+                                        avg_score = attempt.get('average_score', 0)
+                                        if avg_score > 0:
+                                            score = avg_score * 100  # Convert decimal to percentage
                                     if score > highest_score:
                                         highest_score = score
                         except Exception as e:
@@ -2907,7 +2925,13 @@ def get_unlocked_modules():
                             for attempt in attempts:
                                 test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
                                 if test and test.get('module_id') == 'GRAMMAR' and test.get('subcategory') == level_id:
-                                    score = attempt.get('average_score', 0) or attempt.get('score_percentage', 0)
+                                    # Use score_percentage (0-100) as the primary score
+                                    score = attempt.get('score_percentage', 0)
+                                    # Convert average_score (0-1) to percentage if score_percentage is not available
+                                    if score == 0:
+                                        avg_score = attempt.get('average_score', 0)
+                                        if avg_score > 0:
+                                            score = avg_score * 100  # Convert decimal to percentage
                                     if score > highest_score:
                                         highest_score = score
                         except Exception as e:
@@ -2937,7 +2961,13 @@ def get_unlocked_modules():
                             for attempt in attempts:
                                 test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
                                 if test and test.get('level_id') == level_id:
-                                    score = attempt.get('average_score', 0) or attempt.get('score_percentage', 0)
+                                    # Use score_percentage (0-100) as the primary score
+                                    score = attempt.get('score_percentage', 0)
+                                    # Convert average_score (0-1) to percentage if score_percentage is not available
+                                    if score == 0:
+                                        avg_score = attempt.get('average_score', 0)
+                                        if avg_score > 0:
+                                            score = avg_score * 100  # Convert decimal to percentage
                                     if score > highest_score:
                                         highest_score = score
                         except Exception as e:

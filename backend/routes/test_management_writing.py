@@ -45,9 +45,12 @@ def create_writing_test():
         question_texts = []
         duplicate_questions = []
         for i, question in enumerate(questions):
-            question_text = question.get('question', '').strip().lower()
+            # Handle both question formats: from question bank ('question') and from manual upload ('question_text')
+            question_text = question.get('question_text', question.get('question', '')).strip().lower()
             if question_text in question_texts:
-                duplicate_questions.append(f"Question {i+1}: '{question.get('question', '')[:50]}...'")
+                # Get the display text for error message
+                display_text = question.get('question_text', question.get('question', ''))[:50]
+                duplicate_questions.append(f"Question {i+1}: '{display_text}...'")
             else:
                 question_texts.append(question_text)
         

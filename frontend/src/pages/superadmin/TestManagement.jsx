@@ -2514,6 +2514,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
   };
 
   const handleQuestionBankSelect = async () => {
+    setQuestionSource('bank'); // Set the question source to bank
     setShowQuestionCountModal(true);
   };
 
@@ -2662,9 +2663,29 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
   };
 
   const handlePreviewConfirm = () => {
-    setUploadedQuestions(selectedBankQuestions);
+    if (questionSource === 'bank') {
+      // Add status field to question bank questions for consistency
+      const questionsWithStatus = selectedBankQuestions.map(q => ({
+        ...q,
+        status: 'existing', // Question bank questions are always existing
+        source: 'question_bank',
+        // Preserve repetition status and other question bank specific fields
+        repetitionStatus: q.repetitionStatus,
+        repeatCount: q.repeatCount,
+        currentUsage: q.currentUsage
+      }));
+      setUploadedQuestions(questionsWithStatus);
+      // Keep questionSource as 'bank' to maintain proper UI display
+      setQuestionSource('bank');
+    } else {
+      // For manual uploads, questions are already in uploadedQuestions
+      setQuestionSource('manual');
+    }
     setShowQuestionPreview(false);
-    setQuestionSource('bank');
+    
+    // Show success message and allow user to proceed
+    const questionCount = questionSource === 'bank' ? selectedBankQuestions.length : uploadedQuestions.length;
+    success(`Successfully processed ${questionCount} questions for test creation`);
   };
 
   const shuffleArray = (array) => {
@@ -2802,8 +2823,18 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
   };
 
   const handleConfirmBankQuestions = () => {
-    setUploadedQuestions(selectedBankQuestions);
-    setQuestionSource('manual'); // Switch back to manual view to show selected questions
+    // Add status field to question bank questions for consistency
+    const questionsWithStatus = selectedBankQuestions.map(q => ({
+      ...q,
+      status: 'existing', // Question bank questions are always existing
+      source: 'question_bank',
+      // Preserve repetition status and other question bank specific fields
+      repetitionStatus: q.repetitionStatus,
+      repeatCount: q.repeatCount,
+      currentUsage: q.currentUsage
+    }));
+    setUploadedQuestions(questionsWithStatus);
+    setQuestionSource('bank'); // Keep as 'bank' to maintain proper UI display
   };
 
   const handleFileUpload = (event) => {
@@ -2840,8 +2871,21 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
       const response = await api.post('/test-management/upload-questions', formData);
 
       if (response.data.success) {
+        console.log('Upload response:', response.data);
+        console.log('Questions received:', response.data.questions);
         setUploadedQuestions(response.data.questions);
+        
+        // Show status information
+        const statusSummary = response.data.status_summary;
+        if (statusSummary) {
+          const message = `Questions processed: ${statusSummary.new_questions} new, ${statusSummary.existing_questions} existing in database`;
+          toast.success(message);
+        } else {
         toast.success('Questions uploaded successfully!');
+        }
+        
+        // Questions are now displayed directly in the main UI
+        // No need to show preview modal for manual uploads
       } else {
         setError(response.data.message || 'Failed to upload questions');
       }
@@ -3206,40 +3250,76 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                       {/* Question Tags */}
                       <div className="mt-4 pt-3 border-t border-gray-100">
                         <div className="flex flex-wrap gap-2">
+                          {/* Source Tags */}
+                          {question.source === 'question_bank' ? (
+                            <>
+                              <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full font-medium">
+                                Question Bank
+                              </span>
+                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">
+                                Randomly Selected
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">
+                                Manual Upload
+                              </span>
+                              {question.status === 'new' && (
+                                <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">
+                                  New (Added to DB)
+                                </span>
+                              )}
+                              {question.status === 'existing' && (
+                                <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full font-medium">
+                                  Already in DB
+                                </span>
+                              )}
+                            </>
+                          )}
+                          
+                          {/* Module and Type Tags */}
                           <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
                             {testData.module || 'Module'}
                           </span>
                           <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
                             {question.question_type || 'Type'}
                           </span>
+                          
+                          {/* Usage Tags */}
                           {question.used_count > 0 && (
                             <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full font-medium">
                               Used {question.used_count} times
                             </span>
                           )}
-                          {/* Repetition Status Tags */}
-                          <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">
-                            Selected
-                          </span>
-                          {question.repetitionStatus === 'first_time' && (
-                            <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">
-                              First Time
-                            </span>
-                          )}
-                          {question.repetitionStatus === 'repeating_first_time' && (
-                            <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full font-medium">
-                              Repeating First Time
-                            </span>
-                          )}
-                          {question.repetitionStatus === 'repeating_second_time' && (
-                            <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full font-medium">
-                              Repeating Second Time
-                            </span>
-                          )}
-                          {question.repetitionStatus && question.repetitionStatus.startsWith('repeating_') && question.repetitionStatus !== 'repeating_first_time' && question.repetitionStatus !== 'repeating_second_time' && (
-                            <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full font-medium">
-                              {question.repetitionStatus.replace('repeating_', 'Repeating ').replace('_', ' ').replace('time', 'Time')}
-                            </span>
+                          
+                          {/* Repetition Status Tags for Question Bank */}
+                          {question.source === 'question_bank' && (
+                            <>
+                              <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">
+                                Selected
+                              </span>
+                              {question.repetitionStatus === 'first_time' && (
+                                <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">
+                                  First Time
+                                </span>
+                              )}
+                              {question.repetitionStatus === 'repeating_first_time' && (
+                                <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full font-medium">
+                                  Repeating First Time
+                                </span>
+                              )}
+                              {question.repetitionStatus === 'repeating_second_time' && (
+                                <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full font-medium">
+                                  Repeating Second Time
+                                </span>
+                              )}
+                              {question.repetitionStatus && question.repetitionStatus.startsWith('repeating_') && question.repetitionStatus !== 'repeating_first_time' && question.repetitionStatus !== 'repeating_second_time' && (
+                                <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full font-medium">
+                                  {question.repetitionStatus.replace('repeating_', 'Repeating ').replace('_', ' ').replace('time', 'Time')}
+                                </span>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
@@ -3449,6 +3529,141 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
               {loading ? 'Uploading...' : 'Upload Questions'}
             </button>
           </div>
+
+          {/* Display Uploaded Questions */}
+          {uploadedQuestions.length > 0 && (
+            <div className="mt-6">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-lg font-semibold text-gray-800">
+                  Uploaded Questions ({uploadedQuestions.length})
+                </h4>
+                <div className="flex items-center space-x-2">
+                  {questionSource === 'bank' ? (
+                    <span className="text-sm text-gray-600">
+                      {uploadedQuestions.filter(q => q.repetitionStatus === 'first_time').length} first time, {uploadedQuestions.filter(q => q.repetitionStatus && q.repetitionStatus.startsWith('repeating_')).length} repeating
+                    </span>
+                  ) : (
+                    <span className="text-sm text-gray-600">
+                      {uploadedQuestions.filter(q => q.status === 'new').length} new, {uploadedQuestions.filter(q => q.status === 'existing').length} existing
+                    </span>
+                  )}
+                  <span className="text-xs text-gray-500">
+                    (Total: {uploadedQuestions.length})
+                  </span>
+                </div>
+              </div>
+              
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {uploadedQuestions.map((question, index) => (
+                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-500">Question {index + 1}</span>
+                      <div className="flex items-center space-x-2">
+                        {question.source === 'question_bank' ? (
+                          <>
+                            <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">Question Bank</span>
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Randomly Selected</span>
+                            {question.repetitionStatus === 'first_time' && (
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                First Time
+                              </span>
+                            )}
+                            {question.repetitionStatus === 'repeating_first_time' && (
+                              <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                                Repeating First Time
+                              </span>
+                            )}
+                            {question.repetitionStatus === 'repeating_second_time' && (
+                              <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                                Repeating Second Time
+                              </span>
+                            )}
+                            {question.repetitionStatus && question.repetitionStatus.startsWith('repeating_') && question.repetitionStatus !== 'repeating_first_time' && question.repetitionStatus !== 'repeating_second_time' && (
+                              <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                                {question.repetitionStatus.replace('repeating_', 'Repeating ').replace('_', ' ').replace('time', 'Time')}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Manual Upload</span>
+                            {question.status === 'new' && (
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                                New (Added to DB)
+                              </span>
+                            )}
+                            {question.status === 'existing' && (
+                              <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                                Already in DB
+                              </span>
+                            )}
+                          </>
+                        )}
+                        <span className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">
+                          MCQ
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="mb-3">
+                      <h4 className="font-medium text-gray-800 mb-2">{question.question_text || question.question}</h4>
+                      {question.instructions && (
+                        <p className="text-sm text-gray-600 mb-2">{question.instructions}</p>
+                      )}
+                      {question.source === 'question_bank' && question.repeatCount !== undefined && (
+                        <p className="text-xs text-gray-500 mb-2">
+                          Previously used {question.repeatCount} times | Current usage: {question.currentUsage || question.repeatCount + 1}
+                        </p>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      {question.options ? (
+                        // Manual upload format (object with A, B, C, D keys)
+                        Object.entries(question.options).map(([key, value]) => (
+                          <div key={key} className="flex items-center space-x-2">
+                            <span className="font-medium text-gray-600 w-6">{key}.</span>
+                            <span className="text-gray-700">{value}</span>
+                            {question.correct_answer === key && (
+                              <span className="text-green-600 text-sm font-medium">✓ Correct</span>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        // Question bank format (optionA, optionB, optionC, optionD fields)
+                        ['A', 'B', 'C', 'D'].map(letter => {
+                          const optionValue = question[`option${letter}`];
+                          if (!optionValue) return null;
+                          return (
+                            <div key={letter} className="flex items-center space-x-2">
+                              <span className="font-medium text-gray-600 w-6">{letter}.</span>
+                              <span className="text-gray-700">{optionValue}</span>
+                              {question.answer === letter && (
+                                <span className="text-green-600 text-sm font-medium">✓ Correct</span>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-4 pt-4 border-t border-blue-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-blue-600 font-medium">Ready to proceed?</span>
+                  <button
+                    onClick={handleNext}
+                    disabled={uploadedQuestions.length === 0}
+                    className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Continue to Next Step →
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -3517,7 +3732,7 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
             // Don't clear selectedBankQuestions when closing modal
             setShowQuestionPreview(false);
           }}
-          title={`Preview Questions (${selectedBankQuestions.length} selected)`}
+          title={`Preview Questions (${questionSource === 'bank' ? selectedBankQuestions.length : uploadedQuestions.length} selected)`}
           size="lg"
         >
           <div className="space-y-4 max-h-96 overflow-y-auto">
@@ -3534,12 +3749,14 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                 </p>
               </div>
             )}
-            {selectedBankQuestions.length === 0 ? (
+            {(() => {
+              const questionsToShow = questionSource === 'bank' ? selectedBankQuestions : uploadedQuestions;
+              return questionsToShow.length === 0 ? (
               <div className="text-center py-8">
                 <div className="text-gray-500 mb-4">
                   <FileQuestion className="w-12 h-12 mx-auto mb-2" />
                   <p className="text-lg font-medium">No questions found</p>
-                  <p className="text-sm">No questions are available in the question bank for this module.</p>
+                    <p className="text-sm">No questions are available for this module.</p>
                 </div>
                 <div className="text-sm text-gray-600 space-y-2">
                   <p>• Make sure questions have been uploaded for <strong>{testData.module}</strong></p>
@@ -3548,31 +3765,50 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                 </div>
               </div>
             ) : (
-              selectedBankQuestions.map((question, index) => (
+                questionsToShow.map((question, index) => (
                 <div key={index} className="border border-gray-200 rounded-lg p-4">
                   <div className="flex items-start justify-between mb-2">
                     <span className="text-sm font-medium text-gray-500">Question {index + 1}</span>
                     <div className="flex items-center space-x-2">
-                      <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Randomly Selected</span>
-                      {question.repetitionStatus === 'first_time' && (
-                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                          First Time
-                        </span>
-                      )}
-                      {question.repetitionStatus === 'repeating_first_time' && (
-                        <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
-                          Repeating First Time
-                        </span>
-                      )}
-                      {question.repetitionStatus === 'repeating_second_time' && (
-                        <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
-                          Repeating Second Time
-                        </span>
-                      )}
-                      {question.repetitionStatus && question.repetitionStatus.startsWith('repeating_') && question.repetitionStatus !== 'repeating_first_time' && question.repetitionStatus !== 'repeating_second_time' && (
-                        <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
-                          {question.repetitionStatus.replace('repeating_', 'Repeating ').replace('_', ' ').replace('time', 'Time')}
-                        </span>
+                      {questionSource === 'bank' ? (
+                        <>
+                          <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">Question Bank</span>
+                          <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Randomly Selected</span>
+                          {question.repetitionStatus === 'first_time' && (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                              First Time
+                            </span>
+                          )}
+                          {question.repetitionStatus === 'repeating_first_time' && (
+                            <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                              Repeating First Time
+                            </span>
+                          )}
+                          {question.repetitionStatus === 'repeating_second_time' && (
+                            <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                              Repeating Second Time
+                            </span>
+                          )}
+                          {question.repetitionStatus && question.repetitionStatus.startsWith('repeating_') && question.repetitionStatus !== 'repeating_first_time' && question.repetitionStatus !== 'repeating_second_time' && (
+                            <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                              {question.repetitionStatus.replace('repeating_', 'Repeating ').replace('_', ' ').replace('time', 'Time')}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Manual Upload</span>
+                          {question.status === 'new' && (
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                              New (Added to DB)
+                            </span>
+                          )}
+                          {question.status === 'existing' && (
+                            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                              Already in DB
+                            </span>
+                          )}
+                        </>
                       )}
                       {question.question_type === 'compiler_integrated' && (
                         <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
@@ -3592,8 +3828,59 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                     </div>
                   </div>
 
+                  {/* Usage information for question bank questions */}
+                  {questionSource === 'bank' && question.repeatCount !== undefined && (
+                    <div className="mb-3 p-2 bg-gray-50 rounded text-xs text-gray-600">
+                      Previously used {question.repeatCount} times | Current usage: {question.currentUsage || question.repeatCount + 1}
+                    </div>
+                  )}
+
                   {/* Display based on question type */}
-                  {question.question_type === 'compiler_integrated' ? (
+                  {questionSource === 'bank' && question.question_type === 'mcq' ? (
+                    <div>
+                      <div className="mb-3">
+                        <h4 className="font-medium text-gray-800 mb-2">{question.question}</h4>
+                        {question.instructions && (
+                          <p className="text-sm text-gray-600 mb-2">{question.instructions}</p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        {['A', 'B', 'C', 'D'].map(letter => {
+                          const optionValue = question[`option${letter}`];
+                          if (!optionValue) return null;
+                          return (
+                            <div key={letter} className="flex items-center space-x-2">
+                              <span className="font-medium text-gray-600 w-6">{letter}.</span>
+                              <span className="text-gray-700">{optionValue}</span>
+                              {question.answer === letter && (
+                                <span className="text-green-600 text-sm font-medium">✓ Correct</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : questionSource === 'manual' && question.question_type === 'MCQ' ? (
+                    <div>
+                      <div className="mb-3">
+                        <h4 className="font-medium text-gray-800 mb-2">{question.question_text}</h4>
+                        {question.instructions && (
+                          <p className="text-sm text-gray-600 mb-2">{question.instructions}</p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        {question.options && Object.entries(question.options).map(([key, value]) => (
+                          <div key={key} className="flex items-center space-x-2">
+                            <span className="font-medium text-gray-600 w-6">{key}.</span>
+                            <span className="text-gray-700">{value}</span>
+                            {question.correct_answer === key && (
+                              <span className="text-green-600 text-sm font-medium">✓ Correct</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : question.question_type === 'compiler_integrated' ? (
                     <div>
                       <div className="mb-3">
                         <h4 className="font-medium text-gray-800 mb-2">{question.questionTitle || question.question}</h4>
@@ -3667,7 +3954,8 @@ const Step5QuestionUpload = ({ nextStep, prevStep, updateTestData, testData, upl
                   )}
                 </div>
               ))
-            )}
+            );
+            })()}
           </div>
           <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
             <button

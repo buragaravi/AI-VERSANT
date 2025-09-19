@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime, timezone
 import boto3
 import threading
+import pandas as pd
 # Make audio processing packages optional
 try:
     from pydub import AudioSegment
@@ -2178,43 +2179,47 @@ def submit_practice_test():
             current_app.logger.info(f"Question {i} data: {question}")
             
             if question.get('question_type') == 'mcq':
-                # Handle MCQ question
-                answer_key = f'answer_{i}'
+                # Handle MCQ question - use question ID format (same as online tests)
+                question_id = str(question.get('_id', f'q_{i}'))
+                answer_key = f'question_{question_id}'
                 current_app.logger.info(f"MCQ question {i}: looking for answer key '{answer_key}' in data")
                 
                 if answer_key in data:
                     student_answer = data[answer_key]
                     
-                    # Get the correct answer from the lookup table
-                    question_key = f"{question.get('question', '')[:50]}_{question.get('question_type', '')}"
-                    current_app.logger.info(f"Looking for question key: '{question_key}' in lookup table")
-                    current_app.logger.info(f"Current question text: '{question.get('question', '')[:50]}...'")
+                    # For practice tests, options are shuffled, so we need to find the correct answer differently
+                    # The question should have a 'correct_answer' field with the shuffled letter
+                    correct_answer_letter = question.get('correct_answer', '')  # This is the shuffled letter
+                    correct_answer_text = ''
                     
-                    correct_answer = ''
+                    # Map shuffled answer letter to actual option text
+                    if correct_answer_letter == 'A':
+                        correct_answer_text = question.get('optionA', '')
+                    elif correct_answer_letter == 'B':
+                        correct_answer_text = question.get('optionB', '')
+                    elif correct_answer_letter == 'C':
+                        correct_answer_text = question.get('optionC', '')
+                    elif correct_answer_letter == 'D':
+                        correct_answer_text = question.get('optionD', '')
                     
-                    if question_key in correct_answer_lookup:
-                        correct_answer = correct_answer_lookup[question_key]['correct_answer']
-                        current_app.logger.info(f"Found correct answer in lookup table: {correct_answer}")
-                    else:
-                        current_app.logger.warning(f"Question key '{question_key}' not found in lookup table")
-                        # Try alternative matching methods
-                        for key, value in correct_answer_lookup.items():
-                            if (question.get('question', '')[:50] in key or 
-                                str(question.get('_id', '')) == value['question_id'] or
-                                str(question.get('question_id', '')) == value['question_id']):
-                                correct_answer = value['correct_answer']
-                                current_app.logger.info(f"Found correct answer via alternative matching: {correct_answer}")
-                                break
+                    # If correct_answer field doesn't exist, fall back to original logic
+                    if not correct_answer_text and question.get('answer'):
+                        original_answer_letter = question.get('answer', '')
+                        if original_answer_letter == 'A':
+                            correct_answer_text = question.get('optionA', '')
+                        elif original_answer_letter == 'B':
+                            correct_answer_text = question.get('optionB', '')
+                        elif original_answer_letter == 'C':
+                            correct_answer_text = question.get('optionC', '')
+                        elif original_answer_letter == 'D':
+                            correct_answer_text = question.get('optionD', '')
                     
-                    if not correct_answer:
-                        current_app.logger.warning(f"Could not find correct answer for question {i}, using fallback")
-                        # Fallback: try to extract from the current question object
-                        correct_answer = question.get('correct_answer') or question.get('answer') or question.get('right_answer') or ''
-                    
-                    is_correct = student_answer == correct_answer
+                    # Check if student answer matches correct answer text
+                    is_correct = student_answer == correct_answer_text
                     score = 1 if is_correct else 0
                     
-                    current_app.logger.info(f"MCQ question {i}: student_answer={student_answer}, correct_answer={correct_answer}, is_correct={is_correct}")
+                    current_app.logger.info(f"MCQ question {i}: student_answer='{student_answer}', correct_answer_text='{correct_answer_text}', is_correct={is_correct}")
+                    current_app.logger.info(f"Question {i} structure: correct_answer='{correct_answer_letter}', original_answer='{question.get('answer', '')}', options={question.get('optionA', '')[:20]}...")
                     
                     if is_correct:
                         correct_answers += 1
@@ -2225,7 +2230,8 @@ def submit_practice_test():
                         'question': question['question'],
                         'question_type': 'mcq',
                         'student_answer': student_answer,
-                        'correct_answer': correct_answer,
+                        'correct_answer_letter': correct_answer_letter,
+                        'correct_answer_text': correct_answer_text,
                         'is_correct': is_correct,
                         'score': score
                     })
@@ -3748,12 +3754,12 @@ def upload_questions():
             return jsonify({'success': False, 'message': 'module_id and level_id are required'}), 400
         
         # Read and parse the file
-        content = file.read().decode('utf-8')
         questions = []
         
         if file.filename.endswith('.csv'):
             import csv
             import io
+            content = file.read().decode('utf-8')
             csv_reader = csv.DictReader(io.StringIO(content))
             for row in csv_reader:
                 question = {
@@ -3766,7 +3772,38 @@ def upload_questions():
                     'instructions': row.get('Instructions', row.get('instructions', ''))
                 }
                 questions.append(question)
+        elif file.filename.endswith(('.xlsx', '.xls')):
+            # Handle Excel files
+            import pandas as pd
+            import io
+            
+            # Read Excel file with proper encoding handling
+            try:
+                # Try different encodings
+                file.seek(0)  # Reset file pointer
+                df = pd.read_excel(file, engine='openpyxl')
+            except Exception as e:
+                # If openpyxl fails, try xlrd for older Excel files
+                file.seek(0)
+                try:
+                    df = pd.read_excel(file, engine='xlrd')
+                except Exception as e2:
+                    return jsonify({'success': False, 'message': f'Failed to read Excel file: {str(e2)}'}), 400
+            
+            # Convert DataFrame to list of dictionaries
+            for _, row in df.iterrows():
+                question = {
+                    'question': str(row.get('Question', row.get('question', ''))),
+                    'optionA': str(row.get('OptionA', row.get('A', ''))),
+                    'optionB': str(row.get('OptionB', row.get('B', ''))),
+                    'optionC': str(row.get('OptionC', row.get('C', ''))),
+                    'optionD': str(row.get('OptionD', row.get('D', ''))),
+                    'answer': str(row.get('Answer', row.get('answer', ''))),
+                    'instructions': str(row.get('Instructions', row.get('instructions', '')))
+                }
+                questions.append(question)
         elif file.filename.endswith('.txt'):
+            content = file.read().decode('utf-8')
             # Parse human-readable format
             lines = content.split('\n')
             current_question = None
@@ -3802,17 +3839,11 @@ def upload_questions():
             if current_question:
                 questions.append(current_question)
         
-        # Validate questions and check for duplicates
+        # Validate questions and check for duplicates within file only
+        # For manual test paper uploads, we don't check against database duplicates
         valid_questions = []
         duplicate_questions = []
         invalid_questions = []
-        
-        # Get existing questions for duplicate checking
-        existing_questions = list(mongo_db.question_bank.find(
-            {'module_id': module_id, 'level_id': level_id, 'question_type': question_type},
-            {'question': 1, '_id': 0}
-        ))
-        existing_question_texts = {q['question'].strip().lower() for q in existing_questions}
         
         # Track questions within the file to detect duplicates
         seen_questions_in_file = set()
@@ -3828,22 +3859,13 @@ def upload_questions():
                 })
                 continue
             
-            # Check for duplicates within the file first
+            # Check for duplicates within the file only
             question_text = q['question'].strip().lower()
             if question_text in seen_questions_in_file:
                 duplicate_questions.append({
                     'index': i + 1,
                     'question': q['question'],
                     'reason': 'Duplicate question within the same file'
-                })
-                continue
-            
-            # Check for duplicates against database
-            if question_text in existing_question_texts:
-                duplicate_questions.append({
-                    'index': i + 1,
-                    'question': q['question'],
-                    'reason': 'Question already exists in database'
                 })
                 continue
             
@@ -3865,37 +3887,82 @@ def upload_questions():
                 }
             }), 400
         
-        # Store valid questions in database
-        upload_session_id = str(uuid.uuid4())
-        inserted_count = 0
+        # Check for existing questions in database and prepare questions for test creation
+        # This allows the same questions to be used even if they exist in the question bank
+        
+        # Get existing questions for status checking
+        existing_questions = list(mongo_db.question_bank.find(
+            {'module_id': module_id, 'level_id': level_id, 'question_type': question_type},
+            {'question': 1, '_id': 1}
+        ))
+        existing_question_texts = {q['question'].strip().lower(): str(q['_id']) for q in existing_questions}
+        
+        # Prepare questions for test creation with status information
+        formatted_questions = []
+        new_questions_to_store = []
         
         for q in valid_questions:
-            doc = {
-                'module_id': module_id,
-                'level_id': level_id,
-                'question_type': question_type,
-                'question': q['question'],
-                'optionA': q['optionA'],
-                'optionB': q['optionB'],
-                'optionC': q['optionC'],
-                'optionD': q['optionD'],
-                'answer': q['answer'].upper(),
-                'instructions': q.get('instructions', ''),
-                'used_in_tests': [],
-                'used_count': 0,
-                'last_used': None,
-                'created_at': datetime.utcnow(),
-                'upload_session_id': upload_session_id
-            }
+            question_text_lower = q['question'].strip().lower()
+            is_existing = question_text_lower in existing_question_texts
             
-            mongo_db.question_bank.insert_one(doc)
-            inserted_count += 1
+            formatted_question = {
+                'question_text': q['question'],
+                'question_type': 'MCQ',
+                'options': {
+                    'A': q['optionA'],
+                    'B': q['optionB'],
+                    'C': q['optionC'],
+                    'D': q['optionD']
+                },
+                'correct_answer': q['answer'].upper(),
+                'marks': 1,
+                'instructions': q.get('instructions', ''),
+                'source': 'manual_upload',
+                'status': 'existing' if is_existing else 'new',
+                'existing_id': existing_question_texts.get(question_text_lower) if is_existing else None
+            }
+            formatted_questions.append(formatted_question)
+            
+            # If it's a new question, prepare it for storage
+            if not is_existing:
+                new_question_doc = {
+                    'module_id': module_id,
+                    'level_id': level_id,
+                    'question_type': question_type,
+                    'question': q['question'],
+                    'optionA': q['optionA'],
+                    'optionB': q['optionB'],
+                    'optionC': q['optionC'],
+                    'optionD': q['optionD'],
+                    'answer': q['answer'].upper(),
+                    'instructions': q.get('instructions', ''),
+                    'used_in_tests': [],
+                    'used_count': 0,
+                    'last_used': None,
+                    'created_at': datetime.utcnow(),
+                    'source': 'manual_upload'
+                }
+                new_questions_to_store.append(new_question_doc)
+        
+        # Store new questions in database
+        if new_questions_to_store:
+            mongo_db.question_bank.insert_many(new_questions_to_store)
+        
+        # Count questions by status
+        new_count = sum(1 for q in formatted_questions if q['status'] == 'new')
+        existing_count = sum(1 for q in formatted_questions if q['status'] == 'existing')
         
         # Prepare detailed response
         response_data = {
             'success': True,
-            'message': f'Successfully uploaded {inserted_count} questions',
-            'count': inserted_count,
+            'message': f'Successfully processed {len(formatted_questions)} questions for test creation ({new_count} new, {existing_count} existing)',
+            'count': len(formatted_questions),
+            'questions': formatted_questions,  # Return questions for immediate use
+            'status_summary': {
+                'new_questions': new_count,
+                'existing_questions': existing_count,
+                'stored_to_db': len(new_questions_to_store)
+            },
             'details': {
                 'total_questions': len(questions),
                 'valid_questions': len(valid_questions),
