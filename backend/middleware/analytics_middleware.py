@@ -5,7 +5,6 @@ Automatically tracks all requests for comprehensive analytics
 
 import time
 from flask import request, g
-from utils.advanced_analytics import track_request
 
 def init_analytics_middleware(app):
     """Initialize analytics middleware for the Flask app"""
@@ -31,15 +30,20 @@ def init_analytics_middleware(app):
             bytes_sent = len(response.get_data()) if response.get_data() else 0
             bytes_received = request.content_length or 0
             
-            # Track the request
-            track_request(
-                endpoint=endpoint,
-                method=method,
-                response_code=response_code,
-                response_time=response_time,
-                bytes_sent=bytes_sent,
-                bytes_received=bytes_received
-            )
+            # Get error message if any
+            error_msg = None
+            if response_code >= 400:
+                try:
+                    response_data = response.get_json()
+                    if response_data and 'error' in response_data:
+                        error_msg = response_data['error']
+                    else:
+                        error_msg = f"HTTP {response_code}"
+                except:
+                    error_msg = f"HTTP {response_code}"
+            
+            # Real analytics tracking is handled by real_analytics_middleware
+            # No need to track here to avoid double counting
             
         except Exception as e:
             # Don't let analytics errors break the request

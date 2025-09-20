@@ -72,7 +72,7 @@ import CourseAdminSidebar from './components/common/CourseAdminSidebar'
 import StudentSidebar from './pages/student/StudentSidebar'
 
 // Analytics Pages
-import ComprehensiveAnalytics from './pages/analytics/ComprehensiveAnalytics'
+import RealAnalytics from './pages/analytics/RealAnalytics'
 
 function App() {
   return (
@@ -135,7 +135,7 @@ function App() {
                     {/* Form Portal Routes */}
                     <Route path="form-management" element={<FormManagement />} />
                     <Route path="form-submissions/:formId" element={<SubmissionViewer />} />
-                    <Route path="comprehensive-analytics" element={<ComprehensiveAnalytics />} />
+                    <Route path="real-analytics" element={<RealAnalytics />} />
                     <Route path="profile" element={<SuperAdminProfile />} />
                   </Route>
 

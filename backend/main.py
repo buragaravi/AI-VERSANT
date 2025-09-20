@@ -45,6 +45,15 @@ def create_app():
     bcrypt.init_app(app)
     socketio.init_app(app)
     
+    # Initialize analytics middleware (must be done early)
+    from middleware.analytics_middleware import init_analytics_middleware
+    init_analytics_middleware(app)
+    
+    # Initialize real analytics middleware (must be done early)
+    from middleware.real_analytics_middleware import init_real_analytics_middleware
+    init_real_analytics_middleware(app)
+    print("✅ Analytics middleware initialized successfully")
+    
     # Socket.IO authentication middleware
     @socketio.on('connect')
     def handle_connect(auth=None):
@@ -328,17 +337,9 @@ def create_app():
     from routes.batch_processing import batch_processing_bp
     app.register_blueprint(batch_processing_bp, url_prefix='/batch-processing')
     
-    # Register Server Analytics blueprint
-    from routes.server_analytics import server_analytics_bp
-    app.register_blueprint(server_analytics_bp, url_prefix='/server-analytics')
-    
-    # Register Professional Analytics blueprint
-    from routes.professional_analytics import professional_analytics_bp
-    app.register_blueprint(professional_analytics_bp, url_prefix='/professional-analytics')
-    
-    # Register Enhanced Analytics blueprint
-    from routes.enhanced_analytics import enhanced_analytics_bp
-    app.register_blueprint(enhanced_analytics_bp, url_prefix='/enhanced-analytics')
+    # Real Analytics (only analytics system we're using)
+    from routes.real_analytics import real_analytics_bp
+    app.register_blueprint(real_analytics_bp, url_prefix='/real-analytics')
     
     # Register Global Settings blueprint
     app.register_blueprint(global_settings_bp, url_prefix='/global-settings')
@@ -402,30 +403,7 @@ def create_app():
     except Exception as e:
         print(f"⚠️ Warning: Async system initialization failed: {e}")
     
-    # Initialize professional monitoring system
-    print("🔍 Initializing professional monitoring system...")
-    try:
-        from utils.professional_monitoring import initialize_professional_monitoring
-        initialize_professional_monitoring(app)
-        print("✅ Professional monitoring system initialized successfully")
-    except Exception as e:
-        print(f"⚠️ Warning: Professional monitoring initialization failed: {e}")
-        print("   Continuing without professional monitoring...")
-    
-    # Initialize advanced analytics system
-    print("📊 Initializing advanced analytics system...")
-    try:
-        from utils.advanced_analytics import initialize_advanced_analytics
-        initialize_advanced_analytics()
-        print("✅ Advanced analytics system initialized successfully")
-        
-        # Initialize analytics middleware
-        from middleware.analytics_middleware import init_analytics_middleware
-        init_analytics_middleware(app)
-        print("✅ Analytics middleware initialized successfully")
-    except Exception as e:
-        print(f"⚠️ Warning: Advanced analytics initialization failed: {e}")
-        print("   Continuing without advanced analytics...")
+    # Real analytics system is initialized above with middleware
     
     # TODO: Initialize Push Notification Service (removed for cleanup)
     print("ℹ️ Push Notification Service will be reimplemented")
