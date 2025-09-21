@@ -1003,8 +1003,8 @@ def get_grammar_progress():
                 current_app.logger.info(f"Found {len(test_results)} grammar results in test_results collection")
             
             # Check student_test_attempts collection
-            if db is not None and 'student_test_attempts' in db.list_collection_names():
-                attempt_results = list(db.student_test_attempts.find({
+            if db and 'student_test_attempts' in db.list_collection_names():
+                attempt_results = list(mongo_db.student_test_attempts.find({
                     'student_id': current_user_id,
                     'test_type': 'practice'
                 }))
@@ -2440,8 +2440,8 @@ def get_progress_summary():
         # Also get from student_test_attempts collection
         try:
             db = get_db()
-            if db is not None and 'student_test_attempts' in db.list_collection_names():
-                total_results += db.student_test_attempts.count_documents({
+            if db and 'student_test_attempts' in db.list_collection_names():
+                total_results += mongo_db.student_test_attempts.count_documents({
                     'student_id': current_user_id,
                     'test_type': 'practice'
                 })
