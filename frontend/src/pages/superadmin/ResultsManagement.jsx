@@ -22,13 +22,19 @@ import {
     X,
     Filter,
     FileText,
-    FileSpreadsheet as ExcelIcon
+    FileSpreadsheet as ExcelIcon,
+    Unlock,
+    Lock,
+    AlertCircle,
+    Settings
 } from 'lucide-react';
 import { useNotification } from '../../contexts/NotificationContext';
 import api from '../../services/api';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import AutoReleaseSettingsModal from '../../components/common/AutoReleaseSettingsModal';
+import { autoReleaseSettingsAPI } from '../../services/autoReleaseSettings';
 
 // Test Details View Component
 const TestDetailsView = ({ 
@@ -37,7 +43,12 @@ const TestDetailsView = ({
     onBack, 
     onStudentClick, 
     onExportTestResults, 
-    exportLoading 
+    exportLoading,
+    releaseStatus,
+    releaseLoading,
+    onReleaseResults,
+    onUnreleaseResults,
+    autoReleaseSchedule
 }) => {
     const attempts = testAttempts[test.test_id] || [];
     
@@ -147,6 +158,7 @@ const TestDetailsView = ({
     return (
         <div className="space-y-6">
             {/* Header with Back Button */}
+            <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
                 <button
                     onClick={onBack}
@@ -158,6 +170,63 @@ const TestDetailsView = ({
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">{test.test_name}</h1>
                     <p className="text-gray-600">Detailed analysis and student performance</p>
+                    
+                    {/* Auto Release Schedule Info */}
+                    {autoReleaseSchedule && (
+                        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <div className="flex items-center space-x-2">
+                                <Clock className="w-4 h-4 text-blue-600" />
+                                <span className="text-sm font-medium text-blue-900">Auto Release Scheduled</span>
+                            </div>
+                            <p className="text-sm text-blue-700 mt-1">
+                                Results will be automatically released on{' '}
+                                {new Date(autoReleaseSchedule.scheduled_release_time).toLocaleString()}
+                            </p>
+                            {autoReleaseSchedule.status === 'pending' && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 mt-2">
+                                    Pending
+                                </span>
+                            )}
+                        </div>
+                    )}
+                    </div>
+                </div>
+                
+                {/* Release Controls */}
+                <div className="flex items-center gap-3">
+                    {releaseStatus[test.test_id] ? (
+                        <div className="flex items-center gap-3">
+                            <span className="inline-flex items-center gap-1 px-3 py-2 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                                <Unlock className="w-4 h-4" />
+                                Results Released
+                            </span>
+                            <button
+                                onClick={() => onUnreleaseResults(test.test_id, test.test_name)}
+                                disabled={releaseLoading[test.test_id]}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-red-100 hover:bg-red-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {releaseLoading[test.test_id] ? (
+                                    <RefreshCw className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <Lock className="w-4 h-4" />
+                                )}
+                                Revoke Release
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => onReleaseResults(test.test_id, test.test_name)}
+                            disabled={releaseLoading[test.test_id]}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-green-700 bg-green-100 hover:bg-green-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {releaseLoading[test.test_id] ? (
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <Unlock className="w-4 h-4" />
+                            )}
+                            Release Results
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -676,11 +745,18 @@ const ResultsManagement = () => {
     const [currentView, setCurrentView] = useState('list'); // 'list' or 'test-details'
     const [selectedTest, setSelectedTest] = useState(null);
     const [studentExportLoading, setStudentExportLoading] = useState(false);
+    const [releaseStatus, setReleaseStatus] = useState({}); // Track release status for each test
+    const [releaseLoading, setReleaseLoading] = useState({}); // Track loading state for release actions
+    const [migrationLoading, setMigrationLoading] = useState(false); // Track migration loading state
+    const [showAutoReleaseModal, setShowAutoReleaseModal] = useState(false); // Auto-release settings modal
+    const [autoReleaseSettings, setAutoReleaseSettings] = useState(null); // Auto-release settings
+    const [autoReleaseSchedules, setAutoReleaseSchedules] = useState({}); // Auto-release schedules for tests
     const { error, success } = useNotification();
 
     useEffect(() => {
         window.scrollTo(0, 0);
         fetchTests();
+        fetchAutoReleaseSettings();
     }, []);
 
     const fetchTests = async () => {
@@ -729,6 +805,8 @@ const ResultsManagement = () => {
             if (!testAttempts[testId]) {
                 await fetchTestAttempts(testId);
             }
+            // Fetch auto-release schedule for this test
+            await fetchAutoReleaseSchedule(testId);
         }
     };
 
@@ -1207,6 +1285,134 @@ const ResultsManagement = () => {
         }
     };
 
+    // Release test results
+    const handleReleaseResults = async (testId, testName) => {
+        try {
+            setReleaseLoading(prev => ({ ...prev, [testId]: true }));
+            
+            const response = await api.post(`/results-management/release/${testId}`);
+            
+            if (response.data.success) {
+                setReleaseStatus(prev => ({ ...prev, [testId]: true }));
+                success(`Test results for "${testName}" have been released successfully!`);
+            } else {
+                error(response.data.message || 'Failed to release test results');
+            }
+        } catch (err) {
+            console.error('Release error:', err);
+            error('Failed to release test results. Please try again.');
+        } finally {
+            setReleaseLoading(prev => ({ ...prev, [testId]: false }));
+        }
+    };
+
+    // Unrelease test results
+    const handleUnreleaseResults = async (testId, testName) => {
+        try {
+            setReleaseLoading(prev => ({ ...prev, [testId]: true }));
+            
+            const response = await api.post(`/results-management/unrelease/${testId}`);
+            
+            if (response.data.success) {
+                setReleaseStatus(prev => ({ ...prev, [testId]: false }));
+                success(`Test results for "${testName}" have been unreleased successfully!`);
+            } else {
+                error(response.data.message || 'Failed to unrelease test results');
+            }
+        } catch (err) {
+            console.error('Unrelease error:', err);
+            error('Failed to unrelease test results. Please try again.');
+        } finally {
+            setReleaseLoading(prev => ({ ...prev, [testId]: false }));
+        }
+    };
+
+    // Fetch release status for all tests
+    const fetchReleaseStatus = async () => {
+        try {
+            const statusPromises = tests.map(test => 
+                api.get(`/results-management/status/${test.test_id}`)
+                    .then(response => ({ testId: test.test_id, status: response.data.data }))
+                    .catch(() => ({ testId: test.test_id, status: { is_released: false } }))
+            );
+            
+            const statuses = await Promise.all(statusPromises);
+            const statusMap = {};
+            statuses.forEach(({ testId, status }) => {
+                statusMap[testId] = status.is_released;
+            });
+            setReleaseStatus(statusMap);
+        } catch (err) {
+            console.error('Error fetching release status:', err);
+        }
+    };
+
+    // Fetch release status when tests are loaded
+    useEffect(() => {
+        if (tests.length > 0) {
+            fetchReleaseStatus();
+        }
+    }, [tests]);
+
+    // Migrate existing tests
+    const handleMigrateExistingTests = async () => {
+        try {
+            setMigrationLoading(true);
+            
+            const response = await api.post('/results-management/migrate-existing-tests');
+            
+            if (response.data.success) {
+                success(`Migration completed! ${response.data.data.updated_tests} tests updated with release fields.`);
+                // Refresh the tests list and release status
+                await fetchTests();
+                await fetchReleaseStatus();
+            } else {
+                error(response.data.message || 'Failed to migrate existing tests');
+            }
+        } catch (err) {
+            console.error('Migration error:', err);
+            error('Failed to migrate existing tests. Please try again.');
+        } finally {
+            setMigrationLoading(false);
+        }
+    };
+
+    // Auto-release settings functions
+    const fetchAutoReleaseSettings = async () => {
+        try {
+            const response = await autoReleaseSettingsAPI.getSettings();
+            setAutoReleaseSettings(response.settings);
+        } catch (err) {
+            console.error('Error fetching auto-release settings:', err);
+        }
+    };
+
+    const handleSaveAutoReleaseSettings = async (settings) => {
+        try {
+            await autoReleaseSettingsAPI.updateSettings(settings);
+            setAutoReleaseSettings(settings);
+            success('Auto-release settings saved successfully!');
+        } catch (err) {
+            console.error('Error saving auto-release settings:', err);
+            throw err;
+        }
+    };
+
+    // Fetch auto-release schedule for a specific test
+    const fetchAutoReleaseSchedule = async (testId) => {
+        try {
+            const response = await autoReleaseSettingsAPI.getTestSchedule(testId);
+            if (response.schedule) {
+                setAutoReleaseSchedules(prev => ({
+                    ...prev,
+                    [testId]: response.schedule
+                }));
+            }
+        } catch (err) {
+            console.error('Error fetching auto-release schedule:', err);
+        }
+    };
+
     if (loading) {
         return (
             <main className="px-6 lg:px-10 py-12">
@@ -1232,6 +1438,11 @@ const ResultsManagement = () => {
                             onStudentClick={handleStudentClick}
                             onExportTestResults={handleExportTestResults}
                             exportLoading={exportLoading}
+                            releaseStatus={releaseStatus}
+                            releaseLoading={releaseLoading}
+                            onReleaseResults={handleReleaseResults}
+                            onUnreleaseResults={handleUnreleaseResults}
+                            autoReleaseSchedule={autoReleaseSchedules[selectedTest?.test_id]}
                         />
                     ) : (
                         <>
@@ -1244,6 +1455,27 @@ const ResultsManagement = () => {
                                     <p className="mt-2 text-gray-600">
                                         Click on a test to view student attempts and detailed results
                                     </p>
+                                </div>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => setShowAutoReleaseModal(true)}
+                                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                    >
+                                        <Settings className="w-4 h-4" />
+                                        Auto Release Settings
+                                    </button>
+                                    <button
+                                        onClick={handleMigrateExistingTests}
+                                        disabled={migrationLoading}
+                                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        {migrationLoading ? (
+                                            <RefreshCw className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <AlertCircle className="w-4 h-4" />
+                                        )}
+                                        {migrationLoading ? 'Migrating...' : 'Migrate Existing Tests'}
+                                    </button>
                                 </div>
                             </div>
 
@@ -1276,7 +1508,7 @@ const ResultsManagement = () => {
                                             Average Score
                                         </th>
                                         <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Actions
+                                            Results Status
                                         </th>
                                     </tr>
                                 </thead>
@@ -1328,8 +1560,29 @@ const ResultsManagement = () => {
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
                                                     {test.average_score}%
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    <Eye className="w-5 h-5" />
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    {releaseStatus[test.test_id] ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                            <Unlock className="w-3 h-3" />
+                                                            Released
+                                                        </span>
+                                                    ) : (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleReleaseResults(test.test_id, test.test_name);
+                                                            }}
+                                                            disabled={releaseLoading[test.test_id]}
+                                                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 hover:bg-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            {releaseLoading[test.test_id] ? (
+                                                                <RefreshCw className="w-3 h-3 animate-spin" />
+                                                            ) : (
+                                                                <Lock className="w-3 h-3" />
+                                                            )}
+                                                            Not Released
+                                                        </button>
+                                                    )}
                                                 </td>
                                             </motion.tr>
                                         ))
@@ -1534,6 +1787,14 @@ const ResultsManagement = () => {
                     </motion.div>
                 </div>
             )}
+
+            {/* Auto Release Settings Modal */}
+            <AutoReleaseSettingsModal
+                isOpen={showAutoReleaseModal}
+                onClose={() => setShowAutoReleaseModal(false)}
+                onSave={handleSaveAutoReleaseSettings}
+                initialSettings={autoReleaseSettings}
+            />
         </>
     );
 };

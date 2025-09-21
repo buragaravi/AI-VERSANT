@@ -386,13 +386,13 @@ const TestManagement = () => {
               <div className="flex items-center space-x-2">
                 <input
                   type="text"
-                  value={`crt.pydasoft.in/student/exam/${createdTestId}`}
+                  value={`https://crt.pydahsoft.in/student/exam/${createdTestId}`}
                   readOnly
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm font-mono"
                 />
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(`crt.pydasoft.in/student/exam/${createdTestId}`);
+                    navigator.clipboard.writeText(`https://crt.pydahsoft.in/student/exam/${createdTestId}`);
                     success('URL copied to clipboard!');
                   }}
                   className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"

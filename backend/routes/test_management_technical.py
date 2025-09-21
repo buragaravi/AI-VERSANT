@@ -101,11 +101,30 @@ def create_technical_test():
             test_doc.update({
                 'startDateTime': datetime.fromisoformat(startDateTime.replace('Z', '+00:00')),
                 'endDateTime': datetime.fromisoformat(endDateTime.replace('Z', '+00:00')),
-                'duration': int(duration)
+                'duration': int(duration),
+                'is_released': False,  # Results are not released by default
+                'released_at': None,
+                'released_by': None
             })
 
         # Insert test
         result = mongo_db.tests.insert_one(test_doc)
+        test_id = str(result.inserted_id)
+        
+        # Create auto-release schedule for online tests
+        if test_type.lower() == 'online':
+            try:
+                from services.auto_release_scheduler import get_scheduler
+                scheduler = get_scheduler(mongo_db)
+                
+                created_at = datetime.utcnow()
+                end_date = None
+                if startDateTime and endDateTime:
+                    end_date = datetime.fromisoformat(endDateTime.replace('Z', '+00:00'))
+                
+                scheduler.create_schedule_for_test(test_id, test_type.lower(), created_at, end_date)
+            except Exception as e:
+                current_app.logger.warning(f"Failed to create auto-release schedule for test {test_id}: {e}")
         
         # Update question usage count for questions from the bank
         if questions:

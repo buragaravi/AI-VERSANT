@@ -974,7 +974,7 @@ def get_grammar_progress():
             
             # Check student_test_attempts collection
             if db and 'student_test_attempts' in db.list_collection_names():
-                attempt_results = list(db.student_test_attempts.find({
+                attempt_results = list(mongo_db.student_test_attempts.find({
                     'student_id': current_user_id,
                     'test_type': 'practice'
                 }))
@@ -1637,7 +1637,9 @@ def get_test_history():
                         '$match': {
                             '$or': [
                                 {'student_id': ObjectId(current_user_id)},
-                                {'student_id': current_user_id}
+                                {'student_id': current_user_id},
+                                {'user_id': ObjectId(current_user_id)},
+                                {'user_id': current_user_id}
                             ],
                             'status': 'completed'  # Only get completed attempts
                         }
@@ -1652,6 +1654,18 @@ def get_test_history():
                     },
                     {
                         '$unwind': '$test_details'
+                    },
+                    {
+                        '$match': {
+                            # Only show online tests that are released
+                            'test_details.test_type': 'online',
+                            '$or': [
+                                # Show if explicitly released
+                                {'test_details.is_released': True},
+                                # Show if is_released field doesn't exist (for existing records) - treat as released
+                                {'test_details.is_released': {'$exists': False}}
+                            ]
+                        }
                     },
                     {
                         '$project': {
@@ -1683,7 +1697,7 @@ def get_test_history():
                     { '$sort': { 'end_time': -1, 'submitted_at': -1 } }
                 ]
                 
-                all_attempts = list(db.student_test_attempts.aggregate(pipeline))
+                all_attempts = list(mongo_db.student_test_attempts.aggregate(pipeline))
                 current_app.logger.info(f"Found {len(all_attempts)} completed attempts in student_test_attempts collection")
             else:
                 current_app.logger.warning("student_test_attempts collection not found")
@@ -1776,6 +1790,17 @@ def get_test_history():
                         else:
                             attempt['score_percentage'] = 0
                             attempt['average_score'] = 0
+                
+                # Process detailed_results to match frontend expectations
+                if attempt.get('detailed_results'):
+                    for i, result in enumerate(attempt['detailed_results']):
+                        # Ensure consistent field names for frontend
+                        if 'question_text' not in result and 'question' in result:
+                            result['question_text'] = result['question']
+                        if 'correct_answer_text' not in result and 'correct_answer' in result:
+                            result['correct_answer_text'] = result['correct_answer']
+                        if 'student_answer' not in result and 'selected_answer' in result:
+                            result['student_answer'] = result['selected_answer']
                 
                 # Format duration for display
                 duration_seconds = attempt.get('duration_seconds', 0)
@@ -1909,7 +1934,7 @@ def get_practice_results():
                     }
                 ]
                 
-                attempt_results = list(db.student_test_attempts.aggregate(pipeline))
+                attempt_results = list(mongo_db.student_test_attempts.aggregate(pipeline))
                 all_results.extend(attempt_results)
                 current_app.logger.info(f"Found {len(attempt_results)} practice results in student_test_attempts collection")
             else:
@@ -2089,7 +2114,7 @@ def get_grammar_detailed_results():
                     }
                 ]
                 
-                attempt_results = list(db.student_test_attempts.aggregate(pipeline))
+                attempt_results = list(mongo_db.student_test_attempts.aggregate(pipeline))
                 all_results.extend(attempt_results)
                 current_app.logger.info(f"Found {len(attempt_results)} grammar results in student_test_attempts collection")
             else:
@@ -2277,7 +2302,7 @@ def get_vocabulary_detailed_results():
                     }
                 ]
                 
-                attempt_results = list(db.student_test_attempts.aggregate(pipeline))
+                attempt_results = list(mongo_db.student_test_attempts.aggregate(pipeline))
                 all_results.extend(attempt_results)
                 current_app.logger.info(f"Found {len(attempt_results)} vocabulary results in student_test_attempts collection")
             else:
@@ -2405,7 +2430,7 @@ def get_progress_summary():
         try:
             db = get_db()
             if db and 'student_test_attempts' in db.list_collection_names():
-                total_results += db.student_test_attempts.count_documents({
+                total_results += mongo_db.student_test_attempts.count_documents({
                     'student_id': current_user_id,
                     'test_type': 'practice'
                 })

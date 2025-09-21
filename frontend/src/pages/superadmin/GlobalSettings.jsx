@@ -9,11 +9,151 @@ import {
   RotateCcw,
   Save,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Clock,
+  Calendar
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Swal from 'sweetalert2';
 import api from '../../services/api';
+import AutoReleaseSettingsModal from '../../components/common/AutoReleaseSettingsModal';
+import { autoReleaseSettingsAPI } from '../../services/autoReleaseSettings';
+
+// Auto Release Settings Section Component
+const AutoReleaseSettingsSection = () => {
+  const [autoReleaseSettings, setAutoReleaseSettings] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    fetchAutoReleaseSettings();
+  }, []);
+
+  const fetchAutoReleaseSettings = async () => {
+    try {
+      setLoading(true);
+      const response = await autoReleaseSettingsAPI.getSettings();
+      setAutoReleaseSettings(response.settings);
+    } catch (error) {
+      console.error('Error fetching auto-release settings:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async (settings) => {
+    try {
+      await autoReleaseSettingsAPI.updateSettings(settings);
+      setAutoReleaseSettings(settings);
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const getStatusText = () => {
+    if (!autoReleaseSettings) return 'Loading...';
+    if (!autoReleaseSettings.enabled) return 'Disabled';
+    
+    const { rules } = autoReleaseSettings;
+    if (rules.immediate_release) return 'Immediate Release';
+    if (rules.days_after_creation !== null) return `${rules.days_after_creation} days after creation`;
+    if (rules.days_after_end_date !== null) return `${rules.days_after_end_date} days after end date`;
+    if (rules.specific_time) return `Daily at ${rules.specific_time.hour}:${rules.specific_time.minute.toString().padStart(2, '0')} UTC`;
+    
+    return 'Configured';
+  };
+
+  const getStatusColor = () => {
+    if (!autoReleaseSettings) return 'text-gray-500';
+    if (!autoReleaseSettings.enabled) return 'text-gray-500';
+    return 'text-green-600';
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="animate-pulse">
+          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+          <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <Clock className="h-6 w-6 text-blue-600" />
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Auto Release Settings</h2>
+              <p className="text-sm text-gray-600">Configure automatic release of test results</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowModal(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+          >
+            <Settings className="w-4 h-4" />
+            <span>Configure</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <h3 className="font-medium text-gray-900 mb-2">Current Status</h3>
+            <p className={`text-sm ${getStatusColor()}`}>
+              {getStatusText()}
+            </p>
+          </div>
+          
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <h3 className="font-medium text-gray-900 mb-2">Last Updated</h3>
+            <p className="text-sm text-gray-600">
+              {autoReleaseSettings?.updated_at ? 
+                new Date(autoReleaseSettings.updated_at).toLocaleString() : 
+                'Never'
+              }
+            </p>
+          </div>
+        </div>
+
+        {autoReleaseSettings?.enabled && (
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-start space-x-3">
+              <Calendar className="w-5 h-5 text-blue-600 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-blue-900">Active Rules</h4>
+                <ul className="mt-2 text-sm text-blue-800 space-y-1">
+                  {autoReleaseSettings.rules.immediate_release && (
+                    <li>• Release immediately when student submits</li>
+                  )}
+                  {autoReleaseSettings.rules.days_after_creation !== null && (
+                    <li>• Release {autoReleaseSettings.rules.days_after_creation} days after test creation</li>
+                  )}
+                  {autoReleaseSettings.rules.days_after_end_date !== null && (
+                    <li>• Release {autoReleaseSettings.rules.days_after_end_date} days after test end date</li>
+                  )}
+                  {autoReleaseSettings.rules.specific_time && (
+                    <li>• Release daily at {autoReleaseSettings.rules.specific_time.hour}:{autoReleaseSettings.rules.specific_time.minute.toString().padStart(2, '0')} UTC</li>
+                  )}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <AutoReleaseSettingsModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        onSave={handleSaveSettings}
+        initialSettings={autoReleaseSettings}
+      />
+    </>
+  );
+};
 
 const GlobalSettings = () => {
   const [selectedRole, setSelectedRole] = useState('student');
@@ -440,6 +580,9 @@ const GlobalSettings = () => {
             </div>
           ))}
         </div>
+
+        {/* Auto Release Settings */}
+        <AutoReleaseSettingsSection />
       </div>
     </div>
   );

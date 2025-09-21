@@ -139,7 +139,10 @@ def create_audio_test():
             test_doc.update({
                 'startDateTime': datetime.fromisoformat(startDateTime.replace('Z', '+00:00')),
                 'endDateTime': datetime.fromisoformat(endDateTime.replace('Z', '+00:00')),
-                'duration': int(duration)
+                'duration': int(duration),
+                'is_released': False,  # Results are not released by default
+                'released_at': None,
+                'released_by': None
             })
 
         # Insert test
