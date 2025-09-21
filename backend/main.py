@@ -341,6 +341,14 @@ def create_app():
     from routes.real_analytics import real_analytics_bp
     app.register_blueprint(real_analytics_bp, url_prefix='/real-analytics')
     
+    # Results Management
+    from routes.results_management import results_management_bp
+    app.register_blueprint(results_management_bp, url_prefix='/results-management')
+    
+    # Auto Release Settings
+    from routes.auto_release_settings import auto_release_settings_bp
+    app.register_blueprint(auto_release_settings_bp, url_prefix='/auto-release-settings')
+    
     # Register Global Settings blueprint
     app.register_blueprint(global_settings_bp, url_prefix='/global-settings')
     
@@ -498,6 +506,13 @@ if __name__ == "__main__":
     from utils.log_analytics import start_log_analytics, stop_log_analytics
     start_log_analytics()
     
+    # Start auto-release scheduler
+    print("⏰ Starting auto-release scheduler...")
+    from services.auto_release_scheduler import start_scheduler, stop_scheduler
+    from utils.connection_manager import get_mongo_database
+    mongo_db = get_mongo_database()
+    start_scheduler(mongo_db)
+    
     # Register cleanup function
     def cleanup():
         print("🧹 Cleaning up connections...")
@@ -507,6 +522,7 @@ if __name__ == "__main__":
         from utils.hosting_worker_manager import stop_worker_monitoring
         stop_worker_monitoring()
         stop_log_analytics()
+        stop_scheduler()
     
     atexit.register(cleanup)
     
