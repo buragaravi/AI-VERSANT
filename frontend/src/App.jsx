@@ -28,6 +28,7 @@ import BatchCourseInstances from './pages/superadmin/BatchCourseInstances'
 import BatchManagement from './pages/superadmin/BatchManagement'
 import FormManagement from './pages/superadmin/FormManagement'
 import SubmissionViewer from './pages/superadmin/SubmissionViewer'
+import ProgressTracking from './pages/superadmin/ProgressTracking'
 
 // Campus Admin Pages
 import CampusAdminDashboard from './pages/campus-admin/CampusAdminDashboard'
@@ -125,6 +126,7 @@ function App() {
                     <Route path="global-settings" element={<GlobalSettings />} />
                     <Route path="students" element={<StudentManagement />} />
                     <Route path="results" element={<ResultsManagement />} />
+                    <Route path="progress-tracking" element={<ProgressTracking />} />
                     <Route path="batches/:batchId" element={<BatchDetails />} />
                   <Route path="tests" element={<TestManagement />} />
                     <Route path="tests/create" element={<TestManagement />} />

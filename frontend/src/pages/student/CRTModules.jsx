@@ -174,15 +174,31 @@ const ModuleListView = ({ category, modules, onSelectModule, onBack }) => (
               <p className="text-gray-500 text-sm mb-4">Test your {category.name.toLowerCase()} skills.</p>
             </div>
             <div className="mt-4">
-              <div className="w-full bg-gray-200 rounded-full h-3">
+              {/* Progress Bar with Highest Score */}
+              <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
                 <div 
                   className="bg-blue-600 h-3 rounded-full transition-all duration-300" 
-                  style={{ width: `${module.completed_count && module.total_tests ? (module.completed_count / module.total_tests) * 100 : 0}%` }}
+                  style={{ 
+                    width: `${module.highest_score ? Math.min(module.highest_score, 100) : 0}%` 
+                  }}
                 ></div>
               </div>
-              <p className="text-right text-sm text-gray-600 mt-2">
-                {module.completed_count || 0}/{module.total_tests || 1} completed
-              </p>
+              
+              {/* Progress Information */}
+              <div className="flex justify-between items-center text-sm text-gray-600">
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span className="font-medium">
+                    {module.completed_count || 0} attempt{(module.completed_count || 0) !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="font-semibold text-blue-600">
+                    {module.highest_score ? module.highest_score.toFixed(1) : '0'}%
+                  </span>
+                  <span className="text-gray-500 ml-1">best</span>
+                </div>
+              </div>
             </div>
           </motion.div>
         ))}

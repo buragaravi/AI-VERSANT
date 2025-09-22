@@ -4951,4 +4951,382 @@ def get_student_progress(student_id):
         return jsonify({
             'success': False,
             'message': f'Failed to fetch student progress: {str(e)}'
-        }), 500 
+        }), 500
+
+@superadmin_bp.route('/practice-tests-by-module', methods=['GET'])
+@jwt_required()
+def get_practice_tests_by_module():
+    """Get practice tests grouped by module for progress tracking"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        # Get all practice tests
+        practice_tests = list(mongo_db.tests.find({
+            'test_type': 'practice'
+        }).sort('module_id', 1))
+        
+        # Group by module
+        tests_by_module = {}
+        for test in practice_tests:
+            module_id = test.get('module_id', 'UNKNOWN')
+            if module_id not in tests_by_module:
+                tests_by_module[module_id] = []
+            
+            # Calculate total questions from questions array
+            questions = test.get('questions', [])
+            total_questions = len(questions) if isinstance(questions, list) else 0
+            
+            test_data = {
+                'test_id': str(test['_id']),
+                'test_name': test.get('name', 'Unknown Test'),
+                'module_id': module_id,
+                'subcategory': test.get('subcategory'),
+                'level_id': test.get('level_id'),
+                'total_questions': total_questions,
+                'created_at': safe_isoformat(test.get('created_at'))
+            }
+            tests_by_module[module_id].append(test_data)
+        
+        return jsonify({
+            'success': True,
+            'data': tests_by_module
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching practice tests by module: {e}")
+        return jsonify({'success': False, 'message': 'Failed to fetch practice tests'}), 500
+
+@superadmin_bp.route('/test-assigned-students/<test_id>', methods=['GET'])
+@jwt_required()
+def get_test_assigned_students(test_id):
+    """Get attempted and unattempted students for a specific test"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        # Get test details
+        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
+        if not test:
+            return jsonify({'success': False, 'message': 'Test not found'}), 404
+        
+        # Get all students who have attempted this test
+        try:
+            attempted_students = list(mongo_db.student_test_attempts.find({
+                'test_id': ObjectId(test_id),
+                'test_type': 'practice'
+            }))
+            current_app.logger.info(f"Found {len(attempted_students)} attempts for test {test_id}")
+        except Exception as e:
+            current_app.logger.error(f"Error fetching attempts: {e}")
+            return jsonify({'success': False, 'message': 'Failed to fetch test attempts'}), 500
+        
+        # Get unique student IDs who attempted
+        attempted_student_ids = set()
+        for attempt in attempted_students:
+            student_id = attempt.get('student_id') or attempt.get('user_id')
+            if student_id:
+                # Convert ObjectId to string
+                if hasattr(student_id, '__str__'):
+                    attempted_student_ids.add(str(student_id))
+                else:
+                    attempted_student_ids.add(student_id)
+        
+        # Get all students assigned to this test (based on batch/campus/course)
+        # This is a simplified version - you might need to adjust based on your assignment logic
+        try:
+            # Use aggregation to join users and students collections
+            pipeline = [
+                {
+                    '$match': {'role': 'student'}
+                },
+                {
+                    '$lookup': {
+                        'from': 'students',
+                        'localField': '_id',
+                        'foreignField': 'user_id',
+                        'as': 'student_profile'
+                    }
+                },
+                {
+                    '$unwind': {
+                        'path': '$student_profile',
+                        'preserveNullAndEmptyArrays': True
+                    }
+                }
+            ]
+            all_students = list(mongo_db.users.aggregate(pipeline))
+        except Exception as e:
+            current_app.logger.error(f"Error fetching students: {e}")
+            return jsonify({'success': False, 'message': 'Failed to fetch students'}), 500
+        
+        attempted_students_list = []
+        unattempted_students_list = []
+        
+        for student in all_students:
+            student_id = str(student['_id'])
+            student_profile = student.get('student_profile', {})
+            student_data = {
+                'student_id': student_id,
+                'name': student.get('name', 'Unknown'),
+                'email': student.get('email', 'Unknown'),
+                'roll_number': student_profile.get('roll_number', 'Unknown'),
+                'campus_id': str(student_profile.get('campus_id')) if student_profile.get('campus_id') else None,
+                'batch_id': str(student_profile.get('batch_id')) if student_profile.get('batch_id') else None,
+                'course_id': str(student_profile.get('course_id')) if student_profile.get('course_id') else None
+            }
+            
+            if student_id in attempted_student_ids:
+                # Get attempt summary for this student
+                student_attempts = []
+                for a in attempted_students:
+                    attempt_student_id = a.get('student_id') or a.get('user_id')
+                    if attempt_student_id:
+                        # Convert ObjectId to string for comparison
+                        if hasattr(attempt_student_id, '__str__'):
+                            attempt_student_id = str(attempt_student_id)
+                        if attempt_student_id == student_id:
+                            student_attempts.append(a)
+                if student_attempts:
+                    latest_attempt = max(student_attempts, key=lambda x: x.get('submitted_at', ''))
+                    student_data.update({
+                        'total_attempts': len(student_attempts),
+                        'latest_score': latest_attempt.get('score_percentage', 0) or (latest_attempt.get('average_score', 0) * 100),
+                        'latest_attempt_date': safe_isoformat(latest_attempt.get('submitted_at')),
+                        'highest_score': max([a.get('score_percentage', 0) or (a.get('average_score', 0) * 100) for a in student_attempts])
+                    })
+                attempted_students_list.append(student_data)
+            else:
+                unattempted_students_list.append(student_data)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'test': {
+                    'test_id': str(test['_id']),
+                    'test_name': test.get('name'),
+                    'module_id': test.get('module_id'),
+                    'subcategory': test.get('subcategory'),
+                    'level_id': test.get('level_id')
+                },
+                'attempted_students': attempted_students_list,
+                'unattempted_students': unattempted_students_list,
+                'summary': {
+                    'total_assigned': len(all_students),
+                    'attempted_count': len(attempted_students_list),
+                    'unattempted_count': len(unattempted_students_list)
+                }
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching test assigned students: {e}")
+        return jsonify({'success': False, 'message': 'Failed to fetch test students'}), 500
+
+@superadmin_bp.route('/student-test-progress/<student_id>/<test_id>', methods=['GET'])
+@jwt_required()
+def get_student_test_progress(student_id, test_id):
+    """Get student's progress for a specific test"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        # Get student details with profile
+        pipeline = [
+            {'$match': {'_id': ObjectId(student_id)}},
+            {
+                '$lookup': {
+                    'from': 'students',
+                    'localField': '_id',
+                    'foreignField': 'user_id',
+                    'as': 'student_profile'
+                }
+            },
+            {
+                '$unwind': {
+                    'path': '$student_profile',
+                    'preserveNullAndEmptyArrays': True
+                }
+            }
+        ]
+        student_result = list(mongo_db.users.aggregate(pipeline))
+        if not student_result:
+            return jsonify({'success': False, 'message': 'Student not found'}), 404
+        
+        student = student_result[0]
+        
+        # Get test details
+        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
+        if not test:
+            return jsonify({'success': False, 'message': 'Test not found'}), 404
+        
+        # Get student's attempts for this test
+        attempts = list(mongo_db.student_test_attempts.find({
+            '$or': [
+                {'student_id': student_id},
+                {'student_id': ObjectId(student_id)},
+                {'user_id': student_id},
+                {'user_id': ObjectId(student_id)}
+            ],
+            'test_id': ObjectId(test_id),
+            'test_type': 'practice'
+        }).sort('submitted_at', 1))
+        
+        # Process attempts
+        processed_attempts = []
+        for attempt in attempts:
+            processed_attempt = {
+                'attempt_id': str(attempt['_id']),
+                'test_id': str(attempt['test_id']),
+                'score': attempt.get('score_percentage', 0) or (attempt.get('average_score', 0) * 100),
+                'correct_answers': attempt.get('correct_answers', 0),
+                'total_questions': attempt.get('total_questions', 0),
+                'submitted_at': safe_isoformat(attempt.get('submitted_at')),
+                'time_taken': attempt.get('time_taken'),
+                'status': attempt.get('status', 'completed')
+            }
+            processed_attempts.append(processed_attempt)
+        
+        # Calculate summary stats
+        if processed_attempts:
+            scores = [attempt['score'] for attempt in processed_attempts]
+            total_attempts = len(processed_attempts)
+            highest_score = max(scores)
+            average_score = sum(scores) / len(scores)
+            latest_score = processed_attempts[-1]['score']
+        else:
+            total_attempts = 0
+            highest_score = 0
+            average_score = 0
+            latest_score = 0
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'student': {
+                    'student_id': str(student['_id']),
+                    'name': student.get('name', 'Unknown'),
+                    'email': student.get('email', 'Unknown'),
+                    'roll_number': student.get('student_profile', {}).get('roll_number', 'Unknown')
+                },
+                'test': {
+                    'test_id': str(test['_id']),
+                    'test_name': test.get('name'),
+                    'module_id': test.get('module_id'),
+                    'subcategory': test.get('subcategory'),
+                    'level_id': test.get('level_id')
+                },
+                'summary': {
+                    'total_attempts': total_attempts,
+                    'highest_score': highest_score,
+                    'average_score': average_score,
+                    'latest_score': latest_score
+                },
+                'attempts': processed_attempts
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching student test progress: {e}")
+        return jsonify({'success': False, 'message': 'Failed to fetch student test progress'}), 500
+
+@superadmin_bp.route('/practice-attempt-details/<attempt_id>', methods=['GET'])
+@jwt_required()
+def get_superadmin_practice_attempt_details(attempt_id):
+    """Get detailed results for a specific practice test attempt (Superadmin access)"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = mongo_db.find_user_by_id(current_user_id)
+        
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
+            return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+        # Convert to ObjectId safely
+        try:
+            attempt_object_id = ObjectId(attempt_id)
+        except ValueError as e:
+            return jsonify({'success': False, 'message': 'Invalid attempt ID'}), 400
+        
+        # Get the attempt (no user restriction for superadmin)
+        attempt = mongo_db.student_test_attempts.find_one({
+            '_id': attempt_object_id,
+            'test_type': 'practice'
+        })
+        
+        if not attempt:
+            return jsonify({'success': False, 'message': 'Attempt not found'}), 404
+        
+        # Get test details
+        test = mongo_db.tests.find_one({'_id': attempt['test_id']})
+        if not test:
+            return jsonify({'success': False, 'message': 'Test not found'}), 404
+        
+        # Process detailed results
+        detailed_results = []
+        if attempt.get('detailed_results'):
+            for i, result in enumerate(attempt['detailed_results']):
+                # Ensure consistent field names for frontend (same as student endpoint)
+                if 'question_text' not in result and 'question' in result:
+                    result['question_text'] = result['question']
+                if 'correct_answer_text' not in result and 'correct_answer' in result:
+                    result['correct_answer_text'] = result['correct_answer']
+                if 'student_answer' not in result and 'selected_answer' in result:
+                    result['student_answer'] = result['selected_answer']
+                
+                detailed_result = {
+                    'question_number': i + 1,
+                    'question_text': result.get('question_text', ''),
+                    'question_type': result.get('question_type', 'mcq'),
+                    'student_answer': result.get('student_answer') or result.get('selected_answer', ''),
+                    'correct_answer': result.get('correct_answer_text') or result.get('correct_answer', ''),
+                    'is_correct': result.get('is_correct', False),
+                    'marks_obtained': result.get('marks_obtained', 0),
+                    'max_marks': result.get('max_marks', 1),
+                    'similarity_score': result.get('similarity_score', 0),
+                    'student_text': result.get('student_text', ''),
+                    'original_text': result.get('original_text', ''),
+                    'student_audio_url': result.get('student_audio_url', ''),
+                    'audio_url': result.get('audio_url', ''),
+                    'options': result.get('options', {}),
+                    'explanation': result.get('explanation', '')
+                }
+                detailed_results.append(detailed_result)
+        
+        # Process attempt summary
+        attempt_summary = {
+            'attempt_id': str(attempt['_id']),
+            'test_id': str(attempt['test_id']),
+            'test_name': test.get('name', 'Unknown Test'),
+            'module_id': test.get('module_id'),
+            'subcategory': test.get('subcategory'),
+            'level_id': test.get('level_id'),
+            'score': attempt.get('score_percentage', 0) or (attempt.get('average_score', 0) * 100),
+            'correct_answers': attempt.get('correct_answers', 0),
+            'total_questions': attempt.get('total_questions', 0),
+            'submitted_at': safe_isoformat(attempt.get('submitted_at')),
+            'time_taken': attempt.get('time_taken'),
+            'status': attempt.get('status', 'completed')
+        }
+        
+        current_app.logger.info(f"Superadmin found detailed results for attempt {attempt_id}: {len(detailed_results)} questions")
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'attempt': attempt_summary,
+                'detailed_results': detailed_results
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching superadmin practice attempt details: {e}")
+        return jsonify({'success': False, 'message': 'Failed to fetch attempt details'}), 500 
