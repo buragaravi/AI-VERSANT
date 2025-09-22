@@ -531,15 +531,16 @@ def get_student_tests():
             all_attempts = (attempts_primary or []) + (attempts_alt or [])
             current_app.logger.info(f"Test {test['_id']}: Found {len(attempts_primary)} attempts in test_results, {len(attempts_alt)} attempts in student_test_attempts")
             if all_attempts:
-                # Count completed attempts (score >= 60%)
+                # Count all attempts (not just completed ones)
+                completed_count = len(all_attempts)
+                
+                # Find highest score from all attempts
                 for attempt in all_attempts:
                     score = attempt.get('score_percentage', 0)
                     if score == 0:
                         avg_score = attempt.get('average_score', 0)
                         if avg_score > 0:
                             score = avg_score * 100  # Convert from 0-1 to 0-100 scale
-                    if score >= 60:  # Consider 60% and above as completed
-                        completed_count += 1
                     if score > highest_score:
                         highest_score = score
                 current_app.logger.info(f"Test {test['_id']}: Calculated highest_score = {highest_score}, completed_count = {completed_count}")
@@ -548,15 +549,15 @@ def get_student_tests():
             
             # Get total number of tests for this module/subcategory
             total_tests = 1  # Default to 1 for individual tests
-            if module_id and subcategory:
+            if module and subcategory:
                 try:
                     total_tests = mongo_db.tests.count_documents({
-                        'module_id': module_id,
+                        'module_id': module,
                         'subcategory': subcategory,
                         'test_type': 'practice'
                     })
                 except Exception as e:
-                    current_app.logger.warning(f"Error counting total tests for {module_id}/{subcategory}: {e}")
+                    current_app.logger.warning(f"Error counting total tests for {module}/{subcategory}: {e}")
                     total_tests = 1
             
             test_list.append({
@@ -1003,7 +1004,7 @@ def get_grammar_progress():
                 current_app.logger.info(f"Found {len(test_results)} grammar results in test_results collection")
             
             # Check student_test_attempts collection
-            if db and 'student_test_attempts' in db.list_collection_names():
+            if db is not None and 'student_test_attempts' in db.list_collection_names():
                 attempt_results = list(mongo_db.student_test_attempts.find({
                     'student_id': current_user_id,
                     'test_type': 'practice'
@@ -2035,68 +2036,9 @@ def get_grammar_detailed_results():
         except ValueError as e:
             return jsonify({'success': False, 'message': str(e)}), 400
         
-        # Get grammar results from both collections
+        # Get grammar results from student_test_attempts collection only
         all_results = []
         
-        # Try to get from test_results collection
-        try:
-            db = get_db()
-            if db is not None and 'test_results' in db.list_collection_names():
-                pipeline = [
-                    {
-                        '$match': {
-                            'student_id': user_object_id,
-                            'module_id': 'GRAMMAR',
-                            'test_type': 'practice'
-                        }
-                    },
-                    {
-                        '$lookup': {
-                            'from': 'tests',
-                            'localField': 'test_id',
-                            'foreignField': '_id',
-                            'as': 'test_details'
-                        }
-                    },
-                    {
-                        '$unwind': '$test_details'
-                    },
-                    {
-                        '$group': {
-                            '_id': '$subcategory',
-                            'subcategory_name': { '$first': '$subcategory' },
-                            'total_attempts': { '$sum': 1 },
-                            'highest_score': { '$max': '$score_percentage' },  # Use score_percentage for highest score
-                            'average_score': { '$avg': '$score_percentage' },  # Use score_percentage for average
-                            'total_questions': { '$sum': '$total_questions' },
-                            'total_correct': { '$sum': '$correct_answers' },
-                            'last_attempt': { '$max': '$submitted_at' },
-                            'attempts': {
-                                '$push': {
-                                    'test_name': '$test_details.name',
-                                    'score': '$score_percentage',  # Use score_percentage for individual scores
-                                    'correct_answers': '$correct_answers',
-                                    'total_questions': '$total_questions',
-                                    'submitted_at': '$submitted_at',
-                                    'result_id': '$_id'
-                                }
-                            }
-                        }
-                    },
-                    {
-                        '$sort': { 'subcategory_name': 1 }
-                    }
-                ]
-                
-                test_results = list(db.test_results.aggregate(pipeline))
-                all_results.extend(test_results)
-                current_app.logger.info(f"Found {len(test_results)} grammar results in test_results collection")
-            else:
-                current_app.logger.warning("test_results collection not found")
-        except Exception as e:
-            current_app.logger.warning(f"Error aggregating grammar results from test_results: {e}")
-        
-        # Also get from student_test_attempts collection
         try:
             db = get_db()
             if db is not None and 'student_test_attempts' in db.list_collection_names():
@@ -2128,15 +2070,37 @@ def get_grammar_detailed_results():
                             '_id': '$test_details.subcategory',
                             'subcategory_name': { '$first': '$test_details.subcategory' },
                             'total_attempts': { '$sum': 1 },
-                            'highest_score': { '$max': '$score_percentage' },  # Use score_percentage for highest score
-                            'average_score': { '$avg': '$score_percentage' },  # Use score_percentage for average
+                            'highest_score': { 
+                                '$max': {
+                                    '$cond': [
+                                        {'$gt': ['$score_percentage', 0]},
+                                        '$score_percentage',
+                                        {'$multiply': ['$average_score', 100]}
+                                    ]
+                                }
+                            },
+                            'average_score': { 
+                                '$avg': {
+                                    '$cond': [
+                                        {'$gt': ['$score_percentage', 0]},
+                                        '$score_percentage',
+                                        {'$multiply': ['$average_score', 100]}
+                                    ]
+                                }
+                            },
                             'total_questions': { '$sum': '$total_questions' },
                             'total_correct': { '$sum': '$correct_answers' },
                             'last_attempt': { '$max': '$submitted_at' },
                             'attempts': {
                                 '$push': {
                                     'test_name': '$test_details.name',
-                                    'score': '$score_percentage',  # Use score_percentage for individual scores
+                                    'score': {
+                                        '$cond': [
+                                            {'$gt': ['$score_percentage', 0]},
+                                            '$score_percentage',
+                                            {'$multiply': ['$average_score', 100]}
+                                        ]
+                                    },
                                     'correct_answers': '$correct_answers',
                                     'total_questions': '$total_questions',
                                     'submitted_at': '$submitted_at',
@@ -2150,37 +2114,16 @@ def get_grammar_detailed_results():
                     }
                 ]
                 
-                attempt_results = list(mongo_db.student_test_attempts.aggregate(pipeline))
-                all_results.extend(attempt_results)
-                current_app.logger.info(f"Found {len(attempt_results)} grammar results in student_test_attempts collection")
+                all_results = list(db.student_test_attempts.aggregate(pipeline))
+                current_app.logger.info(f"Found {len(all_results)} grammar results in student_test_attempts collection")
             else:
                 current_app.logger.warning("student_test_attempts collection not found")
         except Exception as e:
-            current_app.logger.warning(f"Error aggregating grammar results from student_test_attempts: {e}")
+            current_app.logger.error(f"Error aggregating grammar results from student_test_attempts: {e}")
+            return jsonify({'success': False, 'message': 'Failed to fetch grammar results'}), 500
         
-        # Merge results from both collections
-        merged_results = {}
-        for result in all_results:
-            subcategory = result['_id']
-            if subcategory not in merged_results:
-                merged_results[subcategory] = result
-            else:
-                # Merge the results, taking the better scores
-                existing = merged_results[subcategory]
-                merged_results[subcategory] = {
-                    '_id': subcategory,
-                    'subcategory_name': result['subcategory_name'],
-                    'total_attempts': existing['total_attempts'] + result['total_attempts'],
-                    'highest_score': max(existing['highest_score'], result['highest_score']),
-                    'average_score': (existing['average_score'] + result['average_score']) / 2,
-                    'total_questions': existing['total_questions'] + result['total_questions'],
-                    'total_correct': existing['total_correct'] + result['total_correct'],
-                    'last_attempt': max(existing['last_attempt'], result['last_attempt']),
-                    'attempts': existing['attempts'] + result['attempts']
-                }
-        
-        results = list(merged_results.values())
-        current_app.logger.info(f"Total merged grammar results: {len(results)}")
+        results = all_results
+        current_app.logger.info(f"Total grammar results: {len(results)}")
         
         # Process results
         for result in results:
@@ -2223,68 +2166,9 @@ def get_vocabulary_detailed_results():
         except ValueError as e:
             return jsonify({'success': False, 'message': str(e)}), 400
         
-        # Get vocabulary results from both collections
+        # Get vocabulary results from student_test_attempts collection only
         all_results = []
         
-        # Try to get from test_results collection
-        try:
-            db = get_db()
-            if db is not None and 'test_results' in db.list_collection_names():
-                pipeline = [
-                    {
-                        '$match': {
-                            'student_id': user_object_id,
-                            'module_id': 'VOCABULARY',
-                            'test_type': 'practice'
-                        }
-                    },
-                    {
-                        '$lookup': {
-                            'from': 'tests',
-                            'localField': 'test_id',
-                            'foreignField': '_id',
-                            'as': 'test_details'
-                        }
-                    },
-                    {
-                        '$unwind': '$test_details'
-                    },
-                    {
-                        '$group': {
-                            '_id': '$test_details.level_id',
-                            'level_name': { '$first': '$test_details.level_id' },
-                            'total_attempts': { '$sum': 1 },
-                            'highest_score': { '$max': '$score_percentage' },  # Use score_percentage for highest score
-                            'average_score': { '$avg': '$score_percentage' },  # Use score_percentage for average
-                            'total_questions': { '$sum': '$total_questions' },
-                            'total_correct': { '$sum': '$correct_answers' },
-                            'last_attempt': { '$max': '$submitted_at' },
-                            'attempts': {
-                                '$push': {
-                                    'test_name': '$test_details.name',
-                                    'score': '$score_percentage',  # Use score_percentage for individual scores
-                                    'correct_answers': '$correct_answers',
-                                    'total_questions': '$total_questions',
-                                    'submitted_at': '$submitted_at',
-                                    'result_id': '$_id'
-                                }
-                            }
-                        }
-                    },
-                    {
-                        '$sort': { 'level_name': 1 }
-                    }
-                ]
-                
-                test_results = list(db.test_results.aggregate(pipeline))
-                all_results.extend(test_results)
-                current_app.logger.info(f"Found {len(test_results)} vocabulary results in test_results collection")
-            else:
-                current_app.logger.warning("test_results collection not found")
-        except Exception as e:
-            current_app.logger.warning(f"Error aggregating vocabulary results from test_results: {e}")
-        
-        # Also get from student_test_attempts collection
         try:
             db = get_db()
             if db is not None and 'student_test_attempts' in db.list_collection_names():
@@ -2316,15 +2200,37 @@ def get_vocabulary_detailed_results():
                             '_id': '$test_details.level_id',
                             'level_name': { '$first': '$test_details.level_id' },
                             'total_attempts': { '$sum': 1 },
-                            'highest_score': { '$max': '$score_percentage' },  # Use score_percentage for highest score
-                            'average_score': { '$avg': '$score_percentage' },  # Use score_percentage for average
+                            'highest_score': { 
+                                '$max': {
+                                    '$cond': [
+                                        {'$gt': ['$score_percentage', 0]},
+                                        '$score_percentage',
+                                        {'$multiply': ['$average_score', 100]}
+                                    ]
+                                }
+                            },
+                            'average_score': { 
+                                '$avg': {
+                                    '$cond': [
+                                        {'$gt': ['$score_percentage', 0]},
+                                        '$score_percentage',
+                                        {'$multiply': ['$average_score', 100]}
+                                    ]
+                                }
+                            },
                             'total_questions': { '$sum': '$total_questions' },
                             'total_correct': { '$sum': '$correct_answers' },
                             'last_attempt': { '$max': '$submitted_at' },
                             'attempts': {
                                 '$push': {
                                     'test_name': '$test_details.name',
-                                    'score': '$score_percentage',  # Use score_percentage for individual scores
+                                    'score': {
+                                        '$cond': [
+                                            {'$gt': ['$score_percentage', 0]},
+                                            '$score_percentage',
+                                            {'$multiply': ['$average_score', 100]}
+                                        ]
+                                    },
                                     'correct_answers': '$correct_answers',
                                     'total_questions': '$total_questions',
                                     'submitted_at': '$submitted_at',
@@ -2338,37 +2244,16 @@ def get_vocabulary_detailed_results():
                     }
                 ]
                 
-                attempt_results = list(mongo_db.student_test_attempts.aggregate(pipeline))
-                all_results.extend(attempt_results)
-                current_app.logger.info(f"Found {len(attempt_results)} vocabulary results in student_test_attempts collection")
+                all_results = list(db.student_test_attempts.aggregate(pipeline))
+                current_app.logger.info(f"Found {len(all_results)} vocabulary results in student_test_attempts collection")
             else:
                 current_app.logger.warning("student_test_attempts collection not found")
         except Exception as e:
-            current_app.logger.warning(f"Error aggregating vocabulary results from student_test_attempts: {e}")
+            current_app.logger.error(f"Error aggregating vocabulary results from student_test_attempts: {e}")
+            return jsonify({'success': False, 'message': 'Failed to fetch vocabulary results'}), 500
         
-        # Merge results from both collections
-        merged_results = {}
-        for result in all_results:
-            level_id = result['_id']
-            if level_id not in merged_results:
-                merged_results[level_id] = result
-            else:
-                # Merge the results, taking the better scores
-                existing = merged_results[level_id]
-                merged_results[level_id] = {
-                    '_id': level_id,
-                    'level_name': result['level_name'],
-                    'total_attempts': existing['total_attempts'] + result['total_attempts'],
-                    'highest_score': max(existing['highest_score'], result['highest_score']),
-                    'average_score': (existing['average_score'] + result['average_score']) / 2,
-                    'total_questions': existing['total_questions'] + result['total_questions'],
-                    'total_correct': existing['total_correct'] + result['total_correct'],
-                    'last_attempt': max(existing['last_attempt'], result['last_attempt']),
-                    'attempts': existing['attempts'] + result['attempts']
-                }
-        
-        results = list(merged_results.values())
-        current_app.logger.info(f"Total merged vocabulary results: {len(results)}")
+        results = all_results
+        current_app.logger.info(f"Total vocabulary results: {len(results)}")
         
         # Process results
         for result in results:
@@ -2411,66 +2296,20 @@ def get_progress_summary():
         except ValueError as e:
             return jsonify({'success': False, 'message': str(e)}), 400
         
-        # Get progress from both collections
+        # Get progress from student_test_attempts collection (primary source)
         total_results = 0
-        all_modules = []
+        module_stats = []
         
-        # Try to get from test_results collection
         try:
             db = get_db()
-            if db is not None and 'test_results' in db.list_collection_names():
-                total_results += db.test_results.count_documents({
-                    'student_id': user_object_id,
-                    'test_type': 'practice'
-                })
-                
-                pipeline = [
-                    {
-                        '$match': {
-                            'student_id': user_object_id,
-                            'test_type': 'practice'
-                        }
-                    },
-                    {
-                        '$lookup': {
-                            'from': 'tests',
-                            'localField': 'test_id',
-                            'foreignField': '_id',
-                            'as': 'test_details'
-                        }
-                    },
-                    {'$unwind': '$test_details'},
-                    {
-                        '$group': {
-                            '_id': '$test_details.module_id',
-                            'module_name': { '$first': '$test_details.module_id' },
-                            'total_attempts': { '$sum': 1 },
-                            'highest_score': { '$max': '$score_percentage' },  # Use score_percentage for highest score
-                            'average_score': { '$avg': '$score_percentage' },  # Use score_percentage for average
-                            'total_questions': { '$sum': '$total_questions' },
-                            'total_correct': { '$sum': '$correct_answers' },
-                            'last_attempt': { '$max': '$submitted_at' }
-                        }
-                    }
-                ]
-                
-                module_stats = list(db.test_results.aggregate(pipeline))
-                all_modules.extend(module_stats)
-                current_app.logger.info(f"Found {len(module_stats)} modules in test_results collection")
-            else:
-                current_app.logger.warning("test_results collection not found")
-        except Exception as e:
-            current_app.logger.warning(f"Error aggregating from test_results: {e}")
-        
-        # Also get from student_test_attempts collection
-        try:
-            db = get_db()
-            if db and 'student_test_attempts' in db.list_collection_names():
-                total_results += mongo_db.student_test_attempts.count_documents({
+            if db is not None and 'student_test_attempts' in db.list_collection_names():
+                # Count total practice attempts
+                total_results = db.student_test_attempts.count_documents({
                     'student_id': current_user_id,
                     'test_type': 'practice'
                 })
                 
+                # Aggregate module statistics
                 pipeline = [
                     {
                         '$match': {
@@ -2492,45 +2331,41 @@ def get_progress_summary():
                             '_id': '$test_details.module_id',
                             'module_name': { '$first': '$test_details.module_id' },
                             'total_attempts': { '$sum': 1 },
-                            'highest_score': { '$max': '$score_percentage' },  # Use score_percentage for highest score
-                            'average_score': { '$avg': '$score_percentage' },  # Use score_percentage for average
+                            'highest_score': { 
+                                '$max': {
+                                    '$cond': [
+                                        {'$gt': ['$score_percentage', 0]},
+                                        '$score_percentage',
+                                        {'$multiply': ['$average_score', 100]}
+                                    ]
+                                }
+                            },
+                            'average_score': { 
+                                '$avg': {
+                                    '$cond': [
+                                        {'$gt': ['$score_percentage', 0]},
+                                        '$score_percentage',
+                                        {'$multiply': ['$average_score', 100]}
+                                    ]
+                                }
+                            },
                             'total_questions': { '$sum': '$total_questions' },
                             'total_correct': { '$sum': '$correct_answers' },
                             'last_attempt': { '$max': '$submitted_at' }
                         }
+                    },
+                    {
+                        '$sort': { 'module_name': 1 }
                     }
                 ]
                 
-                attempt_module_stats = list(db.student_test_attempts.aggregate(pipeline))
-                all_modules.extend(attempt_module_stats)
-                current_app.logger.info(f"Found {len(attempt_module_stats)} modules in student_test_attempts collection")
+                module_stats = list(db.student_test_attempts.aggregate(pipeline))
+                current_app.logger.info(f"Found {len(module_stats)} modules in student_test_attempts collection")
             else:
                 current_app.logger.warning("student_test_attempts collection not found")
         except Exception as e:
-            current_app.logger.warning(f"Error aggregating from student_test_attempts: {e}")
-        
-        # Merge module results from both collections
-        merged_modules = {}
-        for module in all_modules:
-            module_id = module['_id']
-            if module_id not in merged_modules:
-                merged_modules[module_id] = module
-            else:
-                # Merge the results, taking the better scores
-                existing = merged_modules[module_id]
-                merged_modules[module_id] = {
-                    '_id': module_id,
-                    'module_name': module['module_name'],
-                    'total_attempts': existing['total_attempts'] + module['total_attempts'],
-                    'highest_score': max(existing['highest_score'], module['highest_score']),
-                    'average_score': (existing['average_score'] + module['average_score']) / 2,
-                    'total_questions': existing['total_questions'] + module['total_questions'],
-                    'total_correct': existing['total_correct'] + module['total_correct'],
-                    'last_attempt': max(existing['last_attempt'], module['last_attempt'])
-                }
-        
-        module_stats = list(merged_modules.values())
-        current_app.logger.info(f"Total merged modules: {len(module_stats)}")
+            current_app.logger.error(f"Error aggregating from student_test_attempts: {e}")
+            return jsonify({'success': False, 'message': 'Failed to fetch progress data'}), 500
         
         # Process module statistics
         for stat in module_stats:
@@ -2543,108 +2378,46 @@ def get_progress_summary():
             if isinstance(stat.get('_id'), ObjectId):
                 stat['_id'] = str(stat['_id'])
         
-        # Get recent activity from both collections with comprehensive error handling
+        # Get recent activity from student_test_attempts collection only
         recent_activity = []
         
         try:
-            if hasattr(mongo_db, 'test_results'):
-                test_recent = list(mongo_db.test_results.find({
-                    'student_id': user_object_id
-                }).sort('submitted_at', -1).limit(5))
-                # Filter out invalid entries
-                test_recent = [item for item in test_recent if isinstance(item, dict) and item.get('_id')]
-                recent_activity.extend(test_recent)
-                current_app.logger.info(f"Found {len(test_recent)} valid test results")
-        except Exception as e:
-            current_app.logger.warning(f"Error fetching recent activity from test_results: {e}")
-        
-        try:
-            if hasattr(mongo_db, 'student_test_attempts'):
-                attempt_recent = list(mongo_db.student_test_attempts.find({
-                    'student_id': current_user_id
-                }).sort('submitted_at', -1).limit(5))
-                # Filter out invalid entries
-                attempt_recent = [item for item in attempt_recent if isinstance(item, dict) and item.get('_id')]
-                recent_activity.extend(attempt_recent)
-                current_app.logger.info(f"Found {len(attempt_recent)} valid test attempts")
-        except Exception as e:
-            current_app.logger.warning(f"Error fetching recent activity from student_test_attempts: {e}")
-        
-        # Process recent activity with comprehensive error handling
-        try:
-            # Sort by date and take top 10 - with proper error handling
-            def get_sort_key(activity):
-                """Get sort key for activity, handling None and missing fields safely"""
-                try:
-                    # Ensure activity is a dictionary
-                    if not isinstance(activity, dict):
-                        return datetime.min
-                        
-                    submitted_at = activity.get('submitted_at')
-                    if submitted_at is None:
-                        return datetime.min
-                        
-                    if isinstance(submitted_at, str):
-                        # Try to parse string dates
-                        try:
-                            from dateutil import parser
-                            parsed_date = parser.parse(submitted_at)
-                            return parsed_date if isinstance(parsed_date, datetime) else datetime.min
-                        except ImportError:
-                            # Fallback to datetime parsing
-                            try:
-                                parsed_date = datetime.fromisoformat(submitted_at.replace('Z', '+00:00'))
-                                return parsed_date if isinstance(parsed_date, datetime) else datetime.min
-                            except:
-                                return datetime.min
-                    elif isinstance(submitted_at, datetime):
-                        return submitted_at
-                    else:
-                        return datetime.min
-                except Exception as e:
-                    current_app.logger.warning(f"Error in get_sort_key: {e}")
-                    return datetime.min
-            
-            # Sort with error handling
-            try:
-                recent_activity.sort(key=get_sort_key, reverse=True)
-            except Exception as e:
-                current_app.logger.error(f"Error sorting recent activity: {e}")
-                # If sorting fails, just take the first 10 items without sorting
-                pass
+            if db is not None and 'student_test_attempts' in db.list_collection_names():
+                recent_activity = list(db.student_test_attempts.find({
+                    'student_id': current_user_id,
+                    'test_type': 'practice'
+                }).sort('submitted_at', -1).limit(10))
                 
-            recent_activity = recent_activity[:10]
-            
-            # Process each activity item
-            processed_activities = []
-            for activity in recent_activity:
-                try:
-                    # Ensure activity is a dictionary
-                    if not isinstance(activity, dict):
-                        continue
+                # Process recent activity
+                processed_activities = []
+                for activity in recent_activity:
+                    try:
+                        if not isinstance(activity, dict):
+                            continue
+                            
+                        processed_activity = {
+                            '_id': str(activity.get('_id', '')),
+                            'submitted_at': safe_isoformat(activity.get('submitted_at')),
+                            'average_score': activity.get('score_percentage', 0) or (activity.get('average_score', 0) * 100),
+                            'test_name': activity.get('test_name', 'Unknown Test')
+                        }
                         
-                    # Create a copy to avoid modifying the original
-                    processed_activity = dict(activity)
-                    processed_activity['_id'] = str(processed_activity.get('_id', ''))
-                    
-                    # Handle submitted_at field safely
-                    processed_activity['submitted_at'] = safe_isoformat(processed_activity.get('submitted_at'))
-                    
-                    # Convert any ObjectId fields in activity to string
-                    for k, v in processed_activity.items():
-                        if isinstance(v, ObjectId):
-                            processed_activity[k] = str(v)
-                    
-                    processed_activities.append(processed_activity)
-                except Exception as e:
-                    current_app.logger.warning(f"Error processing activity item: {e}")
-                    continue
-            
-            recent_activity = processed_activities
-            
+                        # Convert any ObjectId fields to string
+                        for k, v in processed_activity.items():
+                            if isinstance(v, ObjectId):
+                                processed_activity[k] = str(v)
+                        
+                        processed_activities.append(processed_activity)
+                    except Exception as e:
+                        current_app.logger.warning(f"Error processing activity item: {e}")
+                        continue
+                
+                recent_activity = processed_activities
+                current_app.logger.info(f"Found {len(recent_activity)} recent activities")
+            else:
+                current_app.logger.warning("student_test_attempts collection not found for recent activity")
         except Exception as e:
-            current_app.logger.error(f"Error processing recent activity: {e}")
-            # Fallback: return empty list if processing fails
+            current_app.logger.error(f"Error fetching recent activity: {e}")
             recent_activity = []
         
         summary = {
@@ -2664,6 +2437,318 @@ def get_progress_summary():
     except Exception as e:
         logging.error(f"Error fetching progress summary for student {get_jwt_identity()}: {e}", exc_info=True)
         return jsonify({'success': False, 'message': 'Failed to fetch progress summary.'}), 500
+
+@student_bp.route('/practice-tests-summary', methods=['GET'])
+@jwt_required()
+def get_practice_tests_summary():
+    """Get comprehensive practice tests summary for student"""
+    try:
+        current_user_id = get_jwt_identity()
+        
+        # Convert to ObjectId safely
+        try:
+            user_object_id = safe_object_id_conversion(current_user_id)
+        except ValueError as e:
+            return jsonify({'success': False, 'message': str(e)}), 400
+        
+        # Get practice tests grouped by module type
+        practice_tests = {}
+        
+        try:
+            db = get_db()
+            if db is not None and 'student_test_attempts' in db.list_collection_names():
+                pipeline = [
+                    {
+                        '$match': {
+                            '$or': [
+                                {'student_id': current_user_id},
+                                {'student_id': user_object_id},
+                                {'user_id': current_user_id},
+                                {'user_id': user_object_id}
+                            ],
+                            'test_type': 'practice'
+                        }
+                    },
+                    {
+                        '$lookup': {
+                            'from': 'tests',
+                            'localField': 'test_id',
+                            'foreignField': '_id',
+                            'as': 'test_details'
+                        }
+                    },
+                    {'$unwind': '$test_details'},
+                    {
+                        '$group': {
+                            '_id': {
+                                'test_id': '$test_id',
+                                'test_name': '$test_details.name',
+                                'module_id': '$test_details.module_id',
+                                'subcategory': '$test_details.subcategory',
+                                'level_id': '$test_details.level_id'
+                            },
+                            'total_attempts': { '$sum': 1 },
+                            'highest_score': { 
+                                '$max': {
+                                    '$cond': [
+                                        {'$gt': ['$score_percentage', 0]},
+                                        '$score_percentage',
+                                        {'$multiply': ['$average_score', 100]}
+                                    ]
+                                }
+                            },
+                            'average_score': { 
+                                '$avg': {
+                                    '$cond': [
+                                        {'$gt': ['$score_percentage', 0]},
+                                        '$score_percentage',
+                                        {'$multiply': ['$average_score', 100]}
+                                    ]
+                                }
+                            },
+                            'last_attempt': { '$max': '$submitted_at' },
+                            'attempts': {
+                                '$push': {
+                                    'attempt_id': '$_id',
+                                    'score': {
+                                        '$cond': [
+                                            {'$gt': ['$score_percentage', 0]},
+                                            '$score_percentage',
+                                            {'$multiply': ['$average_score', 100]}
+                                        ]
+                                    },
+                                    'submitted_at': '$submitted_at',
+                                    'time_taken': '$time_taken',
+                                    'correct_answers': '$correct_answers',
+                                    'total_questions': '$total_questions'
+                                }
+                            }
+                        }
+                    },
+                    {
+                        '$sort': { 'last_attempt': -1 }
+                    }
+                ]
+                
+                results = list(db.student_test_attempts.aggregate(pipeline))
+                current_app.logger.info(f"Found {len(results)} practice tests with attempts")
+                
+                # Group by module type
+                for result in results:
+                    module_id = result['_id']['module_id']
+                    if module_id not in practice_tests:
+                        practice_tests[module_id] = []
+                    
+                    # Process the result
+                    test_data = {
+                        'test_id': str(result['_id']['test_id']),
+                        'test_name': result['_id']['test_name'],
+                        'module_id': module_id,
+                        'subcategory': result['_id'].get('subcategory'),
+                        'level_id': result['_id'].get('level_id'),
+                        'total_attempts': result['total_attempts'],
+                        'highest_score': result['highest_score'],
+                        'average_score': result['average_score'],
+                        'last_attempt': safe_isoformat(result['last_attempt']),
+                        'attempts': result['attempts']
+                    }
+                    
+                    # Convert attempt IDs to strings
+                    for attempt in test_data['attempts']:
+                        attempt['attempt_id'] = str(attempt['attempt_id'])
+                        attempt['submitted_at'] = safe_isoformat(attempt['submitted_at'])
+                    
+                    practice_tests[module_id].append(test_data)
+                
+                current_app.logger.info(f"Grouped practice tests: {list(practice_tests.keys())}")
+            else:
+                current_app.logger.warning("student_test_attempts collection not found")
+        except Exception as e:
+            current_app.logger.error(f"Error fetching practice tests summary: {e}")
+            return jsonify({'success': False, 'message': 'Failed to fetch practice tests summary'}), 500
+        
+        return jsonify({
+            'success': True,
+            'data': practice_tests
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error fetching practice tests summary for student {get_jwt_identity()}: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Failed to fetch practice tests summary.'}), 500
+
+@student_bp.route('/practice-test-attempts/<test_id>', methods=['GET'])
+@jwt_required()
+def get_practice_test_attempts(test_id):
+    """Get all attempts for a specific practice test"""
+    try:
+        current_user_id = get_jwt_identity()
+        
+        # Convert to ObjectId safely
+        try:
+            test_object_id = ObjectId(test_id)
+            user_object_id = safe_object_id_conversion(current_user_id)
+        except ValueError as e:
+            return jsonify({'success': False, 'message': 'Invalid test ID'}), 400
+        
+        try:
+            db = get_db()
+            if db is not None and 'student_test_attempts' in db.list_collection_names():
+                # Get all attempts for this test by this student
+                attempts = list(db.student_test_attempts.find({
+                    '$or': [
+                        {'student_id': current_user_id},
+                        {'student_id': user_object_id},
+                        {'user_id': current_user_id},
+                        {'user_id': user_object_id}
+                    ],
+                    'test_id': test_object_id,
+                    'test_type': 'practice'
+                }).sort('submitted_at', -1))
+                
+                # Get test details
+                test = db.tests.find_one({'_id': test_object_id})
+                if not test:
+                    return jsonify({'success': False, 'message': 'Test not found'}), 404
+                
+                # Process attempts
+                processed_attempts = []
+                for attempt in attempts:
+                    processed_attempt = {
+                        'attempt_id': str(attempt['_id']),
+                        'test_id': str(attempt['test_id']),
+                        'test_name': test.get('name', 'Unknown Test'),
+                        'module_id': test.get('module_id'),
+                        'subcategory': test.get('subcategory'),
+                        'level_id': test.get('level_id'),
+                        'score': attempt.get('score_percentage', 0) or (attempt.get('average_score', 0) * 100),
+                        'correct_answers': attempt.get('correct_answers', 0),
+                        'total_questions': attempt.get('total_questions', 0),
+                        'submitted_at': safe_isoformat(attempt.get('submitted_at')),
+                        'time_taken': attempt.get('time_taken'),
+                        'status': attempt.get('status', 'completed')
+                    }
+                    processed_attempts.append(processed_attempt)
+                
+                current_app.logger.info(f"Found {len(processed_attempts)} attempts for test {test_id}")
+                
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'test': {
+                            'test_id': str(test['_id']),
+                            'test_name': test.get('name'),
+                            'module_id': test.get('module_id'),
+                            'subcategory': test.get('subcategory'),
+                            'level_id': test.get('level_id'),
+                            'total_questions': test.get('total_questions', 0)
+                        },
+                        'attempts': processed_attempts
+                    }
+                }), 200
+            else:
+                return jsonify({'success': False, 'message': 'Database not available'}), 500
+        except Exception as e:
+            current_app.logger.error(f"Error fetching practice test attempts: {e}")
+            return jsonify({'success': False, 'message': 'Failed to fetch test attempts'}), 500
+        
+    except Exception as e:
+        logging.error(f"Error fetching practice test attempts for student {get_jwt_identity()}: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Failed to fetch test attempts.'}), 500
+
+@student_bp.route('/practice-attempt-details/<attempt_id>', methods=['GET'])
+@jwt_required()
+def get_practice_attempt_details(attempt_id):
+    """Get detailed results for a specific practice test attempt"""
+    try:
+        current_user_id = get_jwt_identity()
+        
+        # Convert to ObjectId safely
+        try:
+            attempt_object_id = ObjectId(attempt_id)
+            user_object_id = safe_object_id_conversion(current_user_id)
+        except ValueError as e:
+            return jsonify({'success': False, 'message': 'Invalid attempt ID'}), 400
+        
+        try:
+            db = get_db()
+            if db is not None and 'student_test_attempts' in db.list_collection_names():
+                # Get the attempt
+                attempt = db.student_test_attempts.find_one({
+                    '_id': attempt_object_id,
+                    '$or': [
+                        {'student_id': current_user_id},
+                        {'student_id': user_object_id},
+                        {'user_id': current_user_id},
+                        {'user_id': user_object_id}
+                    ],
+                    'test_type': 'practice'
+                })
+                
+                if not attempt:
+                    return jsonify({'success': False, 'message': 'Attempt not found'}), 404
+                
+                # Get test details
+                test = db.tests.find_one({'_id': attempt['test_id']})
+                if not test:
+                    return jsonify({'success': False, 'message': 'Test not found'}), 404
+                
+                # Process detailed results
+                detailed_results = []
+                if attempt.get('detailed_results'):
+                    for i, result in enumerate(attempt['detailed_results']):
+                        detailed_result = {
+                            'question_number': i + 1,
+                            'question_text': result.get('question_text', ''),
+                            'question_type': result.get('question_type', 'mcq'),
+                            'student_answer': result.get('student_answer') or result.get('selected_answer', ''),
+                            'correct_answer': result.get('correct_answer_text') or result.get('correct_answer', ''),
+                            'is_correct': result.get('is_correct', False),
+                            'marks_obtained': result.get('marks_obtained', 0),
+                            'max_marks': result.get('max_marks', 1),
+                            'similarity_score': result.get('similarity_score', 0),
+                            'student_text': result.get('student_text', ''),
+                            'original_text': result.get('original_text', ''),
+                            'student_audio_url': result.get('student_audio_url', ''),
+                            'audio_url': result.get('audio_url', ''),
+                            'options': result.get('options', {}),
+                            'explanation': result.get('explanation', '')
+                        }
+                        detailed_results.append(detailed_result)
+                
+                # Process attempt summary
+                attempt_summary = {
+                    'attempt_id': str(attempt['_id']),
+                    'test_id': str(attempt['test_id']),
+                    'test_name': test.get('name', 'Unknown Test'),
+                    'module_id': test.get('module_id'),
+                    'subcategory': test.get('subcategory'),
+                    'level_id': test.get('level_id'),
+                    'score': attempt.get('score_percentage', 0) or (attempt.get('average_score', 0) * 100),
+                    'correct_answers': attempt.get('correct_answers', 0),
+                    'total_questions': attempt.get('total_questions', 0),
+                    'submitted_at': safe_isoformat(attempt.get('submitted_at')),
+                    'time_taken': attempt.get('time_taken'),
+                    'status': attempt.get('status', 'completed')
+                }
+                
+                current_app.logger.info(f"Found detailed results for attempt {attempt_id}: {len(detailed_results)} questions")
+                
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'attempt': attempt_summary,
+                        'detailed_results': detailed_results
+                    }
+                }), 200
+            else:
+                return jsonify({'success': False, 'message': 'Database not available'}), 500
+        except Exception as e:
+            current_app.logger.error(f"Error fetching practice attempt details: {e}")
+            return jsonify({'success': False, 'message': 'Failed to fetch attempt details'}), 500
+        
+    except Exception as e:
+        logging.error(f"Error fetching practice attempt details for student {get_jwt_identity()}: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': 'Failed to fetch attempt details.'}), 500
 
 @student_bp.route('/test-result/<test_id>', methods=['GET'])
 @jwt_required()

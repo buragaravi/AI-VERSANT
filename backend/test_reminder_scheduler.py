@@ -163,7 +163,7 @@ class TestReminderScheduler:
             logger.error(f"Error cancelling reminders for test {test_id}: {e}")
             return False
     
-    def start_periodic_reminder_check(self):
+    def     start_periodic_reminder_check(self):
         """Start periodic check for active tests that need reminders"""
         if not APSCHEDULER_AVAILABLE or not self.scheduler:
             logger.warning("APScheduler not available - cannot start periodic reminder check")

@@ -175,6 +175,7 @@ const SuperAdminSidebar = () => {
         { name: 'CRT Upload', path: '/superadmin/crt-upload', icon: FilePlus, module: 'crt_upload', isUpload: true },
         { name: 'Student Management', path: '/superadmin/students', icon: GraduationCap, module: 'student_management' },
         { name: 'Results Management', path: '/superadmin/results', icon: BarChart, module: 'results_management' },
+        { name: 'Progress Tracking', path: '/superadmin/progress-tracking', icon: TrendingUp, module: 'progress_tracking' },
         
         // Analytics (hidden from menu - access via direct URL)
         // { name: 'Real Analytics', path: '/superadmin/real-analytics', icon: Activity, module: 'analytics' },
@@ -202,6 +203,7 @@ const SuperAdminSidebar = () => {
       { name: 'CRT Upload', path: '/superadmin/crt-upload', icon: FilePlus, module: 'crt_upload', isUpload: true },
       { name: 'Student Management', path: '/superadmin/students', icon: GraduationCap, module: 'student_management' },
       { name: 'Results Management', path: '/superadmin/results', icon: BarChart, module: 'results_management' },
+      { name: 'Progress Tracking', path: '/superadmin/progress-tracking', icon: TrendingUp, module: 'progress_tracking' },
       
       // Analytics (hidden from menu - access via direct URL)
       // { name: 'Real Analytics', path: '/superadmin/real-analytics', icon: Activity, module: 'analytics' },

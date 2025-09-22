@@ -513,6 +513,12 @@ if __name__ == "__main__":
     mongo_db = get_mongo_database()
     start_scheduler(mongo_db)
     
+    # Start test reminder scheduler
+    print("📱 Starting test reminder scheduler...")
+    from test_reminder_scheduler import start_reminder_system, reminder_scheduler
+    start_reminder_system()
+    print("✅ Test reminder scheduler started successfully")
+    
     # Register cleanup function
     def cleanup():
         print("🧹 Cleaning up connections...")
@@ -523,6 +529,12 @@ if __name__ == "__main__":
         stop_worker_monitoring()
         stop_log_analytics()
         stop_scheduler()
+        # Stop test reminder scheduler
+        try:
+            reminder_scheduler.shutdown()
+            print("✅ Test reminder scheduler stopped")
+        except Exception as e:
+            print(f"⚠️ Error stopping test reminder scheduler: {e}")
     
     atexit.register(cleanup)
     

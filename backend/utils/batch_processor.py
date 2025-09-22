@@ -328,7 +328,7 @@ class BatchProcessor:
         
         # Queue SMS if phone exists
         if phone:
-            sms_message = f"New test '{test_name}' scheduled for {start_date}. Test ID: {test_id}. Login to attempt: https://crt.pydahsoft.in/student/exam/{test_id}"
+            sms_message = f"A new test {test_name} has been scheduled at {start_date}.  for you. Please make sure to attempt it within 24hours. exam link: https://crt.pydahsoft.in/student/exam/{test_id} - Pydah College"
             sms_task_id = queue_sms(
                 phone=phone,
                 message=sms_message,
