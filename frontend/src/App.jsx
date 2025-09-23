@@ -176,12 +176,14 @@ function App() {
                   <Route path="history" element={<TestHistory />} />
                   <Route path="progress" element={<ProgressTracker />} />
                   <Route path="profile" element={<StudentProfile />} />
-                  <Route path="exam/:examId" element={<OnlineExamTaking />} />
                   <Route path="test-result/:resultId" element={<TestResult />} />
                   <Route path="practice-modules/:testId" element={<PracticeModuleTaking />} />
                   <Route path="technical-test/:testId" element={<TechnicalTestTaking />} />
                   <Route path="writing-test/:testId" element={<WritingTestTaking />} />
                 </Route>
+
+                {/* Exam Taking Routes - No Sidebar */}
+                <Route path="/student/exam/:examId" element={<ProtectedRoute allowedRoles={['student']}><OnlineExamTaking /></ProtectedRoute>} />
 
                 {/* Test Routes */}
 
