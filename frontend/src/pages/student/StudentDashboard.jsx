@@ -45,6 +45,7 @@ const StudentDashboard = () => {
   const [onlineExamsLoading, setOnlineExamsLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [activeExamModal, setActiveExamModal] = useState({ show: false, exam: null })
+  const [completedExamIds, setCompletedExamIds] = useState([])
 
   // Helper function to safely format numbers
   const safeToFixed = (value, decimals = 1) => {
@@ -82,6 +83,11 @@ const StudentDashboard = () => {
 
   // Helper function to get exam status
   const getExamStatus = (exam) => {
+    // Check if exam is completed first
+    if (completedExamIds.includes(exam._id)) {
+      return 'completed'
+    }
+    
     const start = new Date(exam.startDateTime)
     const end = new Date(exam.endDateTime)
     
@@ -103,6 +109,7 @@ const StudentDashboard = () => {
     fetchDashboardData()
     fetchUserProfile()
     fetchOnlineExams()
+    fetchCompletedExams()
   }, [])
 
   // Real-time clock for time remaining updates
@@ -122,7 +129,7 @@ const StudentDashboard = () => {
         setActiveExamModal({ show: true, exam: activeExam })
       }
     }
-  }, [onlineExams, currentTime, activeExamModal.show])
+  }, [onlineExams, currentTime, activeExamModal.show, completedExamIds])
 
   const fetchUserProfile = async () => {
     try {
@@ -188,18 +195,31 @@ const StudentDashboard = () => {
       if (response.data.success) {
         const exams = response.data.data || []
         
-        // Filter out ended exams and sort by start time (closest upcoming first)
+        // Filter out only ended exams, show upcoming, active, and completed
         const now = new Date()
         const filteredExams = exams.filter(exam => {
           const start = new Date(exam.startDateTime)
           const end = new Date(exam.endDateTime)
-          // Only show upcoming and active exams (not ended)
+          // Show upcoming, active, and completed exams (not ended)
           return now <= end
         })
         
         const sortedExams = filteredExams.sort((a, b) => {
           const startA = new Date(a.startDateTime)
           const startB = new Date(b.startDateTime)
+          
+          // Check if exams are completed
+          const aCompleted = completedExamIds.includes(a._id)
+          const bCompleted = completedExamIds.includes(b._id)
+          
+          // If one is completed and one is not, prioritize non-completed
+          if (aCompleted && !bCompleted) return 1
+          if (!aCompleted && bCompleted) return -1
+          
+          // If both are completed, sort by start time (most recent first)
+          if (aCompleted && bCompleted) {
+            return startB - startA
+          }
           
           // If both are in the future, sort by start time (earliest first)
           if (startA > now && startB > now) {
@@ -221,6 +241,18 @@ const StudentDashboard = () => {
       setOnlineExams([])
     } finally {
       setOnlineExamsLoading(false)
+    }
+  }
+
+  const fetchCompletedExams = async () => {
+    try {
+      const response = await api.get('/student/completed-exams')
+      if (response.data.success) {
+        setCompletedExamIds(response.data.data || [])
+      }
+    } catch (err) {
+      console.error('Error fetching completed exams:', err)
+      setCompletedExamIds([])
     }
   }
 
@@ -337,7 +369,9 @@ const StudentDashboard = () => {
                       transition={{ delay: index * 0.1 }}
                       whileHover={{ scale: 1.02 }}
                       className={`rounded-xl p-6 border-2 transition-all duration-300 ${
-                        examStatus === 'active' 
+                        examStatus === 'completed'
+                          ? 'bg-gradient-to-br from-purple-50 to-purple-100 border-purple-300 shadow-lg'
+                          : examStatus === 'active' 
                           ? 'bg-gradient-to-br from-green-50 to-green-100 border-green-300 shadow-lg' 
                           : examStatus === 'upcoming'
                           ? 'bg-gradient-to-br from-blue-50 to-blue-100 border-blue-300 hover:border-blue-400'
@@ -359,13 +393,15 @@ const StudentDashboard = () => {
                           </div>
                         </div>
                         <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          examStatus === 'active'
+                          examStatus === 'completed'
+                            ? 'bg-purple-100 text-purple-800'
+                            : examStatus === 'active'
                             ? 'bg-green-100 text-green-800'
                             : examStatus === 'upcoming'
                             ? 'bg-blue-100 text-blue-800'
                             : 'bg-gray-100 text-gray-800'
                         }`}>
-                          {examStatus === 'active' ? 'Live' : examStatus === 'upcoming' ? 'Upcoming' : 'Ended'}
+                          {examStatus === 'completed' ? 'Completed' : examStatus === 'active' ? 'Live' : examStatus === 'upcoming' ? 'Upcoming' : 'Ended'}
                         </div>
                       </div>
                       
@@ -394,6 +430,12 @@ const StudentDashboard = () => {
                             }`}>
                               {timeRemaining.text}
                             </span>
+                          </div>
+                        )}
+                        
+                        {examStatus === 'completed' && (
+                          <div className="w-full bg-purple-200 text-purple-800 font-medium py-2 px-4 rounded-lg text-center">
+                            ✓ Exam Submitted
                           </div>
                         )}
                         
