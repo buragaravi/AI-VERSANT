@@ -108,9 +108,15 @@ const StudentDashboard = () => {
   useEffect(() => {
     fetchDashboardData()
     fetchUserProfile()
-    fetchOnlineExams()
-    fetchCompletedExams()
+    fetchCompletedExams() // Fetch completed exams first
   }, [])
+
+  // Fetch online exams after completed exams are loaded
+  useEffect(() => {
+    if (completedExamIds.length >= 0) { // This will be true even if empty array
+      fetchOnlineExams()
+    }
+  }, [completedExamIds])
 
   // Refresh completed exams when user returns to dashboard (e.g., after submitting an exam)
   useEffect(() => {
@@ -242,6 +248,10 @@ const StudentDashboard = () => {
           return completedExamIds.includes(exam._id)
         })
         
+        // Debug logging
+        console.log('Completed exam IDs:', completedExamIds)
+        console.log('Completed exams found:', completedExams.length)
+        
         // Sort each category
         upcomingExams.sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime))
         activeExams.sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime))
@@ -254,6 +264,12 @@ const StudentDashboard = () => {
           ...upcomingExams,    // Then all upcoming exams
           ...(completedExams.length > 0 ? [completedExams[0]] : []) // Only show the most recent completed exam
         ]
+        
+        // Debug logging
+        console.log('Active exams:', activeExams.length)
+        console.log('Upcoming exams:', upcomingExams.length)
+        console.log('Completed exams (showing 1):', completedExams.length > 0 ? 1 : 0)
+        console.log('Total sorted exams:', sortedExams.length)
         
         setOnlineExams(sortedExams)
       }
