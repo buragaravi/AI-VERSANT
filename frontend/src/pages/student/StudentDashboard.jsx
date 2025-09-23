@@ -112,6 +112,16 @@ const StudentDashboard = () => {
     fetchCompletedExams()
   }, [])
 
+  // Refresh completed exams when user returns to dashboard (e.g., after submitting an exam)
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchCompletedExams()
+    }
+    
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [])
+
   // Real-time clock for time remaining updates
   useEffect(() => {
     const interval = setInterval(() => {
@@ -123,10 +133,22 @@ const StudentDashboard = () => {
 
   // Check for active exams and show popup
   useEffect(() => {
-    if (onlineExams.length > 0) {
-      const activeExam = onlineExams.find(exam => getExamStatus(exam) === 'active')
+    if (onlineExams.length > 0 && completedExamIds.length >= 0) {
+      // Find the first active exam that is NOT completed
+      const activeExam = onlineExams.find(exam => {
+        const status = getExamStatus(exam)
+        // Only show modal for active exams that are NOT completed
+        return status === 'active' && !completedExamIds.includes(exam._id)
+      })
+      
+      // Only show modal if we found an active non-completed exam and modal is not already showing
       if (activeExam && !activeExamModal.show) {
         setActiveExamModal({ show: true, exam: activeExam })
+      }
+      
+      // If the currently shown exam in modal is now completed, hide the modal
+      if (activeExamModal.show && activeExamModal.exam && completedExamIds.includes(activeExamModal.exam._id)) {
+        setActiveExamModal({ show: false, exam: null })
       }
     }
   }, [onlineExams, currentTime, activeExamModal.show, completedExamIds])
