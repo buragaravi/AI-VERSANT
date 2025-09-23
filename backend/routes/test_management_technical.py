@@ -145,6 +145,41 @@ def create_technical_test():
                     except Exception as e:
                         current_app.logger.warning(f"Failed to update usage count for question {question.get('_id')}: {e}")
 
+        # Send test notifications to students in background
+        try:
+            from utils.test_student_selector import get_students_by_batch_course_combination
+            from utils.batch_processor import create_test_notification_batch_job
+            
+            # Get students for this test
+            students = get_students_by_batch_course_combination(batch_ids, course_ids)
+            
+            if students:
+                # Format start date for notification
+                start_date_str = startDateTime if test_type.lower() == 'online' else 'Immediately'
+                
+                # Get the custom test_id from the test document
+                test_doc = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
+                custom_test_id = test_doc.get('test_id', test_id) if test_doc else test_id
+                
+                # Create batch job for test notifications
+                batch_result = create_test_notification_batch_job(
+                    test_id=custom_test_id,  # Custom test_id for SMS
+                    object_id=test_id,  # MongoDB _id for emails
+                    test_name=test_name,
+                    start_date=start_date_str,
+                    students=students,
+                    batch_size=100,
+                    interval_minutes=3
+                )
+                
+                current_app.logger.info(f"📧📱 Technical test notification batch created: {batch_result}")
+            else:
+                current_app.logger.warning(f"⚠️ No students found for technical test notification: batch_ids={batch_ids}, course_ids={course_ids}")
+                
+        except Exception as e:
+            current_app.logger.error(f"❌ Failed to create technical test notification batch: {e}")
+            # Don't fail test creation if notifications fail
+
         return jsonify({
             'success': True,
             'message': 'Technical test created successfully',
