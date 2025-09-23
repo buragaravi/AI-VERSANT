@@ -41,6 +41,10 @@ const StudentDashboard = () => {
   const [unlockedLoading, setUnlockedLoading] = useState(true)
   const [unlockedError, setUnlockedError] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
+  const [onlineExams, setOnlineExams] = useState([])
+  const [onlineExamsLoading, setOnlineExamsLoading] = useState(true)
+  const [currentTime, setCurrentTime] = useState(new Date())
+  const [activeExamModal, setActiveExamModal] = useState({ show: false, exam: null })
 
   // Helper function to safely format numbers
   const safeToFixed = (value, decimals = 1) => {
@@ -51,6 +55,45 @@ const StudentDashboard = () => {
     return isNaN(num) ? '0.0' : num.toFixed(decimals)
   }
 
+  // Helper function to format time remaining
+  const getTimeRemaining = (startDateTime) => {
+    const start = new Date(startDateTime)
+    const diff = start - currentTime
+    
+    if (diff <= 0) {
+      return { text: 'Started', status: 'active' }
+    }
+    
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000)
+    
+    if (days > 0) {
+      return { text: `${days}d ${hours}h`, status: 'upcoming' }
+    } else if (hours > 0) {
+      return { text: `${hours}h ${minutes}m`, status: 'upcoming' }
+    } else if (minutes > 0) {
+      return { text: `${minutes}m ${seconds}s`, status: 'urgent' }
+    } else {
+      return { text: `${seconds}s`, status: 'urgent' }
+    }
+  }
+
+  // Helper function to get exam status
+  const getExamStatus = (exam) => {
+    const start = new Date(exam.startDateTime)
+    const end = new Date(exam.endDateTime)
+    
+    if (currentTime < start) {
+      return 'upcoming'
+    } else if (currentTime >= start && currentTime <= end) {
+      return 'active'
+    } else {
+      return 'ended'
+    }
+  }
+
   const coreModules = [
     { id: 'GRAMMAR', name: 'Grammar', icon: '🧠', color: 'bg-indigo-500' },
     { id: 'VOCABULARY', name: 'Vocabulary', icon: '📚', color: 'bg-green-500' }
@@ -59,7 +102,27 @@ const StudentDashboard = () => {
   useEffect(() => {
     fetchDashboardData()
     fetchUserProfile()
+    fetchOnlineExams()
   }, [])
+
+  // Real-time clock for time remaining updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date())
+    }, 1000) // Update every second
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // Check for active exams and show popup
+  useEffect(() => {
+    if (onlineExams.length > 0) {
+      const activeExam = onlineExams.find(exam => getExamStatus(exam) === 'active')
+      if (activeExam && !activeExamModal.show) {
+        setActiveExamModal({ show: true, exam: activeExam })
+      }
+    }
+  }, [onlineExams, currentTime, activeExamModal.show])
 
   const fetchUserProfile = async () => {
     try {
@@ -115,6 +178,49 @@ const StudentDashboard = () => {
       error('Failed to load dashboard data')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchOnlineExams = async () => {
+    try {
+      setOnlineExamsLoading(true)
+      const response = await api.get('/student/online-exams')
+      if (response.data.success) {
+        const exams = response.data.data || []
+        
+        // Filter out ended exams and sort by start time (closest upcoming first)
+        const now = new Date()
+        const filteredExams = exams.filter(exam => {
+          const start = new Date(exam.startDateTime)
+          const end = new Date(exam.endDateTime)
+          // Only show upcoming and active exams (not ended)
+          return now <= end
+        })
+        
+        const sortedExams = filteredExams.sort((a, b) => {
+          const startA = new Date(a.startDateTime)
+          const startB = new Date(b.startDateTime)
+          
+          // If both are in the future, sort by start time (earliest first)
+          if (startA > now && startB > now) {
+            return startA - startB
+          }
+          
+          // If one is in the past and one is in the future, prioritize future
+          if (startA > now && startB <= now) return -1
+          if (startA <= now && startB > now) return 1
+          
+          // If both are active (started but not ended), sort by start time (earliest first)
+          return startA - startB
+        })
+        
+        setOnlineExams(sortedExams)
+      }
+    } catch (err) {
+      console.error('Error fetching online exams:', err)
+      setOnlineExams([])
+    } finally {
+      setOnlineExamsLoading(false)
     }
   }
 
@@ -192,6 +298,165 @@ const StudentDashboard = () => {
             </div>
           </div>
         </motion.div>
+
+        {/* Online Exams Section - Prominently placed after header */}
+        {!onlineExamsLoading && onlineExams.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="mb-8"
+          >
+            <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                  <Calendar className="h-6 w-6 text-orange-600 mr-3" />
+                  Upcoming Online Exams
+                </h2>
+                <Link 
+                  to="/student/exams" 
+                  className="text-orange-600 hover:text-orange-700 text-sm font-medium flex items-center"
+                >
+                  View All
+                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {onlineExams.slice(0, 6).map((exam, index) => {
+                  const examStatus = getExamStatus(exam)
+                  const timeRemaining = getTimeRemaining(exam.startDateTime)
+                  
+                  return (
+                    <motion.div
+                      key={exam._id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      whileHover={{ scale: 1.02 }}
+                      className={`rounded-xl p-6 border-2 transition-all duration-300 ${
+                        examStatus === 'active' 
+                          ? 'bg-gradient-to-br from-green-50 to-green-100 border-green-300 shadow-lg' 
+                          : examStatus === 'upcoming'
+                          ? 'bg-gradient-to-br from-blue-50 to-blue-100 border-blue-300 hover:border-blue-400'
+                          : 'bg-gradient-to-br from-gray-50 to-gray-100 border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-bold text-gray-900 mb-2 line-clamp-2">
+                            {exam.name}
+                          </h3>
+                          <div className="flex items-center text-sm text-gray-600 mb-2">
+                            <BookOpen className="h-4 w-4 mr-2" />
+                            {exam.module_name} - {exam.level_name}
+                          </div>
+                          <div className="flex items-center text-sm text-gray-600">
+                            <FileText className="h-4 w-4 mr-2" />
+                            {exam.question_count} Questions
+                          </div>
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          examStatus === 'active'
+                            ? 'bg-green-100 text-green-800'
+                            : examStatus === 'upcoming'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {examStatus === 'active' ? 'Live' : examStatus === 'upcoming' ? 'Upcoming' : 'Ended'}
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Start Time:</span>
+                          <span className="font-medium text-gray-900">
+                            {new Date(exam.startDateTime).toLocaleString()}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">End Time:</span>
+                          <span className="font-medium text-gray-900">
+                            {new Date(exam.endDateTime).toLocaleString()}
+                          </span>
+                        </div>
+                        
+                        {examStatus === 'upcoming' && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-600">Time Remaining:</span>
+                            <span className={`font-bold ${
+                              timeRemaining.status === 'urgent' 
+                                ? 'text-red-600' 
+                                : 'text-blue-600'
+                            }`}>
+                              {timeRemaining.text}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {examStatus === 'active' && (
+                          <Link
+                            to={`/student/exam/${exam._id}`}
+                            className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 text-center block"
+                          >
+                            Start Exam
+                          </Link>
+                        )}
+                        
+                        {examStatus === 'upcoming' && (
+                          <div className="w-full bg-gray-200 text-gray-600 font-medium py-2 px-4 rounded-lg text-center">
+                            Exam Not Started
+                          </div>
+                        )}
+                        
+                        {examStatus === 'ended' && (
+                          <div className="w-full bg-gray-200 text-gray-600 font-medium py-2 px-4 rounded-lg text-center">
+                            Exam Ended
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+              
+              {onlineExams.length > 6 && (
+                <div className="text-center mt-6">
+                  <Link
+                    to="/student/exams"
+                    className="inline-flex items-center text-orange-600 hover:text-orange-700 font-medium"
+                  >
+                    View {onlineExams.length - 6} more exams
+                    <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Show message when no online exams */}
+        {!onlineExamsLoading && onlineExams.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="mb-8"
+          >
+            <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100 text-center">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Calendar className="h-8 w-8 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Online Exams</h3>
+              <p className="text-gray-600">You don't have any online exams scheduled at the moment.</p>
+            </div>
+          </motion.div>
+        )}
 
         {/* Enhanced Quick Actions */}
         <motion.div
@@ -514,6 +779,67 @@ const StudentDashboard = () => {
       
       {/* Form Portal Popup */}
       <FormPortalPopup />
+      
+      {/* Active Exam Modal */}
+      {activeExamModal.show && activeExamModal.exam && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl"
+          >
+            <div className="text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Target className="h-8 w-8 text-green-600" />
+              </div>
+              
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                Exam is Live!
+              </h3>
+              
+              <p className="text-gray-600 mb-6">
+                <strong>{activeExamModal.exam.name}</strong> is currently active and ready to be taken.
+              </p>
+              
+              <div className="bg-green-50 rounded-lg p-4 mb-6">
+                <div className="text-sm text-gray-600 mb-2">Exam Details:</div>
+                <div className="text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span>Module:</span>
+                    <span className="font-medium">{activeExamModal.exam.module_name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Questions:</span>
+                    <span className="font-medium">{activeExamModal.exam.question_count}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Ends at:</span>
+                    <span className="font-medium">
+                      {new Date(activeExamModal.exam.endDateTime).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => setActiveExamModal({ show: false, exam: null })}
+                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 px-4 rounded-lg transition-colors duration-200"
+                >
+                  Maybe Later
+                </button>
+                <Link
+                  to={`/student/exam/${activeExamModal.exam._id}`}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 text-center"
+                  onClick={() => setActiveExamModal({ show: false, exam: null })}
+                >
+                  Start Exam
+                </Link>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   )
 }
