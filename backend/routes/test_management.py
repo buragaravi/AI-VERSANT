@@ -3961,35 +3961,19 @@ def upload_questions():
         # Get existing questions for status checking
         existing_questions = list(mongo_db.question_bank.find(
             {'module_id': module_id, 'level_id': level_id, 'question_type': question_type},
-            {'question': 1, '_id': 1}
+            {'question': 1, '_id': 1, 'used_count': 1}
         ))
         existing_question_texts = {q['question'].strip().lower(): str(q['_id']) for q in existing_questions}
+        existing_question_objects = {q['question'].strip().lower(): q['_id'] for q in existing_questions}
         
         # Prepare questions for test creation with status information
         formatted_questions = []
         new_questions_to_store = []
         
+        # First, prepare new questions for storage
         for q in valid_questions:
             question_text_lower = q['question'].strip().lower()
             is_existing = question_text_lower in existing_question_texts
-            
-            formatted_question = {
-                'question_text': q['question'],
-                'question_type': 'MCQ',
-                'options': {
-                    'A': q['optionA'],
-                    'B': q['optionB'],
-                    'C': q['optionC'],
-                    'D': q['optionD']
-                },
-                'correct_answer': q['answer'].upper(),
-                'marks': 1,
-                'instructions': q.get('instructions', ''),
-                'source': 'manual_upload',
-                'status': 'existing' if is_existing else 'new',
-                'existing_id': existing_question_texts.get(question_text_lower) if is_existing else None
-            }
-            formatted_questions.append(formatted_question)
             
             # If it's a new question, prepare it for storage
             if not is_existing:
@@ -4012,20 +3996,73 @@ def upload_questions():
                 }
                 new_questions_to_store.append(new_question_doc)
         
-        # Store new questions in database
+        # Store new questions in database and get their ObjectIds
+        stored_question_ids = {}
         if new_questions_to_store:
-            mongo_db.question_bank.insert_many(new_questions_to_store)
+            result = mongo_db.question_bank.insert_many(new_questions_to_store)
+            # Map question text to ObjectId for new questions
+            for i, question_doc in enumerate(new_questions_to_store):
+                question_text_lower = question_doc['question'].strip().lower()
+                stored_question_ids[question_text_lower] = result.inserted_ids[i]
+        
+        # Now create formatted questions with correct ObjectIds
+        questions_to_update_usage = []  # Track questions that need usage count update
+        
+        for q in valid_questions:
+            question_text_lower = q['question'].strip().lower()
+            is_existing = question_text_lower in existing_question_texts
+            
+            # Get the correct ObjectId - either from existing questions or newly stored questions
+            if is_existing:
+                question_id = existing_question_objects.get(question_text_lower)
+                questions_to_update_usage.append(question_id)  # Track for usage update
+            else:
+                question_id = stored_question_ids.get(question_text_lower)
+            
+            formatted_question = {
+                '_id': question_id if question_id else ObjectId(),  # Use actual database ObjectId
+                'question': q['question'],
+                'question_type': 'mcq',
+                'optionA': q['optionA'],
+                'optionB': q['optionB'],
+                'optionC': q['optionC'],
+                'optionD': q['optionD'],
+                'answer': q['answer'].upper(),
+                'marks': 1,
+                'instructions': q.get('instructions', ''),
+                'source': 'manual_upload',
+                'status': 'existing' if is_existing else 'new',
+                'existing_id': existing_question_texts.get(question_text_lower) if is_existing else None
+            }
+            formatted_questions.append(formatted_question)
+        
+        # Update usage count for existing questions that are being used
+        if questions_to_update_usage:
+            mongo_db.question_bank.update_many(
+                {'_id': {'$in': questions_to_update_usage}},
+                {
+                    '$inc': {'used_count': 1},
+                    '$set': {'last_used': datetime.utcnow()}
+                }
+            )
         
         # Count questions by status
         new_count = sum(1 for q in formatted_questions if q['status'] == 'new')
         existing_count = sum(1 for q in formatted_questions if q['status'] == 'existing')
+        
+        # Convert ObjectIds to strings for JSON serialization
+        serializable_questions = []
+        for q in formatted_questions:
+            serializable_q = q.copy()
+            serializable_q['_id'] = str(serializable_q['_id'])
+            serializable_questions.append(serializable_q)
         
         # Prepare detailed response
         response_data = {
             'success': True,
             'message': f'Successfully processed {len(formatted_questions)} questions for test creation ({new_count} new, {existing_count} existing)',
             'count': len(formatted_questions),
-            'questions': formatted_questions,  # Return questions for immediate use
+            'questions': serializable_questions,  # Return questions with string ObjectIds
             'status_summary': {
                 'new_questions': new_count,
                 'existing_questions': existing_count,
