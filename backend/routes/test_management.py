@@ -801,137 +801,89 @@ def check_test_name():
 @jwt_required()
 @require_superadmin
 def notify_students(test_id):
-    """Notify all students assigned to a test by email with test details."""
+    """Notify all students assigned to a test using batch processing for both SMS and email."""
     try:
         # Fetch test details
         test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
         if not test:
             return jsonify({'success': False, 'message': 'Test not found.'}), 404
 
-        # Fetch all assigned students
-        from routes.student import get_students_for_test_ids
+        # Get batch_ids and course_ids from test (same approach as test creation)
+        batch_ids = test.get('batch_ids', [])
+        course_ids = test.get('course_ids', [])
+        
+        current_app.logger.info(f"Test {test_id} assigned to batches: {batch_ids}, courses: {course_ids}")
+        
+        if not batch_ids and not course_ids:
+            return jsonify({'success': False, 'message': 'No batches or courses assigned to this test.'}), 400
+
+        # Use the same student fetching approach as test creation
         try:
-            if test.get('assigned_student_ids'):
-                student_list = get_students_for_test_ids([test_id], assigned_student_ids=test['assigned_student_ids'])
-            else:
-                student_list = get_students_for_test_ids([test_id])
+            from utils.test_student_selector import get_students_by_batch_course_combination
             
-            current_app.logger.info(f"Found {len(student_list)} students for test {test_id}")
+            # Get students for this test using the same method as test creation
+            students = get_students_by_batch_course_combination(batch_ids, course_ids)
             
-            if not student_list:
-                return jsonify({'success': False, 'message': 'No students found for this test.'}), 404
+            current_app.logger.info(f"Found {len(students)} students for test {test_id}")
+            
+            if not students:
+                return jsonify({'success': False, 'message': 'No students found for this test. Please ensure students are uploaded to the assigned batches and courses.'}), 404
+                
         except Exception as e:
             current_app.logger.error(f"Error fetching students for test {test_id}: {e}")
             return jsonify({'success': False, 'message': f'Error fetching students: {e}'}), 500
 
-        # Check email service configuration
-        from utils.email_service import check_email_configuration
-        email_config_ok = check_email_configuration()
-        if not email_config_ok:
-            current_app.logger.warning("Email service has configuration issues")
-            current_app.logger.info("Proceeding with notifications, but some may fail")
+        # Format start date for notification (same as test creation)
+        start_date_str = test.get('startDateTime', 'Immediately') if test.get('test_type', '').lower() == 'online' else 'Immediately'
         
-        # Send notifications
-        results = []
-        current_app.logger.info(f"Starting to send notifications to {len(student_list)} students")
-        
-        for student in student_list:
-            try:
-                current_app.logger.info(f"Processing notification for student: {student['name']} ({student['email']})")
-                
-                # Send email notification
-                try:
-                    html_content = render_template('test_notification.html', 
-                        student_name=student['name'],
-                        test_name=test['name'],
-                        test_id=str(test['_id']),
-                        test_type=test.get('test_type', 'Practice'),
-                        module=test.get('module_id', 'Unknown'),
-                        level=test.get('level_id', 'Unknown'),
-                        module_display_name=test.get('module_id', 'Unknown'),
-                        level_display_name=test.get('level_id', 'Unknown'),
-                        question_count=len(test.get('questions', [])),
-                        is_online=test.get('test_type') == 'online',
-                        start_dt=test.get('startDateTime', 'Not specified'),
-                        end_dt=test.get('endDateTime', 'Not specified'),
-                        duration=test.get('duration', 'Not specified')
-                    )
-                    current_app.logger.info(f"Template rendered successfully for {student['email']}")
-                except Exception as template_error:
-                    current_app.logger.error(f"Template rendering failed for {student['email']}: {template_error}")
-                    # Use a simple fallback template
-                    html_content = f"""
-                    <html>
-                    <body>
-                        <h2>New Test Available: {test['name']}</h2>
-                        <p>Hello {student['name']},</p>
-                        <p>You have been assigned a new test: {test['name']}</p>
-                        <p>Module: {test.get('module_id', 'Unknown')}</p>
-                        <p>Level: {test.get('level_id', 'Unknown')}</p>
-                        <p>Type: {test.get('test_type', 'Practice')}</p>
-                        <p>Questions: {len(test.get('questions', []))}</p>
-                        <p>Please log in to your account to take the test.</p>
-                    </body>
-                    </html>
-                    """
-                
-                email_sent = send_email(
-                    to_email=student['email'],
-                    to_name=student['name'],
-                    subject=f"New Test Available: {test['name']}",
-                    html_content=html_content
-                )
-                
-                current_app.logger.info(f"Email sent to {student['email']}: {email_sent}")
-                
-                results.append({
-                    'student_id': student['student_id'],
-                    'name': student['name'],
-                    'email': student['email'],
-                    'mobile_number': student.get('mobile_number'),
-                    'test_status': 'pending',  # Default to pending, could be enhanced to check actual status
-                    'notify_status': 'sent' if email_sent else 'failed',
-                    'sms_status': 'no_mobile',  # Default since SMS is not implemented
-                    'email_sent': email_sent,
-                    'status': 'success' if email_sent else 'failed'
-                })
-            except Exception as e:
-                current_app.logger.error(f"Failed to notify student {student['student_id']}: {e}")
-                import traceback
-                current_app.logger.error(f"Full traceback: {traceback.format_exc()}")
-                results.append({
-                    'student_id': student['student_id'],
-                    'name': student['name'],
-                    'email': student['email'],
-                    'mobile_number': student.get('mobile_number'),
-                    'test_status': 'pending',
-                    'notify_status': 'failed',
-                    'sms_status': 'no_mobile',
-                    'email_sent': False,
-                    'status': 'failed',
-                    'error': str(e)
-                })
-
-        # Calculate success/failure statistics
-        successful_notifications = sum(1 for r in results if r['status'] == 'success')
-        failed_notifications = sum(1 for r in results if r['status'] == 'failed')
-        
-        current_app.logger.info(f"Notification summary: {successful_notifications} successful, {failed_notifications} failed")
+        # Create batch job for test notifications (same as test creation)
+        try:
+            from utils.batch_processor import create_test_notification_batch_job
+            
+            # Get the custom test_id from the test document
+            test_doc = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
+            custom_test_id = test_doc.get('test_id', test_id) if test_doc else test_id
+            
+            batch_result = create_test_notification_batch_job(
+                test_id=custom_test_id,  # Custom test_id for SMS
+                object_id=test_id,  # MongoDB _id for emails
+                test_name=test.get('name', 'Test'),
+                start_date=start_date_str,
+                students=students,
+                batch_size=100,
+                interval_minutes=3
+            )
+            
+            current_app.logger.info(f"📧📱 Test notification batch created: {batch_result}")
+        except Exception as e:
+            current_app.logger.error(f"Error creating test notification batch: {e}")
+            return jsonify({
+                'success': False,
+                'message': 'Failed to create notification batch. Notifications will be sent individually.'
+            }), 500
         
         return jsonify({
             'success': True,
-            'message': f'Notifications processed: {successful_notifications} successful, {failed_notifications} failed',
-            'results': results,
-            'summary': {
-                'total': len(results),
-                'successful': successful_notifications,
-                'failed': failed_notifications
+                'message': f'Test notifications queued for {len(students)} students. Processing in background.',
+                'data': {
+                    'test_id': test_id,
+                    'test_name': test.get('name'),
+                    'total_students': len(students),
+                    'batch_id': batch_result.get('batch_id'),
+                    'estimated_completion': batch_result.get('estimated_completion'),
+                    'sub_batches': batch_result.get('sub_batches')
             }
         }), 200
 
     except Exception as e:
-        current_app.logger.error(f"Error notifying students: {e}")
-        return jsonify({'success': False, 'message': f'Failed to send notification: {e}'}), 500
+            current_app.logger.error(f"❌ Failed to create test notification batch: {e}")
+            return jsonify({'success': False, 'message': f'Failed to queue notifications: {e}'}), 500
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in notify_students: {e}")
+        import traceback
+        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'success': False, 'message': 'An error occurred while sending notifications.'}), 500
 
 
 
@@ -5127,14 +5079,18 @@ def submit_online_listening_test():
                 'message': 'Test ID is required'
             }), 400
         
-        test_id = ObjectId(data['test_id'])
-        test = mongo_db.tests.find_one({'_id': test_id})
+        # Use the test ID resolver to support both _id and test_id
+        from utils.test_id_resolver import resolve_test_id
         
-        if not test:
+        test_result = resolve_test_id(data['test_id'])
+        if not test_result:
             return jsonify({
                 'success': False,
                 'message': 'Test not found'
             }), 404
+        
+        test = test_result['test']
+        current_app.logger.info(f"Online listening test resolved by {test_result['resolved_by']}: {test_result['object_id']} / {test_result['test_id']}")
         
         # Check if this is a listening test
         if test.get('module_id') != 'LISTENING':

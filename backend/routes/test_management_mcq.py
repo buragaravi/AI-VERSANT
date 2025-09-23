@@ -145,9 +145,14 @@ def create_mcq_test():
                 # Format start date for notification
                 start_date_str = startDateTime if test_type.lower() == 'online' else 'Immediately'
                 
+                # Get the custom test_id from the test document
+                test_doc = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
+                custom_test_id = test_doc.get('test_id', test_id) if test_doc else test_id
+                
                 # Create batch job for test notifications
                 batch_result = create_test_notification_batch_job(
-                    test_id=test_id,
+                    test_id=custom_test_id,  # Custom test_id for SMS
+                    object_id=test_id,  # MongoDB _id for emails
                     test_name=test_name,
                     start_date=start_date_str,
                     students=students,

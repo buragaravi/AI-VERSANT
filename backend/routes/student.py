@@ -606,17 +606,18 @@ def start_test(test_id):
         if not student:
             return jsonify({'success': False, 'message': 'Student profile not found'}), 404
         
-        # Get test and verify it's available for this student
-        # For online exams, check campus_ids and course_ids
-        # For regular tests, check batch_course_instance_ids
-        test_query = {
-            '_id': ObjectId(test_id),
-            'status': 'active'
-        }
+        # Use the test ID resolver to support both _id and test_id
+        from utils.test_id_resolver import resolve_test_id
         
-        # Check if it's an online exam
-        test = mongo_db.tests.find_one(test_query)
-        if not test:
+        test_result = resolve_test_id(test_id)
+        if not test_result:
+            return jsonify({'success': False, 'message': 'Test not found'}), 404
+        
+        test = test_result['test']
+        current_app.logger.info(f"Test start resolved by {test_result['resolved_by']}: {test_result['object_id']} / {test_result['test_id']}")
+        
+        # Verify test is active
+        if test.get('status') != 'active':
             return jsonify({'success': False, 'message': 'Test not found or not active'}), 404
         
         # For online exams, check campus and course assignment
@@ -761,10 +762,15 @@ def submit_test(test_id):
         if not student:
             return jsonify({'success': False, 'message': 'Student profile not found'}), 404
         
-        # Get test details first to determine test type
-        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
-        if not test:
+        # Use the test ID resolver to support both _id and test_id
+        from utils.test_id_resolver import resolve_test_id
+        
+        test_result = resolve_test_id(test_id)
+        if not test_result:
             return jsonify({'success': False, 'message': 'Test not found'}), 404
+        
+        test = test_result['test']
+        current_app.logger.info(f"Test submit resolved by {test_result['resolved_by']}: {test_result['object_id']} / {test_result['test_id']}")
         
         # Build attempt query based on test type
         attempt_query = {
@@ -1089,16 +1095,19 @@ def get_student_random_test_assignment(test_id):
         
         instance_id = student['batch_course_instance_id']
         
-        # Get test and verify it's assigned to this instance
-        test = mongo_db.tests.find_one({
-            '_id': ObjectId(test_id),
-            'batch_course_instance_ids': instance_id,
-            'is_active': True,
-            'has_random_questions': True  # Only for tests with random questions
-        })
+        # Use the test ID resolver to support both _id and test_id
+        from utils.test_id_resolver import resolve_test_id
         
-        if not test:
-            return jsonify({'success': False, 'message': 'Test not found or not available'}), 404
+        test_result = resolve_test_id(test_id)
+        if not test_result:
+            return jsonify({'success': False, 'message': 'Test not found'}), 404
+        
+        test = test_result['test']
+        current_app.logger.info(f"Random assignment test resolved by {test_result['resolved_by']}: {test_result['object_id']} / {test_result['test_id']}")
+        
+        # Verify test is assigned to this instance and has random questions
+        if (test.get('batch_course_instance_ids') and instance_id not in test.get('batch_course_instance_ids', [])) or not test.get('is_active', False) or not test.get('has_random_questions', False):
+            return jsonify({'success': False, 'message': 'Test not available for random assignment'}), 404
         
         # Check if student is assigned to this test
         if ObjectId(current_user_id) not in test.get('assigned_student_ids', []):
@@ -1190,10 +1199,15 @@ def submit_random_test(test_id):
         if assignment.get('attempted', False):
             return jsonify({'success': False, 'message': 'Test already submitted'}), 409
         
-        # Get test details
-        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
-        if not test:
+        # Use the test ID resolver to support both _id and test_id
+        from utils.test_id_resolver import resolve_test_id
+        
+        test_result = resolve_test_id(test_id)
+        if not test_result:
             return jsonify({'success': False, 'message': 'Test not found'}), 404
+        
+        test = test_result['test']
+        current_app.logger.info(f"Random test submit resolved by {test_result['resolved_by']}: {test_result['object_id']} / {test_result['test_id']}")
         
 
         # Calculate score properly
@@ -1415,7 +1429,7 @@ def get_online_exams():
 @student_bp.route('/test/<test_id>', methods=['GET'])
 @jwt_required()
 def get_single_test(test_id):
-    """Get full details for a single test for a student to take."""
+    """Get full details for a single test for a student to take. Supports both MongoDB _id and custom test_id."""
     try:
         current_user_id = get_jwt_identity()
         user = mongo_db.users.find_one({'_id': ObjectId(current_user_id)})
@@ -1423,9 +1437,15 @@ def get_single_test(test_id):
         if not user or user.get('role') != 'student':
             return jsonify({'success': False, 'message': 'Access denied'}), 403
 
-        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
-        if not test:
+        # Use the test ID resolver to support both _id and test_id
+        from utils.test_id_resolver import resolve_test_id
+        
+        test_result = resolve_test_id(test_id)
+        if not test_result:
             return jsonify({'success': False, 'message': 'Test not found'}), 404
+        
+        test = test_result['test']
+        current_app.logger.info(f"Test resolved by {test_result['resolved_by']}: {test_result['object_id']} / {test_result['test_id']}")
             
         # For practice tests, be more lenient with access control
         # Check if this is a practice test that should be accessible

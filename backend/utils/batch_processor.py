@@ -61,7 +61,7 @@ class BatchProcessor:
             interval_minutes=interval_minutes
         )
     
-    def create_test_notification_batch_job(self, test_id: str, test_name: str, 
+    def create_test_notification_batch_job(self, test_id: str, object_id: str, test_name: str, 
                                          start_date: str, students: List[Dict],
                                          batch_size: int = 100, 
                                          interval_minutes: int = 3) -> Dict:
@@ -74,7 +74,8 @@ class BatchProcessor:
             batch_size=batch_size,
             interval_minutes=interval_minutes,
             test_data={
-                'test_id': test_id,
+                'test_id': test_id,  # Custom test_id for SMS
+                'object_id': object_id,  # MongoDB _id for emails
                 'test_name': test_name,
                 'start_date': start_date
             }
@@ -322,13 +323,14 @@ class BatchProcessor:
                                  test_data: Dict, sms_queued: int, email_queued: int, 
                                  sms_failed: int, email_failed: int):
         """Process test notification"""
-        test_id = test_data['test_id']
+        test_id = test_data['test_id']  # Custom test_id for SMS
+        object_id = test_data['object_id']  # MongoDB _id for emails
         test_name = test_data['test_name']
         start_date = test_data['start_date']
         
-        # Queue SMS if phone exists
+        # Queue SMS if phone exists (use custom test_id for URL)
         if phone:
-            sms_message = f"A new test {test_name} has been scheduled at {start_date}.  for you. Please make sure to attempt it within 24hours. exam link: https://crt.pydahsoft.in/student/exam/{test_id} - Pydah College"
+            sms_message = f"A new test {test_name} has been scheduled at {start_date} for you. Please make sure to attempt it within 24hours. exam link: https://crt.pydahsoft.in/student/exam/ {test_id} - Pydah College"
             sms_task_id = queue_sms(
                 phone=phone,
                 message=sms_message,
@@ -340,7 +342,7 @@ class BatchProcessor:
             else:
                 sms_failed += 1
         
-        # Queue email if email exists
+        # Queue email if email exists (use MongoDB _id for URL)
         if email:
             email_task_id = queue_email(
                 email=email,
@@ -350,9 +352,10 @@ class BatchProcessor:
                 template_params={
                     'name': name,
                     'test_name': test_name,
-                    'test_id': test_id,
+                    'test_id': test_id,  # Custom test_id for display
+                    'object_id': object_id,  # MongoDB _id for URL
                     'start_date': start_date,
-                    'test_url': f"https://crt.pydahsoft.in/student/exam/{test_id}"
+                    'test_url': f"https://crt.pydahsoft.in/student/exam/{object_id}"  # Use _id for URL
                 }
             )
             if email_task_id:
@@ -424,13 +427,13 @@ def create_credentials_batch_job(students: List[Dict],
     """Create a new credentials batch job"""
     return batch_processor.create_credentials_batch_job(students, batch_size, interval_minutes)
 
-def create_test_notification_batch_job(test_id: str, test_name: str, 
+def create_test_notification_batch_job(test_id: str, object_id: str, test_name: str, 
                                      start_date: str, students: List[Dict],
                                      batch_size: int = 100, 
                                      interval_minutes: int = 3) -> Dict:
     """Create a new test notification batch job"""
     return batch_processor.create_test_notification_batch_job(
-        test_id, test_name, start_date, students, batch_size, interval_minutes
+        test_id, object_id, test_name, start_date, students, batch_size, interval_minutes
     )
 
 def get_batch_status(batch_id: str) -> Optional[Dict]:
