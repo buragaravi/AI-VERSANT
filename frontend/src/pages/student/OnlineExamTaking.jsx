@@ -12,7 +12,7 @@ const OnlineExamTaking = () => {
   const [exam, setExam] = useState(null);
   const [answers, setAnswers] = useState({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [cheatWarning, setCheatWarning] = useState(false);
   const [cheatCount, setCheatCount] = useState(0);
   const [autoSubmitted, setAutoSubmitted] = useState(false);
@@ -31,11 +31,81 @@ const OnlineExamTaking = () => {
   const [recordingQuestionId, setRecordingQuestionId] = useState(null);
   const [audioURLs, setAudioURLs] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isExamFetched, setIsExamFetched] = useState(false);
+
+  // Security measures for exam taking
+  useEffect(() => {
+    // Disable right-click context menu
+    const handleContextMenu = (e) => e.preventDefault();
+    
+    // Disable text selection
+    const handleSelectStart = (e) => e.preventDefault();
+    
+    // Disable drag and drop
+    const handleDragStart = (e) => e.preventDefault();
+    
+    // Disable F12, Ctrl+Shift+I, Ctrl+U, Ctrl+S, Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+    const handleKeyDown = (e) => {
+      if (
+        e.key === 'F12' ||
+        (e.ctrlKey && e.shiftKey && e.key === 'I') ||
+        (e.ctrlKey && e.key === 'u') ||
+        (e.ctrlKey && e.key === 's') ||
+        (e.ctrlKey && e.key === 'a') ||
+        (e.ctrlKey && e.key === 'c') ||
+        (e.ctrlKey && e.key === 'v') ||
+        (e.ctrlKey && e.key === 'x') ||
+        (e.ctrlKey && e.key === 'p')
+      ) {
+        e.preventDefault();
+        showError('This action is not allowed during the exam.');
+      }
+    };
+    
+    // Prevent page refresh
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = 'Are you sure you want to leave? Your progress will be lost.';
+      return 'Are you sure you want to leave? Your progress will be lost.';
+    };
+    
+    // Disable back button
+    const handlePopState = (e) => {
+      e.preventDefault();
+      window.history.pushState(null, '', window.location.href);
+      showError('You cannot navigate away from the exam.');
+    };
+    
+    // Add event listeners
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('selectstart', handleSelectStart);
+    document.addEventListener('dragstart', handleDragStart);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+    
+    // Push initial state to prevent back navigation
+    window.history.pushState(null, '', window.location.href);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('selectstart', handleSelectStart);
+      document.removeEventListener('dragstart', handleDragStart);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [showError]);
 
   useEffect(() => {
     const fetchExam = async () => {
+      // Prevent multiple API calls
+      if (isExamFetched) return;
+      
       try {
         setLoading(true);
+        setIsExamFetched(true);
         // First, get the test details to check if it's a random assignment test
         try {
           const testRes = await api.get(`/student/test/${examId}`);
@@ -46,8 +116,6 @@ const OnlineExamTaking = () => {
           setExamDuration(duration);
           setTimeRemaining(duration * 60); // Convert minutes to seconds
           
-          // Log duration for debugging
-          console.log('Exam duration set to:', duration, 'minutes');
           
           // Check if this is a random assignment test
           if (testData.test_type === 'random_assignment' || testData.has_random_questions) {
@@ -59,7 +127,6 @@ const OnlineExamTaking = () => {
               setAssignmentId(res.data.data.assignment_id);
             } catch (randomErr) {
               // If random assignment fails, fall back to regular test
-              console.log('Random assignment failed, using regular test:', randomErr);
               setExam(testData);
               setQuestions(testData.questions || []);
               setAssignmentId(null);
@@ -74,9 +141,7 @@ const OnlineExamTaking = () => {
             try {
               const startRes = await api.post(`/student/tests/${examId}/start`);
               setAttemptId(startRes.data.data.attempt_id);
-              console.log('Test started with attempt_id:', startRes.data.data.attempt_id);
             } catch (startErr) {
-              console.error('Error starting test:', startErr);
               showError('Failed to start test. Please try again.');
             }
           }
@@ -90,8 +155,8 @@ const OnlineExamTaking = () => {
         setLoading(false);
       }
     };
-    if (examId) fetchExam();
-  }, [examId, showError]);
+    if (examId && !isExamFetched) fetchExam();
+  }, [examId, isExamFetched]); // Removed loading from dependencies to prevent infinite loop
 
   useEffect(() => {
     // Anti-cheating: Prevent tab switching
@@ -438,16 +503,13 @@ const OnlineExamTaking = () => {
         }
       } else {
         // Submit using regular test endpoint (for tests without random questions)
-        console.log('Submitting via regular test endpoint for test_id:', examId);
         
         if (!attemptId) {
           // If we don't have an attempt_id, try to start the test first
           try {
             const startRes = await api.post(`/student/tests/${examId}/start`);
             setAttemptId(startRes.data.data.attempt_id);
-            console.log('Got attempt_id during submit:', startRes.data.data.attempt_id);
           } catch (startErr) {
-            console.error('Error starting test during submit:', startErr);
             showError('Failed to start test. Please try again.');
             return;
           }
@@ -479,28 +541,17 @@ const OnlineExamTaking = () => {
 
   const currentQuestion = questions[currentQuestionIndex];
 
-  // Debug logging
-  console.log('Exam state:', {
-    autoSubmitted,
-    isTimerActive,
-    timeRemaining,
-    examDuration,
-    cheatCount,
-    questionsLength: questions.length,
-    examModuleId: exam?.module_id,
-    currentQuestion: currentQuestion
-  });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <main className="container mx-auto px-4 py-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 fixed inset-0 overflow-auto">
+      <main className="w-full h-full px-4 py-6">
         {/* Header with Timer */}
         <header className="pb-6 mb-6 border-b border-gradient-to-r from-transparent via-slate-200 to-transparent flex justify-between items-center">
           <motion.h1 
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
-            className="text-3xl sm:text-4xl font-light text-slate-700 tracking-wide"
+            className="text-xl sm:text-2xl font-medium text-slate-700 tracking-wide"
           >
             {exam.name}
           </motion.h1>
@@ -509,7 +560,7 @@ const OnlineExamTaking = () => {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="bg-gradient-to-r from-blue-100 to-indigo-100 text-slate-700 px-4 py-2 rounded-full text-sm font-medium shadow-sm border border-blue-200"
+              className="bg-gradient-to-r from-blue-100 to-indigo-100 text-slate-700 px-3 py-1.5 rounded-full text-xs font-medium shadow-sm border border-blue-200"
             >
               Question {currentQuestionIndex + 1} of {questions.length}
             </motion.span>
@@ -519,7 +570,7 @@ const OnlineExamTaking = () => {
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
-                className={`px-5 py-3 rounded-2xl border-2 font-semibold text-lg shadow-lg backdrop-blur-sm transition-all duration-500 ${
+                className={`px-4 py-2 rounded-xl border-2 font-semibold text-sm shadow-lg backdrop-blur-sm transition-all duration-500 ${
                   timeRemaining <= 300 
                     ? timeRemaining <= 60 
                       ? 'bg-gradient-to-r from-red-50 to-pink-50 border-red-300 text-red-600 animate-pulse shadow-red-200' 
@@ -545,7 +596,7 @@ const OnlineExamTaking = () => {
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
-                className="px-5 py-3 rounded-2xl border-2 font-semibold text-lg bg-gradient-to-r from-slate-50 to-gray-50 border-slate-300 text-slate-600 shadow-lg"
+                className="px-4 py-2 rounded-xl border-2 font-semibold text-sm bg-gradient-to-r from-slate-50 to-gray-50 border-slate-300 text-slate-600 shadow-lg"
               >
                 <div className="flex items-center space-x-3">
                   <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
@@ -581,8 +632,8 @@ const OnlineExamTaking = () => {
               animate={{ opacity: 1, scale: 1 }}
               className="bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 text-red-700 px-6 py-4 rounded-2xl mb-6 text-center shadow-lg animate-pulse"
             >
-              <strong className="text-lg">⚠️ CRITICAL: Only {formatTime(timeRemaining)} remaining!</strong>
-              <div className="mt-2 text-sm">Exam will auto-submit when time runs out.</div>
+              <strong className="text-base">⚠️ CRITICAL: Only {formatTime(timeRemaining)} remaining!</strong>
+              <div className="mt-2 text-xs">Exam will auto-submit when time runs out.</div>
             </motion.div>
           )}
           {timeRemaining <= 300 && timeRemaining > 60 && !timerWarning && !autoSubmitted && (
@@ -591,8 +642,8 @@ const OnlineExamTaking = () => {
               animate={{ opacity: 1, scale: 1 }}
               className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 text-amber-700 px-6 py-4 rounded-2xl mb-6 text-center shadow-lg"
             >
-              <strong className="text-lg">⏰ Warning: Only {formatTime(timeRemaining)} remaining!</strong>
-              <div className="mt-2 text-sm">Please complete your exam soon.</div>
+              <strong className="text-base">⏰ Warning: Only {formatTime(timeRemaining)} remaining!</strong>
+              <div className="mt-2 text-xs">Please complete your exam soon.</div>
             </motion.div>
           )}
 
@@ -603,7 +654,7 @@ const OnlineExamTaking = () => {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="mb-8"
           >
-            <div className="flex justify-between text-sm text-slate-600 mb-3">
+            <div className="flex justify-between text-xs text-slate-600 mb-3">
               <span className="font-medium">Progress: {Object.keys({...answers, ...recordings}).length} / {questions.length} answered</span>
               <span className="font-semibold text-slate-700">{Math.round((Object.keys({...answers, ...recordings}).length / questions.length) * 100)}%</span>
             </div>
@@ -629,7 +680,7 @@ const OnlineExamTaking = () => {
               >
                 <fieldset disabled={autoSubmitted} style={{ opacity: autoSubmitted ? 0.6 : 1 }}>
                   <motion.h3 
-                    className="text-2xl font-light mb-8 text-slate-700 leading-relaxed"
+                    className="text-lg font-medium mb-6 text-slate-700 leading-relaxed"
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.4 }}
@@ -637,19 +688,6 @@ const OnlineExamTaking = () => {
                     {currentQuestion.question}
                   </motion.h3>
 
-                  {/* Debug info - remove this in production */}
-                  {process.env.NODE_ENV === 'development' && (
-                    <div className="bg-gray-100 p-4 rounded-lg mb-4 text-xs">
-                      <strong>Debug Info:</strong><br/>
-                      Question Type: {currentQuestion.question_type || 'undefined'}<br/>
-                      Audio URL: {currentQuestion.audio_url || 'undefined'}<br/>
-                      Module ID: {exam?.module_id || 'undefined'}<br/>
-                      Question ID: {currentQuestion.question_id || 'undefined'}<br/>
-                      Question Index: {currentQuestionIndex}<br/>
-                      Total Questions: {questions.length}<br/>
-                      Audio Key: audio-{currentQuestion.question_id}-{currentQuestionIndex}
-                    </div>
-                  )}
 
                   {/* Audio playback for listening modules */}
                   {(currentQuestion.question_type === 'audio' || currentQuestion.audio_url) && (
@@ -660,7 +698,7 @@ const OnlineExamTaking = () => {
                       transition={{ duration: 0.5, delay: 0.4 }}
                     >
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                        <p className="text-blue-700 font-semibold mb-2">Listen to the audio:</p>
+                        <p className="text-blue-700 font-medium mb-2 text-sm">Listen to the audio:</p>
                         <audio 
                           key={`audio-${currentQuestion.question_id}-${currentQuestionIndex}`}
                           controls 

@@ -108,9 +108,15 @@ const StudentDashboard = () => {
   useEffect(() => {
     fetchDashboardData()
     fetchUserProfile()
-    fetchOnlineExams()
-    fetchCompletedExams()
+    fetchCompletedExams() // Fetch completed exams first
   }, [])
+
+  // Fetch online exams after completed exams are loaded
+  useEffect(() => {
+    if (completedExamIds.length >= 0) { // This will be true even if empty array
+      fetchOnlineExams()
+    }
+  }, [completedExamIds])
 
   // Refresh completed exams when user returns to dashboard (e.g., after submitting an exam)
   useEffect(() => {
@@ -226,35 +232,44 @@ const StudentDashboard = () => {
           return now <= end
         })
         
-        const sortedExams = filteredExams.sort((a, b) => {
-          const startA = new Date(a.startDateTime)
-          const startB = new Date(b.startDateTime)
-          
-          // Check if exams are completed
-          const aCompleted = completedExamIds.includes(a._id)
-          const bCompleted = completedExamIds.includes(b._id)
-          
-          // If one is completed and one is not, prioritize non-completed
-          if (aCompleted && !bCompleted) return 1
-          if (!aCompleted && bCompleted) return -1
-          
-          // If both are completed, sort by start time (most recent first)
-          if (aCompleted && bCompleted) {
-            return startB - startA
-          }
-          
-          // If both are in the future, sort by start time (earliest first)
-          if (startA > now && startB > now) {
-            return startA - startB
-          }
-          
-          // If one is in the past and one is in the future, prioritize future
-          if (startA > now && startB <= now) return -1
-          if (startA <= now && startB > now) return 1
-          
-          // If both are active (started but not ended), sort by start time (earliest first)
-          return startA - startB
+        // Separate exams by status
+        const upcomingExams = filteredExams.filter(exam => {
+          const start = new Date(exam.startDateTime)
+          return start > now && !completedExamIds.includes(exam._id)
         })
+        
+        const activeExams = filteredExams.filter(exam => {
+          const start = new Date(exam.startDateTime)
+          const end = new Date(exam.endDateTime)
+          return start <= now && now <= end && !completedExamIds.includes(exam._id)
+        })
+        
+        const completedExams = filteredExams.filter(exam => {
+          return completedExamIds.includes(exam._id)
+        })
+        
+        // Debug logging
+        console.log('Completed exam IDs:', completedExamIds)
+        console.log('Completed exams found:', completedExams.length)
+        
+        // Sort each category
+        upcomingExams.sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime))
+        activeExams.sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime))
+        completedExams.sort((a, b) => new Date(b.startDateTime) - new Date(a.startDateTime)) // Most recent first
+        
+        // Combine: active first, then upcoming, then only the most recent completed exam
+        // This ensures we show at most 1 completed exam, prioritizing the most recent one
+        const sortedExams = [
+          ...activeExams,      // Show all active exams first
+          ...upcomingExams,    // Then all upcoming exams
+          ...(completedExams.length > 0 ? [completedExams[0]] : []) // Only show the most recent completed exam
+        ]
+        
+        // Debug logging
+        console.log('Active exams:', activeExams.length)
+        console.log('Upcoming exams:', upcomingExams.length)
+        console.log('Completed exams (showing 1):', completedExams.length > 0 ? 1 : 0)
+        console.log('Total sorted exams:', sortedExams.length)
         
         setOnlineExams(sortedExams)
       }

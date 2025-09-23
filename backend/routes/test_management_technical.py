@@ -63,12 +63,72 @@ def create_technical_test():
         # Generate unique test ID
         test_id = generate_unique_test_id()
 
-        # Process questions for technical
+        # Check for existing questions in database
+        existing_questions = list(mongo_db.question_bank.find(
+            {'module_id': module_id, 'level_id': level_id, 'question_type': 'technical'},
+            {'question': 1, '_id': 1, 'used_count': 1}
+        ))
+        existing_question_texts = {q['question'].strip().lower(): str(q['_id']) for q in existing_questions}
+        existing_question_objects = {q['question'].strip().lower(): q['_id'] for q in existing_questions}
+        
+        # Process questions for technical - store in database and get ObjectIds
         processed_questions = []
+        new_questions_to_store = []
+        questions_to_update_usage = []
+        
         for i, question in enumerate(questions):
+            question_text = question.get('question_text') or question.get('question', '')
+            question_text_lower = question_text.strip().lower()
+            is_existing = question_text_lower in existing_question_texts
+            
+            # Prepare question document for database storage
+            question_doc = {
+                'module_id': module_id,
+                'level_id': level_id,
+                'question_type': 'technical',
+                'question': question_text,
+                'testCases': question.get('testCases', ''),
+                'expectedOutput': question.get('expectedOutput', ''),
+                'language': question.get('language', 'python'),
+                'instructions': question.get('instructions', ''),
+                'used_in_tests': [],
+                'used_count': 0,
+                'last_used': None,
+                'created_at': datetime.utcnow(),
+                'source': 'manual_upload'
+            }
+            
+            if is_existing:
+                # Use existing question ObjectId
+                question_id = existing_question_objects.get(question_text_lower)
+                questions_to_update_usage.append(question_id)
+            else:
+                # Store new question and get ObjectId
+                new_questions_to_store.append(question_doc)
+        
+        # Store new questions in database
+        stored_question_ids = {}
+        if new_questions_to_store:
+            result = mongo_db.question_bank.insert_many(new_questions_to_store)
+            for i, question_doc in enumerate(new_questions_to_store):
+                question_text_lower = question_doc['question'].strip().lower()
+                stored_question_ids[question_text_lower] = result.inserted_ids[i]
+        
+        # Create processed questions with correct ObjectIds
+        for i, question in enumerate(questions):
+            question_text = question.get('question_text') or question.get('question', '')
+            question_text_lower = question_text.strip().lower()
+            is_existing = question_text_lower in existing_question_texts
+            
+            # Get the correct ObjectId
+            if is_existing:
+                question_id = existing_question_objects.get(question_text_lower)
+            else:
+                question_id = stored_question_ids.get(question_text_lower)
+            
             processed_question = {
-                'question_id': f'q_{i+1}',
-                'question': question.get('question', ''),
+                '_id': question_id if question_id else ObjectId(),
+                'question': question_text,
                 'question_type': 'technical',
                 'module_id': module_id,
                 'testCases': question.get('testCases', ''),
@@ -77,6 +137,16 @@ def create_technical_test():
                 'instructions': question.get('instructions', '')
             }
             processed_questions.append(processed_question)
+        
+        # Update usage count for existing questions
+        if questions_to_update_usage:
+            mongo_db.question_bank.update_many(
+                {'_id': {'$in': questions_to_update_usage}},
+                {
+                    '$inc': {'used_count': 1},
+                    '$set': {'last_used': datetime.utcnow()}
+                }
+            )
 
         # Create test document
         test_doc = {
