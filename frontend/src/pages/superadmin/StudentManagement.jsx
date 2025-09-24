@@ -5,7 +5,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { Users, Filter, Search, Trash2, ListChecks, CheckCircle, BookOpen, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, User } from 'lucide-react';
 import Modal from '../../components/common/Modal';
-import { getStudentAccessStatus, authorizeStudentModule, lockStudentModule, authorizeStudentLevel, getStudentDetailedInsights } from '../../services/api';
+import { getStudentAccessStatus, authorizeStudentModule, lockStudentModule, authorizeStudentLevel, getStudentDetailedInsights, bulkMigrateStudentsProgress } from '../../services/api';
 
 const StudentManagement = () => {
     const [students, setStudents] = useState([]);
@@ -46,6 +46,7 @@ const StudentManagement = () => {
     const [levelPercentages, setLevelPercentages] = useState({}); // { levelId: { practice: %, online: % } }
     const [moduleActionLoading, setModuleActionLoading] = useState({});
     const [levelActionLoading, setLevelActionLoading] = useState({});
+    const [migrationLoading, setMigrationLoading] = useState(false);
     
     // Filter and lazy loading state
     const [currentPage, setCurrentPage] = useState(1);
@@ -482,6 +483,54 @@ const StudentManagement = () => {
         }
     };
 
+    const handleBulkMigration = async () => {
+        if (!window.confirm('Are you sure you want to migrate ALL students to the new progress system? This action cannot be undone.')) {
+            return;
+        }
+        
+        setMigrationLoading(true);
+        
+        try {
+            const response = await bulkMigrateStudentsProgress();
+            
+            if (response.data.success) {
+                console.log('Migration response:', response.data); // Debug log
+                const { 
+                    migrated_count = 0, 
+                    failed_count = 0, 
+                    already_migrated_count = 0, 
+                    total_students_processed = 0 
+                } = response.data;
+                
+                let message = `Migration completed!\n\n`;
+                message += `✅ Migrated: ${migrated_count} students\n`;
+                message += `⚠️ Already migrated: ${already_migrated_count} students\n`;
+                message += `❌ Failed: ${failed_count} students\n`;
+                message += `📊 Total processed: ${total_students_processed} students`;
+                
+                if (failed_count > 0 && response.data.migration_errors) {
+                    message += `\n\nErrors:\n${response.data.migration_errors.slice(0, 3).join('\n')}`;
+                    if (response.data.migration_errors.length > 3) {
+                        message += `\n... and ${response.data.migration_errors.length - 3} more errors`;
+                    }
+                }
+                
+                alert(message);
+                success('Bulk migration completed successfully');
+                
+                // Refresh the student list
+                fetchStudents();
+            } else {
+                error(response.data.message || 'Migration failed');
+            }
+        } catch (error) {
+            console.error('Error during bulk migration:', error);
+            error('Failed to perform bulk migration');
+        } finally {
+            setMigrationLoading(false);
+        }
+    };
+
     // Helper to fetch percentages for all levels in a module
     const fetchLevelPercentages = async (student, module) => {
         const percentages = {};
@@ -574,6 +623,28 @@ const StudentManagement = () => {
                                         </span>
                                     )}
                                 </p>
+                            </div>
+                            
+                            {/* Migration Button */}
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={handleBulkMigration}
+                                    disabled={migrationLoading}
+                                    className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:bg-orange-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                                    title="Migrate all students to new progress system"
+                                >
+                                    {migrationLoading ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                            Migrating...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <ListChecks className="h-4 w-4" />
+                                            Migrate Progress System
+                                        </>
+                                    )}
+                                </button>
                             </div>
                         </div>
 

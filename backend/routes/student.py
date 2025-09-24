@@ -8,6 +8,7 @@ import logging
 from datetime import datetime
 import pytz
 from utils.async_processor import async_route, performance_monitor, submit_background_task, cached_async_result
+from utils.date_formatter import format_date_to_ist
 
 # Helper function to recursively convert ObjectId fields to strings
 def convert_objectids_to_strings(obj):
@@ -3014,14 +3015,14 @@ def get_unlocked_modules():
                     score = 0
                     if module_id in module_progress:
                         score = module_progress[module_id].get('highest_score', 0)
-                    
-                    module_levels.append({
-                        'level_id': level_id,
+                        
+                        module_levels.append({
+                            'level_id': level_id,
                         'level_name': level['name'],
                         'unlocked': is_unlocked,
                         'score': score,
                         'unlock_source': 'default' if is_unlocked else 'locked'
-                    })
+                        })
                 
                 modules_status.append({
                     'module_id': module_id,
@@ -3036,12 +3037,12 @@ def get_unlocked_modules():
                 levels_for_module = [
                     (level_id, level) for level_id, level in LEVELS.items()
                     if isinstance(level, dict) and level.get('module_id') == module_id
-                ]
-                
-                # Sort by order
-                levels_for_module.sort(key=lambda x: x[1].get('order', 999))
-                
-                for level_id, level in levels_for_module:
+                 ]
+            
+            # Sort by order
+            levels_for_module.sort(key=lambda x: x[1].get('order', 999))
+            
+            for level_id, level in levels_for_module:
                     is_unlocked = level_id in unlocked_levels
                     
                     # Get score from module progress if available
@@ -3060,7 +3061,6 @@ def get_unlocked_modules():
                             elif isinstance(auth_level, str) and auth_level == level_id:
                                 unlock_source = 'legacy'  # Old format
                                 break
-                    
                     module_levels.append({
                         'level_id': level_id,
                         'level_name': level['name'],
@@ -3068,13 +3068,13 @@ def get_unlocked_modules():
                         'score': score,
                         'unlock_source': unlock_source
                     })
-                
-                modules_status.append({
-                    'module_id': module_id,
-                    'module_name': module_name,
-                    'unlocked': any(l['unlocked'] for l in module_levels),
-                    'levels': module_levels
-                })
+            
+            modules_status.append({
+                'module_id': module_id,
+                'module_name': module_name,
+                'unlocked': any(l['unlocked'] for l in module_levels),
+                'levels': module_levels
+            })
         
         return jsonify({'success': True, 'data': modules_status}), 200
         

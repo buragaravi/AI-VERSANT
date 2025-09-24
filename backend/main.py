@@ -96,7 +96,7 @@ def create_app():
 
     # CORS configuration
 
-    default_origins = 'http://localhost:3000,http://localhost:5173,https://crt.pydahsoft.in,https://versant-frontend.vercel.app,https://crt.pydahsoft.in,https://52.66.128.80,https://another-versant.vercel.app'
+    default_origins = 'http://localhost:3000,http://localhost:5173,https://crt.pydahsoft.in,https://52.66.128.80'
     cors_origins = os.getenv('CORS_ORIGINS', default_origins)
 
     # Enhanced CORS configuration to handle all possible origins
@@ -477,6 +477,27 @@ def add_dev_routes(app):
             }
         except Exception as e:
             return {'success': False, 'error': str(e)}
+    
+    @app.route('/dev/worker-manager-status')
+    def dev_worker_manager_status():
+        """Get Smart Worker Manager status and statistics"""
+        try:
+            from utils.smart_worker_manager import smart_worker_manager
+            
+            stats = smart_worker_manager.get_stats()
+            active_tasks = smart_worker_manager.get_task_details()
+            
+            return {
+                'success': True,
+                'worker_manager': {
+                    'stats': stats,
+                    'active_tasks': active_tasks,
+                    'health': 'healthy' if stats['active_tasks'] < 10 else 'busy'
+                }
+            }
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
 
 app, socketio = create_app()
 
@@ -486,6 +507,12 @@ if __name__ == "__main__":
     
     port = int(os.environ.get("PORT", 8000))
     debug = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
+    
+    # Initialize Smart Worker Manager
+    print("🔧 Initializing Smart Worker Manager...")
+    from utils.smart_worker_manager import smart_worker_manager, setup_signal_handlers
+    setup_signal_handlers()
+    print("✅ Smart Worker Manager initialized")
     
     # Start connection monitoring for high load stability
     print("🔍 Starting MongoDB connection monitor...")

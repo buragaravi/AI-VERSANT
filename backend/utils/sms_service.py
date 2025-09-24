@@ -2,6 +2,7 @@ import os
 import requests
 import logging
 from typing import Dict, List, Optional, Tuple
+from utils.date_formatter import format_date_to_ist
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -143,9 +144,12 @@ def send_test_scheduled_sms(phone_number: str, test_name: str, start_time: str, 
         
         logger.info(f"📱 Sending test scheduled SMS to: {phone_number}")
         
+        # Format start_time to IST readable format
+        formatted_start_time = format_date_to_ist(start_time, 'readable')
+        
         # Replace template variables: A new test {#var#} has been scheduled at {#var#} for you. Please make sure to attempt it within 24hours.\nexam link: https://crt.pydahsoft.in/student/exam/{#var#} - Pydah College
         message = TEST_SCHEDULED_TEMPLATE.replace('{#var#}', test_name, 1) \
-                                       .replace('{#var#}', start_time, 1) \
+                                       .replace('{#var#}', formatted_start_time, 1) \
                                        .replace('{#var#}', test_id, 1)
         
         params = {

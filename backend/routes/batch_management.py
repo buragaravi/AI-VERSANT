@@ -1402,7 +1402,7 @@ def authorize_student_module(student_id):
         )
         
         if success:
-            # Emit real-time event to the student
+        # Emit real-time event to the student
             try:
                 from flask_socketio import emit
                 emit('module_access_changed', {
@@ -2793,6 +2793,173 @@ def send_student_credentials(student_id):
         
     except Exception as e:
         current_app.logger.error(f"Error sending credentials: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@batch_management_bp.route('/students/bulk-migrate-progress', methods=['POST'])
+@jwt_required()
+@require_permission(module='batch_management')
+def bulk_migrate_students_progress():
+    """Bulk migrate all students to new progress system"""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = mongo_db.users.find_one({'_id': ObjectId(current_user_id)})
+        
+        if not current_user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+        
+        # Debug: Log user data to see what fields are available
+        current_app.logger.info(f"User data for migration: {current_user}")
+        
+        # Check permissions - only superadmin can do bulk migration
+        allowed_roles = ['superadmin', 'super_admin']
+        if current_user.get('role') not in allowed_roles:
+            return jsonify({'success': False, 'message': 'Only superadmin can perform bulk migration'}), 403
+        
+        # Get user display name (try multiple fields)
+        user_name = (current_user.get('name') or 
+                    current_user.get('username') or 
+                    current_user.get('email') or 
+                    current_user.get('full_name') or 
+                    f"User {current_user_id}")
+        
+        current_app.logger.info(f"Starting bulk migration by user {user_name} (ID: {current_user_id}, Role: {current_user.get('role', 'Unknown')})")
+        
+        # Find all students that need migration (have old string-based authorized_levels)
+        students_to_migrate = list(mongo_db.students.find({
+            'authorized_levels': {
+                '$exists': True,
+                '$ne': [],
+                '$elemMatch': {'$type': 'string'}  # Contains at least one string element
+            }
+        }))
+        
+        if not students_to_migrate:
+            return jsonify({
+                'success': True,
+                'message': 'No students need migration - all are already using the new progress system',
+                'migrated_count': 0,
+                'failed_count': 0,
+                'already_migrated_count': 0,
+                'total_students_processed': 0,
+                'migration_errors': []
+            }), 200
+        
+        # Also count already migrated students
+        already_migrated_count = mongo_db.students.count_documents({
+            'authorized_levels': {
+                '$exists': True,
+                '$ne': [],
+                '$elemMatch': {'$type': 'object'}  # Contains at least one object element
+            }
+        })
+        
+        migrated_count = 0
+        failed_count = 0
+        migration_errors = []
+        
+        try:
+            from utils.student_progress_manager import StudentProgressManager
+            progress_manager = StudentProgressManager()
+            
+            for student in students_to_migrate:
+                try:
+                    authorized_levels = student.get('authorized_levels', [])
+                    
+                    # Convert old string array to new object array
+                    new_authorized_levels = []
+                    for level_id in authorized_levels:
+                        if isinstance(level_id, str):
+                            new_authorized_levels.append({
+                                'level_id': level_id,
+                                'unlocked_at': datetime.now(),
+                                'unlock_source': 'legacy_migration',
+                                'unlocked_by': current_user_id,
+                                'reason': 'Bulk migrated from old progress system'
+                            })
+                    
+                    # Update student document
+                    update_data = {
+                        'authorized_levels': new_authorized_levels,
+                        'migration_status': 'completed',
+                        'migrated_at': datetime.now(),
+                        'migrated_by': current_user_id
+                    }
+                    
+                    # Add module_progress if not exists
+                    if 'module_progress' not in student:
+                        update_data['module_progress'] = {}
+                    
+                    # Add unlock_history if not exists
+                    if 'unlock_history' not in student:
+                        update_data['unlock_history'] = []
+                    
+                    result = mongo_db.students.update_one(
+                        {'_id': student['_id']},
+                        {'$set': update_data}
+                    )
+                    
+                    if result.modified_count > 0:
+                        migrated_count += 1
+                        
+                        # Log the migration event
+                        progress_manager.log_progress_event(
+                            event_type='student_migration',
+                            student_id=str(student['_id']),
+                            level_id=None,
+                            details={
+                                'migrated_by': current_user_id,
+                                'old_levels_count': len(authorized_levels),
+                                'new_levels_count': len(new_authorized_levels),
+                                'migration_reason': 'Bulk migration via admin interface',
+                                'student_name': student.get('name', 'Unknown'),
+                                'roll_number': student.get('roll_number', 'N/A')
+                            }
+                        )
+                        
+                        current_app.logger.info(f"Migrated student: {student.get('name', 'Unknown')} ({student.get('roll_number', 'N/A')}) by {user_name}")
+                    else:
+                        failed_count += 1
+                        migration_errors.append(f"Failed to update student {student.get('name', 'Unknown')}")
+                        
+                except Exception as e:
+                    failed_count += 1
+                    error_msg = f"Error migrating student {student.get('name', 'Unknown')}: {str(e)}"
+                    migration_errors.append(error_msg)
+                    current_app.logger.error(error_msg)
+            
+            # Log bulk migration completion
+            progress_manager.log_progress_event(
+                event_type='bulk_migration_completed',
+                student_id=None,
+                level_id=None,
+                details={
+                    'migrated_by': current_user_id,
+                    'total_migrated': migrated_count,
+                    'total_failed': failed_count,
+                    'already_migrated': already_migrated_count,
+                    'migration_timestamp': datetime.now().isoformat()
+                }
+            )
+            
+            current_app.logger.info(f"Bulk migration completed by {user_name}: {migrated_count} migrated, {failed_count} failed, {already_migrated_count} already migrated")
+            
+            return jsonify({
+                'success': True,
+                'message': f'Bulk migration completed successfully',
+                'migrated_count': migrated_count,
+                'failed_count': failed_count,
+                'already_migrated_count': already_migrated_count,
+                'total_students_processed': len(students_to_migrate),
+                'migration_errors': migration_errors[:10],  # Limit to first 10 errors
+                'migrated_at': datetime.now().isoformat()
+            }), 200
+                
+        except Exception as e:
+            current_app.logger.error(f"Error in bulk migration process: {e}")
+            return jsonify({'success': False, 'message': f'Bulk migration failed: {str(e)}'}), 500
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in bulk_migrate_students_progress: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @batch_management_bp.route('/students/<student_id>/credentials', methods=['GET'])
