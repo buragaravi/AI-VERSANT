@@ -400,6 +400,15 @@ def create_app():
     # Initialize the scheduler for daily notifications
     schedule_daily_notifications(app)
     
+    # Initialize Smart Worker Manager (must be done early for Gunicorn compatibility)
+    print("🔧 Initializing Smart Worker Manager...")
+    try:
+        from utils.smart_worker_manager import smart_worker_manager, setup_signal_handlers
+        setup_signal_handlers()
+        print("✅ Smart Worker Manager initialized")
+    except Exception as e:
+        print(f"⚠️ Warning: Smart Worker Manager initialization failed: {e}")
+    
     # Initialize async processing system for high concurrency
     try:
         from utils.async_processor import init_async_system
@@ -508,11 +517,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     debug = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
     
-    # Initialize Smart Worker Manager
-    print("🔧 Initializing Smart Worker Manager...")
-    from utils.smart_worker_manager import smart_worker_manager, setup_signal_handlers
-    setup_signal_handlers()
-    print("✅ Smart Worker Manager initialized")
+    # Smart Worker Manager is already initialized in create_app() for Gunicorn compatibility
     
     # Start connection monitoring for high load stability
     print("🔍 Starting MongoDB connection monitor...")

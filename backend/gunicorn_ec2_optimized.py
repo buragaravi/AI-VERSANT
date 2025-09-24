@@ -74,6 +74,7 @@ def on_starting(server):
     print("   🧹 Automatic memory cleanup enabled")
     print("   📊 Memory monitoring without hard limits")
     print("   🗄️ Optimized for bulk uploads and complex queries")
+    print("   🧠 Smart Worker Management enabled for background tasks")
 
 def on_reload(server):
     print("🔄 Reloading OPTIMIZED Study Edge Backend...")
@@ -132,6 +133,14 @@ def post_fork(server, worker):
         cleanup_thread.start()
         
         print(f"🔧 Worker {worker.pid} configured for long-running operations with memory management")
+        
+        # Initialize Smart Worker Management for this worker
+        try:
+            from utils.smart_worker_manager import smart_worker_manager
+            print(f"🧠 Worker {worker.pid} Smart Worker Management initialized")
+        except Exception as e:
+            print(f"⚠️ Could not initialize Smart Worker Management for worker {worker.pid}: {e}")
+            
     except Exception as e:
         print(f"⚠️ Could not configure worker {worker.pid} for long operations: {e}")
 
