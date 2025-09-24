@@ -2957,6 +2957,9 @@ def get_unlocked_modules():
         current_user_id = get_jwt_identity()
         student = mongo_db.students.find_one({'user_id': ObjectId(current_user_id)})
         
+        if not student:
+            return jsonify({'success': False, 'message': 'Student profile not found.'}), 404
+        
         # Define the desired order - exclude CRT modules
         module_order = ['GRAMMAR', 'VOCABULARY', 'LISTENING', 'SPEAKING', 'READING', 'WRITING']
         
@@ -2973,151 +2976,105 @@ def get_unlocked_modules():
         
         modules_status = []
         
-        # If no student or no authorized levels, use default behavior
-        if not student or not student.get('authorized_levels'):
+        # Get authorized levels from student document
+        authorized_levels = student.get('authorized_levels', [])
+        module_progress = student.get('module_progress', {})
+        
+        # Convert authorized_levels to a set for quick lookup
+        # Handle both old format (strings) and new format (objects)
+        unlocked_levels = set()
+        if authorized_levels:
+            if isinstance(authorized_levels[0], str):
+                # Old format - just strings
+                unlocked_levels = set(authorized_levels)
+            else:
+                # New format - objects with metadata
+                unlocked_levels = set([level['level_id'] for level in authorized_levels])
+        
+        # If no authorized levels, use default behavior (Grammar and Vocabulary unlocked)
+        if not unlocked_levels:
             for module_id, module_name in ordered_modules:
-                # Filter levels for this module
                 module_levels = []
-                for level_id, level in LEVELS.items():
-                    if isinstance(level, dict) and level.get('module_id') == module_id:
-                        # Get the highest score for this level
-                        highest_score = 0
-                        try:
-                            # Try to get scores from student_test_attempts
-                            attempts = list(mongo_db.student_test_attempts.find({
-                                'student_id': current_user_id,
-                                'test_type': 'practice'
-                            }))
-                            
-                            # Find tests for this level and get highest score
-                            for attempt in attempts:
-                                test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
-                                if test and test.get('level_id') == level_id:
-                                    # Use score_percentage (0-100) as the primary score
-                                    score = attempt.get('score_percentage', 0)
-                                    # Convert average_score (0-1) to percentage if score_percentage is not available
-                                    if score == 0:
-                                        avg_score = attempt.get('average_score', 0)
-                                        if avg_score > 0:
-                                            score = avg_score * 100  # Convert decimal to percentage
-                                    if score > highest_score:
-                                        highest_score = score
-                        except Exception as e:
-                            current_app.logger.warning(f"Error fetching scores for level {level_id}: {e}")
-                        
-                        module_levels.append({
-                            'level_id': level_id,
-                            'level_name': level['name'],
-                            'unlocked': (module_id == 'GRAMMAR' or module_id == 'VOCABULARY'),
-                            'score': highest_score
-                        })
-                    elif not isinstance(level, dict) and module_id == 'GRAMMAR':
-                        # Handle grammar categories as levels
-                        # Get the highest score for this grammar category
-                        highest_score = 0
-                        try:
-                            # Try to get scores from student_test_attempts
-                            attempts = list(mongo_db.student_test_attempts.find({
-                                'student_id': current_user_id,
-                                'test_type': 'practice'
-                            }))
-                            
-                            # Find tests for this grammar category and get highest score
-                            for attempt in attempts:
-                                test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
-                                if test and test.get('module_id') == 'GRAMMAR' and test.get('subcategory') == level_id:
-                                    # Use score_percentage (0-100) as the primary score
-                                    score = attempt.get('score_percentage', 0)
-                                    # Convert average_score (0-1) to percentage if score_percentage is not available
-                                    if score == 0:
-                                        avg_score = attempt.get('average_score', 0)
-                                        if avg_score > 0:
-                                            score = avg_score * 100  # Convert decimal to percentage
-                                    if score > highest_score:
-                                        highest_score = score
-                        except Exception as e:
-                            current_app.logger.warning(f"Error fetching scores for grammar category {level_id}: {e}")
-                        
-                        module_levels.append({
-                            'level_id': level_id,
-                            'level_name': str(level),
-                            'unlocked': True,
-                            'score': highest_score
-                        })
+                levels_for_module = [
+                    (level_id, level) for level_id, level in LEVELS.items()
+                    if isinstance(level, dict) and level.get('module_id') == module_id
+                ]
+                
+                # Sort by order
+                levels_for_module.sort(key=lambda x: x[1].get('order', 999))
+                
+                for level_id, level in levels_for_module:
+                    # Default unlock logic - first level of Grammar and Vocabulary
+                    is_unlocked = (
+                        (module_id == 'GRAMMAR' and level_id == 'GRAMMAR_NOUN') or
+                        (module_id == 'VOCABULARY' and level_id == 'VOCABULARY_BEGINNER')
+                    )
+                    
+                    # Get score from module progress if available
+                    score = 0
+                    if module_id in module_progress:
+                        score = module_progress[module_id].get('highest_score', 0)
+                    
+                    module_levels.append({
+                        'level_id': level_id,
+                        'level_name': level['name'],
+                        'unlocked': is_unlocked,
+                        'score': score,
+                        'unlock_source': 'default' if is_unlocked else 'locked'
+                    })
                 
                 modules_status.append({
                     'module_id': module_id,
                     'module_name': module_name,
-                    'unlocked': (module_id == 'GRAMMAR' or module_id == 'VOCABULARY'),
+                    'unlocked': any(l['unlocked'] for l in module_levels),
                     'levels': module_levels
                 })
-            
-            return jsonify({'success': True, 'data': modules_status}), 200
-        
-        # Get all student scores first
-        student_scores = {}
-        try:
-            attempts = list(mongo_db.student_test_attempts.find({
-                'student_id': current_user_id,
-                'test_type': 'practice'
-            }))
-            
-            for attempt in attempts:
-                test = mongo_db.tests.find_one({'_id': attempt.get('test_id')})
-                if test:
-                    level_id = test.get('level_id')
-                    subcategory = test.get('subcategory')
-                    
-                    # Use score_percentage (0-100) as the primary score
-                    score = attempt.get('score_percentage', 0)
-                    # Convert average_score (0-1) to percentage if score_percentage is not available
-                    if score == 0:
-                        avg_score = attempt.get('average_score', 0)
-                        if avg_score > 0:
-                            score = avg_score * 100  # Convert decimal to percentage
-                    
-                    # For grammar, use subcategory as level_id
-                    if test.get('module_id') == 'GRAMMAR' and subcategory:
-                        level_id = f'GRAMMAR_{subcategory}'
-                    
-                    if level_id and score > student_scores.get(level_id, 0):
-                        student_scores[level_id] = score
-        except Exception as e:
-            current_app.logger.warning(f"Error fetching student scores: {e}")
-        
-        for module_id, module_name in ordered_modules:
-            # Filter levels for this module and sort by order
-            module_levels = []
-            levels_for_module = [
-                (level_id, level) for level_id, level in LEVELS.items()
-                if isinstance(level, dict) and level.get('module_id') == module_id
-            ]
-            
-            # Sort by order
-            levels_for_module.sort(key=lambda x: x[1].get('order', 999))
-            
-            for level_id, level in levels_for_module:
-                highest_score = student_scores.get(level_id, 0)
+        else:
+            # Use stored authorized levels
+            for module_id, module_name in ordered_modules:
+                module_levels = []
+                levels_for_module = [
+                    (level_id, level) for level_id, level in LEVELS.items()
+                    if isinstance(level, dict) and level.get('module_id') == module_id
+                ]
                 
-                # Calculate if level should be unlocked
-                is_unlocked = calculate_level_unlock_status(module_id, level_id, student_scores, LEVELS)
+                # Sort by order
+                levels_for_module.sort(key=lambda x: x[1].get('order', 999))
                 
-                module_levels.append({
-                    'level_id': level_id,
-                    'level_name': level['name'],
-                    'unlocked': is_unlocked,
-                    'score': highest_score
+                for level_id, level in levels_for_module:
+                    is_unlocked = level_id in unlocked_levels
+                    
+                    # Get score from module progress if available
+                    score = 0
+                    if module_id in module_progress:
+                        score = module_progress[module_id].get('highest_score', 0)
+                    
+                    # Determine unlock source
+                    unlock_source = 'locked'
+                    if is_unlocked:
+                        # Find the authorization info for this level
+                        for auth_level in authorized_levels:
+                            if isinstance(auth_level, dict) and auth_level.get('level_id') == level_id:
+                                unlock_source = auth_level.get('authorized_by', 'unknown')
+                                break
+                            elif isinstance(auth_level, str) and auth_level == level_id:
+                                unlock_source = 'legacy'  # Old format
+                                break
+                    
+                    module_levels.append({
+                        'level_id': level_id,
+                        'level_name': level['name'],
+                        'unlocked': is_unlocked,
+                        'score': score,
+                        'unlock_source': unlock_source
+                    })
+                
+                modules_status.append({
+                    'module_id': module_id,
+                    'module_name': module_name,
+                    'unlocked': any(l['unlocked'] for l in module_levels),
+                    'levels': module_levels
                 })
-            
-            # Module is unlocked if any level is unlocked
-            unlocked = any(l['unlocked'] for l in module_levels) if module_levels else False
-            
-            modules_status.append({
-                'module_id': module_id,
-                'module_name': module_name,
-                'unlocked': unlocked,
-                'levels': module_levels
-            })
         
         return jsonify({'success': True, 'data': modules_status}), 200
         

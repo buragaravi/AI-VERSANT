@@ -5,7 +5,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { Users, Filter, Search, Trash2, ListChecks, CheckCircle, BookOpen, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, User } from 'lucide-react';
 import Modal from '../../components/common/Modal';
-import { getStudentAccessStatus, authorizeStudentModule, lockStudentModule, authorizeStudentLevel } from '../../services/api';
+import { getStudentAccessStatus, authorizeStudentModule, lockStudentModule, authorizeStudentLevel, getStudentDetailedInsights } from '../../services/api';
 
 const StudentManagement = () => {
     const [students, setStudents] = useState([]);
@@ -28,6 +28,8 @@ const StudentManagement = () => {
     const [levelTests, setLevelTests] = useState({ loading: false, practice: [], online: [] });
     const [unlockMsg, setUnlockMsg] = useState('');
     const [onlineExamResults, setOnlineExamResults] = useState([]);
+    const [detailedInsights, setDetailedInsights] = useState(null);
+    const [insightsLoading, setInsightsLoading] = useState(false);
     const [practiceResults, setPracticeResults] = useState([]);
     const [selectedLevel, setSelectedLevel] = useState(null);
     const [selectedLevelResults, setSelectedLevelResults] = useState([]);
@@ -370,16 +372,26 @@ const StudentManagement = () => {
         setSelectedStudent(student);
         setIsProgressModalOpen(true);
         setProgressLoading(true);
+        setInsightsLoading(true);
         setProgressError(null);
         setAccessStatus([]);
+        setDetailedInsights(null);
+        
         try {
-            // Fetch access status for modules and levels
-            const res = await getStudentAccessStatus(student._id);
-            setAccessStatus(res.data.data || []);
+            // Fetch both access status and detailed insights in parallel
+            const [accessRes, insightsRes] = await Promise.all([
+                getStudentAccessStatus(student._id),
+                getStudentDetailedInsights(student._id)
+            ]);
+            
+            setAccessStatus(accessRes.data.data || []);
+            setDetailedInsights(insightsRes.data.data || null);
         } catch (e) {
-            setProgressError('Failed to load access status.');
+            console.error('Error fetching student data:', e);
+            setProgressError('Failed to load student data.');
         } finally {
             setProgressLoading(false);
+            setInsightsLoading(false);
         }
     };
 
@@ -436,9 +448,13 @@ const StudentManagement = () => {
                 await authorizeStudentModule(studentId, moduleId);
                 setUnlockMsg('Module unlocked!');
             }
-            // Refresh access status for the modal UI and force re-render
-            const res = await getStudentAccessStatus(studentId);
-            setAccessStatus([...res.data.data]); // new array reference
+            // Refresh both access status and insights
+            const [accessRes, insightsRes] = await Promise.all([
+                getStudentAccessStatus(studentId),
+                getStudentDetailedInsights(studentId)
+            ]);
+            setAccessStatus([...accessRes.data.data]); // new array reference
+            setDetailedInsights(insightsRes.data.data || null);
         } catch (e) {
             setUnlockMsg('Failed to update module access.');
         } finally {
@@ -1037,6 +1053,69 @@ const StudentManagement = () => {
             {selectedStudent && (
                 <Modal isOpen={isProgressModalOpen} onClose={() => { setIsProgressModalOpen(false); setSelectedStudent(null); setSelectedModule(null); setShowLevelsModal(false); setLevelsModalData({ module: null, levels: [] }); }} title={`Student Details: ${selectedStudent.name}`}>
                     <div className="p-6">
+                        {/* Detailed Insights Section */}
+                        {detailedInsights && (
+                            <div className="mb-8 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                                <h3 className="text-lg font-semibold mb-4 text-blue-900 flex items-center gap-2">
+                                    📊 Student Progress Insights
+                                </h3>
+                                
+                                {/* Overall Stats */}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                    <div className="bg-white p-3 rounded-lg border">
+                                        <div className="text-2xl font-bold text-blue-600">{detailedInsights.overall_stats.total_attempts}</div>
+                                        <div className="text-sm text-gray-600">Total Attempts</div>
+                                    </div>
+                                    <div className="bg-white p-3 rounded-lg border">
+                                        <div className="text-2xl font-bold text-green-600">{detailedInsights.overall_stats.average_score.toFixed(1)}%</div>
+                                        <div className="text-sm text-gray-600">Average Score</div>
+                                    </div>
+                                    <div className="bg-white p-3 rounded-lg border">
+                                        <div className="text-2xl font-bold text-purple-600">{detailedInsights.overall_stats.modules_accessed}</div>
+                                        <div className="text-sm text-gray-600">Modules Accessed</div>
+                                    </div>
+                                    <div className="bg-white p-3 rounded-lg border">
+                                        <div className="text-2xl font-bold text-orange-600">{detailedInsights.overall_stats.levels_unlocked}</div>
+                                        <div className="text-sm text-gray-600">Levels Unlocked</div>
+                                    </div>
+                                </div>
+
+                                {/* Module Analysis */}
+                                <div className="mb-4">
+                                    <h4 className="font-semibold mb-2 text-blue-800">Module Performance</h4>
+                                    <div className="space-y-2">
+                                        {Object.entries(detailedInsights.module_analysis).map(([moduleId, moduleData]) => (
+                                            <div key={moduleId} className="bg-white p-3 rounded-lg border flex justify-between items-center">
+                                                <div>
+                                                    <span className="font-medium">{moduleId}</span>
+                                                    <span className="text-sm text-gray-600 ml-2">(Level: {moduleData.current_level})</span>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="font-bold text-blue-600">{moduleData.current_score.toFixed(1)}%</div>
+                                                    <div className="text-xs text-gray-500">{moduleData.attempts_count} attempts</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Unlock Recommendations */}
+                                {detailedInsights.unlock_recommendations && detailedInsights.unlock_recommendations.length > 0 && (
+                                    <div>
+                                        <h4 className="font-semibold mb-2 text-green-800">💡 Recommendations</h4>
+                                        <div className="space-y-2">
+                                            {detailedInsights.unlock_recommendations.map((rec, index) => (
+                                                <div key={index} className="bg-white p-3 rounded-lg border border-green-200">
+                                                    <div className="font-medium text-green-800">{rec.action}</div>
+                                                    <div className="text-sm text-gray-600">{rec.reason}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         <h3 className="text-lg font-semibold mb-2">Module Access Control</h3>
                         {progressLoading ? (
                             <LoadingSpinner />
