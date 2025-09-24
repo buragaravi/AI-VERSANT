@@ -2495,6 +2495,36 @@ def submit_practice_test():
         
         current_app.logger.info("Test result saved successfully")
         
+        # Update student progress and check for level unlocks
+        try:
+            from utils.student_progress_manager import StudentProgressManager
+            progress_manager = StudentProgressManager(mongo_db)
+            
+            # Get level_id from test
+            level_id = test.get('level_id') or test.get('subcategory')
+            if level_id:
+                # Convert score to percentage if needed
+                score_percentage = percentage if percentage <= 100 else (total_score / total_questions * 100)
+                
+                # Update progress and check for unlocks
+                progress_updated = progress_manager.update_student_progress_on_test_completion(
+                    student_id=student['_id'],
+                    level_id=level_id,
+                    score=score_percentage,
+                    test_id=test_id
+                )
+                
+                if progress_updated:
+                    current_app.logger.info(f"Student progress updated for level {level_id} with score {score_percentage}")
+                else:
+                    current_app.logger.warning(f"Failed to update student progress for level {level_id}")
+            else:
+                current_app.logger.warning("No level_id found in test, skipping progress update")
+                
+        except Exception as progress_error:
+            current_app.logger.error(f"Error updating student progress: {progress_error}")
+            # Don't fail the test submission if progress update fails
+        
         return jsonify({
             'success': True,
             'message': 'Test submitted successfully',

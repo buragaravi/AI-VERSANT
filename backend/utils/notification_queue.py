@@ -8,6 +8,7 @@ import logging
 import time
 from typing import Dict, List, Optional, Any
 from utils.async_processor import submit_background_task
+from utils.smart_worker_manager import run_background_task_with_tracking
 from utils.email_service import send_email, render_template
 from utils.sms_service import send_student_credentials_sms, send_custom_sms
 from utils.resilient_services import create_resilient_services
@@ -34,10 +35,13 @@ class NotificationQueue:
     
     def queue_sms_notification(self, phone: str, message: str, notification_type: str = 'custom', 
                              student_name: str = None, username: str = None, password: str = None) -> str:
-        """Queue SMS notification for background processing"""
+        """Queue SMS notification for background processing with smart worker tracking"""
         try:
-            task_id = submit_background_task(
+            task_id = run_background_task_with_tracking(
                 self._process_sms_notification,
+                task_type='sms_notification',
+                description=f'SMS to {phone} ({notification_type})',
+                estimated_duration=5,  # 5 seconds for SMS
                 phone=phone,
                 message=message,
                 notification_type=notification_type,
@@ -58,10 +62,13 @@ class NotificationQueue:
     
     def queue_email_notification(self, email: str, subject: str, content: str, 
                                 template_name: str = None, template_params: Dict = None) -> str:
-        """Queue email notification for background processing"""
+        """Queue email notification for background processing with smart worker tracking"""
         try:
-            task_id = submit_background_task(
+            task_id = run_background_task_with_tracking(
                 self._process_email_notification,
+                task_type='email_notification',
+                description=f'Email to {email} ({subject})',
+                estimated_duration=10,  # 10 seconds for email
                 email=email,
                 subject=subject,
                 content=content,

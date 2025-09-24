@@ -388,6 +388,14 @@ export const lockStudentModule = async (studentId, moduleId) => {
   return api.post(`/batch-management/student/${studentId}/lock-module`, { module: moduleId });
 };
 
+export const getStudentDetailedInsights = async (studentId) => {
+  return api.get(`/batch-management/student/${studentId}/detailed-insights`);
+};
+
+export const bulkMigrateStudentsProgress = async () => {
+  return api.post('/batch-management/students/bulk-migrate-progress');
+};
+
 // Question Bank CRUD Operations
 export const getQuestions = async (moduleId, levelId) => {
   return api.get('/test-management/questions', {

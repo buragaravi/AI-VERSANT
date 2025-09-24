@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from mongo import mongo_db
 from bson import ObjectId
+from datetime import datetime
 import csv
 import openpyxl
 from werkzeug.utils import secure_filename
@@ -1340,57 +1341,90 @@ def lock_student_level(student_id):
 @batch_management_bp.route('/student/<student_id>/authorize-module/', methods=['POST'])
 @jwt_required()
 def authorize_student_module(student_id):
-    print(f"DEBUG: authorize_student_module route hit - student_id: {student_id}")
-    print(f"DEBUG: Request method: {request.method}")
-    print(f"DEBUG: Request URL: {request.url}")
-    print(f"DEBUG: Request headers: {dict(request.headers)}")
-    print(f"DEBUG: Request JSON: {request.json}")
     try:
         data = request.json
         module = data.get('module')
+        reason = data.get('reason', 'Admin authorization')
+        
         if not module:
             return jsonify({'success': False, 'message': 'Module is required'}), 400
 
-        # Find all levels for this module
-        from config.constants import LEVELS
-        module_levels = [level_id for level_id, level in LEVELS.items() if (level.get('module_id') if isinstance(level, dict) else None) == module]
-        if not module_levels:
-            return jsonify({'success': False, 'message': 'No levels found for this module.'}), 404
-
-        # Ensure authorized_levels exists
-        print(f"DEBUG: Looking for student with ID: {student_id}")
-        print(f"DEBUG: Student ID type: {type(student_id)}")
+        # Get current admin user
+        current_user_id = get_jwt_identity()
+        
+        # Find student - try multiple methods
+        student = None
         try:
-            obj_id = ObjectId(student_id)
-            print(f"DEBUG: Converted to ObjectId: {obj_id}")
+            # Method 1: Try as ObjectId (student._id)
+            try:
+                student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+            except:
+                pass
+            
+            # Method 2: Try as user_id
+            if not student:
+                try:
+                    student = mongo_db.students.find_one({'user_id': ObjectId(student_id)})
+                except:
+                    pass
+            
+            # Method 3: Try as roll_number
+            if not student:
+                student = mongo_db.students.find_one({'roll_number': student_id})
+            
+            # Method 4: Try as username in users collection, then find student
+            if not student:
+                user = mongo_db.users.find_one({'username': student_id})
+                if user:
+                    student = mongo_db.students.find_one({'user_id': user['_id']})
+            
+            # Method 5: Try as email in users collection, then find student
+            if not student:
+                user = mongo_db.users.find_one({'email': student_id})
+                if user:
+                    student = mongo_db.students.find_one({'user_id': user['_id']})
+            
+            if not student:
+                return jsonify({'success': False, 'message': f'Student not found with identifier: {student_id}'}), 404
+                
         except Exception as e:
-            print(f"DEBUG: Failed to convert to ObjectId: {e}")
-            return jsonify({'success': False, 'message': f'Invalid student_id: {student_id}'}), 400
-        student = mongo_db.students.find_one({'_id': obj_id})
-        print(f"DEBUG: Student found: {student is not None}")
-        if not student:
-            print(f"DEBUG: No student found with ID: {student_id}")
-            # Fallback: try user_id
-            student = mongo_db.students.find_one({'user_id': obj_id})
-            if student:
-                print(f"DEBUG: Found student by user_id fallback: {student}")
-            else:
-                # Let's also check if there are any students in the database
-                all_students = list(mongo_db.students.find({}, {'_id': 1, 'name': 1, 'email': 1}))
-                print(f"DEBUG: Total students in database: {len(all_students)}")
-                print(f"DEBUG: Sample student IDs: {[str(s['_id']) for s in all_students[:5]]}")
-                return jsonify({'success': False, 'message': 'Student not found.'}), 404
-        if 'authorized_levels' not in student:
-            mongo_db.students.update_one({'_id': student['_id']}, {'$set': {'authorized_levels': []}})
+            return jsonify({'success': False, 'message': f'Error searching for student: {str(e)}'}), 400
 
-        # Add all levels to authorized_levels
-        mongo_db.students.update_one({'_id': student['_id']}, {'$addToSet': {'authorized_levels': {'$each': module_levels}}})
-        student = mongo_db.students.find_one({'_id': student['_id']})
-
+        # Use progress manager for enhanced authorization
+        from utils.student_progress_manager import StudentProgressManager
+        progress_manager = StudentProgressManager(mongo_db)
+        
+        success, message = progress_manager.admin_authorize_module(
+            student_id=student['_id'],
+            module_id=module,
+            admin_user_id=current_user_id,
+            reason=reason
+        )
+        
+        if success:
         # Emit real-time event to the student
-        socketio.emit('module_access_changed', {'student_id': str(student['_id']), 'module': module, 'action': 'unlocked'}, room=str(student['_id']))
-
-        return jsonify({'success': True, 'message': f"Module '{module}' authorized for student.", 'authorized_levels': student.get('authorized_levels', [])}), 200
+            try:
+                from flask_socketio import emit
+                emit('module_access_changed', {
+                    'student_id': str(student['_id']), 
+                    'module': module, 
+                    'action': 'unlocked',
+                    'authorized_by': 'admin'
+                }, room=str(student['_id']))
+            except Exception as socket_error:
+                current_app.logger.warning(f"Could not emit socket event: {socket_error}")
+            
+            # Get updated student data
+            updated_student = mongo_db.students.find_one({'_id': student['_id']})
+            
+            return jsonify({
+                'success': True, 
+                'message': message,
+                'authorized_levels': updated_student.get('authorized_levels', [])
+            }), 200
+        else:
+            return jsonify({'success': False, 'message': message}), 400
+            
     except Exception as e:
         current_app.logger.error(f"Error authorizing module: {e}")
         return jsonify({'success': False, 'message': 'An error occurred authorizing the module.'}), 500
@@ -1987,7 +2021,42 @@ def add_single_student():
 def get_student_access_status(student_id):
     try:
         from config.constants import MODULES, LEVELS
-        student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+        
+        # Find student - try multiple methods
+        student = None
+        try:
+            # Method 1: Try as ObjectId (student._id)
+            try:
+                student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+            except:
+                pass
+            
+            # Method 2: Try as user_id
+            if not student:
+                try:
+                    student = mongo_db.students.find_one({'user_id': ObjectId(student_id)})
+                except:
+                    pass
+            
+            # Method 3: Try as roll_number
+            if not student:
+                student = mongo_db.students.find_one({'roll_number': student_id})
+            
+            # Method 4: Try as username in users collection, then find student
+            if not student:
+                user = mongo_db.users.find_one({'username': student_id})
+                if user:
+                    student = mongo_db.students.find_one({'user_id': user['_id']})
+            
+            # Method 5: Try as email in users collection, then find student
+            if not student:
+                user = mongo_db.users.find_one({'email': student_id})
+                if user:
+                    student = mongo_db.students.find_one({'user_id': user['_id']})
+                    
+        except Exception as e:
+            return jsonify({'success': False, 'message': f'Error searching for student: {str(e)}'}), 400
+        
         # Default logic if student not found or no authorized_levels
         default_grammar_unlocked = ['GRAMMAR_NOUN']
         modules_status = []
@@ -2015,7 +2084,18 @@ def get_student_access_status(student_id):
                 })
             return jsonify({'success': True, 'data': modules_status}), 200
         # If student has authorized_levels, use them
-        authorized_levels = set(student.get('authorized_levels', []))
+        authorized_levels_raw = student.get('authorized_levels', [])
+        
+        # Handle both old format (strings) and new format (objects)
+        authorized_levels = set()
+        if authorized_levels_raw:
+            if isinstance(authorized_levels_raw[0], str):
+                # Old format - just strings
+                authorized_levels = set(authorized_levels_raw)
+            else:
+                # New format - objects with metadata
+                authorized_levels = set([level['level_id'] for level in authorized_levels_raw])
+        
         for module_id, module_name in MODULES.items():
             levels = [
                 {
@@ -2036,6 +2116,139 @@ def get_student_access_status(student_id):
     except Exception as e:
         current_app.logger.error(f"Error fetching access status: {e}")
         return jsonify({'success': False, 'message': 'An error occurred fetching access status.'}), 500
+
+@batch_management_bp.route('/student/<student_id>/detailed-insights', methods=['GET'])
+@jwt_required()
+def get_student_detailed_insights(student_id):
+    """Get comprehensive student insights for admin dashboard"""
+    try:
+        # Get current admin user
+        current_user_id = get_jwt_identity()
+        user = mongo_db.users.find_one({'_id': ObjectId(current_user_id)})
+        
+        # Check admin permissions
+        allowed_roles = ['super_admin', 'superadmin', 'campus_admin', 'course_admin']
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found.'}), 403
+        
+        user_role = user.get('role')
+        if user_role not in allowed_roles:
+            return jsonify({'success': False, 'message': f'Access denied. Required roles: {allowed_roles}, but user has: {user_role}'}), 403
+        
+        # Find student - try multiple methods
+        student = None
+        try:
+            # Method 1: Try as ObjectId (student._id)
+            try:
+                student = mongo_db.students.find_one({'_id': ObjectId(student_id)})
+            except:
+                pass
+            
+            # Method 2: Try as user_id
+            if not student:
+                try:
+                    student = mongo_db.students.find_one({'user_id': ObjectId(student_id)})
+                except:
+                    pass
+            
+            # Method 3: Try as roll_number
+            if not student:
+                student = mongo_db.students.find_one({'roll_number': student_id})
+            
+            # Method 4: Try as username in users collection, then find student
+            if not student:
+                user = mongo_db.users.find_one({'username': student_id})
+                if user:
+                    student = mongo_db.students.find_one({'user_id': user['_id']})
+            
+            # Method 5: Try as email in users collection, then find student
+            if not student:
+                user = mongo_db.users.find_one({'email': student_id})
+                if user:
+                    student = mongo_db.students.find_one({'user_id': user['_id']})
+            
+            if not student:
+                return jsonify({'success': False, 'message': f'Student not found with identifier: {student_id}'}), 404
+                
+        except Exception as e:
+            return jsonify({'success': False, 'message': f'Error searching for student: {str(e)}'}), 400
+        
+        # Use progress manager for detailed insights
+        try:
+            from utils.student_progress_manager import StudentProgressManager
+            progress_manager = StudentProgressManager(mongo_db)
+            
+            current_app.logger.info(f"Generating insights for student: {student['_id']}")
+            insights = progress_manager.get_student_detailed_insights(student['_id'])
+            
+            if insights:
+                current_app.logger.info(f"Insights generated successfully for student: {student.get('name', 'Unknown')}")
+                
+                # Convert ObjectIds to strings for JSON serialization
+                def convert_objectids(obj):
+                    if isinstance(obj, ObjectId):
+                        return str(obj)
+                    elif isinstance(obj, dict):
+                        return {key: convert_objectids(value) for key, value in obj.items()}
+                    elif isinstance(obj, list):
+                        return [convert_objectids(item) for item in obj]
+                    elif hasattr(obj, 'isoformat'):  # datetime objects
+                        return obj.isoformat()
+                    else:
+                        return obj
+                
+                serializable_insights = convert_objectids(insights)
+                return jsonify({'success': True, 'data': serializable_insights}), 200
+            else:
+                current_app.logger.warning(f"Failed to generate insights for student: {student['_id']}")
+                return jsonify({'success': False, 'message': 'Failed to generate insights.'}), 500
+        except Exception as e:
+            current_app.logger.error(f"Error generating insights: {e}", exc_info=True)
+            return jsonify({'success': False, 'message': f'Error generating insights: {str(e)}'}), 500
+            
+    except Exception as e:
+        current_app.logger.error(f"Error getting student insights: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'An error occurred fetching student insights: {str(e)}'}), 500
+
+@batch_management_bp.route('/system/progress-monitoring', methods=['GET'])
+@jwt_required()
+def get_progress_system_monitoring():
+    """Get system monitoring data for progress management"""
+    try:
+        # Get current admin user
+        current_user_id = get_jwt_identity()
+        user = mongo_db.users.find_one({'_id': ObjectId(current_user_id)})
+        
+        # Check admin permissions (only super_admin and campus_admin)
+        allowed_roles = ['super_admin', 'campus_admin']
+        if not user or user.get('role') not in allowed_roles:
+            return jsonify({'success': False, 'message': 'Access denied. Super admin privileges required.'}), 403
+        
+        # Get monitoring data
+        from utils.student_progress_manager import StudentProgressManager
+        progress_manager = StudentProgressManager(mongo_db)
+        
+        # Get system health metrics
+        health_metrics = progress_manager.monitoring.get_system_health_metrics()
+        
+        # Get progress analytics
+        analytics = progress_manager.monitoring.get_student_progress_analytics(days=30)
+        
+        # Get data integrity status
+        integrity_check = progress_manager.monitoring.validate_student_progress_integrity()
+        
+        monitoring_data = {
+            'health_metrics': health_metrics,
+            'analytics': analytics,
+            'integrity_check': integrity_check,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        
+        return jsonify({'success': True, 'data': monitoring_data}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting progress monitoring data: {e}")
+        return jsonify({'success': False, 'message': 'An error occurred fetching monitoring data.'}), 500
 
 # --- BATCH-COURSE INSTANCE MANAGEMENT ---
 
@@ -2580,6 +2793,173 @@ def send_student_credentials(student_id):
         
     except Exception as e:
         current_app.logger.error(f"Error sending credentials: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@batch_management_bp.route('/students/bulk-migrate-progress', methods=['POST'])
+@jwt_required()
+@require_permission(module='batch_management')
+def bulk_migrate_students_progress():
+    """Bulk migrate all students to new progress system"""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = mongo_db.users.find_one({'_id': ObjectId(current_user_id)})
+        
+        if not current_user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+        
+        # Debug: Log user data to see what fields are available
+        current_app.logger.info(f"User data for migration: {current_user}")
+        
+        # Check permissions - only superadmin can do bulk migration
+        allowed_roles = ['superadmin', 'super_admin']
+        if current_user.get('role') not in allowed_roles:
+            return jsonify({'success': False, 'message': 'Only superadmin can perform bulk migration'}), 403
+        
+        # Get user display name (try multiple fields)
+        user_name = (current_user.get('name') or 
+                    current_user.get('username') or 
+                    current_user.get('email') or 
+                    current_user.get('full_name') or 
+                    f"User {current_user_id}")
+        
+        current_app.logger.info(f"Starting bulk migration by user {user_name} (ID: {current_user_id}, Role: {current_user.get('role', 'Unknown')})")
+        
+        # Find all students that need migration (have old string-based authorized_levels)
+        students_to_migrate = list(mongo_db.students.find({
+            'authorized_levels': {
+                '$exists': True,
+                '$ne': [],
+                '$elemMatch': {'$type': 'string'}  # Contains at least one string element
+            }
+        }))
+        
+        if not students_to_migrate:
+            return jsonify({
+                'success': True,
+                'message': 'No students need migration - all are already using the new progress system',
+                'migrated_count': 0,
+                'failed_count': 0,
+                'already_migrated_count': 0,
+                'total_students_processed': 0,
+                'migration_errors': []
+            }), 200
+        
+        # Also count already migrated students
+        already_migrated_count = mongo_db.students.count_documents({
+            'authorized_levels': {
+                '$exists': True,
+                '$ne': [],
+                '$elemMatch': {'$type': 'object'}  # Contains at least one object element
+            }
+        })
+        
+        migrated_count = 0
+        failed_count = 0
+        migration_errors = []
+        
+        try:
+            from utils.student_progress_manager import StudentProgressManager
+            progress_manager = StudentProgressManager()
+            
+            for student in students_to_migrate:
+                try:
+                    authorized_levels = student.get('authorized_levels', [])
+                    
+                    # Convert old string array to new object array
+                    new_authorized_levels = []
+                    for level_id in authorized_levels:
+                        if isinstance(level_id, str):
+                            new_authorized_levels.append({
+                                'level_id': level_id,
+                                'unlocked_at': datetime.now(),
+                                'unlock_source': 'legacy_migration',
+                                'unlocked_by': current_user_id,
+                                'reason': 'Bulk migrated from old progress system'
+                            })
+                    
+                    # Update student document
+                    update_data = {
+                        'authorized_levels': new_authorized_levels,
+                        'migration_status': 'completed',
+                        'migrated_at': datetime.now(),
+                        'migrated_by': current_user_id
+                    }
+                    
+                    # Add module_progress if not exists
+                    if 'module_progress' not in student:
+                        update_data['module_progress'] = {}
+                    
+                    # Add unlock_history if not exists
+                    if 'unlock_history' not in student:
+                        update_data['unlock_history'] = []
+                    
+                    result = mongo_db.students.update_one(
+                        {'_id': student['_id']},
+                        {'$set': update_data}
+                    )
+                    
+                    if result.modified_count > 0:
+                        migrated_count += 1
+                        
+                        # Log the migration event
+                        progress_manager.log_progress_event(
+                            event_type='student_migration',
+                            student_id=str(student['_id']),
+                            level_id=None,
+                            details={
+                                'migrated_by': current_user_id,
+                                'old_levels_count': len(authorized_levels),
+                                'new_levels_count': len(new_authorized_levels),
+                                'migration_reason': 'Bulk migration via admin interface',
+                                'student_name': student.get('name', 'Unknown'),
+                                'roll_number': student.get('roll_number', 'N/A')
+                            }
+                        )
+                        
+                        current_app.logger.info(f"Migrated student: {student.get('name', 'Unknown')} ({student.get('roll_number', 'N/A')}) by {user_name}")
+                    else:
+                        failed_count += 1
+                        migration_errors.append(f"Failed to update student {student.get('name', 'Unknown')}")
+                        
+                except Exception as e:
+                    failed_count += 1
+                    error_msg = f"Error migrating student {student.get('name', 'Unknown')}: {str(e)}"
+                    migration_errors.append(error_msg)
+                    current_app.logger.error(error_msg)
+            
+            # Log bulk migration completion
+            progress_manager.log_progress_event(
+                event_type='bulk_migration_completed',
+                student_id=None,
+                level_id=None,
+                details={
+                    'migrated_by': current_user_id,
+                    'total_migrated': migrated_count,
+                    'total_failed': failed_count,
+                    'already_migrated': already_migrated_count,
+                    'migration_timestamp': datetime.now().isoformat()
+                }
+            )
+            
+            current_app.logger.info(f"Bulk migration completed by {user_name}: {migrated_count} migrated, {failed_count} failed, {already_migrated_count} already migrated")
+            
+            return jsonify({
+                'success': True,
+                'message': f'Bulk migration completed successfully',
+                'migrated_count': migrated_count,
+                'failed_count': failed_count,
+                'already_migrated_count': already_migrated_count,
+                'total_students_processed': len(students_to_migrate),
+                'migration_errors': migration_errors[:10],  # Limit to first 10 errors
+                'migrated_at': datetime.now().isoformat()
+            }), 200
+                
+        except Exception as e:
+            current_app.logger.error(f"Error in bulk migration process: {e}")
+            return jsonify({'success': False, 'message': f'Bulk migration failed: {str(e)}'}), 500
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in bulk_migrate_students_progress: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @batch_management_bp.route('/students/<student_id>/credentials', methods=['GET'])

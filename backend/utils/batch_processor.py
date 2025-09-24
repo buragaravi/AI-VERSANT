@@ -15,6 +15,8 @@ from bson import ObjectId
 from mongo import mongo_db
 from utils.notification_queue import queue_sms, queue_email
 from utils.async_processor import submit_background_task
+from utils.smart_worker_manager import run_background_task_with_tracking
+from utils.date_formatter import format_date_to_ist
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -221,60 +223,83 @@ class BatchProcessor:
     
     def _process_students_sub_batch(self, batch_id: str, sub_batch_index: int, 
                                    students: List[Dict], notification_type: str, test_data: Dict = None):
-        """Process a sub-batch of students"""
+        """Process a sub-batch of students with smart worker tracking"""
+        
+        def process_sub_batch():
+            try:
+                logger.info(f"🔄 Processing {len(students)} students in batch {batch_id}, sub-batch {sub_batch_index + 1}")
+                
+                sms_queued = 0
+                email_queued = 0
+                sms_failed = 0
+                email_failed = 0
+                
+                for student in students:
+                    try:
+                        # Extract student data
+                        name = student.get('name', 'Student')
+                        email = student.get('email')
+                        phone = student.get('mobile_number') or student.get('mobile') or student.get('phone_number')
+                        username = student.get('username')
+                        password = student.get('password')
+                        
+                        if notification_type == 'credentials':
+                            # Process student credentials
+                            self._process_credentials_notification(
+                                name, email, phone, username, password,
+                                sms_queued, email_queued, sms_failed, email_failed
+                            )
+                        elif notification_type == 'test_notification':
+                            # Process test notification
+                            self._process_test_notification(
+                                name, email, phone, test_data,
+                                sms_queued, email_queued, sms_failed, email_failed
+                            )
+                                
+                    except Exception as e:
+                        logger.error(f"❌ Error processing student {student.get('name', 'Unknown')}: {e}")
+                        sms_failed += 1
+                        email_failed += 1
+                
+                return {
+                    'sms_queued': sms_queued,
+                    'email_queued': email_queued,
+                    'sms_failed': sms_failed,
+                    'email_failed': email_failed,
+                    'total_processed': len(students)
+                }
+                
+            except Exception as e:
+                logger.error(f"❌ Error processing sub-batch {sub_batch_index + 1} for batch {batch_id}: {e}")
+                raise
+        
+        # Run with smart worker tracking
         try:
-            logger.info(f"🔄 Processing {len(students)} students in batch {batch_id}, sub-batch {sub_batch_index + 1}")
-            
-            sms_queued = 0
-            email_queued = 0
-            sms_failed = 0
-            email_failed = 0
-            
-            for student in students:
-                try:
-                    # Extract student data
-                    name = student.get('name', 'Student')
-                    email = student.get('email')
-                    phone = student.get('mobile_number') or student.get('mobile') or student.get('phone_number')
-                    username = student.get('username')
-                    password = student.get('password')
-                    
-                    if notification_type == 'credentials':
-                        # Process student credentials
-                        self._process_credentials_notification(
-                            name, email, phone, username, password,
-                            sms_queued, email_queued, sms_failed, email_failed
-                        )
-                    elif notification_type == 'test_notification':
-                        # Process test notification
-                        self._process_test_notification(
-                            name, email, phone, test_data,
-                            sms_queued, email_queued, sms_failed, email_failed
-                        )
-                            
-                except Exception as e:
-                    logger.error(f"❌ Error processing student {student.get('name', 'Unknown')}: {e}")
-                    sms_failed += 1
-                    email_failed += 1
+            result = run_background_task_with_tracking(
+                process_sub_batch,
+                task_type='batch_processing',
+                description=f'Batch {batch_id} sub-batch {sub_batch_index + 1} ({len(students)} students)',
+                estimated_duration=len(students) * 2  # 2 seconds per student estimate
+            )
             
             # Update batch results
             with self.batch_lock:
                 if batch_id in self.active_batches:
                     batch_info = self.active_batches[batch_id]
-                    batch_info['results']['sms_queued'] += sms_queued
-                    batch_info['results']['email_queued'] += email_queued
-                    batch_info['results']['sms_failed'] += sms_failed
-                    batch_info['results']['email_failed'] += email_failed
-                    batch_info['results']['total_processed'] += len(students)
+                    batch_info['results']['sms_queued'] += result['sms_queued']
+                    batch_info['results']['email_queued'] += result['email_queued']
+                    batch_info['results']['sms_failed'] += result['sms_failed']
+                    batch_info['results']['email_failed'] += result['email_failed']
+                    batch_info['results']['total_processed'] += result['total_processed']
                     batch_info['current_sub_batch'] += 1
                     batch_info['status'] = 'pending'  # Ready for next sub-batch
                     
                     logger.info(f"✅ Sub-batch {sub_batch_index + 1} completed for batch {batch_id}: "
-                              f"SMS: {sms_queued} queued, {sms_failed} failed | "
-                              f"Email: {email_queued} queued, {email_failed} failed")
-            
+                              f"SMS: {result['sms_queued']} queued, {result['sms_failed']} failed | "
+                              f"Email: {result['email_queued']} queued, {result['email_failed']} failed")
+        
         except Exception as e:
-            logger.error(f"❌ Error processing sub-batch {sub_batch_index + 1} for batch {batch_id}: {e}")
+            logger.error(f"❌ Failed to process sub-batch {sub_batch_index + 1} for batch {batch_id}: {e}")
             with self.batch_lock:
                 if batch_id in self.active_batches:
                     self.active_batches[batch_id]['status'] = 'failed'
@@ -330,7 +355,9 @@ class BatchProcessor:
         
         # Queue SMS if phone exists (use custom test_id for URL)
         if phone:
-            sms_message = f"A new test {test_name} has been scheduled at {start_date} for you. Please make sure to attempt it within 24hours. exam link: https://crt.pydahsoft.in/student/exam/ {test_id} - Pydah College"
+            # Format start_date to IST readable format
+            formatted_start_date = format_date_to_ist(start_date, 'readable')
+            sms_message = f"A new test {test_name} has been scheduled at {formatted_start_date} for you. Please make sure to attempt it within 24hours. exam link: https://crt.pydahsoft.in/student/exam/ {test_id} - Pydah College"
             sms_task_id = queue_sms(
                 phone=phone,
                 message=sms_message,
@@ -354,7 +381,7 @@ class BatchProcessor:
                     'test_name': test_name,
                     'test_id': test_id,  # Custom test_id for display
                     'object_id': object_id,  # MongoDB _id for URL
-                    'start_date': start_date,
+                    'start_date': format_date_to_ist(start_date, 'readable'),  # Format to IST
                     'test_url': f"https://crt.pydahsoft.in/student/exam/{object_id}"  # Use _id for URL
                 }
             )

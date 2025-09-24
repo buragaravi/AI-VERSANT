@@ -11,6 +11,7 @@ from typing import List, Dict, Optional
 from bson import ObjectId
 from mongo import mongo_db
 from utils.sms_service import send_test_reminder_sms, send_test_scheduled_sms
+from utils.date_formatter import format_date_to_ist
 # Make email service import optional
 try:
     from utils.email_service import send_test_notification_email
@@ -123,8 +124,8 @@ class TestReminderSystem:
             if isinstance(start_time, str):
                 start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
             
-            # Format start time
-            start_time_str = start_time.strftime('%Y-%m-%d %H:%M:%S')
+            # Format start time to IST readable format
+            start_time_str = format_date_to_ist(start_time, 'readable')
             
             # Send SMS to all students
             results = []
