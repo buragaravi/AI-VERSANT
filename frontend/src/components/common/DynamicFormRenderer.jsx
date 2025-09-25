@@ -17,7 +17,19 @@ const DynamicFormRenderer = ({
 
   useEffect(() => {
     // Initialize form data with initial values
-    const initialFormData = {};
+    if (!form || !form.fields || !Array.isArray(form.fields)) {
+      return;
+    }
+    
+    // Only initialize if formData is empty or if form ID has changed
+    const formId = form._id || form.id;
+    const currentFormId = formData._formId;
+    
+    if (currentFormId === formId && Object.keys(formData).length > 1) {
+      return;
+    }
+    
+    const initialFormData = { _formId: formId };
     form.fields.forEach(field => {
       if (initialData[field.field_id] !== undefined) {
         initialFormData[field.field_id] = initialData[field.field_id];
@@ -27,8 +39,32 @@ const DynamicFormRenderer = ({
         initialFormData[field.field_id] = '';
       }
     });
+    
     setFormData(initialFormData);
-  }, [form, initialData]);
+  }, [form?._id || form?.id]); // Only depend on form ID, not the entire form object
+
+  // Separate effect to handle initialData changes without re-initializing
+  useEffect(() => {
+    if (!form || !form.fields || !Array.isArray(form.fields) || !initialData || Object.keys(initialData).length === 0) {
+      return;
+    }
+    
+    // Only update fields that have initial data and are currently empty
+    setFormData(prev => {
+      const updated = { ...prev };
+      let hasChanges = false;
+      
+      form.fields.forEach(field => {
+        if (initialData[field.field_id] !== undefined && 
+            (prev[field.field_id] === '' || prev[field.field_id] === undefined)) {
+          updated[field.field_id] = initialData[field.field_id];
+          hasChanges = true;
+        }
+      });
+      
+      return hasChanges ? updated : prev;
+    });
+  }, [initialData]); // Only depend on initialData
 
   const validateField = (field, value) => {
     const fieldErrors = [];
@@ -118,10 +154,17 @@ const DynamicFormRenderer = ({
   };
 
   const handleFieldChange = (fieldId, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [fieldId]: value
-    }));
+    setFormData(prev => {
+      const newData = {
+        ...prev,
+        [fieldId]: value
+      };
+      // Preserve the form ID
+      if (prev._formId) {
+        newData._formId = prev._formId;
+      }
+      return newData;
+    });
 
     // Clear error when user starts typing
     if (errors[fieldId]) {
@@ -149,6 +192,10 @@ const DynamicFormRenderer = ({
   };
 
   const validateForm = () => {
+    if (!form || !form.fields || !Array.isArray(form.fields)) {
+      return false;
+    }
+    
     const newErrors = {};
     let isValid = true;
 
@@ -165,6 +212,10 @@ const DynamicFormRenderer = ({
   };
 
   const handleSubmit = (status = 'submitted') => {
+    if (!form || !form.fields || !Array.isArray(form.fields)) {
+      return;
+    }
+    
     if (status === 'submitted' && !validateForm()) {
       return;
     }
@@ -172,7 +223,7 @@ const DynamicFormRenderer = ({
     const responses = form.fields.map(field => ({
       field_id: field.field_id,
       value: formData[field.field_id]
-    }));
+    })).filter(response => response.field_id !== '_formId'); // Exclude internal form ID
 
     if (status === 'submitted') {
       onSubmit(responses);
@@ -182,6 +233,10 @@ const DynamicFormRenderer = ({
   };
 
   const renderField = (field) => {
+    if (!field || !field.field_id) {
+      return null;
+    }
+    
     const value = formData[field.field_id] || '';
     const fieldErrors = errors[field.field_id] || [];
     const isTouched = touched[field.field_id];
@@ -357,6 +412,10 @@ const DynamicFormRenderer = ({
   };
 
   const getProgressPercentage = () => {
+    if (!form || !form.fields || !Array.isArray(form.fields)) {
+      return 0;
+    }
+    
     const totalFields = form.fields.length;
     const filledFields = form.fields.filter(field => {
       const value = formData[field.field_id];
@@ -365,6 +424,18 @@ const DynamicFormRenderer = ({
     
     return totalFields > 0 ? Math.round((filledFields / totalFields) * 100) : 0;
   };
+
+  // Don't render if form is not properly loaded
+  if (!form || !form.fields || !Array.isArray(form.fields)) {
+    return (
+      <div className="w-full max-w-7xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading form...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-7xl mx-auto">

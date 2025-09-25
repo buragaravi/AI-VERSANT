@@ -213,8 +213,13 @@ const PracticeModules = () => {
   const fetchModules = useCallback(async () => {
     try {
       setLoading(true);
+      console.log('🔍 Fetching practice modules...');
       // Use the new endpoint for per-student module access
       const res = await getUnlockedModules();
+      console.log('📊 API Response:', res.data);
+      console.log('📋 Modules data:', res.data.data);
+      console.log('📊 Number of modules:', res.data.data?.length || 0);
+      
       // Map backend unlocked -> frontend locked
       const modulesWithIcons = res.data.data.map(m => ({
         id: m.module_id,
@@ -222,8 +227,10 @@ const PracticeModules = () => {
         locked: !m.unlocked, // invert for UI
         icon: moduleIcons[m.module_id] || moduleIcons.DEFAULT
       }));
+      console.log('🎨 Mapped modules:', modulesWithIcons);
       setModules(modulesWithIcons);
     } catch (err) {
+      console.error('❌ Error fetching modules:', err);
       showError('Failed to load practice modules. Please try refreshing the page.');
       setModules([]);
     } finally {
@@ -430,6 +437,7 @@ const MainView = ({ modules, onSelectModule }) => {
       <p className="text-gray-600 mb-8 text-lg">Practice language skills to improve your English proficiency.</p>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {console.log('🎨 Rendering modules:', modules.length, modules)}
         {modules.map(module => (
           <motion.div
             key={module.id}

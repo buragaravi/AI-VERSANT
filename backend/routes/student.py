@@ -1369,13 +1369,30 @@ def get_online_exams():
         if not user or user.get('role') != 'student':
             return jsonify({'success': False, 'message': 'Access denied'}), 403
 
+        # Get student's record to access batch information
+        student = mongo_db.students.find_one({'user_id': ObjectId(current_user_id)})
+        if not student:
+            current_app.logger.warning(f"Student profile not found for user {current_user_id}")
+            return jsonify({'success': True, 'data': []}), 200
+
         # Base query for active online exams assigned to the student's audience
         query = {
             'test_type': 'online', 
             'status': 'active',
-            'campus_ids': user.get('campus_id'),
-            'course_ids': user.get('course_id')
+            'campus_ids': student.get('campus_id'),
+            'course_ids': student.get('course_id')
         }
+        
+        # Add batch filter if student has a batch_id
+        if student.get('batch_id'):
+            query['batch_ids'] = student.get('batch_id')
+        
+        # Debug logging
+        current_app.logger.info(f"Online exams query for student {current_user_id}:")
+        current_app.logger.info(f"  - Campus ID: {student.get('campus_id')}")
+        current_app.logger.info(f"  - Course ID: {student.get('course_id')}")
+        current_app.logger.info(f"  - Batch ID: {student.get('batch_id')}")
+        current_app.logger.info(f"  - Final query: {query}")
         
         # Don't exclude questions field - we need it to count questions
         projection = { "audio_config": 0 }
@@ -3015,14 +3032,14 @@ def get_unlocked_modules():
                     score = 0
                     if module_id in module_progress:
                         score = module_progress[module_id].get('highest_score', 0)
-                        
-                        module_levels.append({
-                            'level_id': level_id,
+                    
+                    module_levels.append({
+                        'level_id': level_id,
                         'level_name': level['name'],
                         'unlocked': is_unlocked,
                         'score': score,
                         'unlock_source': 'default' if is_unlocked else 'locked'
-                        })
+                    })
                 
                 modules_status.append({
                     'module_id': module_id,
@@ -3037,12 +3054,12 @@ def get_unlocked_modules():
                 levels_for_module = [
                     (level_id, level) for level_id, level in LEVELS.items()
                     if isinstance(level, dict) and level.get('module_id') == module_id
-                 ]
-            
-            # Sort by order
-            levels_for_module.sort(key=lambda x: x[1].get('order', 999))
-            
-            for level_id, level in levels_for_module:
+                ]
+                
+                # Sort by order
+                levels_for_module.sort(key=lambda x: x[1].get('order', 999))
+                
+                for level_id, level in levels_for_module:
                     is_unlocked = level_id in unlocked_levels
                     
                     # Get score from module progress if available
@@ -3068,13 +3085,13 @@ def get_unlocked_modules():
                         'score': score,
                         'unlock_source': unlock_source
                     })
-            
-            modules_status.append({
-                'module_id': module_id,
-                'module_name': module_name,
-                'unlocked': any(l['unlocked'] for l in module_levels),
-                'levels': module_levels
-            })
+                
+                modules_status.append({
+                    'module_id': module_id,
+                    'module_name': module_name,
+                    'unlocked': any(l['unlocked'] for l in module_levels),
+                    'levels': module_levels
+                })
         
         return jsonify({'success': True, 'data': modules_status}), 200
         

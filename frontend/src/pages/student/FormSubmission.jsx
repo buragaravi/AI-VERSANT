@@ -26,7 +26,8 @@ const FormSubmission = ({ formId, onComplete, isProcessing = false, showProgress
       
       const response = await api.get(`/form-submissions/student/forms/${formId}`);
       if (response.data.success) {
-        setForm(response.data.data.form);
+        const formData = response.data.data.form;
+        setForm(formData);
         setExistingSubmission(response.data.data.existingSubmission);
       } else {
         setError(response.data.message || 'Failed to fetch form');

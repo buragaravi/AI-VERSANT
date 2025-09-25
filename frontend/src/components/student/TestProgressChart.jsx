@@ -200,8 +200,6 @@ const TestProgressChart = ({ attempts, testName }) => {
             <CartesianGrid strokeDasharray="2 2" stroke="#e5e7eb" vertical={false} />
             <XAxis 
               dataKey="attempt" 
-              axisLine={true}
-              tickLine={true}
               tick={{ fontSize: 11, fill: '#374151', fontWeight: 500 }}
               interval={0}
               type="category"
@@ -212,8 +210,6 @@ const TestProgressChart = ({ attempts, testName }) => {
             />
             <YAxis 
               domain={[0, 100]}
-              axisLine={true}
-              tickLine={true}
               tick={{ fontSize: 11, fill: '#374151', fontWeight: 500 }}
               tickCount={6}
               ticks={[0, 20, 40, 60, 80, 100]}
