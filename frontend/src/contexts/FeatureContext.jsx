@@ -32,7 +32,9 @@ export const FeatureProvider = ({ children }) => {
       const response = await api.get('/global-settings/user/features');
       
       if (response.data.success) {
-        console.log('✅ Fetched user features:', response.data.data.features);
+        console.log('✅ Fetched user features - Full response:', response.data);
+        console.log('✅ User role from API:', response.data.data.role);
+        console.log('✅ Features data:', response.data.data.features);
         setUserFeatures(response.data.data.features || {});
       } else {
         console.log('❌ Failed to fetch user features:', response.data.message);
@@ -114,6 +116,8 @@ export const FeatureProvider = ({ children }) => {
   const generateNavLinks = (role) => {
     console.log('🔗 Generating nav links for role:', role);
     console.log('📊 Current userFeatures:', userFeatures);
+    console.log('📊 UserFeatures type:', typeof userFeatures);
+    console.log('📊 UserFeatures keys:', Object.keys(userFeatures || {}));
     
     const allFeatures = {
       student: [
@@ -155,6 +159,9 @@ export const FeatureProvider = ({ children }) => {
       // Show enabled features
       const isEnabled = isFeatureEnabled(link.feature);
       console.log(`${isEnabled ? '✅' : '❌'} Feature ${link.name} (${link.feature}): ${isEnabled ? 'enabled' : 'disabled'}`);
+      console.log(`   - Checking feature: ${link.feature}`);
+      console.log(`   - Feature exists in userFeatures:`, userFeatures[link.feature] !== undefined);
+      console.log(`   - Feature data:`, userFeatures[link.feature]);
       return isEnabled;
     });
     

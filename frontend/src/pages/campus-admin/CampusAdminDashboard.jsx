@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import api from '../../services/api';
-import Header from '../../components/common/Header';
+import { useAuth } from '../../contexts/AuthContext';
 import { FilePlus, Users, BarChart, Building2 } from 'lucide-react';
 
 const CampusAdminDashboard = () => {
+  const { user } = useAuth();
   const [stats, setStats] = useState({
     totalStudents: 0,
     totalTests: 0,
@@ -20,7 +21,7 @@ const CampusAdminDashboard = () => {
   const fetchDashboardStats = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/campus-admin/dashboard');
+      const response = await api.get(`/superadmin/dashboard?campus_id=${user?.campus_id || ''}`);
       if (response.data.success) {
         setStats(response.data.data.statistics);
       }
@@ -59,7 +60,6 @@ const CampusAdminDashboard = () => {
   if (loading) {
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
         <main className="flex-1 overflow-x-hidden overflow-y-auto flex items-center justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </main>
@@ -69,7 +69,6 @@ const CampusAdminDashboard = () => {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <Header />
       <main className="flex-1 overflow-x-hidden overflow-y-auto">
         <div className="p-6">
           {/* Header */}

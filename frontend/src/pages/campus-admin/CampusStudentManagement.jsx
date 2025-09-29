@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import Header from '../../components/common/Header';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { useNotification } from '../../contexts/NotificationContext';
+import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
 const CampusStudentManagement = () => {
   const { error } = useNotification();
+  const { user } = useAuth();
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -33,7 +34,7 @@ const CampusStudentManagement = () => {
         ...(search && { search })
       });
       
-      const res = await api.get(`/campus-admin/students?${params}`);
+      const res = await api.get(`/superadmin/users?${params}&campus_id=${user?.campus_id || ''}`);
       
       if (page === 1) {
         setStudents(res.data.data || []);
@@ -60,7 +61,6 @@ const CampusStudentManagement = () => {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <Header />
       <div className="flex-1 overflow-x-hidden overflow-y-auto">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
           <div className="flex items-center justify-between mb-6">
@@ -83,10 +83,6 @@ const CampusStudentManagement = () => {
             />
           </div>
           
-          <div className="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded">
-            <p className="text-yellow-800">To add, edit, or delete students, please request the Superadmin.</p>
-            <button className="mt-2 px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition">Request Superadmin</button>
-          </div>
           {loading ? (
             <LoadingSpinner size="md" />
           ) : (
