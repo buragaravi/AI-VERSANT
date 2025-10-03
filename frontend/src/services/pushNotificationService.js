@@ -174,6 +174,12 @@ class PushNotificationService {
    */
   async sendTestNotification() {
     try {
+      // Check if user is subscribed, if not, subscribe them first
+      if (!this.isSubscribed) {
+        console.log('ℹ️ User not subscribed, subscribing first...');
+        await this.subscribe();
+      }
+
       const response = await api.post('/push-notifications/test');
       if (response.data.success) {
         console.log('✅ Test notification sent');

@@ -16,8 +16,13 @@ class VAPIDPushService {
       if (process.env.VAPID_PUBLIC_KEY && privateKey) {
         const webpush = require('web-push');
         // Ensure VAPID subject is in proper mailto: format
-        const vapidSubject = process.env.VAPID_SUBJECT || 
+        let vapidSubject = process.env.VAPID_SUBJECT || 
           (process.env.VAPID_EMAIL ? `mailto:${process.env.VAPID_EMAIL}` : 'mailto:admin@versant.com');
+        
+        // Fix VAPID subject if it doesn't start with mailto:
+        if (!vapidSubject.startsWith('mailto:')) {
+          vapidSubject = `mailto:${vapidSubject}`;
+        }
         
         webpush.setVapidDetails(
           vapidSubject,
