@@ -58,6 +58,7 @@ const OneSignalIntegration = () => {
       }
     } catch (error) {
       console.error('OneSignal subscription failed:', error)
+      // Don't show error notification for subscription failures
     }
   }
 
