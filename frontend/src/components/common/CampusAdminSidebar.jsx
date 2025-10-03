@@ -54,15 +54,7 @@ const CampusAdminSidebar = () => {
       return
     }
 
-    try {
-      // Get user's full permissions from the backend
-      const userResponse = await api.get(`/user-management/${user.id || user._id}`)
-      const permissions = userResponse.data.data?.permissions || {}
-      
-      setUserPermissions(permissions)
-    } catch (err) {
-      console.error('Failed to fetch permissions:', err)
-      // Use default permissions for campus admin
+    // Use default permissions for campus admin since we're using FeatureContext
       setUserPermissions({
         modules: ['dashboard', 'course_management', 'batch_management', 'student_management', 'test_management', 'results_management', 'analytics', 'reports'],
         can_create_campus: false,
@@ -72,9 +64,7 @@ const CampusAdminSidebar = () => {
         can_manage_tests: true,
         can_view_all_data: false
       })
-    } finally {
       setLoading(false)
-    }
   }
 
   const handleLogout = () => {
@@ -118,8 +108,8 @@ const CampusAdminSidebar = () => {
     return () => window.removeEventListener('resize', handleResize)
   }, [isMobileMenuOpen])
 
-  return (
-    <div className="flex">
+    return (
+      <div className="flex">
       {/* Mobile Menu Toggle */}
       <div className="lg:hidden fixed top-4 left-4 z-50">
         <motion.button
@@ -131,7 +121,7 @@ const CampusAdminSidebar = () => {
         >
           {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </motion.button>
-      </div>
+            </div>
 
       {/* Modern Collapsible Sidebar */}
       <motion.div
@@ -170,7 +160,7 @@ const CampusAdminSidebar = () => {
                   <div>
                     <p className="font-semibold text-gray-800 text-sm">{user?.name || 'Campus Admin'}</p>
                     <p className="text-xs text-gray-500">Campus Admin</p>
-                  </div>
+          </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -182,15 +172,15 @@ const CampusAdminSidebar = () => {
           {featuresLoading ? (
             <div className="flex items-center justify-center py-8">
               <div className="text-xs text-gray-500">Loading menu...</div>
-            </div>
+        </div>
           ) : (
             <div className="space-y-0.5">
               {navigationItems && navigationItems.length > 0 ? (
                 navigationItems.map((item, index) => (
-                  <motion.div
+      <motion.div
                     key={item.name}
                     initial={{ x: -20, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
+        animate={{ x: 0, opacity: 1 }}
                     transition={{ 
                       delay: index * 0.05,
                       type: 'spring',
@@ -214,7 +204,7 @@ const CampusAdminSidebar = () => {
                       
                       <AnimatePresence>
                         {!isCollapsed && (
-                          <motion.div
+        <motion.div 
                             initial={{ opacity: 0, width: 0 }}
                             animate={{ opacity: 1, width: 'auto' }}
                             exit={{ opacity: 0, width: 0 }}
@@ -231,7 +221,7 @@ const CampusAdminSidebar = () => {
                         )}
                       </AnimatePresence>
                     </Link>
-                  </motion.div>
+        </motion.div>
                 ))
               ) : (
                 <div className="flex items-center justify-center py-8">
@@ -245,8 +235,8 @@ const CampusAdminSidebar = () => {
         {/* Logout Button at Bottom */}
         <div className="p-2 sm:p-3 border-t border-gray-200/50 flex-shrink-0">
           <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
             onClick={handleLogout}
             className="w-full flex items-center justify-center gap-2 bg-red-500 text-white font-medium px-3 py-2 rounded-lg hover:bg-red-600 hover:shadow-lg transition-all duration-300 shadow-md"
           >
@@ -271,12 +261,12 @@ const CampusAdminSidebar = () => {
       {/* External Collapse/Expand Button (Desktop Only) */}
       {isDesktop && (
         <motion.button
-          initial={false}
+                      initial={false}
           animate={{ 
             x: isCollapsed ? 0 : 0,
             rotate: isCollapsed ? 0 : 180
           }}
-          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => setIsCollapsed(!isCollapsed)}
@@ -290,7 +280,7 @@ const CampusAdminSidebar = () => {
       {/* Mobile Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
-          <motion.div
+                    <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -321,18 +311,18 @@ const CampusAdminSidebar = () => {
                     alt="Logo" 
                     className="h-10 w-auto" 
                   />
-                </div>
+            </div>
                 <span className="text-lg font-semibold text-gray-800">
                   <span className="hidden lg:inline">Campus Admin Portal</span>
                   <span className="lg:hidden">Campus Admin</span>
                 </span>
-              </div>
             </div>
-              
+          </div>
+          
             <div className="flex items-center space-x-4">
               <button className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 transition-all duration-200">
                 <Bell className="h-5 w-5" />
-              </button>
+          </button>
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                   <Building2 className="h-4 w-4 text-white" />
@@ -345,7 +335,7 @@ const CampusAdminSidebar = () => {
         
         {/* Content Area */}
         <div className="p-3 sm:p-4 lg:p-6 xl:p-8 min-h-screen w-full overflow-x-auto">
-          <Outlet />
+        <Outlet />
         </div>
       </div>
     </div>

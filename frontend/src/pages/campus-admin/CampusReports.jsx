@@ -1415,6 +1415,17 @@ const ResultsManagement = () => {
         }
     };
 
+    // Filter tests to show only those relevant to the campus admin's campus
+    const filteredTests = React.useMemo(() => {
+        if (user?.role === 'campus_admin' && user?.campus_id) {
+            return tests.filter(test => 
+                test.campus_id === user.campus_id || 
+                (test.campus_ids && test.campus_ids.includes(user.campus_id))
+            );
+        }
+        return tests; // For other roles or if no campus_id, show all fetched tests
+    }, [tests, user]);
+
     if (loading) {
         return (
             <main className="px-6 lg:px-10 py-12">
@@ -1515,7 +1526,7 @@ const ResultsManagement = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {tests.length === 0 ? (
+                                    {filteredTests.length === 0 ? (
                                         <tr>
                                             <td colSpan="6" className="px-6 py-12 text-center">
                                                 <div className="flex flex-col items-center">
@@ -1526,7 +1537,7 @@ const ResultsManagement = () => {
                                             </td>
                                         </tr>
                                     ) : (
-                                        tests.map((test, index) => (
+                                        filteredTests.map((test, index) => (
                                             <motion.tr
                                                 key={test.test_id}
                                                 initial={{ opacity: 0, y: 20 }}

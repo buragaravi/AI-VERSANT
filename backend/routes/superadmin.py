@@ -80,10 +80,22 @@ def dashboard():
         # Filter by campus if user is campus admin
         user_query = {}
         test_query = {}
+        batch_query = {}
+        course_query = {}
+
         if user_role == 'campus_admin' and user.get('campus_id'):
             user_query['campus_id'] = user.get('campus_id')
-            test_query['campus_id'] = user.get('campus_id')
-        
+            test_query['campus_ids'] = user.get('campus_id')
+            batch_query['campus_ids'] = user.get('campus_id')
+            course_query['campus_id'] = user.get('campus_id')
+        elif user_role == 'course_admin' and user.get('course_id'):
+            user_query['course_id'] = user.get('course_id')
+            if user.get('campus_id'):
+                user_query['campus_id'] = user.get('campus_id')
+            test_query['course_ids'] = user.get('course_id')
+            batch_query['course_ids'] = user.get('course_id')
+            course_query['_id'] = user.get('course_id')
+
         total_users = mongo_db.users.count_documents(user_query)
         total_students = mongo_db.users.count_documents({**user_query, 'role': 'student'})
         total_tests = mongo_db.tests.count_documents(test_query)
@@ -93,17 +105,15 @@ def dashboard():
             admin_query['campus_id'] = user.get('campus_id')
         total_admins = mongo_db.users.count_documents(admin_query)
         
-        # Optionally, count active courses
-        course_query = {}
-        if user_role == 'campus_admin' and user.get('campus_id'):
-            course_query['campus_id'] = user.get('campus_id')
         total_courses = mongo_db.courses.count_documents(course_query)
+        total_batches = mongo_db.batches.count_documents(batch_query)
 
         dashboard_data = {
             'statistics': {
                 'total_users': total_users,
                 'total_students': total_students,
                 'total_tests': total_tests,
+                'total_batches': total_batches,
                 'total_admins': total_admins,
                 'active_courses': total_courses
             }

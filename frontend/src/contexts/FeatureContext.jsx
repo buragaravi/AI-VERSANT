@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import api from '../services/api';
 
@@ -19,7 +19,7 @@ export const FeatureProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   // Fetch user's enabled features
-  const fetchUserFeatures = async () => {
+  const fetchUserFeatures = useCallback(async () => {
     if (!user) {
       setLoading(false);
       return;
@@ -32,12 +32,8 @@ export const FeatureProvider = ({ children }) => {
       const response = await api.get('/global-settings/user/features');
       
       if (response.data.success) {
-        console.log('✅ Fetched user features - Full response:', response.data);
-        console.log('✅ User role from API:', response.data.data.role);
-        console.log('✅ Features data:', response.data.data.features);
         setUserFeatures(response.data.data.features || {});
       } else {
-        console.log('❌ Failed to fetch user features:', response.data.message);
         setError(response.data.message || 'Failed to fetch user features');
       }
     } catch (err) {
@@ -45,14 +41,12 @@ export const FeatureProvider = ({ children }) => {
       setError(err.response?.data?.message || 'Failed to fetch user features');
       
       // Fallback to default features if API fails
-      console.log('⚠️ Using fallback features for role:', user?.role);
       const fallbackFeatures = getDefaultFeaturesForRole(user?.role);
-      console.log('📋 Fallback features:', fallbackFeatures);
       setUserFeatures(fallbackFeatures);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id, user?.role]);
 
   // Get default features for a role (fallback)
   const getDefaultFeaturesForRole = (role) => {
@@ -114,10 +108,6 @@ export const FeatureProvider = ({ children }) => {
 
   // Generate navigation links based on user role and enabled features
   const generateNavLinks = (role) => {
-    console.log('🔗 Generating nav links for role:', role);
-    console.log('📊 Current userFeatures:', userFeatures);
-    console.log('📊 UserFeatures type:', typeof userFeatures);
-    console.log('📊 UserFeatures keys:', Object.keys(userFeatures || {}));
     
     const allFeatures = {
       student: [
@@ -152,27 +142,21 @@ export const FeatureProvider = ({ children }) => {
     const filteredLinks = roleFeatures.filter(link => {
       // Always show required features
       if (link.required) {
-        console.log(`✅ Showing required feature: ${link.name}`);
         return true;
       }
       
       // Show enabled features
       const isEnabled = isFeatureEnabled(link.feature);
-      console.log(`${isEnabled ? '✅' : '❌'} Feature ${link.name} (${link.feature}): ${isEnabled ? 'enabled' : 'disabled'}`);
-      console.log(`   - Checking feature: ${link.feature}`);
-      console.log(`   - Feature exists in userFeatures:`, userFeatures[link.feature] !== undefined);
-      console.log(`   - Feature data:`, userFeatures[link.feature]);
       return isEnabled;
     });
     
-    console.log('🎯 Final filtered links:', filteredLinks.map(l => l.name));
     return filteredLinks;
   };
 
   // Fetch features when user changes
   useEffect(() => {
     fetchUserFeatures();
-  }, [user]);
+  }, [fetchUserFeatures]);
 
   const value = {
     userFeatures,
