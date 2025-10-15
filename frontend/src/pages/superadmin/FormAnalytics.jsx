@@ -10,9 +10,9 @@ import {
   Clock,
   PieChart
 } from 'lucide-react';
-import Swal from 'sweetalert2';
-import api from '../../services/api';
-import { Line } from 'react-chartjs-2';
+import Swal from 'sweetalert2'; 
+import api from '../../services/api'; 
+import { Line, Doughnut, Bar, Pie } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -22,7 +22,9 @@ import {
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
+  ArcElement,
+  BarElement
 } from 'chart.js';
 
 // Register Chart.js components
@@ -34,7 +36,9 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
+  ArcElement,
+  BarElement
 );
 
 // Timeline Line Chart Component with Blinking Effect
@@ -51,34 +55,50 @@ const TimelineLineChart = ({ timelineData }) => {
     return () => clearInterval(interval);
   }, []);
 
+  // Ensure timeline data covers the last 30 days including today
+  const completeTimeline = [];
+  const submissionMap = new Map(timelineData.map(d => [new Date(d.date).toDateString(), d.count]));
+  const today = new Date();
+
+  for (let i = 29; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - i);
+    const dateString = date.toDateString();
+    
+    completeTimeline.push({
+      date: date.toISOString().split('T')[0],
+      count: submissionMap.get(dateString) || 0,
+    });
+  }
+
   // Prepare data for the chart
   const chartData = {
-    labels: timelineData.map(day => {
+    labels: completeTimeline.map(day => {
       const date = new Date(day.date);
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     }),
     datasets: [
       {
         label: 'Submissions',
-        data: timelineData.map(day => day.count),
+        data: completeTimeline.map(day => day.count),
         borderColor: 'rgb(59, 130, 246)', // Blue color
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
         borderWidth: 3,
         fill: true,
         tension: 0.4, // Smooth curves
-        pointBackgroundColor: timelineData.map((day, index) => {
+        pointBackgroundColor: completeTimeline.map((day, index) => {
           const today = new Date();
           const dayDate = new Date(day.date);
           const isToday = dayDate.toDateString() === today.toDateString();
           return isToday ? (blinkingPoint ? 'rgb(59, 130, 246)' : 'rgb(239, 68, 68)') : 'rgb(59, 130, 246)';
         }),
-        pointBorderColor: timelineData.map((day, index) => {
+        pointBorderColor: completeTimeline.map((day, index) => {
           const today = new Date();
           const dayDate = new Date(day.date);
           const isToday = dayDate.toDateString() === today.toDateString();
           return isToday ? (blinkingPoint ? 'rgb(59, 130, 246)' : 'rgb(239, 68, 68)') : 'rgb(59, 130, 246)';
         }),
-        pointRadius: timelineData.map((day, index) => {
+        pointRadius: completeTimeline.map((day, index) => {
           const today = new Date();
           const dayDate = new Date(day.date);
           const isToday = dayDate.toDateString() === today.toDateString();
@@ -110,7 +130,7 @@ const TimelineLineChart = ({ timelineData }) => {
         callbacks: {
           title: function(context) {
             const dataIndex = context[0].dataIndex;
-            const day = timelineData[dataIndex];
+            const day = completeTimeline[dataIndex];
             return new Date(day.date).toLocaleDateString('en-US', { 
               weekday: 'long', 
               year: 'numeric', 
@@ -188,6 +208,219 @@ const TimelineLineChart = ({ timelineData }) => {
         </div>
       </div>
     </div>
+  );
+};
+
+const generateColors = (numColors) => {
+  const colors = [
+    '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444',
+    '#EC4899', '#6366F1', '#14B8A6', '#F97316', '#D946EF'
+  ];
+  let result = [];
+  for (let i = 0; i < numColors; i++) {
+    result.push(colors[i % colors.length]);
+  }
+  return result;
+};
+
+const FieldDoughnutChart = ({ data }) => {
+  const chartData = {
+    labels: data.map(d => d.option),
+    datasets: [{
+      data: data.map(d => d.count),
+      backgroundColor: generateColors(data.length),
+      borderColor: '#ffffff',
+      borderWidth: 2,
+    }],
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'right',
+        labels: {
+          boxWidth: 12,
+          padding: 15,
+          font: { size: 12 }
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            const label = context.label || '';
+            const value = context.parsed || 0;
+            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+            return `${label}: ${value} (${percentage}%)`;
+          }
+        }
+      }
+    },
+    cutout: '60%',
+  };
+
+  return (
+    <div className="relative h-48 w-full">
+      <Doughnut data={chartData} options={options} />
+    </div>
+  );
+};
+
+const FieldPieChart = ({ data }) => {
+  const chartData = {
+    labels: data.map(d => d.option),
+    datasets: [{
+      data: data.map(d => d.count),
+      backgroundColor: generateColors(data.length),
+      borderColor: '#ffffff',
+      borderWidth: 2,
+    }],
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'right',
+        labels: {
+          boxWidth: 12,
+          padding: 15,
+          font: { size: 12 }
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            const label = context.label || '';
+            const value = context.parsed || 0;
+            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+            return `${label}: ${value} (${percentage}%)`;
+          }
+        }
+      }
+    },
+  };
+
+  return <div className="relative h-48 w-full"><Pie data={chartData} options={options} /></div>;
+};
+
+const FieldHorizontalBarChart = ({ data }) => {
+  const chartData = {
+    labels: data.map(d => d.option),
+    datasets: [{
+      label: 'Responses',
+      data: data.map(d => d.count),
+      backgroundColor: generateColors(data.length),
+      borderColor: generateColors(data.length),
+      borderWidth: 1,
+      borderRadius: 4,
+    }],
+  };
+
+  const options = {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: {
+        beginAtZero: true,
+        ticks: {
+          precision: 0,
+        },
+        grid: {
+          display: false
+        }
+      },
+      y: {
+        grid: {
+          display: false
+        }
+      }
+    },
+    plugins: {
+      legend: {
+        display: false,
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            return ` Responses: ${context.parsed.x}`;
+          }
+        }
+      }
+    }
+  };
+
+  return (
+    <div className="relative h-48 w-full">
+      <Bar data={chartData} options={options} />
+    </div>
+  );
+};
+
+const DateDistributionChart = ({ responses }) => {
+  if (!responses || responses.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        <p className="text-sm">No date responses to display.</p>
+      </div>
+    );
+  }
+
+  // Aggregate counts for each date
+  const dateCounts = responses.reduce((acc, response) => {
+    if (response.value) {
+      const date = new Date(response.value).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      acc[date] = (acc[date] || 0) + 1;
+    }
+    return acc;
+  }, {});
+
+  const sortedDates = Object.entries(dateCounts).sort((a, b) => new Date(a[0]) - new Date(b[0]));
+
+  const chartData = {
+    labels: sortedDates.map(d => d[0]),
+    datasets: [{
+      label: 'Selections',
+      data: sortedDates.map(d => d[1]),
+      backgroundColor: '#3B82F6',
+      borderColor: '#3B82F6',
+      borderWidth: 1,
+      borderRadius: 4,
+      barThickness: 20,
+    }],
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { font: { size: 10 } }
+      },
+      y: {
+        beginAtZero: true,
+        ticks: { precision: 0 },
+        grid: { color: 'rgba(156, 163, 175, 0.2)' }
+      }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (context) => ` Selections: ${context.parsed.y}`
+        }
+      }
+    }
+  };
+
+  return (
+    <div className="relative h-64 w-full"><Bar data={chartData} options={options} /></div>
   );
 };
 
@@ -349,8 +582,8 @@ const FormAnalytics = ({ selectedForm = null, onBack = null }) => {
   };
 
   const toggleFieldExpansion = (fieldId, formId, fieldType) => {
-    // Only allow expansion for text and number fields
-    if (!['text', 'textarea', 'number', 'email', 'phone'].includes(fieldType)) {
+    // Allow expansion for text, number, and date fields
+    if (!['text', 'textarea', 'number', 'email', 'phone', 'date'].includes(fieldType)) {
       return;
     }
 
@@ -617,7 +850,7 @@ const FormAnalytics = ({ selectedForm = null, onBack = null }) => {
                 <div className="space-y-6">
                   {formStats.field_stats.map((field, index) => {
                     const isExpanded = expandedFields[field.field_id];
-                    const isExpandable = ['text', 'textarea', 'number', 'email', 'phone'].includes(field.field_type);
+                    const isExpandable = ['text', 'textarea', 'number', 'email', 'phone', 'date'].includes(field.field_type);
                     const responses = fieldResponses[field.field_id] || [];
                     
                     return (
@@ -652,17 +885,30 @@ const FormAnalytics = ({ selectedForm = null, onBack = null }) => {
                           </div>
                         </div>
                         
+                        {/* Chart for date fields */}
+                        {field.field_type === 'date' && (
+                          <div className="mt-4">
+                            {responses.length > 0
+                              ? <DateDistributionChart responses={responses} />
+                              : <div className="text-center py-8 text-gray-500 text-sm">Click 'View Details' to load date distribution chart.</div>}
+                          </div>
+                        )}
                         {/* Option distribution for choice fields */}
-                        {field.option_distribution && field.option_distribution.length > 0 && (
-                          <div className="space-y-2">
-                            {field.option_distribution.map((option, optIndex) => (
-                              <div key={optIndex} className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-sm text-gray-700">{option.option}</span>
-                                  <span className="text-sm font-medium text-gray-900">
-                                    {option.count} ({option.percentage}%)
-                                  </span>
-                                </div>
+                        {field.option_distribution && field.option_distribution.length > 0 && ( 
+                          <div className="mt-4">
+                            {field.field_type === 'radio' && (
+                              <FieldDoughnutChart data={field.option_distribution} />
+                            )}
+                            {field.field_type === 'dropdown' && (
+                              <FieldPieChart data={field.option_distribution} />
+                            )}
+                            {field.field_type === 'checkbox' && (
+                              <FieldHorizontalBarChart data={field.option_distribution} />
+                            )}
+                            {/* Fallback for other types */}
+                            {!['radio', 'checkbox', 'dropdown', 'date'].includes(field.field_type) && field.option_distribution.map((option, optIndex) => (
+                              <div key={optIndex} className="space-y-1 mb-2">
+                                <div className="flex items-center justify-between text-sm"><span className="text-gray-700">{option.option}</span><span className="font-medium text-gray-900">{option.count} ({option.percentage}%)</span></div>
                                 <ProgressBar percentage={option.percentage} color="blue" />
                               </div>
                             ))}
@@ -670,7 +916,7 @@ const FormAnalytics = ({ selectedForm = null, onBack = null }) => {
                         )}
                         
                         {/* Expanded detailed responses for text/number fields */}
-                        {isExpanded && isExpandable && (
+                        {isExpanded && isExpandable && field.field_type !== 'date' && (
                           <div className="mt-4 pt-4 border-t border-gray-200">
                             <div className="flex items-center justify-between mb-3">
                               <h5 className="text-sm font-medium text-gray-700">Detailed Responses</h5>

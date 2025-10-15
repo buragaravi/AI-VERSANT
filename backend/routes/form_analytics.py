@@ -133,11 +133,12 @@ def get_form_stats(form_id):
         }))
         
         # Get submission timeline (last 30 days)
-        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        start_date_range = today - timedelta(days=29)
         timeline_data = []
         
         logger.info(f"📊 Generating timeline for form {form_id}")
-        logger.info(f"📊 Thirty days ago: {thirty_days_ago}")
+        logger.info(f"📊 Timeline range start: {start_date_range}")
         
         # First, let's check what submissions exist for this form
         all_submissions = list(mongo_db['form_submissions'].find({
@@ -152,8 +153,8 @@ def get_form_stats(form_id):
         for sub in all_submissions[:3]:  # Log first 3 submissions
             logger.info(f"📊 Submission: {sub.get('_id')}, submitted_at: {sub.get('submitted_at')}, created_at: {sub.get('created_at')}")
         
-        for i in range(30):
-            date = thirty_days_ago + timedelta(days=i)
+        for i in range(30): # Loop for 30 days
+            date = start_date_range + timedelta(days=i)
             start_of_day = date.replace(hour=0, minute=0, second=0, microsecond=0)
             end_of_day = start_of_day + timedelta(days=1)
             
@@ -235,8 +236,8 @@ def get_form_stats(form_id):
                 except Exception:
                     return None
             
-            for i in range(30):
-                date = thirty_days_ago + timedelta(days=i)
+            for i in range(30): # Loop for 30 days
+                date = start_date_range + timedelta(days=i)
                 start_of_day = date.replace(hour=0, minute=0, second=0, microsecond=0)
                 end_of_day = start_of_day + timedelta(days=1)
                 
