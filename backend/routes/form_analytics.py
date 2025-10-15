@@ -505,12 +505,13 @@ def get_completion_rates():
             "message": "Failed to fetch completion rates"
         }), 500
 
-@form_analytics_bp.route('/export/analytics', methods=['GET'])
+@form_analytics_bp.route('/export/analytics/<form_id>', methods=['GET'])
 @jwt_required()
 @require_superadmin
-def export_analytics():
+def export_analytics(form_id):
     """Export analytics data"""
     try:
+
         # Get date range from query parameters
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
@@ -538,59 +539,128 @@ def export_analytics():
                 }), 400
         
         # Get submissions in date range
-        query = {'status': 'submitted'}
+        query = {
+            '$or': [
+                {'form_id': ObjectId(form_id)},
+                {'form_id': form_id}
+            ],
+            'status': 'submitted'
+        }
         if date_filter:
             query['submitted_at'] = date_filter
         
         submissions = list(mongo_db['form_submissions'].find(query).sort('submitted_at', -1))
         
+        if not submissions:
+            return jsonify({
+                "success": True,
+                "data": { "submissions": [] }
+            })
+
         # Prepare export data
         export_data = []
+        all_field_labels = set(['Submission Date', 'Student Name', 'Student Email', 'Student Roll Number', 'Student Mobile Number', 'Campus', 'Course', 'Batch', 'Form Title'])
+
+        # Pre-fetch all forms to create a form map for efficiency
+        form_ids = list(set(ObjectId(sub['form_id']) for sub in submissions if ObjectId.is_valid(str(sub.get('form_id')))))
+        forms_cursor = mongo_db['forms'].find({'_id': {'$in': form_ids}})
+        forms_map = {str(form['_id']): form for form in forms_cursor}
+
+
+        # First pass: collect all unique field labels from all submissions
+        for submission in submissions:
+            form_id_str = str(submission.get('form_id'))
+            form = forms_map.get(form_id_str)
+            if not form:
+                continue
+
+            field_map = {field['field_id']: field['label'] for field in form.get('fields', [])}
+            responses = submission.get('responses', []) or submission.get('form_responses', [])
+            for response in responses:
+                field_label = field_map.get(response.get('field_id'))
+                if field_label:
+                    all_field_labels.add(field_label)
+
+        # Define a consistent header order
+        # Desired order: Student details, then form fields alphabetically
+        student_headers = ['Student Roll Number', 'Student Name', 'Student Mobile Number', 'Student Email', 'Campus', 'Course', 'Batch', 'Submission Date', 'Form Title']
+        form_field_headers = sorted([h for h in all_field_labels if h not in student_headers])
+        ordered_headers = student_headers + form_field_headers
+
         for submission in submissions:
             # Get form details
-            form = mongo_db['forms'].find_one({'_id': submission['form_id']})
-            form_title = form['title'] if form else 'Unknown Form'
-            
+            form_id_str = str(submission.get('form_id'))
+            form = forms_map.get(form_id_str)
+            form_title = form.get('title', 'Unknown Form') if form else 'Unknown Form'
+            field_map = {field['field_id']: field['label'] for field in form.get('fields', [])} if form else {}
+
             # Get student details
-            student = mongo_db['students'].find_one({'_id': submission['student_id']})
-            student_name = student.get('name', 'Unknown') if student else 'Unknown'
-            student_email = student.get('email', 'Unknown') if student else 'Unknown'
-            
+            student_doc = None
+            student_id_val = submission.get('student_id')
+            if student_id_val:
+                try:
+                    student_doc = mongo_db['students'].find_one({'_id': ObjectId(student_id_val)})
+                except Exception:
+                    pass
+            if not student_doc:
+                roll_no = submission.get('student_roll_number')
+                if roll_no:
+                    student_doc = mongo_db['students'].find_one({'roll_number': roll_no})
+
+            student_name = (student_doc or {}).get('name', 'Unknown')
+            student_email = (student_doc or {}).get('email', 'Unknown')
+            student_roll_number = (student_doc or {}).get('roll_number', 'Unknown')
+            student_mobile_number = (student_doc or {}).get('mobile_number', 'Unknown')
+
+            campus_name = 'Unknown'
+            course_name = 'Unknown'
+            batch_name = 'Unknown'
+
+            if student_doc:
+                campus = mongo_db['campuses'].find_one({'_id': student_doc.get('campus_id')}) if student_doc.get('campus_id') else None
+                course = mongo_db['courses'].find_one({'_id': student_doc.get('course_id')}) if student_doc.get('course_id') else None
+                batch = mongo_db['batches'].find_one({'_id': student_doc.get('batch_id')}) if student_doc.get('batch_id') else None
+                campus_name = campus.get('name', 'Unknown') if campus else 'Unknown'
+                course_name = course.get('name', 'Unknown') if course else 'Unknown'
+                batch_name = batch.get('name', 'Unknown') if batch else 'Unknown'
+
             # Create row data
             row = {
                 'Form Title': form_title,
+                'Submission Date': submission.get('submitted_at').strftime('%Y-%m-%d %H:%M:%S') if submission.get('submitted_at') else 'N/A',
                 'Student Name': student_name,
                 'Student Email': student_email,
-                'Submission Date': submission['submitted_at'].strftime('%Y-%m-%d %H:%M:%S') if submission['submitted_at'] else 'N/A',
-                'IP Address': submission.get('ip_address', 'N/A')
+                'Student Roll Number': student_roll_number,
+                'Student Mobile Number': student_mobile_number,
+                'Campus': campus_name,
+                'Course': course_name,
+                'Batch': batch_name
             }
-            
+
             # Add form field responses
-            for response in submission['responses']:
-                field_id = response['field_id']
-                value = response['value']
-                
-                # Find field label
-                field_label = field_id
-                if form:
-                    for field in form['fields']:
-                        if field['field_id'] == field_id:
-                            field_label = field['label']
-                            break
-                
+            responses = submission.get('responses', []) or submission.get('form_responses', [])
+            for response in responses:
+                field_label = field_map.get(response.get('field_id'), response.get('field_id'))
+                value = response.get('value')
                 # Format value
                 if isinstance(value, list):
-                    row[field_label] = ', '.join(str(v) for v in value)
+                    row[field_label] = ', '.join(str(v) for v in value if v is not None)
                 else:
                     row[field_label] = str(value) if value is not None else ''
             
             export_data.append(row)
         
+        # Final step: ensure all rows have all headers
+        final_export_data = []
+        for row in export_data:
+            new_row = {header: row.get(header, '') for header in ordered_headers}
+            final_export_data.append(new_row)
+
         return jsonify({
             "success": True,
             "data": {
-                "submissions": export_data,
-                "total_submissions": len(export_data),
+                "submissions": final_export_data,
+                "total_submissions": len(final_export_data),
                 "date_range": {
                     "start_date": start_date,
                     "end_date": end_date

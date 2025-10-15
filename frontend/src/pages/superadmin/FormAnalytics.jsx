@@ -7,7 +7,8 @@ import {
   Download,
   Calendar,
   CheckCircle,
-  Clock,
+  Clock, 
+  File,
   PieChart
 } from 'lucide-react';
 import Swal from 'sweetalert2'; 
@@ -26,6 +27,9 @@ import {
   ArcElement,
   BarElement
 } from 'chart.js';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Register Chart.js components
 ChartJS.register(
@@ -45,6 +49,7 @@ ChartJS.register(
 const TimelineLineChart = ({ timelineData }) => {
   const [blinkingPoint, setBlinkingPoint] = useState(false);
   const chartRef = useRef(null);
+  window.timelineChartRef = chartRef; // Expose ref for export
 
   // Blinking animation for current day
   useEffect(() => {
@@ -223,7 +228,8 @@ const generateColors = (numColors) => {
   return result;
 };
 
-const FieldDoughnutChart = ({ data }) => {
+const FieldDoughnutChart = ({ data, fieldId }) => {
+  const chartRef = useRef(null);
   const chartData = {
     labels: data.map(d => d.option),
     datasets: [{
@@ -233,6 +239,11 @@ const FieldDoughnutChart = ({ data }) => {
       borderWidth: 2,
     }],
   };
+
+  useEffect(() => {
+    if (!window.fieldChartRefs) window.fieldChartRefs = {};
+    window.fieldChartRefs[fieldId] = chartRef;
+  }, [fieldId]);
 
   const options = {
     responsive: true,
@@ -263,12 +274,15 @@ const FieldDoughnutChart = ({ data }) => {
 
   return (
     <div className="relative h-48 w-full">
-      <Doughnut data={chartData} options={options} />
+      <Doughnut ref={chartRef} data={chartData} options={options} />
     </div>
   );
 };
 
-const FieldPieChart = ({ data }) => {
+const FieldPieChart = ({ data, fieldId }) => {
+  // This component is not currently used for export, but adding ref for consistency
+  const chartRef = useRef(null);
+
   const chartData = {
     labels: data.map(d => d.option),
     datasets: [{
@@ -278,6 +292,11 @@ const FieldPieChart = ({ data }) => {
       borderWidth: 2,
     }],
   };
+
+  useEffect(() => {
+    if (!window.fieldChartRefs) window.fieldChartRefs = {};
+    window.fieldChartRefs[fieldId] = chartRef;
+  }, [fieldId]);
 
   const options = {
     responsive: true,
@@ -305,10 +324,12 @@ const FieldPieChart = ({ data }) => {
     },
   };
 
-  return <div className="relative h-48 w-full"><Pie data={chartData} options={options} /></div>;
+  return <div className="relative h-48 w-full"><Pie ref={chartRef} data={chartData} options={options} /></div>;
 };
 
-const FieldHorizontalBarChart = ({ data }) => {
+const FieldHorizontalBarChart = ({ data, fieldId }) => {
+  const chartRef = useRef(null);
+
   const chartData = {
     labels: data.map(d => d.option),
     datasets: [{
@@ -320,6 +341,11 @@ const FieldHorizontalBarChart = ({ data }) => {
       borderRadius: 4,
     }],
   };
+
+  useEffect(() => {
+    if (!window.fieldChartRefs) window.fieldChartRefs = {};
+    window.fieldChartRefs[fieldId] = chartRef;
+  }, [fieldId]);
 
   const options = {
     indexAxis: 'y',
@@ -357,12 +383,14 @@ const FieldHorizontalBarChart = ({ data }) => {
 
   return (
     <div className="relative h-48 w-full">
-      <Bar data={chartData} options={options} />
+      <Bar ref={chartRef} data={chartData} options={options} />
     </div>
   );
 };
 
-const DateDistributionChart = ({ responses }) => {
+const DateDistributionChart = ({ responses, fieldId }) => {
+  const chartRef = useRef(null);
+
   if (!responses || responses.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
@@ -370,6 +398,11 @@ const DateDistributionChart = ({ responses }) => {
       </div>
     );
   }
+
+  useEffect(() => {
+    if (!window.fieldChartRefs) window.fieldChartRefs = {};
+    window.fieldChartRefs[fieldId] = chartRef;
+  }, [fieldId]);
 
   // Aggregate counts for each date
   const dateCounts = responses.reduce((acc, response) => {
@@ -420,7 +453,7 @@ const DateDistributionChart = ({ responses }) => {
   };
 
   return (
-    <div className="relative h-64 w-full"><Bar data={chartData} options={options} /></div>
+    <div className="relative h-64 w-full"><Bar ref={chartRef} data={chartData} options={options} /></div>
   );
 };
 
@@ -524,11 +557,17 @@ const FormAnalytics = ({ selectedForm = null, onBack = null }) => {
 
   const handleExportAnalytics = async () => {
     try {
+      if (!selectedFormId) {
+        Swal.fire('Info', 'Please select a form to export its analytics.', 'info');
+        return;
+      }
+
       const params = new URLSearchParams();
       if (dateRange.start_date) params.append('start_date', dateRange.start_date);
       if (dateRange.end_date) params.append('end_date', dateRange.end_date);
 
-      const response = await api.get(`/form-analytics/export/analytics?${params}`);
+      const url = `/form-analytics/export/analytics/${selectedFormId}?${params}`;
+      const response = await api.get(url);
       if (response.data.success) {
         const data = response.data.data.submissions;
         if (data.length === 0) {
@@ -536,28 +575,272 @@ const FormAnalytics = ({ selectedForm = null, onBack = null }) => {
           return;
         }
 
-        // Create and download CSV file
-        const headers = Object.keys(data[0]);
-        const csvContent = [
-          headers.join(','),
-          ...data.map(row => headers.map(header => `"${row[header] || ''}"`).join(','))
-        ].join('\n');
+        // --- Create and download Excel file ---
+        const formTitle = data[0]['Form Title'] || 'Analytics';
+        
+        // Define the desired column order
+        const orderedHeaders = [
+          'Student Roll Number',
+          'Student Name',
+          'Student Mobile Number',
+          'Student Email',
+          'Campus',
+          'Course',
+          'Batch',
+          'Submission Date'
+        ];
 
-        const blob = new Blob([csvContent], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
+        // Get all unique headers from the data, excluding the title
+        const allDataHeaders = new Set();
+        data.forEach(row => {
+          Object.keys(row).forEach(header => {
+            if (header !== 'Form Title') {
+              allDataHeaders.add(header);
+            }
+          });
+        });
+
+        // Add remaining headers alphabetically
+        const remainingHeaders = [...allDataHeaders].filter(h => !orderedHeaders.includes(h)).sort();
+        const finalHeaders = [...orderedHeaders, ...remainingHeaders];
+
+        // Prepare data for worksheet, removing the Form Title and ordering columns
+        const worksheetData = data.map(row => {
+          const newRow = {};
+          finalHeaders.forEach(header => {
+            newRow[header] = row[header] || '';
+          });
+          return newRow;
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(worksheetData, { header: finalHeaders });
+
+        // Style the worksheet
+        const headerStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "4F81BD" } } };
+        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const address = XLSX.utils.encode_cell({ r: 0, c: C });
+          if (!worksheet[address]) continue;
+          worksheet[address].s = headerStyle;
+        }
+        // Auto-fit columns
+        const colWidths = finalHeaders.map(header => ({ wch: Math.max(header.length, 15) }));
+        worksheet['!cols'] = colWidths;
+
+        const workbook = XLSX.utils.book_new();
+        // Use a sanitized version of the form title for the sheet name
+        const sheetName = formTitle.replace(/[\/\\?*\[\]]/g, '').substring(0, 31);
+        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+        const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+
         const a = document.createElement('a');
-        a.href = url;
-        a.download = `form_analytics_${new Date().toISOString().split('T')[0]}.csv`;
+        a.href = URL.createObjectURL(blob);
+        a.download = `${sheetName}_${new Date().toISOString().split('T')[0]}.xlsx`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
 
         Swal.fire('Success', 'Analytics data exported successfully', 'success');
       }
     } catch (error) {
       console.error('Error exporting analytics:', error);
       Swal.fire('Error', 'Failed to export analytics data', 'error');
+    }
+  };
+
+  const handleExportPdf = async () => {
+    try {
+      if (!selectedFormId) {
+        Swal.fire('Info', 'Please select a form to export its analytics.', 'info');
+        return;
+      }
+
+      const params = new URLSearchParams();
+      if (dateRange.start_date) params.append('start_date', dateRange.start_date);
+      if (dateRange.end_date) params.append('end_date', dateRange.end_date);
+
+      const url = `/form-analytics/export/analytics/${selectedFormId}?${params}`;
+      const response = await api.get(url);
+
+      if (response.data.success) {
+        const data = response.data.data.submissions;
+        if (data.length === 0) {
+          Swal.fire('Info', 'No data found for the selected date range', 'info');
+          return;
+        }
+
+        const formTitle = data[0]['Form Title'] || 'Analytics';
+        const doc = new jsPDF({ orientation: 'landscape' });
+
+        // Define column order
+        const pdfOrderedHeaders = [
+          'Student Roll Number',
+          'Student Name',
+          'Campus',
+          'Course',
+          'Batch',
+          'Submission Date'
+        ];
+
+        const allDataHeaders = new Set();
+        data.forEach(row => {
+          Object.keys(row).forEach(header => {
+            if (header !== 'Form Title' && header !== 'Student Mobile Number' && header !== 'Student Email') allDataHeaders.add(header);
+          });
+        });
+
+        const remainingHeaders = [...allDataHeaders].filter(h => !pdfOrderedHeaders.includes(h)).sort();
+        const finalHeaders = [...pdfOrderedHeaders, ...remainingHeaders];
+
+        const tableBody = data.map(row => finalHeaders.map(header => row[header] || ''));
+
+        // --- PDF Header ---
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+        // TODO: To enable the logo, replace the placeholder below with a valid base64 string and uncomment the doc.addImage line.
+        // const logoBase64 = 'data:image/png;base64,YOUR_LOGO_BASE64_STRING_HERE';
+        // doc.addImage(logoBase64, 'PNG', 14, 10, 40, 15); // x, y, width, height
+
+        // College Name (Centered)
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40);
+        doc.text('Pydah Group of Institutions', pageWidth / 2, 20, { align: 'center' });
+
+        // Line separator
+        doc.setDrawColor(200, 200, 200); // Light gray line
+        doc.line(14, 28, pageWidth - 14, 28); // from (x1, y1) to (x2, y2)
+
+        // Form Title with background bar
+        doc.setFillColor(79, 129, 189); // Sky Blue
+        doc.rect(14, 32, pageWidth - 28, 12, 'F'); // x, y, width, height, style ('F' for fill)
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255); // White
+        doc.text(formTitle, pageWidth / 2, 40, { align: 'center' });
+
+        // Add Table
+        autoTable(doc, { // Adjust startY to be below the new header
+          startY: 50,
+          head: [finalHeaders],
+          body: tableBody,
+          theme: 'grid',
+          headStyles: {
+            fillColor: [79, 129, 189], // Sky Blue
+            textColor: [255, 255, 255], // White
+            fontStyle: 'bold',
+          },
+          alternateRowStyles: {
+            fillColor: [240, 245, 250], // Light Blue
+          },
+          styles: {
+            fontSize: 7,
+            cellPadding: 2,
+          },
+        });
+
+        // --- Add Field Analytics Section ---
+        let finalY = doc.lastAutoTable.finalY;
+        const addPageIfNeeded = () => {
+          // Check if space is left on the page, leaving a 20mm margin at the bottom
+          if (finalY > doc.internal.pageSize.getHeight() - 20) {
+            doc.addPage();
+            finalY = 20; // Reset Y position for the new page
+          }
+        };
+
+        addPageIfNeeded();
+        finalY = Math.max(finalY + 15, 40); // Ensure there's space after the main title bar
+        doc.setFontSize(16);
+        doc.setTextColor(40);
+        doc.text('Field Response Analysis', 14, finalY);
+        finalY += 10;
+
+        if (formStats && formStats.field_stats) {
+          for (const field of formStats.field_stats) {
+            addPageIfNeeded();
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`${field.field_label} (${field.total_responses} responses)`, 14, finalY);
+            finalY += 8;
+
+            const isChartable = ['radio', 'dropdown', 'checkbox', 'date'].includes(field.field_type);
+            const isExpandable = ['text', 'textarea', 'number', 'email', 'phone'].includes(field.field_type);
+
+            const chartRef = window.fieldChartRefs?.[field.field_id];
+            if (isChartable && chartRef && chartRef.current) {
+              try {
+                const chartImage = chartRef.current.toBase64Image();
+                const imgProps = doc.getImageProperties(chartImage);
+                const pdfWidth = doc.internal.pageSize.getWidth() - 28;
+                const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                
+                // Check if the chart and its title will fit, if not, add a new page
+                if (finalY + pdfHeight + 10 > doc.internal.pageSize.getHeight() - 20) {
+                  addPageIfNeeded();
+                }
+                doc.addImage(chartImage, 'PNG', 14, finalY, pdfWidth, pdfHeight);
+                finalY += pdfHeight + 10;
+
+                // Add a legend table for the chart since PDF is not interactive
+                if (field.option_distribution && field.option_distribution.length > 0) {
+                  addPageIfNeeded();
+                  const legendTableHead = [['Option', 'Count', 'Percentage']];
+                  const legendTableBody = field.option_distribution.map(opt => [
+                    opt.option,
+                    opt.count,
+                    `${opt.percentage}%`
+                  ]);
+
+                  autoTable(doc, {
+                    startY: finalY,
+                    head: legendTableHead,
+                    body: legendTableBody,
+                    theme: 'grid',
+                    styles: { fontSize: 8, cellPadding: 1.5 },
+                    headStyles: { fillColor: [241, 245, 249], textColor: [31, 41, 55], fontStyle: 'bold' }
+                  });
+                  finalY = doc.lastAutoTable.finalY + 10;
+                }
+              } catch (e) {
+                console.error("Could not add chart image to PDF:", e);
+              }
+            } else if (isExpandable) {
+              // For non-chart fields, fetch data and add a table
+              const response = await api.get(`/form-analytics/fields/${selectedFormId}/${field.field_id}/responses`);
+              if (response.data.success && response.data.data.responses.length > 0) {
+                const detailedResponses = response.data.data.responses;
+                const tableHead = [['Roll Number', 'Student Name', 'Course', 'Response']];
+                const tableBody = detailedResponses.map(r => [
+                  r.student?.roll_number || 'N/A',
+                  r.student?.name || 'Unknown',
+                  r.student?.course || 'N/A',
+                  typeof r.value === 'object' ? JSON.stringify(r.value) : (r.value || 'No response')
+                ]);
+
+                addPageIfNeeded();
+                autoTable(doc, {
+                  startY: finalY,
+                  head: tableHead,
+                  body: tableBody,
+                  theme: 'striped',
+                  styles: { fontSize: 8 },
+                  headStyles: { fillColor: [100, 100, 100] }
+                });
+                finalY = doc.lastAutoTable.finalY + 10;
+              }
+            }
+          }
+        }
+
+        doc.save(`${formTitle.replace(/[\/\\?*\[\]]/g, '')}_${new Date().toISOString().split('T')[0]}.pdf`);
+        Swal.fire('Success', 'Analytics data exported to PDF successfully', 'success');
+      }
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      Swal.fire('Error', 'Failed to export analytics data to PDF', 'error');
     }
   };
 
@@ -667,10 +950,19 @@ const FormAnalytics = ({ selectedForm = null, onBack = null }) => {
             </div>
             <button
               onClick={handleExportAnalytics}
+              disabled={!selectedFormId}
               className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
             >
               <Download className="w-4 h-4 mr-2" />
               Export Data
+            </button>
+            <button
+              onClick={handleExportPdf}
+              disabled={!selectedFormId}
+              className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+            >
+              <File className="w-4 h-4 mr-2" />
+              Export PDF
             </button>
           </div>
         </div>
@@ -889,21 +1181,21 @@ const FormAnalytics = ({ selectedForm = null, onBack = null }) => {
                         {field.field_type === 'date' && (
                           <div className="mt-4">
                             {responses.length > 0
-                              ? <DateDistributionChart responses={responses} />
+                              ? <DateDistributionChart responses={responses} fieldId={field.field_id} />
                               : <div className="text-center py-8 text-gray-500 text-sm">Click 'View Details' to load date distribution chart.</div>}
                           </div>
                         )}
                         {/* Option distribution for choice fields */}
                         {field.option_distribution && field.option_distribution.length > 0 && ( 
                           <div className="mt-4">
-                            {field.field_type === 'radio' && (
-                              <FieldDoughnutChart data={field.option_distribution} />
+                            {field.field_type === 'radio' && ( // Pass fieldId to get a ref
+                              <FieldDoughnutChart data={field.option_distribution} fieldId={field.field_id} />
                             )}
                             {field.field_type === 'dropdown' && (
-                              <FieldPieChart data={field.option_distribution} />
+                              <FieldPieChart data={field.option_distribution} fieldId={field.field_id} />
                             )}
                             {field.field_type === 'checkbox' && (
-                              <FieldHorizontalBarChart data={field.option_distribution} />
+                              <FieldHorizontalBarChart data={field.option_distribution} fieldId={field.field_id} />
                             )}
                             {/* Fallback for other types */}
                             {!['radio', 'checkbox', 'dropdown', 'date'].includes(field.field_type) && field.option_distribution.map((option, optIndex) => (
@@ -926,40 +1218,29 @@ const FormAnalytics = ({ selectedForm = null, onBack = null }) => {
                             </div>
                             
                             {responses.length > 0 ? (
-                              <div className="max-h-64 overflow-y-auto space-y-2">
-                                {responses.map((response, respIndex) => (
-                                  <div key={respIndex} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
-                                    <div className="flex items-start justify-between">
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm text-gray-900 break-words">
-                                          {response.value || 'No response'}
-                                        </p>
-                                        <div className="mt-2 text-xs text-gray-600 space-y-1">
-                                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                                            <span className="font-medium text-gray-700">Student:</span>
-                                            <span className="text-gray-900">{response.student?.name || 'Unknown'}</span>
-                                            {response.student?.roll_number && (
-                                              <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">{response.student.roll_number}</span>
-                                            )}
-                                          </div>
-                                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                                            {response.student?.course && <span>Course: <span className="text-gray-900">{response.student.course}</span></span>}
-                                            {response.student?.batch && <span>Batch: <span className="text-gray-900">{response.student.batch}</span></span>}
-                                            {response.student?.campus && <span>Campus: <span className="text-gray-900">{response.student.campus}</span></span>}
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <div className="ml-3 text-right">
-                                        <span className="text-xs text-gray-400">
-                                          {response.submitted_at ?
-                                            new Date(response.submitted_at).toLocaleDateString() :
-                                            'Unknown date'
-                                          }
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
+                              <div className="max-h-80 overflow-y-auto rounded-lg border border-gray-200">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                  <thead className="bg-gray-50 sticky top-0">
+                                    <tr>
+                                      <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll Number</th>
+                                      <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student Name</th>
+                                      <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
+                                      <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Response</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="bg-white divide-y divide-gray-200">
+                                    {responses.map((response, respIndex) => (
+                                      <tr key={respIndex} className="hover:bg-gray-50">
+                                        <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">{response.student?.roll_number || 'N/A'}</td>
+                                        <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">{response.student?.name || 'Unknown'}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">{response.student?.course || 'N/A'}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-800 break-words min-w-[200px]">
+                                          {typeof response.value === 'object' ? JSON.stringify(response.value) : (response.value || 'No response')}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
                               </div>
                             ) : (
                               <div className="text-center py-8 text-gray-500">
