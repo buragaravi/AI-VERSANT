@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 
 const OnlineExamTaking = () => {
-  const { examId } = useParams();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const examId = searchParams.get('testid');
   const { error: showError, success } = useNotification();
   const [questions, setQuestions] = useState([]);
   const [exam, setExam] = useState(null);
@@ -1290,4 +1292,4 @@ const OnlineExamTaking = () => {
   );
 };
 
-export default OnlineExamTaking; 
+export default OnlineExamTaking;

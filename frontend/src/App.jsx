@@ -187,7 +187,7 @@ function App() {
                 </Route>
 
                 {/* Exam Taking Routes - No Sidebar */}
-                <Route path="/student/exam/:examId" element={<ProtectedRoute allowedRoles={['student']}><OnlineExamTaking /></ProtectedRoute>} />
+                <Route path="/student/exam" element={<ProtectedRoute allowedRoles={['student']}><OnlineExamTaking /></ProtectedRoute>} />
 
                 {/* Test Routes */}
 
@@ -204,4 +204,4 @@ function App() {
   )
 }
 
-export default App 
+export default App
