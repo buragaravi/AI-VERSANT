@@ -1,4 +1,5 @@
 const logger = require('../utils/logger');
+const notificationService = require('./notificationService');
 
 // VAPID Push Notification Service
 class VAPIDPushService {
@@ -152,6 +153,16 @@ class PushNotificationService {
   }
 
   async send(subscription, title, body, data = {}) {
+    const settings = await notificationService.getNotificationSettings();
+    if (!settings.pushEnabled) {
+      logger.info('⚠️ Push notifications are disabled in settings. Skipping send.');
+      return {
+        success: false,
+        message: 'Push notifications are disabled',
+        provider: 'None'
+      };
+    }
+
     const results = [];
     let lastError = null;
 

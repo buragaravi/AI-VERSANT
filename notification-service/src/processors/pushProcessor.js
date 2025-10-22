@@ -1,5 +1,6 @@
 const { Notification } = require('../models/Notification');
 const logger = require('../utils/logger');
+const notificationService = require('../services/notificationService');
 
 // Only configure web push if VAPID keys are provided
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
@@ -16,6 +17,17 @@ module.exports = async (job) => {
   
   try {
     logger.info(`🔔 Processing push notification: ${notificationId}`);
+
+    // Check if push notifications are enabled
+    const settings = await notificationService.getNotificationSettings();
+    if (!settings.pushEnabled) {
+      logger.info('⚠️ Push notifications are disabled. Skipping job.');
+      await Notification.findByIdAndUpdate(notificationId, {
+        status: 'skipped',
+        metadata: { ...metadata, reason: 'Push notifications disabled' }
+      });
+      return { success: true, message: 'Push notifications disabled' };
+    }
 
     // Update notification status to processing
     await Notification.findByIdAndUpdate(notificationId, {

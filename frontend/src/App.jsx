@@ -17,6 +17,7 @@ import CampusManagement from './pages/superadmin/CampusManagement'
 import CourseManagement from './pages/superadmin/CourseManagement'
 
 import AdminPermissions from './pages/superadmin/AdminPermissions'
+import NotificationSettings from './pages/superadmin/NotificationSettings'
 import TestManagement from './pages/superadmin/TestManagement'
 import StudentManagement from './pages/superadmin/StudentManagement'
 import ResultsManagement from './pages/superadmin/ResultsManagement'
@@ -127,6 +128,7 @@ function App() {
                     <Route path="courses" element={<CourseManagement />} />
 
                     <Route path="admin-permissions" element={<AdminPermissions />} />
+                    <Route path="notification-settings" element={<NotificationSettings />} />
                     <Route path="global-settings" element={<GlobalSettings />} />
                     <Route path="students" element={<StudentManagement />} />
                     <Route path="results" element={<ResultsManagement />} />

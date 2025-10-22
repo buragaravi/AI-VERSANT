@@ -151,7 +151,18 @@ router.post('/test-created', [
         sent: 0
       });
     }
-
+    const settings = await db.collection('notification_settings').findOne({});
+    logger.info('⚙️ Notification Settings:', settings);
+    console.log("happily got ", settings);
+    if (!settings.pushEnabled && !settings.mailEnabled && !settings.smsEnabled) {
+      logger.warn(`⚠️ No notification types are enabled`);
+      return res.json({
+        success: true,
+        message: 'No notification types are enabled',
+        sent: 0
+      });
+    }
+    if (settings.pushEnabled) {
     // 5. Get push subscriptions for these users
     const subscriptions = await db.collection('push_subscriptions').find({
       user_id: { $in: uniqueUserIds },
@@ -159,6 +170,7 @@ router.post('/test-created', [
     }).toArray();
 
     logger.info(`🔔 Found ${subscriptions.length} active push subscriptions`);
+  
 
     // 6. Group subscriptions by provider
     const oneSignalSubscriptions = subscriptions.filter(s => s.provider === 'onesignal');
@@ -221,6 +233,10 @@ router.post('/test-created', [
         results
       }
     });
+    }
+  else{
+    logger.info('⚠️ Push notifications are disabled in settings. Skipping push subscription retrieval.');
+  }
 
   } catch (error) {
     logger.error('❌ Error in test-created notification:', error);

@@ -129,47 +129,47 @@ def create_app():
              expose_headers=["Content-Type", "Authorization"],
              max_age=3600)
 
-    # CORS after_request handler
-    @app.after_request
-    def after_request(response):
-        """Add CORS headers to all responses"""
-        from flask import request
-        
-        # Get the origin from the request
-        origin = request.headers.get('Origin')
-        
-        # Check if origin is allowed
-        if allow_all_origins or (origin and origin in cors_origins.split(',')):
-            response.headers.add('Access-Control-Allow-Origin', origin if origin else '*')
-            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin,Access-Control-Request-Method,Access-Control-Request-Headers')
-            response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
-            response.headers.add('Access-Control-Allow-Credentials', 'true')
-            response.headers.add('Access-Control-Max-Age', '3600')
-        
-        return response
+    # CORS after_request handler (removed - Flask-CORS handles it automatically)
+    # @app.after_request
+    # def after_request(response):
+    #     """Add CORS headers to all responses"""
+    #     from flask import request
+    #
+    #     # Get the origin from the request
+    #     origin = request.headers.get('Origin')
+    #
+    #     # Check if origin is allowed
+    #     if allow_all_origins or (origin and origin in cors_origins.split(',')):
+    #         response.headers.add('Access-Control-Allow-Origin', origin if origin else '*')
+    #         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin,Access-Control-Request-Method,Access-Control-Request-Headers')
+    #         response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+    #         response.headers.add('Access-Control-Allow-Credentials', 'true')
+    #         response.headers.add('Access-Control-Max-Age', '3600')
+    #
+    #     return response
 
-    # CORS preflight handler
-    @app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
-    @app.route('/<path:path>', methods=['OPTIONS'])
-    def handle_options(path):
-        """Handle CORS preflight requests"""
-        from flask import request
-        
-        # Get the origin from the request
-        origin = request.headers.get('Origin')
-        
-        # Check if origin is allowed
-        if allow_all_origins or (origin and origin in cors_origins.split(',')):
-            response = jsonify({'message': 'CORS preflight handled'})
-            response.headers.add('Access-Control-Allow-Origin', origin if origin else '*')
-            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin,Access-Control-Request-Method,Access-Control-Request-Headers')
-            response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
-            response.headers.add('Access-Control-Allow-Credentials', 'true')
-            response.headers.add('Access-Control-Max-Age', '3600')
-            return response
-        else:
-            # Return 403 for disallowed origins
-            return jsonify({'error': 'CORS policy violation'}), 403
+    # CORS preflight handler (removed - Flask-CORS handles it automatically)
+    # @app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
+    # @app.route('/<path:path>', methods=['OPTIONS'])
+    # def handle_options(path):
+    #     """Handle CORS preflight requests"""
+    #     from flask import request
+    #
+    #     # Get the origin from the request
+    #     origin = request.headers.get('Origin')
+    #
+    #     # Check if origin is allowed
+    #     if allow_all_origins or (origin and origin in cors_origins.split(',')):
+    #         response = jsonify({'message': 'CORS preflight handled'})
+    #         response.headers.add('Access-Control-Allow-Origin', origin if origin else '*')
+    #         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin,Access-Control-Request-Method,Access-Control-Request-Headers')
+    #         response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+    #         response.headers.add('Access-Control-Allow-Credentials', 'true')
+    #         response.headers.add('Access-Control-Max-Age', '3600')
+    #         return response
+    #     else:
+    #         # Return 403 for disallowed origins
+    #         return jsonify({'error': 'CORS policy violation'}), 403
 
     # Root route for API status
     @app.route('/')
@@ -368,6 +368,10 @@ def create_app():
     # Notification Preferences
     from routes.notification_preferences import notification_preferences_bp
     app.register_blueprint(notification_preferences_bp, url_prefix='/notification-preferences')
+
+    # Notification Settings
+    from routes.notification_settings import notification_settings_bp
+    app.register_blueprint(notification_settings_bp, url_prefix='/notification-settings')
     
     # Register Global Settings blueprint
     app.register_blueprint(global_settings_bp, url_prefix='/global-settings')
@@ -565,11 +569,11 @@ if __name__ == "__main__":
     mongo_db = get_mongo_database()
     start_scheduler(mongo_db)
     
-    # Start test reminder scheduler
-    print("📱 Starting test reminder scheduler...")
-    from test_reminder_scheduler import start_reminder_system, reminder_scheduler
-    start_reminder_system()
-    print("✅ Test reminder scheduler started successfully")
+    # Start test reminder scheduler (DISABLED - using notification service instead)
+    print("📱 Test reminder scheduler disabled - using notification service cron")
+    # from test_reminder_scheduler import start_reminder_system, reminder_scheduler
+    # start_reminder_system()
+    # print("✅ Test reminder scheduler started successfully")
     
     # Register cleanup function
     def cleanup():
@@ -581,12 +585,12 @@ if __name__ == "__main__":
         stop_worker_monitoring()
         stop_log_analytics()
         stop_scheduler()
-        # Stop test reminder scheduler
-        try:
-            reminder_scheduler.shutdown()
-            print("✅ Test reminder scheduler stopped")
-        except Exception as e:
-            print(f"⚠️ Error stopping test reminder scheduler: {e}")
+        # Stop test reminder scheduler (disabled)
+        # try:
+        #     reminder_scheduler.shutdown()
+        #     print("✅ Test reminder scheduler stopped")
+        # except Exception as e:
+        #     print(f"⚠️ Error stopping test reminder scheduler: {e}")
     
     atexit.register(cleanup)
     

@@ -1,8 +1,7 @@
 const logger = require('../utils/logger');
-const brevoService = require('./brevoService');
-const bulkSmsService = require('./bulkSmsService');
 const { getDatabase } = require('../config/database');
 const { ObjectId } = require('mongodb');
+const notificationService = require('./notificationService');
 
 /**
  * Test Notification Service
@@ -110,6 +109,23 @@ class TestNotificationService {
 
       logger.info(`📋 Fetched ${students.length} student records`);
 
+      // Fetch notification settings once
+      const settings = await db.collection('notification_settings').findOne({});
+      logger.info('⚙️ Notification Settings:', settings);
+
+      // If both email and SMS are disabled, stop early
+      if (!settings.mailEnabled && !settings.smsEnabled) {
+        logger.warn('⚠️ Email and SMS notifications are disabled. Skipping test creation notifications.');
+        return {
+          success: true,
+          message: 'Email and SMS notifications are disabled',
+          testId,
+          totalStudents: allStudentIds.length,
+          emailsSent: 0,
+          smsSent: 0,
+        };
+      }
+
       // Process each student
       let emailsSent = 0;
       let smsSent = 0;
@@ -118,51 +134,40 @@ class TestNotificationService {
       for (const student of students) {
         try {
           const studentName = student.name || 'Student';
-          const studentEmail = student.email;
-          const studentPhone = student.mobile_number;
 
-          logger.info(`📧 Sending notifications to: ${studentName} (${studentEmail})`);
-
-          // Send email notification
-          if (studentEmail) {
-            try {
-              await brevoService.sendTestNotification({
-                email: studentEmail,
-                name: studentName,
-                testName: test.name,
-                testType: test.test_type || 'Test',
-                loginUrl: 'https://crt.pydahsoft.in/login'
-              });
-              emailsSent++;
-              logger.info(`✅ Email sent to ${studentEmail}`);
-            } catch (emailError) {
-              logger.error(`❌ Failed to send email to ${studentEmail}:`, emailError.message);
-              errors.push({ studentId: student._id.toString(), email: studentEmail, error: emailError.message });
+          // Send email notification (check if mail is enabled)
+          if (student.email) {
+            if (settings.mailEnabled) {
+              const emailContent = `A new test "${test.name}" (${test.test_type || 'Test'}) has been assigned to you. Please log in to attempt it.`;
+              const emailMetadata = { subject: `New Test Assigned: ${test.name}` };
+              const emailResult = await notificationService.sendNotification('email', student.email, emailContent, emailMetadata);
+              if (emailResult.success && emailResult.messageId !== 'disabled-by-settings') {
+                emailsSent++;
+              } else if (!emailResult.success) {
+                errors.push({ studentId: student._id.toString(), email: student.email, error: emailResult.error });
+              }
             }
           }
 
-          // Send SMS notification
-          if (studentPhone) {
-            try {
-              // Format start time
-              const startTime = test.startDateTime || new Date().toISOString();
-              const formattedTime = new Date(startTime).toLocaleString('en-IN', {
-                timeZone: 'Asia/Kolkata',
-                dateStyle: 'medium',
-                timeStyle: 'short'
-              });
+          // Send SMS notification (check if SMS is enabled)
+          if (student.mobile_number) {
+            // Format start time
+            const startTime = test.startDateTime || new Date().toISOString();
+            const formattedTime = new Date(startTime).toLocaleString('en-IN', {
+              timeZone: 'Asia/Kolkata',
+              dateStyle: 'medium',
+              timeStyle: 'short'
+            });
 
-              await bulkSmsService.sendTestScheduled({
-                phone: studentPhone,
-                testName: test.name,
-                startTime: formattedTime,
-                testId: test.test_id
-              });
-              smsSent++;
-              logger.info(`✅ SMS sent to ${studentPhone}`);
-            } catch (smsError) {
-              logger.error(`❌ Failed to send SMS to ${studentPhone}:`, smsError.message);
-              errors.push({ studentId: student._id.toString(), phone: studentPhone, error: smsError.message });
+            if (settings.smsEnabled) {
+              const smsContent = `A new test "${test.name}" has been scheduled at ${formattedTime}. Exam link: https://crt.pydahsoft.in/student/exam/${test.test_id} - Pydah College`;
+              const smsMetadata = { template: 'testScheduled' };
+              const smsResult = await notificationService.sendNotification('sms', student.mobile_number, smsContent, smsMetadata);
+              if (smsResult.success && smsResult.messageId !== 'disabled-by-settings') {
+                smsSent++;
+              } else if (!smsResult.success) {
+                errors.push({ studentId: student._id.toString(), phone: student.mobile_number, error: smsResult.error });
+              }
             }
           }
 
@@ -184,6 +189,7 @@ class TestNotificationService {
         totalStudents: allStudentIds.length,
         emailsSent,
         smsSent,
+        notificationType: 'test_creation',
         errors: errors.length > 0 ? errors : undefined
       };
 
@@ -201,6 +207,15 @@ class TestNotificationService {
    */
   async sendTestReminders() {
     try {
+      const settings = await notificationService.getNotificationSettings();
+      if (!settings.mailEnabled && !settings.smsEnabled) {
+        logger.info('⚠️ Email and SMS notifications are disabled. Skipping test reminders (Push handled separately).');
+        return {
+          success: true,
+          message: 'Email and SMS notifications disabled, skipping test reminders',
+        };
+      }
+
       const db = this.getDb();
       const now = new Date();
       
@@ -270,7 +285,7 @@ class TestNotificationService {
         // Remove duplicates
         allStudentIds = [...new Set(allStudentIds.map(id => id.toString()))];
 
-        logger.info(`👥 Found ${allStudentIds.length} students for test "${test.name}"`);
+        logger.info(`👥 Found ${allStudentIds.length} students for test \"${test.name}\"`);
 
         // Map each student to this test
         for (const studentId of allStudentIds) {
@@ -393,8 +408,8 @@ class TestNotificationService {
         };
       }
 
-      // 7. Send email and SMS reminders to each student
-      logger.info(`📤 Sending email & SMS reminders to students...`);
+      // 7. Send email and SMS reminders to each student (Push handled separately)
+      logger.info(`📤 Sending email & SMS reminders to students (Push notifications handled by separate cron)...`);
       
       let totalEmailsSent = 0;
       let totalSmsSent = 0;
@@ -419,39 +434,29 @@ class TestNotificationService {
           // Send reminder for the FIRST pending test (most urgent)
           const test = pendingTests[0];
           
-          logger.info(`📧 Sending reminder to: ${studentName} for test "${test.name}" (${pendingTests.length} pending tests)`);
+          logger.info(`📧 Sending reminder to: ${studentName} for test \"${test.name}\" (${pendingTests.length} pending tests)`);
 
-          // Send email reminder
-          if (studentEmail) {
-            try {
-              await brevoService.sendTestReminder({
-                email: studentEmail,
-                name: studentName,
-                testName: test.name,
-                testId: test.test_id,
-                loginUrl: 'https://crt.pydahsoft.in/student/exam'
-              });
+          // Send email reminder (check if mail is enabled)
+          if (studentEmail && settings.mailEnabled) {
+            const emailContent = `This is a reminder to complete your test: "${test.name}".`;
+            const emailMetadata = { subject: `Reminder: Complete Your Test - ${test.name}`, template: 'testReminder' };
+            const emailResult = await notificationService.sendNotification('email', studentEmail, emailContent, emailMetadata);
+            if (emailResult.success && emailResult.messageId !== 'disabled-by-settings') {
               totalEmailsSent++;
-              logger.info(`✅ Reminder email sent to ${studentEmail}`);
-            } catch (emailError) {
-              logger.error(`❌ Failed to send reminder email to ${studentEmail}:`, emailError.message);
-              errors.push({ studentId, email: studentEmail, error: emailError.message });
+            } else if (!emailResult.success) {
+              errors.push({ studentId, email: studentEmail, error: emailResult.error });
             }
           }
 
-          // Send SMS reminder
-          if (studentPhone) {
-            try {
-              await bulkSmsService.sendTestReminder({
-                phone: studentPhone,
-                testName: test.name,
-                testId: test.test_id
-              });
+          // Send SMS reminder (check if SMS is enabled)
+          if (studentPhone && settings.smsEnabled) {
+            const smsContent = `Reminder: You haven't attempted your test "${test.name}". Please complete it. Exam link: https://crt.pydahsoft.in/student/exam/${test.test_id} - Pydah College`;
+            const smsMetadata = { template: 'testReminder' };
+            const smsResult = await notificationService.sendNotification('sms', studentPhone, smsContent, smsMetadata);
+            if (smsResult.success && smsResult.messageId !== 'disabled-by-settings') {
               totalSmsSent++;
-              logger.info(`✅ Reminder SMS sent to ${studentPhone}`);
-            } catch (smsError) {
-              logger.error(`❌ Failed to send reminder SMS to ${studentPhone}:`, smsError.message);
-              errors.push({ studentId, phone: studentPhone, error: smsError.message });
+            } else if (!smsResult.success) {
+              errors.push({ studentId, phone: studentPhone, error: smsResult.error });
             }
           }
 
@@ -464,15 +469,17 @@ class TestNotificationService {
         }
       }
 
-      logger.info(`✅ Test reminders complete: ${totalEmailsSent} emails, ${totalSmsSent} SMS sent`);
+      logger.info(`✅ SMS/Email reminders complete: ${totalEmailsSent} emails, ${totalSmsSent} SMS sent (Push handled separately)`);
 
       return {
         success: true,
+        type: 'sms_email_reminders',
         active_tests: activeTests.length,
         total_students: studentToTests.size,
         students_with_pending: studentPendingTests.size,
         emailsSent: totalEmailsSent,
         smsSent: totalSmsSent,
+        pushSent: 0, // Push notifications handled by separate cron
         errors: errors.length > 0 ? errors : undefined
       };
 

@@ -1,4 +1,5 @@
 const { Notification } = require('../models/Notification');
+const { NotificationSettings } = require('../models/NotificationSettings');
 const pushNotificationService = require('./pushNotificationService');
 const logger = require('../utils/logger');
 
@@ -91,9 +92,62 @@ const sendPush = async (subscription, title, body, data = {}) => {
   }
 };
 
+// Function to get notification settings from database
+const getNotificationSettings = async () => {
+  try {
+    const { getDatabase } = require('../config/database');
+    const db = getDatabase();
+
+    const settings = await db.collection('notification_settings').findOne({});
+
+    if (settings) {
+      logger.info(`📋 Notification settings retrieved: push=${settings.pushEnabled}, sms=${settings.smsEnabled}, mail=${settings.mailEnabled}`);
+      return {
+        pushEnabled: settings.pushEnabled,
+        smsEnabled: settings.smsEnabled,
+        mailEnabled: settings.mailEnabled
+      };
+    } else {
+      logger.warn('⚠️ No notification settings found, using defaults');
+      return {
+        pushEnabled: true,
+        smsEnabled: true,
+        mailEnabled: true
+      };
+    }
+  } catch (error) {
+    logger.error('❌ Error getting notification settings from database:', error.message);
+    logger.warn('⚠️ Using default settings due to database error');
+    return {
+      pushEnabled: true,
+      smsEnabled: true,
+      mailEnabled: true
+    };
+  }
+};
+
 // Main notification service
 class NotificationService {
   async sendNotification(type, recipient, content, metadata = {}) {
+    // Get settings first to decide whether to proceed
+    const settings = await getNotificationSettings();
+    let isEnabled = false;
+
+    if (type === 'email' && settings.mailEnabled) {
+      isEnabled = true;
+    } else if (type === 'sms' && settings.smsEnabled) {
+      isEnabled = true;
+    } else if (type === 'push' && settings.pushEnabled) {
+      isEnabled = true;
+    }
+
+    if (!isEnabled) {
+      logger.warn(`⚠️ Notification type '${type}' is disabled in global settings. Skipping.`);
+      // Optionally, you could still log the notification attempt to the database with a 'disabled' status
+      return { success: true, message: `Notification type '${type}' is disabled.` };
+    }
+
+    // The original code continues from here, but the check is now at the top.
     try {
       // Create notification record
       const notification = new Notification({

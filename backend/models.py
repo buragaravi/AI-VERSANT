@@ -222,4 +222,63 @@ class BatchCourseInstance:
         return result.inserted_id
 
     def get_by_id(self, instance_id):
-        return self.collection.find_one({'_id': instance_id}) 
+        return self.collection.find_one({'_id': instance_id})
+
+# NotificationSettings model (MongoDB collection)
+class NotificationSettings:
+    def __init__(self, db):
+        self.collection = db.notification_settings
+
+    def find_one(self):
+        """Get the notification settings document"""
+        return self.collection.find_one({})
+
+    def find_or_create(self):
+        """Get settings or create default if none exist"""
+        settings = self.collection.find_one({})
+        if not settings:
+            default_settings = {
+                'pushEnabled': True,
+                'smsEnabled': True,
+                'mailEnabled': True,
+                'created_at': datetime.utcnow(),
+                'updated_at': datetime.utcnow()
+            }
+            result = self.collection.insert_one(default_settings)
+            settings = self.collection.find_one({'_id': result.inserted_id})
+        return settings
+
+    def update_settings(self, push_enabled=None, sms_enabled=None, mail_enabled=None):
+        """Update notification settings"""
+        update_data = {'updated_at': datetime.utcnow()}
+
+        if push_enabled is not None:
+            update_data['pushEnabled'] = push_enabled
+        if sms_enabled is not None:
+            update_data['smsEnabled'] = sms_enabled
+        if mail_enabled is not None:
+            update_data['mailEnabled'] = mail_enabled
+
+        result = self.collection.update_one(
+            {},  # Update the first (and should be only) document
+            {'$set': update_data},
+            upsert=True  # Create if doesn't exist
+        )
+
+        # Return updated document
+        return self.collection.find_one({})
+
+    def create_default(self):
+        """Create default notification settings"""
+        default_settings = {
+            'pushEnabled': True,
+            'smsEnabled': True,
+            'mailEnabled': True,
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow()
+        }
+        return self.collection.insert_one(default_settings)
+
+    def delete_all(self):
+        """Delete all notification settings (for testing)"""
+        return self.collection.delete_many({})
