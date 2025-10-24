@@ -163,8 +163,8 @@ class TestReminderCron {
         return { success: true, message: 'SMS and Email notifications disabled', skipped: true };
       }
 
-      // Use existing logic but only send SMS/Email, not push
-      const result = await testNotificationService.sendTestReminders();
+      // Use the sendTestReminders method but only send SMS/Email
+      const result = await testNotificationService.sendTestRemindersSmsEmailOnly();
 
       return {
         success: true,

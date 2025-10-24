@@ -77,7 +77,7 @@ router.post('/test-reminder', async (req, res) => {
     // Respond immediately
     res.json({
       success: true,
-      message: 'Test reminders queued for processing'
+      message: 'Test reminders (Push, SMS & Email) queued for processing'
     });
 
     // Process in background
@@ -115,7 +115,7 @@ router.get('/test-reminder/trigger', async (req, res) => {
     // Respond immediately
     res.json({
       success: true,
-      message: 'Test reminders triggered manually'
+      message: 'Test reminders (Push, SMS & Email) triggered manually'
     });
 
     // Process in background
