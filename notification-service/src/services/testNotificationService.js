@@ -139,13 +139,25 @@ class TestNotificationService {
           if (student.email) {
             if (settings.mailEnabled) {
               const emailContent = `A new test "${test.name}" (${test.test_type || 'Test'}) has been assigned to you. Please log in to attempt it.`;
-              const emailMetadata = { subject: `New Test Assigned: ${test.name}` };
+              const emailMetadata = { 
+                subject: `New Test Assigned: ${test.name}`,
+                template: 'testCreated',
+                name: studentName,
+                testName: test.name,
+                testType: test.test_type || 'Online Test',
+                testUrl: `https://crt.pydahsoft.in/student/exam/${test.test_id}`,
+                startDateTime: test.startDateTime || test.start_datetime,
+                endDateTime: test.endDateTime || test.end_datetime
+              };
               const emailResult = await notificationService.sendNotification('email', student.email, emailContent, emailMetadata);
               if (emailResult.success && emailResult.messageId !== 'disabled-by-settings') {
                 emailsSent++;
               } else if (!emailResult.success) {
                 errors.push({ studentId: student._id.toString(), email: student.email, error: emailResult.error });
               }
+            }
+            else{
+              logger.info(`⚠️ Email notifications are disabled in settings. Skipping email to ${student.email}.`);
             }
           }
 
@@ -160,7 +172,7 @@ class TestNotificationService {
             });
 
             if (settings.smsEnabled) {
-              const smsContent = `A new test "${test.name}" has been scheduled at ${formattedTime}. Exam link: https://crt.pydahsoft.in/student/exam/${test.test_id} - Pydah College`;
+              const smsContent= `A new test "${test.name}" has been scheduled at ${formattedTime} for you. Please make sure to attempt it within 24 hours. Exam link: https://crt.pydahsoft.in/student/exam/ ${test.test_id} - Pydah College`;
               const smsMetadata = { template: 'testScheduled' };
               const smsResult = await notificationService.sendNotification('sms', student.mobile_number, smsContent, smsMetadata);
               if (smsResult.success && smsResult.messageId !== 'disabled-by-settings') {
@@ -439,7 +451,15 @@ class TestNotificationService {
           // Send email reminder (check if mail is enabled)
           if (studentEmail && settings.mailEnabled) {
             const emailContent = `This is a reminder to complete your test: "${test.name}".`;
-            const emailMetadata = { subject: `Reminder: Complete Your Test - ${test.name}`, template: 'testReminder' };
+            const emailMetadata = { 
+              subject: `Reminder: Complete Your Test - ${test.name}`, 
+              template: 'testReminder',
+              name: studentName,
+              testName: test.name,
+              testId: test.test_id || test._id.toString(),
+              testUrl: `https://crt.pydahsoft.in/student/exam/${test.test_id || test._id}`,
+              endDateTime: test.endDateTime || test.end_datetime
+            };
             const emailResult = await notificationService.sendNotification('email', studentEmail, emailContent, emailMetadata);
             if (emailResult.success && emailResult.messageId !== 'disabled-by-settings') {
               totalEmailsSent++;
