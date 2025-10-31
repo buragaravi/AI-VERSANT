@@ -5,6 +5,7 @@ from datetime import datetime
 import pytz
 from mongo import mongo_db
 from routes.test_management import require_superadmin, generate_unique_test_id, convert_objectids
+from services.compiler_service import compiler_service
 
 technical_test_bp = Blueprint('technical_test_management', __name__)
 
@@ -82,12 +83,21 @@ def create_technical_test():
             is_existing = question_text_lower in existing_question_texts
             
             # Prepare question document for database storage
+            # Handle test_cases - convert from various formats to array
+            test_cases = question.get('test_cases', question.get('testCases', []))
+            if isinstance(test_cases, str):
+                # If it's a string, try to parse it or leave it empty
+                test_cases = []
+            elif not isinstance(test_cases, list):
+                test_cases = []
+            
             question_doc = {
                 'module_id': module_id,
                 'level_id': level_id,
                 'question_type': 'technical',
                 'question': question_text,
-                'testCases': question.get('testCases', ''),
+                'test_cases': test_cases,  # Use snake_case for consistency
+                'testCases': question.get('testCases', ''),  # Keep for backward compatibility
                 'expectedOutput': question.get('expectedOutput', ''),
                 'language': question.get('language', 'python'),
                 'instructions': question.get('instructions', ''),
@@ -126,12 +136,20 @@ def create_technical_test():
             else:
                 question_id = stored_question_ids.get(question_text_lower)
             
+            # Handle test_cases for processed question
+            test_cases = question.get('test_cases', question.get('testCases', []))
+            if isinstance(test_cases, str):
+                test_cases = []
+            elif not isinstance(test_cases, list):
+                test_cases = []
+            
             processed_question = {
                 '_id': question_id if question_id else ObjectId(),
                 'question': question_text,
                 'question_type': 'technical',
                 'module_id': module_id,
-                'testCases': question.get('testCases', ''),
+                'test_cases': test_cases,  # Use snake_case
+                'testCases': question.get('testCases', ''),  # Keep for backward compatibility
                 'expectedOutput': question.get('expectedOutput', ''),
                 'language': question.get('language', 'python'),
                 'instructions': question.get('instructions', '')
@@ -515,4 +533,229 @@ def notify_technical_test_students(test_id):
 
     except Exception as e:
         current_app.logger.error(f"Error notifying technical test students: {e}")
-        return jsonify({'success': False, 'message': f'Failed to send notifications: {e}'}), 500 
+        return jsonify({'success': False, 'message': f'Failed to send notifications: {e}'}), 500
+
+
+# ==================== NEW COMPILER ENDPOINTS ====================
+
+@technical_test_bp.route('/compile', methods=['POST'])
+@jwt_required()
+def compile_code():
+    """
+    Compile and run code using OneCompiler API
+    For testing code during test taking
+    """
+    try:
+        data = request.get_json()
+        language = data.get('language')
+        code = data.get('code')
+        stdin = data.get('stdin', '')
+        
+        if not language or not code:
+            return jsonify({
+                'success': False,
+                'message': 'Language and code are required'
+            }), 400
+        
+        # Compile and run code
+        result = compiler_service.compile_and_run(language, code, stdin)
+        
+        return jsonify(result), 200 if result.get('success') else 400
+        
+    except Exception as e:
+        current_app.logger.error(f"Error compiling code: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Compilation failed: {str(e)}'
+        }), 500
+
+
+@technical_test_bp.route('/validate-test-cases', methods=['POST'])
+@jwt_required()
+def validate_test_cases():
+    """
+    Validate code against test cases
+    For submitting answers and auto-grading
+    """
+    try:
+        data = request.get_json()
+        language = data.get('language')
+        code = data.get('code')
+        test_cases = data.get('test_cases', [])
+        
+        if not language or not code:
+            return jsonify({
+                'success': False,
+                'message': 'Language and code are required'
+            }), 400
+        
+        if not test_cases:
+            return jsonify({
+                'success': False,
+                'message': 'Test cases are required'
+            }), 400
+        
+        # Validate code against test cases
+        result = compiler_service.validate_against_test_cases(language, code, test_cases)
+        
+        return jsonify(result), 200 if result.get('success') else 400
+        
+    except Exception as e:
+        current_app.logger.error(f"Error validating test cases: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Validation failed: {str(e)}'
+        }), 500
+
+
+@technical_test_bp.route('/submit-answer', methods=['POST'])
+@jwt_required()
+def submit_technical_answer():
+    """
+    Submit student's code answer for a technical question
+    Validates against test cases and stores submission
+    """
+    try:
+        current_user_id = get_jwt_identity()
+        data = request.get_json()
+        
+        test_id = data.get('test_id')
+        question_id = data.get('question_id')
+        language = data.get('language')
+        code = data.get('code')
+        
+        if not all([test_id, question_id, language, code]):
+            return jsonify({
+                'success': False,
+                'message': 'test_id, question_id, language, and code are required'
+            }), 400
+        
+        # Get question details
+        test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
+        if not test:
+            return jsonify({'success': False, 'message': 'Test not found'}), 404
+        
+        # Find the question in the test
+        question = None
+        for q in test.get('questions', []):
+            if str(q.get('_id')) == question_id:
+                question = q
+                break
+        
+        if not question:
+            return jsonify({'success': False, 'message': 'Question not found in test'}), 404
+        
+        # Get test cases from question
+        test_cases = question.get('test_cases', [])
+        
+        if not test_cases:
+            return jsonify({
+                'success': False,
+                'message': 'No test cases defined for this question'
+            }), 400
+        
+        # Validate code against test cases
+        validation_result = compiler_service.validate_against_test_cases(language, code, test_cases)
+        
+        if not validation_result.get('success'):
+            return jsonify(validation_result), 400
+        
+        # Store submission
+        submission_doc = {
+            'student_id': ObjectId(current_user_id),
+            'test_id': ObjectId(test_id),
+            'question_id': ObjectId(question_id),
+            'language': language,
+            'submitted_code': code,
+            'test_results': validation_result.get('test_results', []),
+            'total_score': validation_result.get('total_score', 0),
+            'max_score': validation_result.get('max_score', 0),
+            'percentage': validation_result.get('percentage', 0),
+            'passed_count': validation_result.get('passed_count', 0),
+            'failed_count': validation_result.get('failed_count', 0),
+            'status': 'completed',
+            'submitted_at': datetime.utcnow()
+        }
+        
+        # Check if submission already exists
+        existing_submission = mongo_db.technical_submissions.find_one({
+            'student_id': ObjectId(current_user_id),
+            'test_id': ObjectId(test_id),
+            'question_id': ObjectId(question_id)
+        })
+        
+        if existing_submission:
+            # Update existing submission
+            mongo_db.technical_submissions.update_one(
+                {'_id': existing_submission['_id']},
+                {'$set': submission_doc}
+            )
+            submission_id = str(existing_submission['_id'])
+        else:
+            # Create new submission
+            result = mongo_db.technical_submissions.insert_one(submission_doc)
+            submission_id = str(result.inserted_id)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Answer submitted successfully',
+            'data': {
+                'submission_id': submission_id,
+                'total_score': validation_result.get('total_score', 0),
+                'max_score': validation_result.get('max_score', 0),
+                'percentage': validation_result.get('percentage', 0),
+                'passed_count': validation_result.get('passed_count', 0),
+                'failed_count': validation_result.get('failed_count', 0),
+                'test_results': validation_result.get('test_results', [])
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error submitting technical answer: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Submission failed: {str(e)}'
+        }), 500
+
+
+@technical_test_bp.route('/languages', methods=['GET'])
+def get_supported_languages():
+    """Get list of supported programming languages"""
+    try:
+        languages = compiler_service.get_supported_languages()
+        return jsonify({
+            'success': True,
+            'data': languages
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Error getting supported languages: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@technical_test_bp.route('/default-code/<language>', methods=['GET'])
+def get_default_code(language):
+    """Get default starter code for a language"""
+    try:
+        default_code = compiler_service.get_default_code(language)
+        if default_code is None:
+            return jsonify({
+                'success': False,
+                'message': f'Unsupported language: {language}'
+            }), 400
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'language': language,
+                'default_code': default_code
+            }
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Error getting default code: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500 

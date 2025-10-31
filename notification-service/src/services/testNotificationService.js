@@ -726,28 +726,9 @@ class TestNotificationService {
       let totalPushSent = 0;
       const errors = [];
 
-      // Get push subscriptions for all students with pending tests
-      const userIdsToNotify = Array.from(studentPendingTests.keys())
-        .map(sid => studentToUser.get(sid))
-        .filter(Boolean);
-
-      logger.info(`🔔 Looking up push subscriptions for ${userIdsToNotify.length} users...`);
-
-      const pushSubscriptions = await db.collection('push_subscriptions').find({
-        user_id: { $in: userIdsToNotify },
-        is_active: true
-      }).toArray();
-
-      logger.info(`🔔 Found ${pushSubscriptions.length} active push subscriptions`);
-
-      // Create a map of user_id to subscriptions for quick lookup
-      const userToSubscriptions = new Map();
-      pushSubscriptions.forEach(sub => {
-        if (!userToSubscriptions.has(sub.user_id.toString())) {
-          userToSubscriptions.set(sub.user_id.toString(), []);
-        }
-        userToSubscriptions.get(sub.user_id.toString()).push(sub);
-      });
+      // OneSignal handles subscription management internally
+      // No need to lookup subscriptions - OneSignal will handle delivery
+      logger.info(`🔔 OneSignal will handle push notification delivery automatically`);
 
       for (const [studentId, pendingTests] of studentPendingTests.entries()) {
         try {
@@ -803,76 +784,74 @@ class TestNotificationService {
             }
           }
 
-          // Send push notifications (check if push is enabled)
-          if (userId && settings.pushEnabled && userToSubscriptions.has(userId)) {
-            const subscriptions = userToSubscriptions.get(userId);
+          // Send OneSignal push notifications (check if push is enabled)
+          if (userId && settings.pushEnabled) {
+            try {
+              // Calculate urgency for push notification
+              const endDateTime = test.endDateTime || test.end_datetime;
+              if (!endDateTime) continue;
 
-            // Calculate urgency for push notification
-            const endDateTime = test.endDateTime || test.end_datetime;
-            if (!endDateTime) continue;
+              const endDate = new Date(endDateTime);
+              const timeRemaining = endDate - now;
+              const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
+              const daysRemaining = Math.floor(hoursRemaining / 24);
 
-            const endDate = new Date(endDateTime);
-            const timeRemaining = endDate - now;
-            const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
-            const daysRemaining = Math.floor(hoursRemaining / 24);
+              let title, body, urgency;
 
-            let title, body, urgency;
-
-            if (hoursRemaining < 2) {
-              urgency = 'critical';
-              title = `⚠️ URGENT: ${test.name}`;
-              body = `Test ends in ${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}! Complete it now!`;
-            } else if (hoursRemaining < 6) {
-              urgency = 'high';
-              title = `⏰ Important: ${test.name}`;
-              body = `Only ${hoursRemaining} hours left to complete your test!`;
-            } else if (hoursRemaining < 24) {
-              urgency = 'medium';
-              title = `📝 Reminder: ${test.name}`;
-              body = `Test ends today! ${hoursRemaining} hours remaining.`;
-            } else if (daysRemaining === 1) {
-              urgency = 'medium';
-              title = `📚 Reminder: ${test.name}`;
-              body = `Test ends tomorrow! Don't forget to complete it.`;
-            } else {
-              urgency = 'low';
-              title = `📖 Reminder: ${test.name}`;
-              body = `You have ${daysRemaining} days to complete your test.`;
-            }
-
-            // Add info about other pending tests
-            if (pendingTests.length > 1) {
-              body += ` (+ ${pendingTests.length - 1} more pending test${pendingTests.length > 2 ? 's' : ''})`;
-            }
-
-            const pushData = {
-              type: 'test_reminder',
-              test_id: test._id.toString(),
-              test_name: test.name,
-              pending_tests_count: pendingTests.length,
-              end_datetime: endDate.toISOString(),
-              hours_remaining: hoursRemaining,
-              urgency: urgency,
-              url: `/student/exam/${test._id}`
-            };
-
-            // Send to all subscriptions for this user
-            for (const subscription of subscriptions) {
-              try {
-                const pushResult = await notificationService.sendNotification('push', subscription.subscription, body, {
-                  title: title,
-                  data: pushData
-                });
-
-                if (pushResult.success && pushResult.messageId !== 'disabled-by-settings') {
-                  totalPushSent++;
-                } else if (!pushResult.success) {
-                  errors.push({ studentId, userId, subscription: subscription._id, error: pushResult.error });
-                }
-              } catch (pushError) {
-                logger.error(`❌ Error sending push to subscription ${subscription._id}:`, pushError.message);
-                errors.push({ studentId, userId, subscription: subscription._id, error: pushError.message });
+              if (hoursRemaining < 2) {
+                urgency = 'critical';
+                title = `⚠️ URGENT: ${test.name}`;
+                body = `Test ends in ${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}! Complete it now!`;
+              } else if (hoursRemaining < 6) {
+                urgency = 'high';
+                title = `⏰ Important: ${test.name}`;
+                body = `Only ${hoursRemaining} hours left to complete your test!`;
+              } else if (hoursRemaining < 24) {
+                urgency = 'medium';
+                title = `📝 Reminder: ${test.name}`;
+                body = `Test ends today! ${hoursRemaining} hours remaining.`;
+              } else if (daysRemaining === 1) {
+                urgency = 'medium';
+                title = `📚 Reminder: ${test.name}`;
+                body = `Test ends tomorrow! Don't forget to complete it.`;
+              } else {
+                urgency = 'low';
+                title = `📖 Reminder: ${test.name}`;
+                body = `You have ${daysRemaining} days to complete your test.`;
               }
+
+              // Add info about other pending tests
+              if (pendingTests.length > 1) {
+                body += ` (+ ${pendingTests.length - 1} more pending test${pendingTests.length > 2 ? 's' : ''})`;
+              }
+
+              const pushData = {
+                type: 'test_reminder',
+                test_id: test._id.toString(),
+                test_name: test.name,
+                pending_tests_count: pendingTests.length,
+                end_datetime: endDate.toISOString(),
+                hours_remaining: hoursRemaining,
+                urgency: urgency,
+                url: `/student/exam/${test._id}`
+              };
+
+              // Send OneSignal notification directly (OneSignal handles user lookup)
+              const pushResult = await notificationService.sendNotification('push', { user_id: userId }, body, {
+                title: title,
+                data: pushData
+              });
+
+              if (pushResult.success && pushResult.messageId !== 'disabled-by-settings') {
+                totalPushSent++;
+                logger.info(`✅ OneSignal notification sent to user ${userId}`);
+              } else if (!pushResult.success) {
+                errors.push({ studentId, userId, error: pushResult.error });
+              }
+
+            } catch (pushError) {
+              logger.error(`❌ Error sending OneSignal push to user ${userId}:`, pushError.message);
+              errors.push({ studentId, userId, error: pushError.message });
             }
           }
 

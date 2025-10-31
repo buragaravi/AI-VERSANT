@@ -605,6 +605,42 @@ def test_broadcast_notification():
             'message': f'Error sending test notification: {str(e)}'
         }), 500
 
+@onesignal_notifications_bp.route('/subscription-status', methods=['GET'])
+@jwt_required()
+def get_onesignal_subscription_status():
+    """Get OneSignal subscription status for current user"""
+    try:
+        current_user_id = get_jwt_identity()
+
+        # Check OneSignal subscription in push_subscriptions collection
+        subscription = PushSubscription.get_onesignal_subscription(current_user_id)
+
+        if subscription and subscription.get('is_active'):
+            return jsonify({
+                'success': True,
+                'is_subscribed': True,
+                'player_id': subscription.get('player_id'),
+                'subscription_details': {
+                    'created_at': subscription.get('created_at'),
+                    'last_seen': subscription.get('last_seen_at'),
+                    'platform': subscription.get('platform'),
+                    'browser': subscription.get('browser')
+                }
+            }), 200
+        else:
+            return jsonify({
+                'success': True,
+                'is_subscribed': False,
+                'message': 'No active OneSignal subscription found'
+            }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error getting OneSignal subscription status: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error getting subscription status: {str(e)}'
+        }), 500
+
 @onesignal_notifications_bp.route('/config', methods=['GET'])
 def get_onesignal_config():
     """Get OneSignal configuration for frontend"""

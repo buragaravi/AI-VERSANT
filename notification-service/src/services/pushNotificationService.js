@@ -163,46 +163,46 @@ class PushNotificationService {
       };
     }
 
-    const results = [];
-    let lastError = null;
+    // ONLY use OneSignal (no VAPID conflicts)
+    try {
+      logger.info('📱 Sending OneSignal push notification (ONLY provider)...');
 
-    // Try OneSignal first (if configured)
-    if (this.oneSignalService.isConfigured) {
-      try {
-        logger.info('📱 Attempting OneSignal push notification...');
-        const result = await this.oneSignalService.send(subscription, title, body, data);
-        results.push(result);
-        logger.info('✅ OneSignal push notification sent successfully');
-        return result;
-      } catch (error) {
-        logger.warn('⚠️ OneSignal push notification failed, trying VAPID...', error.message);
-        lastError = error;
-        results.push({ success: false, provider: 'OneSignal', error: error.message });
+      // Handle different subscription formats
+      let playerIds = [];
+
+      if (subscription.player_id) {
+        // OneSignal subscription with player_id
+        playerIds = [subscription.player_id];
+      } else if (subscription.user_id) {
+        // User ID format - OneSignal will lookup the player_id automatically
+        logger.info(`📱 Sending to user_id: ${subscription.user_id} (OneSignal will handle player_id lookup)`);
+        // For user_id format, we need to get the player_id from backend
+        const { getDatabase } = require('../config/database');
+        const db = getDatabase();
+
+        const userSubscription = await db.collection('push_subscriptions').findOne({
+          user_id: subscription.user_id,
+          provider: 'onesignal',
+          is_active: true
+        });
+
+        if (userSubscription && userSubscription.player_id) {
+          playerIds = [userSubscription.player_id];
+        } else {
+          throw new Error(`No OneSignal subscription found for user: ${subscription.user_id}`);
+        }
+      } else {
+        throw new Error('Invalid subscription format - missing player_id or user_id');
       }
-    }
 
-    // Try VAPID as fallback (if configured)
-    if (this.vapidService.isConfigured) {
-      try {
-        logger.info('📱 Attempting VAPID push notification...');
-        const result = await this.vapidService.send(subscription, title, body, data);
-        results.push(result);
-        logger.info('✅ VAPID push notification sent successfully');
-        return result;
-      } catch (error) {
-        logger.warn('⚠️ VAPID push notification failed', error.message);
-        lastError = error;
-        results.push({ success: false, provider: 'VAPID', error: error.message });
-      }
-    }
+      const result = await this.oneSignalService.send(playerIds, title, body, data);
+      logger.info('✅ OneSignal push notification sent successfully');
+      return result;
 
-    // If both failed
-    if (results.length === 0) {
-      throw new Error('No push notification services configured');
+    } catch (error) {
+      logger.error('❌ OneSignal push notification failed:', error.message);
+      throw error;
     }
-
-    // Return the last error if all services failed
-    throw lastError || new Error('All push notification services failed');
   }
 
   // Send to multiple recipients

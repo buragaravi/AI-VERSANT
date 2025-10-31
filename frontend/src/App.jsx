@@ -6,6 +6,7 @@ import { DashboardProvider } from './contexts/DashboardContext'
 import { NotificationProvider } from './contexts/NotificationContext'
 import { FeatureProvider } from './contexts/FeatureContext'
 import { FormPortalProvider } from './contexts/FormPortalContext'
+import { PermissionProvider } from './contexts/PermissionContext'
 
 // Auth Pages
 import Login from './pages/auth/Login'
@@ -30,6 +31,7 @@ import BatchManagement from './pages/superadmin/BatchManagement'
 import FormManagement from './pages/superadmin/FormManagement'
 import SubmissionViewer from './pages/superadmin/SubmissionViewer'
 import ProgressTracking from './pages/superadmin/ProgressTracking'
+import SubSuperadminManagement from './pages/superadmin/SubSuperadminManagement'
 
 // Campus Admin Pages
 import CampusAdminDashboard from './pages/campus-admin/CampusAdminDashboard'
@@ -83,6 +85,7 @@ function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
+        <PermissionProvider>
         <DashboardProvider>
           <NotificationProvider>
             <FeatureProvider>
@@ -121,7 +124,7 @@ function App() {
 
                 {/* Admin Routes */}
                   {/* Super Admin Routes */}
-                <Route path="/superadmin" element={<ProtectedRoute allowedRoles={['superadmin', 'campus_admin', 'course_admin']}><SuperAdminSidebar /></ProtectedRoute>}>
+                <Route path="/superadmin" element={<ProtectedRoute allowedRoles={['superadmin', 'sub_superadmin', 'campus_admin', 'course_admin']}><SuperAdminSidebar /></ProtectedRoute>}>
                   <Route index element={<SuperAdminDashboard />} />
                     <Route path="dashboard" element={<SuperAdminDashboard />} />
                     <Route path="campuses" element={<CampusManagement />} />
@@ -140,9 +143,11 @@ function App() {
                     <Route path="crt-upload" element={<CRTUpload />} />
                     <Route path="batch-course-instances" element={<BatchCourseInstances />} />
                     <Route path="batch-management" element={<BatchManagement />} />
+                    <Route path="sub-superadmin" element={<SubSuperadminManagement />} />
                     {/* Form Portal Routes */}
                     <Route path="form-management" element={<FormManagement />} />
                     <Route path="form-submissions/:formId" element={<SubmissionViewer />} />
+                    <Route path="analytics" element={<ProgressTracking />} />
                     <Route path="real-analytics" element={<RealAnalytics />} />
                     <Route path="profile" element={<SuperAdminProfile />} />
                   </Route>
@@ -201,6 +206,7 @@ function App() {
             </FeatureProvider>
           </NotificationProvider>
         </DashboardProvider>
+        </PermissionProvider>
       </AuthProvider>
     </ErrorBoundary>
   )

@@ -14,8 +14,8 @@ from models import Test
 
 superadmin_bp = Blueprint('superadmin', __name__)
 
-# Define allowed admin roles
-ALLOWED_ADMIN_ROLES = {ROLES['SUPER_ADMIN'], ROLES['CAMPUS_ADMIN'], ROLES['COURSE_ADMIN']}
+# Define allowed admin roles (includes sub-superadmin)
+ALLOWED_ADMIN_ROLES = {ROLES['SUPER_ADMIN'], 'sub_superadmin', ROLES['CAMPUS_ADMIN'], ROLES['COURSE_ADMIN']}
 
 def safe_isoformat(date_obj):
     """Safely convert a date object to ISO format string, handling various types."""
@@ -99,8 +99,8 @@ def dashboard():
         total_users = mongo_db.users.count_documents(user_query)
         total_students = mongo_db.users.count_documents({**user_query, 'role': 'student'})
         total_tests = mongo_db.tests.count_documents(test_query)
-        # Optionally, count admins (super, campus, course)
-        admin_query = {'role': {'$in': [ROLES['SUPER_ADMIN'], ROLES['CAMPUS_ADMIN'], ROLES['COURSE_ADMIN']]}}
+        # Optionally, count admins (super, campus, course, sub_superadmin)
+        admin_query = {'role': {'$in': [ROLES['SUPER_ADMIN'], ROLES['CAMPUS_ADMIN'], ROLES['COURSE_ADMIN'], 'sub_superadmin']}}
         if user_role == 'campus_admin' and user.get('campus_id'):
             admin_query['campus_id'] = user.get('campus_id')
         total_admins = mongo_db.users.count_documents(admin_query)
@@ -171,10 +171,10 @@ def create_user():
         current_user_id = get_jwt_identity()
         user = mongo_db.find_user_by_id(current_user_id)
         
-        if not user or user.get('role') != 'superadmin':
+        if not user or user.get('role') not in ALLOWED_ADMIN_ROLES:
             return jsonify({
                 'success': False,
-                'message': 'Access denied. Super admin privileges required.'
+                'message': 'Access denied. Admin privileges required.'
             }), 403
         
         data = request.get_json()

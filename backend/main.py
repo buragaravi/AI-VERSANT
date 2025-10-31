@@ -202,7 +202,8 @@ def create_app():
                 'course_management': '/course-management',
                 'batch_management': '/batch-management',
                 'access_control': '/access-control',
-                'admin_management': '/admin-management'
+                'admin_management': '/admin-management',
+                'sub_superadmin': '/sub-superadmin'
             }
         }), 200
 
@@ -372,6 +373,10 @@ def create_app():
     # Notification Settings
     from routes.notification_settings import notification_settings_bp
     app.register_blueprint(notification_settings_bp, url_prefix='/notification-settings')
+
+    # Sub Superadmin Management
+    from routes.sub_superadmin import sub_superadmin_bp
+    app.register_blueprint(sub_superadmin_bp, url_prefix='/sub-superadmin')
     
     # Register Global Settings blueprint
     app.register_blueprint(global_settings_bp, url_prefix='/global-settings')

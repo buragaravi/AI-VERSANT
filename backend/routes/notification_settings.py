@@ -16,7 +16,7 @@ def require_superadmin(f):
     def decorated_function(*args, **kwargs):
         current_user_id = get_jwt_identity()
         user = mongo_db.find_user_by_id(current_user_id)
-        allowed_roles = ['superadmin']
+        allowed_roles = ['superadmin', 'sub_superadmin']
         if not user or user.get('role') not in allowed_roles:
             return jsonify({
                 'success': False,

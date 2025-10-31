@@ -1,0 +1,11 @@
+QuestionTitle,ProblemStatement,Language,Instructions,TestCaseID,Input,ExpectedOutput,Points,IsSample
+Reverse String,Write a function that takes a string as input and returns the reversed string,python,"Read a string from input and print the reversed string",TC001,hello,olleh,5,true
+Reverse String,Write a function that takes a string as input and returns the reversed string,python,"Read a string from input and print the reversed string",TC002,world,dlrow,5,false
+Sum Two Numbers,Write a program that reads two integers and prints their sum,python,"Read two integers from input (one per line) and print their sum",TC001,"5\n3",8,5,true
+Sum Two Numbers,Write a program that reads two integers and prints their sum,python,"Read two integers from input (one per line) and print their sum",TC002,"10\n20",30,5,false
+Find Maximum,Write a function to find the maximum of three numbers,python,"Read three integers from input and print the maximum",TC001,"5\n10\n3",10,5,true
+Find Maximum,Write a function to find the maximum of three numbers,python,"Read three integers from input and print the maximum",TC002,"100\n50\n75",100,5,false
+Palindrome Check,Write a program to check if a string is a palindrome,python,"Read a string and print 'true' if palindrome else 'false'",TC001,racecar,true,5,true
+Palindrome Check,Write a program to check if a string is a palindrome,python,"Read a string and print 'true' if palindrome else 'false'",TC002,hello,false,5,false
+Factorial,Write a function to calculate factorial of a number,python,"Read an integer and print its factorial",TC001,5,120,5,true
+Factorial,Write a function to calculate factorial of a number,python,"Read an integer and print its factorial",TC002,0,1,5,false
