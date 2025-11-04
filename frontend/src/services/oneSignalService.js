@@ -175,7 +175,7 @@ class OneSignalService {
         return;
       }
 
-      const response = await fetch('/api/notifications/onesignal/subscribe', {
+      const response = await fetch('/api/onesignal/subscribe', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -208,7 +208,7 @@ class OneSignalService {
         return;
       }
 
-      const response = await fetch('/api/notifications/onesignal/unsubscribe', {
+      const response = await fetch('/api/onesignal/unsubscribe', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -302,7 +302,7 @@ class OneSignalService {
       try {
         const token = localStorage.getItem('token');
         if (token) {
-          const response = await fetch('/api/notifications/onesignal/subscription-status', {
+          const response = await fetch('/api/onesignal/subscription-status', {
             method: 'GET',
             headers: {
               'Authorization': `Bearer ${token}`

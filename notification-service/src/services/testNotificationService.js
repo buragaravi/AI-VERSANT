@@ -236,13 +236,19 @@ class TestNotificationService {
 
       // 1. Get all active tests (endDateTime not passed)
       const activeTests = await db.collection('tests').find({
-        $or: [
-          { endDateTime: { $gt: now } },
-          { end_datetime: { $gt: now } }
-        ],
-        $or: [
-          { is_active: true },
-          { status: 'active' }
+        $and: [
+          {
+            $or: [
+              { endDateTime: { $gt: now } },
+              { end_datetime: { $gt: now } }
+            ]
+          },
+          {
+            $or: [
+              { is_active: true },
+              { status: 'active' }
+            ]
+          }
         ]
       }).toArray();
 
@@ -505,6 +511,340 @@ class TestNotificationService {
 
     } catch (error) {
       logger.error('❌ Error sending SMS/Email test reminders only:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send test reminder notifications (Push notifications only)
+   * Called by cron job every 6 hours
+   * Queries database for tests that need reminders
+   * Only sends push notifications
+   */
+  async sendTestRemindersPushOnly() {
+    try {
+      const settings = await notificationService.getNotificationSettings();
+      if (!settings.pushEnabled) {
+        logger.info('⚠️ Push notifications are disabled. Skipping push-only reminders.');
+        return {
+          success: true,
+          message: 'Push notifications disabled, skipping push reminders',
+        };
+      }
+
+      const db = this.getDb();
+      const now = new Date();
+      
+      logger.info(`⏰ Processing push-only test reminders (STUDENT-CENTRIC approach)...`);
+      logger.info(`⏰ Current time: ${now.toISOString()}`);
+
+      // 1. Get all active tests (endDateTime not passed)
+      // Filter: endDateTime in future AND (is_active=true OR status='active' OR fields missing/null)
+      const activeTests = await db.collection('tests').find({
+        $and: [
+          {
+            $or: [
+              { endDateTime: { $gt: now } },
+              { end_datetime: { $gt: now } }
+            ]
+          },
+          {
+            $or: [
+              { is_active: true },
+              { status: 'active' },
+              { is_active: { $exists: false } },
+              { is_active: null },
+              { status: { $exists: false } },
+              { status: null }
+            ]
+          }
+        ]
+      }).toArray();
+
+      logger.info(`📝 Found ${activeTests.length} active tests`);
+      
+      if (activeTests.length === 0) {
+        return {
+          success: true,
+          message: 'No active tests found',
+          active_tests: 0,
+          pushSent: 0
+        };
+      }
+
+      // 2. Build a map: student_id -> [tests they're assigned to]
+      logger.info(`🔍 Building student-to-tests mapping...`);
+      const studentToTests = new Map();
+
+      for (const test of activeTests) {
+        logger.info(`📝 Mapping students for test: ${test.name}`);
+
+        // Collect student IDs for this test
+        let allStudentIds = [];
+        
+        // Source 1: assigned_student_ids
+        if (test.assigned_student_ids && test.assigned_student_ids.length > 0) {
+          allStudentIds.push(...test.assigned_student_ids);
+        }
+        
+        // Source 2: Query students by batch_ids and course_ids
+        if (test.batch_ids && test.batch_ids.length > 0 && test.course_ids && test.course_ids.length > 0) {
+          const studentsFromBatchCourse = await db.collection('students').find({
+            batch_id: { $in: test.batch_ids.map(id => new ObjectId(id)) },
+            course_id: { $in: test.course_ids.map(id => new ObjectId(id)) }
+          }).toArray();
+          
+          if (studentsFromBatchCourse.length > 0) {
+            allStudentIds.push(...studentsFromBatchCourse.map(s => s._id));
+          }
+        } else if (test.batch_ids && test.batch_ids.length > 0) {
+          const studentsFromBatch = await db.collection('students').find({
+            batch_id: { $in: test.batch_ids.map(id => new ObjectId(id)) }
+          }).toArray();
+          
+          if (studentsFromBatch.length > 0) {
+            allStudentIds.push(...studentsFromBatch.map(s => s._id));
+          }
+        }
+
+        // Remove duplicates
+        allStudentIds = [...new Set(allStudentIds.map(id => id.toString()))];
+
+        logger.info(`👥 Found ${allStudentIds.length} students for test "${test.name}"`);
+
+        // Map each student to this test
+        for (const studentId of allStudentIds) {
+          if (!studentToTests.has(studentId)) {
+            studentToTests.set(studentId, []);
+          }
+          studentToTests.get(studentId).push(test);
+        }
+      }
+
+      logger.info(`✅ Total unique students across all tests: ${studentToTests.size}`);
+
+      // 3. Get ALL attempts for ALL active tests at once
+      logger.info(`🔍 Fetching all attempts for active tests...`);
+      const allAttempts = await db.collection('student_test_attempts').find({
+        $or: activeTests.flatMap(test => [
+          { test_id: test._id.toString() },
+          { test_id: test._id },
+          { test_id: test.test_id }
+        ])
+      }).toArray();
+
+      logger.info(`📋 Found ${allAttempts.length} total attempts across all tests`);
+
+      // Build a map: student_id/user_id -> Set of attempted test_ids
+      const attemptedMap = new Map();
+      allAttempts.forEach(attempt => {
+        const testId = attempt.test_id?.toString();
+        if (attempt.student_id) {
+          const sid = attempt.student_id.toString();
+          if (!attemptedMap.has(sid)) attemptedMap.set(sid, new Set());
+          attemptedMap.get(sid).add(testId);
+        }
+        if (attempt.user_id) {
+          const uid = attempt.user_id.toString();
+          if (!attemptedMap.has(uid)) attemptedMap.set(uid, new Set());
+          attemptedMap.get(uid).add(testId);
+        }
+      });
+
+      // 4. For EACH STUDENT, determine which tests they haven't attempted
+      logger.info(`🔍 Processing each student to find their pending tests...`);
+      
+      const studentPendingTests = new Map();
+      
+      for (const [studentId, assignedTests] of studentToTests.entries()) {
+        const pendingTests = [];
+        
+        for (const test of assignedTests) {
+          const testId = test._id.toString();
+          const attemptedByStudent = attemptedMap.get(studentId)?.has(testId);
+          
+          if (!attemptedByStudent) {
+            pendingTests.push(test);
+          }
+        }
+        
+        if (pendingTests.length > 0) {
+          studentPendingTests.set(studentId, pendingTests);
+        }
+      }
+
+      logger.info(`📊 Students with pending tests: ${studentPendingTests.size}/${studentToTests.size}`);
+
+      if (studentPendingTests.size === 0) {
+        logger.info(`✅ All students have attempted all their tests!`);
+        return {
+          success: true,
+          message: 'No pending tests found',
+          active_tests: activeTests.length,
+          pushSent: 0
+        };
+      }
+
+      // 5. Get user IDs for students with pending tests
+      logger.info(`🔍 Looking up user IDs for students with pending tests...`);
+      const studentIdsWithPending = Array.from(studentPendingTests.keys());
+      
+      const students = await db.collection('students').find({
+        _id: { $in: studentIdsWithPending.map(id => new ObjectId(id)) }
+      }).toArray();
+
+      const studentToUser = new Map();
+      students.forEach(s => {
+        if (s.user_id) {
+          studentToUser.set(s._id.toString(), s.user_id.toString());
+        }
+      });
+
+      logger.info(`🆔 Mapped ${studentToUser.size} students to user IDs`);
+
+      // 6. Double-check: Filter out users who have attempted using user_id
+      logger.info(`🔍 Double-checking attempts by user_id...`);
+      for (const [studentId, pendingTests] of studentPendingTests.entries()) {
+        const userId = studentToUser.get(studentId);
+        if (!userId) continue;
+
+        const filteredTests = pendingTests.filter(test => {
+          const testId = test._id.toString();
+          const attemptedByUser = attemptedMap.get(userId)?.has(testId);
+          return !attemptedByUser;
+        });
+
+        if (filteredTests.length === 0) {
+          studentPendingTests.delete(studentId);
+        } else if (filteredTests.length < pendingTests.length) {
+          studentPendingTests.set(studentId, filteredTests);
+        }
+      }
+
+      logger.info(`✅ After user_id verification: ${studentPendingTests.size} students with pending tests`);
+
+      if (studentPendingTests.size === 0) {
+        logger.info(`✅ All students have attempted all tests (verified by user_id)`);
+        return {
+          success: true,
+          message: 'No pending tests found after verification',
+          active_tests: activeTests.length,
+          pushSent: 0
+        };
+      }
+
+      // 7. Send push notifications only
+      logger.info(`📤 Sending push-only reminders to students...`);
+      let totalPushSent = 0;
+      const errors = [];
+
+      for (const [studentId, pendingTests] of studentPendingTests.entries()) {
+        try {
+          const student = await db.collection('students').findOne({
+            _id: new ObjectId(studentId)
+          });
+
+          if (!student) {
+            logger.warn(`⚠️ Student not found: ${studentId}`);
+            continue;
+          }
+
+          const studentName = student.name || 'Student';
+          const userId = studentToUser.get(studentId);
+
+          // Send reminder for the FIRST pending test (most urgent)
+          const test = pendingTests[0];
+
+          if (userId && settings.pushEnabled) {
+            try {
+              // Calculate urgency for push notification
+              const endDateTime = test.endDateTime || test.end_datetime;
+              if (!endDateTime) continue;
+
+              const endDate = new Date(endDateTime);
+              const timeRemaining = endDate - now;
+              const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
+              const daysRemaining = Math.floor(hoursRemaining / 24);
+
+              let title, body, urgency;
+
+              if (hoursRemaining < 2) {
+                urgency = 'critical';
+                title = `⚠️ URGENT: ${test.name}`;
+                body = `Test ends in ${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}! Complete it now!`;
+              } else if (hoursRemaining < 6) {
+                urgency = 'high';
+                title = `⏰ Important: ${test.name}`;
+                body = `Only ${hoursRemaining} hours left to complete your test!`;
+              } else if (hoursRemaining < 24) {
+                urgency = 'medium';
+                title = `📝 Reminder: ${test.name}`;
+                body = `Test ends today! ${hoursRemaining} hours remaining.`;
+              } else if (daysRemaining === 1) {
+                urgency = 'medium';
+                title = `📚 Reminder: ${test.name}`;
+                body = `Test ends tomorrow! Don't forget to complete it.`;
+              } else {
+                urgency = 'low';
+                title = `📖 Reminder: ${test.name}`;
+                body = `You have ${daysRemaining} days to complete your test.`;
+              }
+
+              // Add info about other pending tests
+              if (pendingTests.length > 1) {
+                body += ` (+ ${pendingTests.length - 1} more pending test${pendingTests.length > 2 ? 's' : ''})`;
+              }
+
+              const pushData = {
+                type: 'test_reminder',
+                test_id: test._id.toString(),
+                test_name: test.name,
+                pending_tests_count: pendingTests.length,
+                end_datetime: endDate.toISOString(),
+                hours_remaining: hoursRemaining,
+                urgency: urgency,
+                url: `/student/exam/${test._id}`
+              };
+
+              // Send OneSignal notification directly (OneSignal handles user lookup)
+              const pushResult = await notificationService.sendNotification('push', { user_id: userId }, body, {
+                title: title,
+                data: pushData
+              });
+
+              if (pushResult.success && pushResult.messageId !== 'disabled-by-settings') {
+                totalPushSent++;
+                logger.info(`✅ OneSignal notification sent to user ${userId}`);
+              } else if (!pushResult.success) {
+                errors.push({ studentId, userId, error: pushResult.error });
+              }
+
+            } catch (pushError) {
+              logger.error(`❌ Error sending OneSignal push to user ${userId}:`, pushError.message);
+              errors.push({ studentId, userId, error: pushError.message });
+            }
+          }
+
+        } catch (studentError) {
+          logger.error(`❌ Error processing student ${studentId}:`, studentError.message);
+          errors.push({ studentId, error: studentError.message });
+        }
+      }
+
+      logger.info(`✅ Push-only reminders complete: ${totalPushSent} push notifications sent`);
+
+      return {
+        success: true,
+        type: 'push_only',
+        active_tests: activeTests.length,
+        total_students: studentToTests.size,
+        students_with_pending: studentPendingTests.size,
+        pushSent: totalPushSent,
+        errors: errors.length > 0 ? errors : undefined
+      };
+
+    } catch (error) {
+      logger.error('❌ Error sending push-only test reminders:', error);
       throw error;
     }
   }

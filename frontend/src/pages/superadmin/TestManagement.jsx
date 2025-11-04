@@ -4118,6 +4118,12 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated, uploadedQu
   const onSubmit = async (data) => {
     setLoading(true)
     try {
+      // Ensure all questions have test_cases array for consistency
+      const processedQuestions = uploadedQuestions.map(question => ({
+        ...question,
+        test_cases: question.test_cases || [] // Ensure test_cases array exists
+      }));
+
       const payload = {
         test_name: testData.test_name,
         test_type: testData.test_type?.toLowerCase(),
@@ -4125,10 +4131,15 @@ const Step6ConfirmAndGenerate = ({ prevStep, testData, onTestCreated, uploadedQu
         campus_id: testData.campus?.value,
         course_ids: testData.courses.map(c => c.value),
         batch_ids: testData.batches.map(b => b.value),
-        questions: uploadedQuestions,
+        questions: processedQuestions,
         audio_config: isMcqModule ? {} : { accent: data.accent, speed: data.speed },
         assigned_student_ids: studentList && studentList.length > 0 ? studentList.map(s => s.id) : [], // Only assign to confirmed students
       };
+
+      // Add question_type for CRT modules to ensure proper backend identification
+      if (testData.module?.startsWith('CRT_')) {
+        payload.question_type = testData.module === 'CRT_TECHNICAL' ? 'compiler' : 'mcq';
+      }
       if (testData.test_type?.toLowerCase() === 'online') {
         // Always send ISO strings for startDateTime and endDateTime
         if (!testData.startDateTime || !testData.endDateTime) {

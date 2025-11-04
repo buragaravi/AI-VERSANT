@@ -82,14 +82,15 @@ const PracticeModuleTaking = () => {
     setAnswers(prev => ({ ...prev, [questionId]: answer }));
   };
 
-  const handleCodeSubmit = (questionId, code, language) => {
-    setAnswers(prev => ({ 
-      ...prev, 
-      [questionId]: { 
-        code, 
+  const handleCodeSubmit = (questionId, code, language, results) => {
+    setAnswers(prev => ({
+      ...prev,
+      [questionId]: {
+        code,
         language,
-        type: 'code'
-      } 
+        type: 'code',
+        results: results // Store validation results
+      }
     }));
   };
 
@@ -105,9 +106,22 @@ const PracticeModuleTaking = () => {
         const questionId = question.question_id || question._id;
         if (answers[questionId]) {
           const answer = answers[questionId];
-          // If it's a code answer, stringify it
+          // If it's a code answer with results, send structured data
           if (answer && typeof answer === 'object' && answer.type === 'code') {
-            formData.append(`answer_${index}`, JSON.stringify(answer));
+            if (answer.results) {
+              // For compiler questions, send pre-calculated results
+              formData.append(`answer_${index}`, JSON.stringify({
+                code: answer.code,
+                language: answer.language,
+                results: answer.results,
+                total_score: answer.results.total_score,
+                max_score: answer.results.max_score,
+                passed_count: answer.results.passed_count,
+                failed_count: answer.results.failed_count
+              }));
+            } else {
+              formData.append(`answer_${index}`, JSON.stringify(answer));
+            }
           } else {
             formData.append(`answer_${index}`, answer);
           }
@@ -241,6 +255,7 @@ const PracticeModuleTaking = () => {
                   <TechnicalCodeEditor
                     question={currentQuestion}
                     onCodeChange={(code, language) => handleCodeSubmit(currentQuestion.question_id || currentQuestion._id, code, language)}
+                    onSubmit={(results) => handleCodeSubmit(currentQuestion.question_id || currentQuestion._id, answers[currentQuestion.question_id || currentQuestion._id]?.code || '', answers[currentQuestion.question_id || currentQuestion._id]?.language || currentQuestion.language || 'python', results)}
                     initialCode={answers[currentQuestion.question_id || currentQuestion._id]?.code || ''}
                     initialLanguage={answers[currentQuestion.question_id || currentQuestion._id]?.language || currentQuestion.language || 'python'}
                   />

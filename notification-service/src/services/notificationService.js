@@ -374,7 +374,7 @@ const sendSMS = async (phone, message) => {
   }
 };
 
-// Push notification service (using the new service with VAPID and OneSignal)
+// Push notification service (using OneSignal)
 const sendPush = async (subscription, title, body, data = {}) => {
   try {
     logger.info(`🔔 Sending push notification: ${title}`);

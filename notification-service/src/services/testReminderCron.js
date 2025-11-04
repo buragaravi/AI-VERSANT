@@ -82,64 +82,12 @@ class TestReminderCron {
   async sendPushRemindersOnly() {
     try {
       logger.info('🔔 Processing push notification reminders only...');
-
-      // Check notification settings
-      const notificationService = require('./notificationService');
-      const settings = await notificationService.getNotificationSettings();
-
-      if (!settings.pushEnabled) {
-        logger.info('⚠️ Push notifications disabled - skipping push reminders');
-        return { success: true, message: 'Push notifications disabled', skipped: true };
-      }
-
-      // Get students with pending tests
-      const db = testNotificationService.getDb();
-      const now = new Date();
-
-      // Find active tests
-      const activeTests = await db.collection('tests').find({
-        $or: [
-          { endDateTime: { $gt: now } },
-          { end_datetime: { $gt: now } }
-        ]
-      }).toArray();
-
-      if (activeTests.length === 0) {
-        return { success: true, message: 'No active tests found' };
-      }
-
-      // Get students who haven't attempted tests
-      const unattemptedStudents = await this.getUnattemptedStudents(db, activeTests);
-
-      if (unattemptedStudents.length === 0) {
-        return { success: true, message: 'No students with pending tests' };
-      }
-
-      // Send push notifications only
-      let pushSent = 0;
-      for (const student of unattemptedStudents) {
-        try {
-          // Send push notification via OneSignal/VAPID
-          const test = student.pendingTests[0]; // First pending test
-          await notificationService.sendNotification('push', student.subscription, `Test Reminder: ${test.name}`, {
-            title: 'Test Reminder',
-            body: `You have a pending test: ${test.name}`,
-            testId: test.test_id,
-            type: 'test_reminder'
-          });
-          pushSent++;
-        } catch (error) {
-          logger.error(`❌ Failed to send push reminder to student ${student._id}:`, error.message);
-        }
-      }
-
-      return {
-        success: true,
-        type: 'push_only',
-        studentsNotified: unattemptedStudents.length,
-        pushSent,
-        timestamp: new Date().toISOString()
-      };
+      
+      // Use the centralized method from testNotificationService
+      const result = await testNotificationService.sendTestRemindersPushOnly();
+      
+      logger.info('✅ Push reminder cron completed:', result);
+      return result;
 
     } catch (error) {
       logger.error('❌ Error sending push reminders only:', error);
@@ -177,34 +125,6 @@ class TestReminderCron {
       logger.error('❌ Error sending SMS/Email reminders only:', error);
       throw error;
     }
-  }
-
-  /**
-   * Get students who haven't attempted tests
-   */
-  async getUnattemptedStudents(db, activeTests) {
-    // Simplified version - reuse logic from testNotificationService
-    const unattemptedStudents = [];
-
-    for (const test of activeTests) {
-      // This would need the full logic from testNotificationService
-      // For now, return basic structure
-      const students = await db.collection('students').find({
-        // Add logic to find students assigned to this test
-      }).toArray();
-
-      for (const student of students) {
-        unattemptedStudents.push({
-          _id: student._id,
-          email: student.email,
-          phone: student.mobile_number,
-          subscription: student.pushSubscription,
-          pendingTests: [test]
-        });
-      }
-    }
-
-    return unattemptedStudents;
   }
 
   /**

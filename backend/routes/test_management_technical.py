@@ -94,13 +94,15 @@ def create_technical_test():
             question_doc = {
                 'module_id': module_id,
                 'level_id': level_id,
-                'question_type': 'technical',
+                'question_type': 'compiler',  # Changed to 'compiler' for clarity
                 'question': question_text,
                 'test_cases': test_cases,  # Use snake_case for consistency
                 'testCases': question.get('testCases', ''),  # Keep for backward compatibility
                 'expectedOutput': question.get('expectedOutput', ''),
                 'language': question.get('language', 'python'),
                 'instructions': question.get('instructions', ''),
+                'time_limit': question.get('time_limit', 5000),  # Overall time limit in ms
+                'memory_limit': question.get('memory_limit', 256),  # Memory limit in MB
                 'used_in_tests': [],
                 'used_count': 0,
                 'last_used': None,
@@ -146,13 +148,13 @@ def create_technical_test():
             processed_question = {
                 '_id': question_id if question_id else ObjectId(),
                 'question': question_text,
-                'question_type': 'technical',
+                'question_type': 'compiler',  # Changed to 'compiler' for clarity
                 'module_id': module_id,
-                'test_cases': test_cases,  # Use snake_case
-                'testCases': question.get('testCases', ''),  # Keep for backward compatibility
-                'expectedOutput': question.get('expectedOutput', ''),
+                'test_cases': test_cases,  # Use snake_case for consistency
                 'language': question.get('language', 'python'),
-                'instructions': question.get('instructions', '')
+                'instructions': question.get('instructions', ''),
+                'time_limit': question.get('time_limit', 5000),  # Overall time limit in ms
+                'memory_limit': question.get('memory_limit', 256)   # Memory limit in MB
             }
             processed_questions.append(processed_question)
         
@@ -200,7 +202,10 @@ def create_technical_test():
 
         # Insert test
         result = mongo_db.tests.insert_one(test_doc)
-        test_id = str(result.inserted_id)
+        test_object_id = str(result.inserted_id)  # MongoDB ObjectId (for internal operations)
+        custom_test_id = test_doc.get('test_id')  # Custom test_id (ABC123 format)
+        
+        current_app.logger.info(f"✅ Technical test created - ObjectId: {test_object_id}, Custom ID: {custom_test_id}")
         
         # Create auto-release schedule for online tests
         if test_type.lower() == 'online':
@@ -213,9 +218,9 @@ def create_technical_test():
                 if startDateTime and endDateTime:
                     end_date = datetime.fromisoformat(endDateTime.replace('Z', '+00:00'))
                 
-                scheduler.create_schedule_for_test(test_id, test_type.lower(), created_at, end_date)
+                scheduler.create_schedule_for_test(test_object_id, test_type.lower(), created_at, end_date)
             except Exception as e:
-                current_app.logger.warning(f"Failed to create auto-release schedule for test {test_id}: {e}")
+                current_app.logger.warning(f"Failed to create auto-release schedule for test {test_object_id}: {e}")
         
         # Update question usage count for questions from the bank
         if questions:
@@ -227,7 +232,7 @@ def create_technical_test():
                             {
                                 '$inc': {'used_count': 1},
                                 '$set': {'last_used': datetime.now(pytz.utc)},
-                                '$push': {'used_in_tests': test_id}
+                                '$push': {'used_in_tests': custom_test_id}  # Use custom ID
                             }
                         )
                     except Exception as e:
@@ -245,14 +250,10 @@ def create_technical_test():
                 # Format start date for notification
                 start_date_str = startDateTime if test_type.lower() == 'online' else 'Immediately'
                 
-                # Get the custom test_id from the test document
-                test_doc = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
-                custom_test_id = test_doc.get('test_id', test_id) if test_doc else test_id
-                
                 # Create batch job for test notifications
                 batch_result = create_test_notification_batch_job(
-                    test_id=custom_test_id,  # Custom test_id for SMS
-                    object_id=test_id,  # MongoDB _id for emails
+                    test_id=custom_test_id,  # Custom test_id for SMS (ABC123)
+                    object_id=test_object_id,  # MongoDB _id for emails
                     test_name=test_name,
                     start_date=start_date_str,
                     students=students,
@@ -277,19 +278,19 @@ def create_technical_test():
             
             email_sms_notification_url = f"{notification_service_url}/api/notifications/test-created"
             
-            current_app.logger.info(f"📧📱 Sending email & SMS notifications for test: {test_id}")
+            current_app.logger.info(f"📧📱 Sending email & SMS notifications for test: {test_object_id}")
             
             # Fire-and-forget: don't wait for response
             response = requests.post(
                 email_sms_notification_url,
-                json={'test_id': test_id},
+                json={'test_id': test_object_id},  # Use ObjectId for notification service
                 timeout=1  # Very short timeout - fire and forget
             )
             
-            current_app.logger.info(f"✅ Email & SMS notifications queued for test: {test_id}")
+            current_app.logger.info(f"✅ Email & SMS notifications queued for test: {test_object_id}")
                 
         except requests.exceptions.Timeout:
-            current_app.logger.debug(f"📧 Email & SMS notification request sent (timeout expected): {test_id}")
+            current_app.logger.debug(f"📧 Email & SMS notification request sent (timeout expected): {test_object_id}")
         except Exception as e:
             current_app.logger.warning(f"⚠️ Failed to queue email & SMS notifications: {e}")
             # Don't fail test creation if notifications fail
@@ -298,7 +299,8 @@ def create_technical_test():
             'success': True,
             'message': 'Technical test created successfully',
             'data': {
-                'test_id': str(result.inserted_id),
+                'test_id': test_object_id,  # Return MongoDB ObjectId
+                'custom_test_id': custom_test_id,  # Return custom ABC123 ID
                 'question_count': len(processed_questions)
             }
         }), 201
@@ -574,32 +576,32 @@ def compile_code():
 @jwt_required()
 def validate_test_cases():
     """
-    Validate code against test cases
-    For submitting answers and auto-grading
+    Validate code against test cases for frontend scoring
+    Returns detailed results for each test case execution
     """
     try:
         data = request.get_json()
         language = data.get('language')
         code = data.get('code')
         test_cases = data.get('test_cases', [])
-        
+
         if not language or not code:
             return jsonify({
                 'success': False,
                 'message': 'Language and code are required'
             }), 400
-        
+
         if not test_cases:
             return jsonify({
                 'success': False,
                 'message': 'Test cases are required'
             }), 400
-        
+
         # Validate code against test cases
         result = compiler_service.validate_against_test_cases(language, code, test_cases)
-        
+
         return jsonify(result), 200 if result.get('success') else 400
-        
+
     except Exception as e:
         current_app.logger.error(f"Error validating test cases: {e}")
         return jsonify({
@@ -612,110 +614,205 @@ def validate_test_cases():
 @jwt_required()
 def submit_technical_answer():
     """
-    Submit student's code answer for a technical question
-    Validates against test cases and stores submission
+    Submit student's answer for a technical question
+    Handles both compiler questions (pre-calculated scores) and MCQ questions (backend validation)
     """
     try:
         current_user_id = get_jwt_identity()
         data = request.get_json()
-        
+
         test_id = data.get('test_id')
         question_id = data.get('question_id')
-        language = data.get('language')
-        code = data.get('code')
-        
-        if not all([test_id, question_id, language, code]):
+
+        print(f"Submit answer request - test_id: {test_id}, question_id: {question_id}")
+        print(f"Request data keys: {list(data.keys())}")
+
+        if not all([test_id, question_id]):
             return jsonify({
                 'success': False,
-                'message': 'test_id, question_id, language, and code are required'
+                'message': 'test_id and question_id are required'
             }), 400
-        
-        # Get question details
+
+        # Get question details to determine question type
         test = mongo_db.tests.find_one({'_id': ObjectId(test_id)})
         if not test:
             return jsonify({'success': False, 'message': 'Test not found'}), 404
-        
+
         # Find the question in the test
         question = None
         for q in test.get('questions', []):
             if str(q.get('_id')) == question_id:
                 question = q
                 break
-        
+
         if not question:
+            print(f"Question not found in test. Available questions: {[str(q.get('_id')) for q in test.get('questions', [])]}")
             return jsonify({'success': False, 'message': 'Question not found in test'}), 404
-        
-        # Get test cases from question
-        test_cases = question.get('test_cases', [])
-        
-        if not test_cases:
+
+        question_type = question.get('question_type', 'mcq')
+        print(f"Question type: {question_type}")
+
+        if question_type == 'compiler':
+            # Handle compiler questions with pre-calculated scores from frontend
+            return _submit_compiler_answer(current_user_id, data, question)
+        elif question_type == 'mcq':
+            # Handle MCQ questions with backend validation
+            return _submit_mcq_answer(current_user_id, data, question)
+        else:
             return jsonify({
                 'success': False,
-                'message': 'No test cases defined for this question'
+                'message': f'Unsupported question type: {question_type}'
             }), 400
-        
-        # Validate code against test cases
-        validation_result = compiler_service.validate_against_test_cases(language, code, test_cases)
-        
-        if not validation_result.get('success'):
-            return jsonify(validation_result), 400
-        
-        # Store submission
-        submission_doc = {
-            'student_id': ObjectId(current_user_id),
-            'test_id': ObjectId(test_id),
-            'question_id': ObjectId(question_id),
-            'language': language,
-            'submitted_code': code,
-            'test_results': validation_result.get('test_results', []),
-            'total_score': validation_result.get('total_score', 0),
-            'max_score': validation_result.get('max_score', 0),
-            'percentage': validation_result.get('percentage', 0),
-            'passed_count': validation_result.get('passed_count', 0),
-            'failed_count': validation_result.get('failed_count', 0),
-            'status': 'completed',
-            'submitted_at': datetime.utcnow()
-        }
-        
-        # Check if submission already exists
-        existing_submission = mongo_db.technical_submissions.find_one({
-            'student_id': ObjectId(current_user_id),
-            'test_id': ObjectId(test_id),
-            'question_id': ObjectId(question_id)
-        })
-        
-        if existing_submission:
-            # Update existing submission
-            mongo_db.technical_submissions.update_one(
-                {'_id': existing_submission['_id']},
-                {'$set': submission_doc}
-            )
-            submission_id = str(existing_submission['_id'])
-        else:
-            # Create new submission
-            result = mongo_db.technical_submissions.insert_one(submission_doc)
-            submission_id = str(result.inserted_id)
-        
-        return jsonify({
-            'success': True,
-            'message': 'Answer submitted successfully',
-            'data': {
-                'submission_id': submission_id,
-                'total_score': validation_result.get('total_score', 0),
-                'max_score': validation_result.get('max_score', 0),
-                'percentage': validation_result.get('percentage', 0),
-                'passed_count': validation_result.get('passed_count', 0),
-                'failed_count': validation_result.get('failed_count', 0),
-                'test_results': validation_result.get('test_results', [])
-            }
-        }), 200
-        
+
     except Exception as e:
         current_app.logger.error(f"Error submitting technical answer: {e}")
         return jsonify({
             'success': False,
             'error': f'Submission failed: {str(e)}'
         }), 500
+
+
+def _submit_compiler_answer(current_user_id, data, question):
+    """Handle compiler question submission with pre-calculated scores"""
+    language = data.get('language')
+    code = data.get('code')
+
+    print(f"Compiler submission - language: {language}, code length: {len(code) if code else 0}")
+
+    # For compiler questions, accept pre-calculated scores
+    test_results = data.get('test_results', [])
+    total_score = data.get('total_score', 0)
+    max_score = data.get('max_score', 0)
+    passed_count = data.get('passed_count', 0)
+    failed_count = data.get('failed_count', 0)
+
+    print(f"Scores - total: {total_score}, max: {max_score}, passed: {passed_count}, failed: {failed_count}")
+
+    if not all([language, code]):
+        print("Missing language or code")
+        return jsonify({
+            'success': False,
+            'message': 'language and code are required for compiler questions'
+        }), 400
+
+    test_id = data.get('test_id')
+    question_id = data.get('question_id')
+
+    # Store submission with pre-calculated scores
+    submission_doc = {
+        'student_id': ObjectId(current_user_id),
+        'test_id': ObjectId(test_id),
+        'question_id': ObjectId(question_id),
+        'language': language,
+        'submitted_code': code,
+        'test_results': test_results,  # Pre-calculated from frontend
+        'total_score': total_score,
+        'max_score': max_score,
+        'percentage': (total_score / max_score * 100) if max_score > 0 else 0,
+        'passed_count': passed_count,
+        'failed_count': failed_count,
+        'status': 'completed',
+        'submitted_at': datetime.utcnow()
+    }
+
+    # Check if submission already exists
+    existing_submission = mongo_db.technical_submissions.find_one({
+        'student_id': ObjectId(current_user_id),
+        'test_id': ObjectId(test_id),
+        'question_id': ObjectId(question_id)
+    })
+
+    if existing_submission:
+        # Update existing submission
+        mongo_db.technical_submissions.update_one(
+            {'_id': existing_submission['_id']},
+            {'$set': submission_doc}
+        )
+        submission_id = str(existing_submission['_id'])
+    else:
+        # Create new submission
+        result = mongo_db.technical_submissions.insert_one(submission_doc)
+        submission_id = str(result.inserted_id)
+
+    return jsonify({
+        'success': True,
+        'message': 'Compiler answer submitted successfully',
+        'data': {
+            'submission_id': submission_id,
+            'total_score': total_score,
+            'max_score': max_score,
+            'percentage': (total_score / max_score * 100) if max_score > 0 else 0,
+            'passed_count': passed_count,
+            'failed_count': failed_count,
+            'test_results': test_results
+        }
+    }), 200
+
+
+def _submit_mcq_answer(current_user_id, data, question):
+    """Handle MCQ question submission with backend validation"""
+    student_answer = data.get('answer')
+
+    if student_answer is None:
+        return jsonify({
+            'success': False,
+            'message': 'Answer is required for MCQ questions'
+        }), 400
+
+    test_id = data.get('test_id')
+    question_id = data.get('question_id')
+
+    # Get correct answer from question
+    correct_answer = question.get('answer', '').strip().upper()
+    student_answer_upper = str(student_answer).strip().upper()
+
+    # Validate answer
+    is_correct = student_answer_upper == correct_answer
+    score = 1 if is_correct else 0
+
+    # Store MCQ submission
+    submission_doc = {
+        'student_id': ObjectId(current_user_id),
+        'test_id': ObjectId(test_id),
+        'question_id': ObjectId(question_id),
+        'question_type': 'mcq',
+        'student_answer': student_answer,
+        'correct_answer': correct_answer,
+        'is_correct': is_correct,
+        'score': score,
+        'status': 'completed',
+        'submitted_at': datetime.utcnow()
+    }
+
+    # Check if submission already exists
+    existing_submission = mongo_db.technical_submissions.find_one({
+        'student_id': ObjectId(current_user_id),
+        'test_id': ObjectId(test_id),
+        'question_id': ObjectId(question_id)
+    })
+
+    if existing_submission:
+        # Update existing submission
+        mongo_db.technical_submissions.update_one(
+            {'_id': existing_submission['_id']},
+            {'$set': submission_doc}
+        )
+        submission_id = str(existing_submission['_id'])
+    else:
+        # Create new submission
+        result = mongo_db.technical_submissions.insert_one(submission_doc)
+        submission_id = str(result.inserted_id)
+
+    return jsonify({
+        'success': True,
+        'message': 'MCQ answer submitted successfully',
+        'data': {
+            'submission_id': submission_id,
+            'is_correct': is_correct,
+            'score': score,
+            'correct_answer': correct_answer
+        }
+    }), 200
 
 
 @technical_test_bp.route('/languages', methods=['GET'])

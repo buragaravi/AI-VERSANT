@@ -1015,6 +1015,7 @@ def upload_module_questions():
         level_id = data.get('level_id')
         questions = data.get('questions')
         topic_id = data.get('topic_id')  # Optional topic_id for CRT modules
+        question_type_from_payload = data.get('question_type')  # Question type from payload
         
         if not module_id or not questions:
             return jsonify({'success': False, 'message': 'module_id and questions are required.'}), 400
@@ -1060,12 +1061,13 @@ def upload_module_questions():
             validation_reason = ""
             
             if module_id == 'CRT_TECHNICAL' or level_id == 'CRT_TECHNICAL':
-                question_type = q.get('questionType', 'technical')
-                if question_type == 'technical':
+                # Get question type from question or payload, default to 'technical'
+                question_type = q.get('questionType', question_type_from_payload or 'technical')
+                if question_type == 'technical' or question_type == 'compiler':
                     # Compiler-integrated technical question
-                    if not (q.get('question') and q.get('testCases') and q.get('expectedOutput')):
+                    if not (q.get('question') and (q.get('testCases') or q.get('test_cases'))):
                         is_valid = False
-                        validation_reason = "Missing required fields (question, testCases, or expectedOutput)"
+                        validation_reason = "Missing required fields (question or testCases)"
                 else:
                     # MCQ technical question
                     if not (q.get('question') and q.get('optionA') and q.get('optionB') and 
@@ -1135,17 +1137,23 @@ def upload_module_questions():
         # Store valid questions in question_bank collection
         inserted = []
         for q in valid_questions:
+            # Determine question type first
+            question_type = None
+            if module_id == 'CRT_TECHNICAL' or level_id == 'CRT_TECHNICAL':
+                question_type = q.get('questionType', question_type_from_payload or 'technical')
+            elif module_id in ['LISTENING', 'SPEAKING']:
+                question_type = 'speaking' if module_id == 'SPEAKING' else 'sentence'
+            else:
+                question_type = 'mcq'
+            
+            # Build document based on question type
             doc = {
                 'module_id': module_id,
                 'level_id': level_id,
                 'question': q.get('question'),
-                'optionA': q.get('options', [])[0] if q.get('options') else q.get('optionA', ''),
-                'optionB': q.get('options', [])[1] if q.get('options') and len(q.get('options')) > 1 else q.get('optionB', ''),
-                'optionC': q.get('options', [])[2] if q.get('options') and len(q.get('options')) > 2 else q.get('optionC', ''),
-                'optionD': q.get('options', [])[3] if q.get('options') and len(q.get('options')) > 3 else q.get('optionD', ''),
-                'answer': q.get('answer', ''),
                 'instructions': q.get('instructions', ''),
-                'used_in_tests': [], # Track test_ids where used
+                'question_type': question_type,
+                'used_in_tests': [],
                 'used_count': 0,
                 'last_used': None,
                 'created_at': datetime.utcnow(),
@@ -1156,46 +1164,39 @@ def upload_module_questions():
             if topic_id:
                 doc['topic_id'] = ObjectId(topic_id)
             
-            # Handle different question types based on module
-            if module_id == 'CRT_TECHNICAL' or level_id == 'CRT_TECHNICAL':
-                # Check question type
-                question_type = q.get('questionType', 'technical')
-                doc['question_type'] = question_type
+            # Handle different question types
+            if question_type in ['technical', 'compiler']:
+                # Compiler/Technical question - only add compiler fields
+                doc['questionTitle'] = q.get('questionTitle', '')
+                doc['problemStatement'] = q.get('problemStatement', '')
+                doc['language'] = q.get('language', 'python')
+                doc['testCases'] = q.get('testCases', q.get('test_cases', []))
                 
-                if question_type == 'technical':
-                    doc['testCases'] = q.get('testCases', '')
-                    doc['expectedOutput'] = q.get('expectedOutput', '')
-                    doc['language'] = q.get('language', 'python')
-                    doc['testCaseId'] = q.get('testCaseId', '')
+                # Validate compiler question
+                if not doc['testCases']:
+                    current_app.logger.warning(f"Skipping compiler question without test cases: {q.get('question', '')}")
+                    continue
                     
-                    # Validate compiler-integrated question
-                    if not doc['testCases'] or not doc['expectedOutput']:
-                        current_app.logger.warning(f"Skipping question without test cases: {q.get('question', '')}")
-                        continue
-                        
-                elif question_type == 'mcq':
-                    # MCQ format for technical questions
-                    doc['question_type'] = 'mcq'
-                    # The MCQ fields are already set above
+            elif question_type == 'mcq':
+                # MCQ question - add MCQ fields
+                doc['optionA'] = q.get('options', [])[0] if q.get('options') else q.get('optionA', '')
+                doc['optionB'] = q.get('options', [])[1] if q.get('options') and len(q.get('options')) > 1 else q.get('optionB', '')
+                doc['optionC'] = q.get('options', [])[2] if q.get('options') and len(q.get('options')) > 2 else q.get('optionC', '')
+                doc['optionD'] = q.get('options', [])[3] if q.get('options') and len(q.get('options')) > 3 else q.get('optionD', '')
+                doc['answer'] = q.get('answer', '')
+                
+                # Validate MCQ question
+                if not (doc['optionA'] and doc['optionB'] and doc['optionC'] and doc['optionD'] and doc['answer']):
+                    current_app.logger.warning(f"Skipping incomplete MCQ question: {q.get('question', '')}")
+                    continue
                     
-                    # Validate MCQ question
-                    if not doc['optionA'] or not doc['optionB'] or not doc['optionC'] or not doc['optionD'] or not doc['answer']:
-                        current_app.logger.warning(f"Skipping incomplete MCQ question: {q.get('question', '')}")
-                        continue
-            elif module_id in ['LISTENING', 'SPEAKING']:
-                # For listening and speaking, handle sentence-type questions
-                doc['question_type'] = 'sentence'
-                # Add sentence-specific fields
+            elif question_type in ['sentence', 'speaking']:
+                # Sentence/Speaking questions
                 doc['sentence'] = q.get('question') or q.get('sentence', '')
                 doc['audio_url'] = q.get('audio_url')
                 doc['audio_config'] = q.get('audio_config')
                 doc['transcript_validation'] = q.get('transcript_validation')
                 doc['has_audio'] = q.get('has_audio', False)
-                # For speaking module
-                if module_id == 'SPEAKING':
-                    doc['question_type'] = 'speaking'
-            else:
-                doc['question_type'] = 'mcq'
             
             # Support sublevel/subcategory for grammar
             if 'subcategory' in q:
@@ -1261,6 +1262,25 @@ def get_existing_questions():
                 'transcript_validation': 1,
                 'has_audio': 1,
                 'question_type': 1,
+                'used_count': 1
+            }
+        elif module_id == 'CRT_TECHNICAL':
+            # For technical questions, include all fields
+            projection = {
+                'question': 1,
+                'questionTitle': 1,
+                'problemStatement': 1,
+                'testCases': 1,
+                'test_cases': 1,
+                'language': 1,
+                'instructions': 1,
+                'question_type': 1,
+                'optionA': 1,
+                'optionB': 1,
+                'optionC': 1,
+                'optionD': 1,
+                'answer': 1,
+                'topic_id': 1,
                 'used_count': 1
             }
         else:

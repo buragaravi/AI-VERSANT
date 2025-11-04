@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Code, Play, CheckCircle, XCircle, TestTube, AlertCircle } from 'lucide-react';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -348,18 +349,22 @@ const OnlineExamTaking = () => {
   useEffect(() => {
     if (questions.length > 0 && currentQuestionIndex < questions.length) {
       const currentQuestion = questions[currentQuestionIndex];
-  // Debug logging for exam and currentQuestion
-  useEffect(() => {
-    console.log('Exam object:', exam);
-    console.log('CurrentQuestion object:', currentQuestion);
-    if (exam) console.log('Exam._id:', exam._id);
-    if (currentQuestion) console.log('CurrentQuestion._id:', currentQuestion._id, 'CurrentQuestion.question_id:', currentQuestion.question_id);
-  }, [exam, currentQuestion]);
       if (currentQuestion && currentQuestion.audio_url) {
         console.log(`Question ${currentQuestionIndex + 1} Audio URL:`, currentQuestion.audio_url);
       }
     }
   }, [currentQuestionIndex, questions]);
+
+  // Debug logging for exam and currentQuestion
+  useEffect(() => {
+    console.log('Exam object:', exam);
+    if (exam) console.log('Exam._id:', exam._id);
+    if (questions.length > 0 && currentQuestionIndex < questions.length) {
+      const currentQuestion = questions[currentQuestionIndex];
+      console.log('CurrentQuestion object:', currentQuestion);
+      if (currentQuestion) console.log('CurrentQuestion._id:', currentQuestion._id, 'CurrentQuestion.question_id:', currentQuestion.question_id);
+    }
+  }, [exam, questions, currentQuestionIndex]);
 
   // Format time for display (clean MM:SS format)
   const formatTime = (seconds) => {
@@ -382,6 +387,48 @@ const OnlineExamTaking = () => {
         type: 'code'
       }
     }));
+  };
+
+  const handleTechnicalSubmission = (questionData) => {
+    const { questionId, code, language, results } = questionData;
+
+    // Store the submission data with pre-calculated scores
+    setAnswers(prev => ({
+      ...prev,
+      [questionId]: {
+        code,
+        language,
+        type: 'code',
+        results: results,
+        submitted: true
+      }
+    }));
+
+    // Store test results for final submission
+    setCodeTestResults(prev => ({
+      ...prev,
+      [questionId]: results
+    }));
+  };
+
+  const handleCodeSubmit = (questionId, code, language, results) => {
+    setAnswers(prev => ({
+      ...prev,
+      [questionId]: {
+        code,
+        language,
+        type: 'code',
+        results: results // Store validation results for submission
+      }
+    }));
+
+    // Also update codeTestResults for display
+    if (results) {
+      setCodeTestResults(prev => ({
+        ...prev,
+        [questionId]: results
+      }));
+    }
   };
 
   const handleRunCode = async (questionId) => {
@@ -607,14 +654,40 @@ const OnlineExamTaking = () => {
           return;
         }
 
-        // Process answers - stringify code answers
+        // Process answers - handle compiler questions with pre-calculated scores
         const processedAnswers = {};
         Object.keys(answers).forEach(key => {
           const answer = answers[key];
           if (answer && typeof answer === 'object' && answer.type === 'code') {
-            processedAnswers[key] = JSON.stringify(answer);
+            // For compiler questions, send the results directly
+            if (answer.results) {
+              processedAnswers[key] = {
+                code: answer.code,
+                language: answer.language,
+                results: answer.results,
+                total_score: answer.results.total_score,
+                max_score: answer.results.max_score,
+                passed_count: answer.results.passed_count,
+                failed_count: answer.results.failed_count
+              };
+            } else {
+              processedAnswers[key] = JSON.stringify(answer);
+            }
           } else {
             processedAnswers[key] = answer;
+          }
+        });
+
+        // Also include code test results for compiler questions
+        Object.keys(codeTestResults).forEach(key => {
+          if (!processedAnswers[key]) {
+            processedAnswers[key] = {
+              results: codeTestResults[key],
+              total_score: codeTestResults[key].total_score,
+              max_score: codeTestResults[key].max_score,
+              passed_count: codeTestResults[key].passed_count,
+              failed_count: codeTestResults[key].failed_count
+            };
           }
         });
 
@@ -863,14 +936,56 @@ const OnlineExamTaking = () => {
             className="mb-8"
           >
             <div className="flex justify-between text-xs text-slate-600 mb-3">
-              <span className="font-medium">Progress: {Object.keys({ ...answers, ...recordings }).length} / {questions.length} answered</span>
-              <span className="font-semibold text-slate-700">{Math.round((Object.keys({ ...answers, ...recordings }).length / questions.length) * 100)}%</span>
+              <span className="font-medium">Progress: {(() => {
+                const compilerQuestionsAnswered = questions.filter(q =>
+                  (q.question_type === 'compiler' || q.question_type === 'technical' || q.test_cases?.length > 0) &&
+                  codeTestResults[q.question_id || q._id]
+                ).length;
+
+                const otherQuestionsAnswered = Object.keys(answers).filter(key => {
+                  const question = questions.find(q => (q.question_id || q._id) === key);
+                  return question && question.question_type !== 'compiler' && question.question_type !== 'technical' && !question.test_cases?.length;
+                }).length;
+
+                const recordingQuestionsAnswered = Object.keys(recordings).length;
+
+                return compilerQuestionsAnswered + otherQuestionsAnswered + recordingQuestionsAnswered;
+              })()} / {questions.length} answered</span>
+              <span className="font-semibold text-slate-700">{Math.round(((() => {
+                const compilerQuestionsAnswered = questions.filter(q =>
+                  (q.question_type === 'compiler' || q.question_type === 'technical' || q.test_cases?.length > 0) &&
+                  codeTestResults[q.question_id || q._id]
+                ).length;
+
+                const otherQuestionsAnswered = Object.keys(answers).filter(key => {
+                  const question = questions.find(q => (q.question_id || q._id) === key);
+                  return question && question.question_type !== 'compiler' && question.question_type !== 'technical' && !question.test_cases?.length;
+                }).length;
+
+                const recordingQuestionsAnswered = Object.keys(recordings).length;
+
+                return (compilerQuestionsAnswered + otherQuestionsAnswered + recordingQuestionsAnswered) / questions.length;
+              })()) * 100)}%</span>
             </div>
             <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
               <motion.div
                 className="bg-gradient-to-r from-blue-500 to-indigo-500 h-3 rounded-full shadow-sm"
                 initial={{ width: 0 }}
-                animate={{ width: `${(Object.keys({ ...answers, ...recordings }).length / questions.length) * 100}%` }}
+                animate={{ width: `${(() => {
+                  const compilerQuestionsAnswered = questions.filter(q =>
+                    (q.question_type === 'compiler' || q.question_type === 'technical' || q.test_cases?.length > 0) &&
+                    codeTestResults[q.question_id || q._id]
+                  ).length;
+
+                  const otherQuestionsAnswered = Object.keys(answers).filter(key => {
+                    const question = questions.find(q => (q.question_id || q._id) === key);
+                    return question && question.question_type !== 'compiler' && question.question_type !== 'technical' && !question.test_cases?.length;
+                  }).length;
+
+                  const recordingQuestionsAnswered = Object.keys(recordings).length;
+
+                  return ((compilerQuestionsAnswered + otherQuestionsAnswered + recordingQuestionsAnswered) / questions.length) * 100;
+                })()}%` }}
                 transition={{ duration: 0.8, ease: "easeOut" }}
               />
             </div>
@@ -999,69 +1114,231 @@ const OnlineExamTaking = () => {
                   {(currentQuestion.question_type === 'compiler' ||
                     currentQuestion.question_type === 'technical' ||
                     currentQuestion.test_cases?.length > 0) && (
-                      <motion.div 
+                      <motion.div
                         className="w-full"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ duration: 0.6, delay: 0.5 }}
                       >
+                        {/* Compiler Question Instructions */}
+                        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                          <h4 className="font-semibold text-blue-800 mb-2 flex items-center">
+                            <Code className="h-5 w-5 mr-2" />
+                            Programming Challenge
+                          </h4>
+                          <div className="text-sm text-blue-700 space-y-1">
+                            <p>• Write your code in the editor below</p>
+                            <p>• Click "Run Code" to test against sample test cases</p>
+                            <p>• Click "Submit Answer" to validate against all test cases</p>
+                            <p>• Your score will be calculated based on test cases passed</p>
+                          </div>
+                        </div>
+
                         <TechnicalCodeEditor
-                          testId={  exam._id }
+                          testId={exam._id}
                           question={currentQuestion}
                           onCodeChange={(code, language) => handleCodeChange(currentQuestion.question_id || currentQuestion._id, code, language)}
+                          onSubmit={(results) => handleTechnicalSubmission({
+                            questionId: currentQuestion.question_id || currentQuestion._id,
+                            code: answers[currentQuestion.question_id || currentQuestion._id]?.code || '',
+                            language: answers[currentQuestion.question_id || currentQuestion._id]?.language || currentQuestion.language || 'python',
+                            results: results
+                          })}
                           initialCode={answers[currentQuestion.question_id || currentQuestion._id]?.code || ''}
                           initialLanguage={answers[currentQuestion.question_id || currentQuestion._id]?.language || currentQuestion.language || 'python'}
+                          showSubmit={false}
                         />
-                        
+
                         <div className="mt-4 flex gap-3">
                           <motion.button
                             onClick={() => handleRunCode(currentQuestion.question_id || currentQuestion._id)}
-                            disabled={runningCode}
+                            disabled={runningCode || !answers[currentQuestion.question_id || currentQuestion._id]?.code?.trim()}
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
-                            className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition-all duration-300 shadow-lg"
+                            className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition-all duration-300 shadow-lg flex items-center"
                           >
-                            {runningCode ? 'Running...' : '▶ Run Code'}
+                            {runningCode ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                                Running...
+                              </>
+                            ) : (
+                              <>
+                                <Play className="h-4 w-4 mr-2" />
+                                Run Code
+                              </>
+                            )}
                           </motion.button>
                         </div>
-                        
+
+                        {/* Enhanced Test Results Display */}
                         {codeTestResults[currentQuestion.question_id || currentQuestion._id] && (
-                          <motion.div 
-                            className="mt-4 p-4 bg-gray-50 rounded-xl"
+                          <motion.div
+                            className="mt-6 p-6 bg-white border border-gray-200 rounded-xl shadow-sm"
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                           >
-                            <h4 className="font-semibold mb-3 text-gray-800">Test Results:</h4>
-                            <div className="space-y-2">
+                            <div className="flex items-center justify-between mb-4">
+                              <h4 className="font-semibold text-gray-800 flex items-center">
+                                <TestTube className="h-5 w-5 mr-2 text-blue-600" />
+                                Test Results
+                              </h4>
+                              <div className="flex items-center space-x-4 text-sm">
+                                <span className="flex items-center">
+                                  <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
+                                  {codeTestResults[currentQuestion.question_id || currentQuestion._id].passed_count || 0} Passed
+                                </span>
+                                <span className="flex items-center">
+                                  <XCircle className="h-4 w-4 text-red-600 mr-1" />
+                                  {codeTestResults[currentQuestion.question_id || currentQuestion._id].failed_count || 0} Failed
+                                </span>
+                                <span className="font-semibold text-blue-600">
+                                  Score: {codeTestResults[currentQuestion.question_id || currentQuestion._id].total_score || 0}/{codeTestResults[currentQuestion.question_id || currentQuestion._id].max_score || 0}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="space-y-3">
                               {codeTestResults[currentQuestion.question_id || currentQuestion._id].test_case_results?.map((tc, idx) => (
-                                <div 
-                                  key={idx} 
-                                  className={`p-3 rounded-lg ${tc.passed ? 'bg-green-100 border border-green-300' : 'bg-red-100 border border-red-300'}`}
+                                <motion.div
+                                  key={idx}
+                                  className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer ${
+                                    tc.passed
+                                      ? 'bg-green-50 border-green-300 hover:bg-green-100'
+                                      : 'bg-red-50 border-red-300 hover:bg-red-100'
+                                  }`}
+                                  whileHover={{ scale: 1.01 }}
+                                  onClick={() => {
+                                    // Toggle detailed view for this test case
+                                    setCodeTestResults(prev => ({
+                                      ...prev,
+                                      [currentQuestion.question_id || currentQuestion._id]: {
+                                        ...prev[currentQuestion.question_id || currentQuestion._id],
+                                        expandedTestCase: prev[currentQuestion.question_id || currentQuestion._id].expandedTestCase === idx ? null : idx
+                                      }
+                                    }));
+                                  }}
                                 >
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="font-semibold text-sm">Test Case {idx + 1}</span>
-                                    <span className={`text-xs font-bold ${tc.passed ? 'text-green-700' : 'text-red-700'}`}>
-                                      {tc.passed ? '✓ PASSED' : '✗ FAILED'}
-                                    </span>
-                                  </div>
-                                  {tc.is_sample && (
-                                    <div className="text-xs space-y-1 mt-2">
-                                      <div><strong>Input:</strong> {tc.input}</div>
-                                      <div><strong>Expected:</strong> {tc.expected_output}</div>
-                                      <div><strong>Got:</strong> {tc.actual_output}</div>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-3">
+                                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                                        tc.passed ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
+                                      }`}>
+                                        {tc.passed ? '✓ PASS' : '✗ FAIL'}
+                                      </span>
+                                      <span className="font-medium text-gray-800">
+                                        Test Case {idx + 1}
+                                        {tc.is_sample && <span className="ml-2 text-xs text-blue-600">(Sample)</span>}
+                                      </span>
                                     </div>
+                                    <div className="flex items-center space-x-2">
+                                      <span className="text-sm text-gray-600">
+                                        {tc.execution_time ? `${tc.execution_time}ms` : ''}
+                                      </span>
+                                      <svg
+                                        className={`h-4 w-4 transition-transform duration-200 ${
+                                          codeTestResults[currentQuestion.question_id || currentQuestion._id].expandedTestCase === idx ? 'rotate-180' : ''
+                                        }`}
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                      </svg>
+                                    </div>
+                                  </div>
+
+                                  {/* Expanded Details */}
+                                  {codeTestResults[currentQuestion.question_id || currentQuestion._id].expandedTestCase === idx && (
+                                    <motion.div
+                                      className="mt-4 pt-4 border-t border-gray-200"
+                                      initial={{ opacity: 0, height: 0 }}
+                                      animate={{ opacity: 1, height: 'auto' }}
+                                      exit={{ opacity: 0, height: 0 }}
+                                    >
+                                      {tc.is_sample ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                          <div className="bg-white p-3 rounded border">
+                                            <div className="font-medium text-gray-700 mb-1">Input:</div>
+                                            <div className="font-mono text-xs bg-gray-50 p-2 rounded border overflow-x-auto">
+                                              {tc.input || 'No input'}
+                                            </div>
+                                          </div>
+                                          <div className="bg-white p-3 rounded border">
+                                            <div className="font-medium text-gray-700 mb-1">Expected Output:</div>
+                                            <div className="font-mono text-xs bg-gray-50 p-2 rounded border overflow-x-auto">
+                                              {tc.expected_output || 'No expected output'}
+                                            </div>
+                                          </div>
+                                          <div className="bg-white p-3 rounded border">
+                                            <div className="font-medium text-gray-700 mb-1">Your Output:</div>
+                                            <div className={`font-mono text-xs p-2 rounded border overflow-x-auto ${
+                                              tc.passed ? 'bg-green-50' : 'bg-red-50'
+                                            }`}>
+                                              {tc.actual_output || 'No output'}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="text-sm text-gray-600 italic text-center py-4">
+                                          This is a hidden test case. Details are not shown to prevent cheating.
+                                        </div>
+                                      )}
+
+                                      {tc.error && (
+                                        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded">
+                                          <div className="font-medium text-red-800 mb-1">Error:</div>
+                                          <div className="text-sm text-red-700 font-mono">{tc.error}</div>
+                                        </div>
+                                      )}
+                                    </motion.div>
                                   )}
-                                  {!tc.is_sample && (
-                                    <div className="text-xs text-gray-600 italic">Hidden test case</div>
-                                  )}
-                                  {tc.error && (
-                                    <div className="text-xs text-red-600 mt-1"><strong>Error:</strong> {tc.error}</div>
-                                  )}
-                                </div>
+                                </motion.div>
                               ))}
+                            </div>
+
+                            {/* Summary Stats */}
+                            <div className="mt-6 pt-4 border-t border-gray-200">
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                                <div className="bg-blue-50 p-3 rounded-lg">
+                                  <div className="text-lg font-bold text-blue-600">
+                                    {codeTestResults[currentQuestion.question_id || currentQuestion._id].passed_count || 0}
+                                  </div>
+                                  <div className="text-xs text-blue-800">Tests Passed</div>
+                                </div>
+                                <div className="bg-red-50 p-3 rounded-lg">
+                                  <div className="text-lg font-bold text-red-600">
+                                    {codeTestResults[currentQuestion.question_id || currentQuestion._id].failed_count || 0}
+                                  </div>
+                                  <div className="text-xs text-red-800">Tests Failed</div>
+                                </div>
+                                <div className="bg-green-50 p-3 rounded-lg">
+                                  <div className="text-lg font-bold text-green-600">
+                                    {codeTestResults[currentQuestion.question_id || currentQuestion._id].total_score || 0}
+                                  </div>
+                                  <div className="text-xs text-green-800">Score Earned</div>
+                                </div>
+                                <div className="bg-gray-50 p-3 rounded-lg">
+                                  <div className="text-lg font-bold text-gray-600">
+                                    {codeTestResults[currentQuestion.question_id || currentQuestion._id].max_score || 0}
+                                  </div>
+                                  <div className="text-xs text-gray-800">Max Score</div>
+                                </div>
+                              </div>
                             </div>
                           </motion.div>
                         )}
+
+                        {/* Compiler Question Tips */}
+                        <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                          <h5 className="font-medium text-yellow-800 mb-2">💡 Tips for Compiler Questions:</h5>
+                          <ul className="text-sm text-yellow-700 space-y-1">
+                            <li>• Test your code with sample test cases first</li>
+                            <li>• Make sure your code handles edge cases</li>
+                            <li>• Check for proper input/output formatting</li>
+                            <li>• Consider time and memory constraints</li>
+                          </ul>
+                        </div>
                       </motion.div>
                     )}
 
@@ -1285,8 +1562,19 @@ const OnlineExamTaking = () => {
                             // For listening/speaking modules, all questions must have recordings
                             return Object.keys(recordings).length !== questions.length;
                           } else {
-                            // For other modules, check answers
-                            return Object.keys(answers).length !== questions.length;
+                            // For other modules, check answers - compiler questions are handled via onSubmit callback
+                            // Count compiler questions as answered when they have test results
+                            const compilerQuestionsAnswered = questions.filter(q =>
+                              (q.question_type === 'compiler' || q.question_type === 'technical' || q.test_cases?.length > 0) &&
+                              codeTestResults[q.question_id || q._id]
+                            ).length;
+
+                            const otherQuestionsAnswered = Object.keys(answers).filter(key => {
+                              const question = questions.find(q => (q.question_id || q._id) === key);
+                              return question && question.question_type !== 'compiler' && question.question_type !== 'technical' && !question.test_cases?.length;
+                            }).length;
+
+                            return (compilerQuestionsAnswered + otherQuestionsAnswered) !== questions.length;
                           }
                         })()}
                         whileHover={{ scale: 1.05 }}
@@ -1350,7 +1638,9 @@ const OnlineExamTaking = () => {
                       whileTap={{ scale: 0.9 }}
                       className={`w-12 h-12 rounded-2xl text-sm font-medium transition-all duration-300 shadow-lg relative ${index === currentQuestionIndex
                           ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-blue-200'
-                          : answers[questions[index]?.question_id] || recordings[questions[index]?.question_id]
+                          : answers[questions[index]?.question_id] ||
+                            recordings[questions[index]?.question_id] ||
+                            codeTestResults[questions[index]?.question_id || questions[index]?._id]
                             ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 border-2 border-green-300 hover:shadow-green-200'
                             : 'bg-white text-slate-700 border-2 border-slate-200 hover:bg-gradient-to-r hover:from-slate-50 hover:to-blue-50 hover:border-blue-300'
                         }`}

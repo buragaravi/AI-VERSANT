@@ -34,7 +34,6 @@ from datetime import datetime
 from mongo import mongo_db
 from routes.access_control import require_permission
 from services.oneSignalService import oneSignalService
-from services.vapid_push_service import vapid_service
 from models_push_subscriptions import PushSubscription
 
 onesignal_notifications_bp = Blueprint('onesignal_notifications', __name__)
@@ -408,7 +407,8 @@ def subscribe_user():
             player_id=data['player_id'],
             platform=data.get('platform'),
             browser=data.get('browser'),
-            tags=data.get('tags', [])
+            tags=data.get('tags', []),
+            device_info=data.get('deviceInfo') or {}
         )
 
         if result:
@@ -438,7 +438,7 @@ def unsubscribe_user():
         current_user_id = get_jwt_identity()
         
         # Deactivate OneSignal subscription
-        result = PushSubscription.deactivate_subscription(current_user_id, 'onesignal')
+        result = PushSubscription.deactivate_onesignal_subscription(current_user_id)
 
         if result:
             current_app.logger.info(f"✅ OneSignal subscription deactivated for user {current_user_id}")
