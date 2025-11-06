@@ -812,6 +812,10 @@ def submit_test(test_id):
             student_answer = answers.get(question_id, '')
             question_type = question.get('question_type', 'mcq')  # Get question type
             
+            # Debug logging for compiler questions
+            if question_type in ['compiler', 'technical']:
+                current_app.logger.info(f"Question {i} (type: {question_type}): question_id={question_id}, found_answer={bool(student_answer)}, answer_keys_in_request={list(answers.keys())[:5]}")
+            
             # Handle different question types
             if question_type in ['compiler', 'technical'] and isinstance(student_answer, dict):
                 # Compiler/Technical question with pre-calculated results
@@ -828,10 +832,13 @@ def submit_test(test_id):
                     if question_percentage == 100:
                         correct_answers += 1
                     
+                    # Get question title/text for compiler questions
+                    question_text = question.get('questionTitle') or question.get('question', '')
+                    
                     detailed_results.append({
                         'question_index': i,
                         'question_id': question_id,
-                        'question': question.get('question', ''),
+                        'question': question_text,
                         'question_type': 'compiler',
                         'student_answer': student_answer.get('code', ''),
                         'language': student_answer.get('language', ''),
@@ -843,13 +850,18 @@ def submit_test(test_id):
                     })
                 else:
                     # No results provided, count as wrong
+                    question_text = question.get('questionTitle') or question.get('question', '')
                     detailed_results.append({
                         'question_index': i,
                         'question_id': question_id,
-                        'question': question.get('question', ''),
+                        'question': question_text,
                         'question_type': 'compiler',
+                        'student_answer': student_answer.get('code', '') if isinstance(student_answer, dict) else '',
+                        'language': student_answer.get('language', '') if isinstance(student_answer, dict) else '',
                         'is_correct': False,
-                        'score': 0
+                        'score': 0,
+                        'max_score': 0,
+                        'percentage': 0
                     })
                     
             else:
@@ -857,7 +869,7 @@ def submit_test(test_id):
                 correct_answer_letter = question.get('answer', '')  # A, B, C, or D
                 correct_answer_text = ''
                 
-                # Map answer letter to actual option text
+                # Map answer letter to actual option text 
                 if correct_answer_letter == 'A':
                     correct_answer_text = question.get('optionA', '')
                 elif correct_answer_letter == 'B':
@@ -1937,17 +1949,32 @@ def get_test_history():
                 
                 # Calculate proper percentage for different test types
                 if attempt.get('test_type') == 'online':
-                    # For online exams, use score field and calculate percentage
-                    score = attempt.get('score', 0)
-                    total_marks = attempt.get('total_marks', 0)
-                    
-                    if total_marks > 0:
-                        calculated_percentage = (score / total_marks) * 100
-                        attempt['score_percentage'] = calculated_percentage
-                        attempt['average_score'] = calculated_percentage
+                    # For technical tests with partial credit, use percentage field if available
+                    # Otherwise, calculate from score and total_marks
+                    if attempt.get('percentage') is not None:
+                        # Technical test with partial credit - use stored percentage
+                        attempt['score_percentage'] = attempt['percentage']
+                        attempt['average_score'] = attempt['percentage']
                     else:
-                        attempt['score_percentage'] = 0
-                        attempt['average_score'] = 0
+                        # For regular MCQ tests, use score field and calculate percentage
+                        score = attempt.get('score', 0)
+                        total_marks = attempt.get('total_marks', 0)
+                        
+                        if total_marks > 0:
+                            calculated_percentage = (score / total_marks) * 100
+                            attempt['score_percentage'] = calculated_percentage
+                            attempt['average_score'] = calculated_percentage
+                        else:
+                            # Fallback: try to calculate from correct_answers and total_questions
+                            correct_answers = attempt.get('correct_answers', 0)
+                            total_questions = attempt.get('total_questions', 0)
+                            if total_questions > 0:
+                                calculated_percentage = (correct_answers / total_questions) * 100
+                                attempt['score_percentage'] = calculated_percentage
+                                attempt['average_score'] = calculated_percentage
+                            else:
+                                attempt['score_percentage'] = 0
+                                attempt['average_score'] = 0
                 elif attempt.get('test_type') == 'practice':
                     # For practice tests, use existing percentage or calculate from score
                     if 'percentage' in attempt and attempt['percentage'] is not None:

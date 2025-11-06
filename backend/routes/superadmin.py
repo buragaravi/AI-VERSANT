@@ -1863,6 +1863,7 @@ def get_student_attempts(student_id, test_id):
             transformed_result = {
                 'question_index': result.get('question_index', 0),
                 'question_id': result.get('question_id', ''),
+                'question': result.get('question', 'Question not available'),  # Keep 'question' for consistency
                 'question_text': result.get('question', 'Question not available'),
                 'question_type': result.get('question_type', 'unknown'),
                 'student_answer': result.get('student_answer', 'No answer provided'),
@@ -1872,11 +1873,19 @@ def get_student_attempts(student_id, test_id):
                 'correct_answer': result.get('correct_answer', ''),
                 'is_correct': result.get('is_correct', False),
                 'score': result.get('score', 0),
+                'max_score': result.get('max_score', 0),
+                'percentage': result.get('percentage', 0),
                 'similarity_score': result.get('similarity_score', 0),
                 'student_text': result.get('student_answer', ''),  # For audio transcripts
                 'original_text': result.get('correct_answer', ''),  # For audio transcripts
                 'student_audio_url': result.get('student_audio_url', '')
             }
+            
+            # Add compiler/technical question specific fields
+            if result.get('question_type') in ['compiler', 'technical']:
+                transformed_result['language'] = result.get('language', '')
+                transformed_result['test_results'] = result.get('test_results', [])
+            
             transformed_results.append(transformed_result)
         
         # Format the response data
@@ -1895,8 +1904,16 @@ def get_student_attempts(student_id, test_id):
             'score': attempt.get('score', 0),
             'correct_answers': attempt.get('correct_answers', 0),
             'total_questions': attempt.get('total_questions', 0),
-            'percentage': attempt.get('percentage', 0),
-            'score_percentage': attempt.get('percentage', 0),  # Add this for frontend compatibility
+            'percentage': attempt.get('percentage') if attempt.get('percentage') is not None else (
+                (attempt.get('score', 0) / attempt.get('total_marks', 1) * 100) if attempt.get('total_marks', 0) > 0 else (
+                    (attempt.get('correct_answers', 0) / attempt.get('total_questions', 1) * 100) if attempt.get('total_questions', 0) > 0 else 0
+                )
+            ),
+            'score_percentage': attempt.get('percentage') if attempt.get('percentage') is not None else (
+                (attempt.get('score', 0) / attempt.get('total_marks', 1) * 100) if attempt.get('total_marks', 0) > 0 else (
+                    (attempt.get('correct_answers', 0) / attempt.get('total_questions', 1) * 100) if attempt.get('total_questions', 0) > 0 else 0
+                )
+            ),  # Use percentage for technical tests, calculate for others
             'duration_seconds': attempt.get('duration_seconds', 0),
             'time_taken_ms': attempt.get('time_taken_ms', 0),
             'time_taken': attempt.get('duration_seconds', 0) / 60,  # Convert to minutes for frontend
@@ -2364,9 +2381,15 @@ def get_online_tests_overview():
                     'all_scores': {
                         '$push': {
                             '$cond': [
-                                {'$gt': ['$total_questions', 0]},
-                                {'$multiply': [{'$divide': ['$correct_answers', '$total_questions']}, 100]},
-                                0
+                                {'$ifNull': ['$percentage', False]},
+                                '$percentage',  # Use percentage for technical tests with partial credit
+                                {
+                                    '$cond': [
+                                        {'$gt': ['$total_questions', 0]},
+                                        {'$multiply': [{'$divide': ['$correct_answers', '$total_questions']}, 100]},
+                                        0
+                                    ]
+                                }
                             ]
                         }
                     },
@@ -2375,9 +2398,15 @@ def get_online_tests_overview():
                             'student_id': '$student_id',
                             'score': {
                                 '$cond': [
-                                    {'$gt': ['$total_questions', 0]},
-                                    {'$multiply': [{'$divide': ['$correct_answers', '$total_questions']}, 100]},
-                                    0
+                                    {'$ifNull': ['$percentage', False]},
+                                    '$percentage',  # Use percentage for technical tests with partial credit
+                                    {
+                                        '$cond': [
+                                            {'$gt': ['$total_questions', 0]},
+                                            {'$multiply': [{'$divide': ['$correct_answers', '$total_questions']}, 100]},
+                                            0
+                                        ]
+                                    }
                                 ]
                             }
                         }
@@ -2611,13 +2640,20 @@ def get_test_attempts(test_id):
                             '$project': {
                                 'score': {
                                     '$cond': [
-                                        {'$gt': ['$total_questions', 0]},
-                                        {'$multiply': [{'$divide': ['$correct_answers', '$total_questions']}, 100]},
-                                        0
+                                        {'$ifNull': ['$percentage', False]},
+                                        '$percentage',  # Use percentage for technical tests with partial credit
+                                        {
+                                            '$cond': [
+                                                {'$gt': ['$total_questions', 0]},
+                                                {'$multiply': [{'$divide': ['$correct_answers', '$total_questions']}, 100]},
+                                                0
+                                            ]
+                                        }
                                     ]
                                 },
                                 'correct_answers': 1,
                                 'total_questions': 1,
+                                'percentage': 1,  # Include percentage field
                                 'submitted_at': 1,
                                 'created_at': 1
                             }
@@ -2653,6 +2689,7 @@ def get_test_attempts(test_id):
                     },
                     'total_questions': {'$arrayElemAt': ['$attempts.total_questions', 0]},
                     'correct_answers': {'$arrayElemAt': ['$attempts.correct_answers', 0]},
+                    'percentage': {'$arrayElemAt': ['$attempts.percentage', 0]},  # Include percentage for technical tests
                     'latest_attempt': {'$max': '$attempts.submitted_at'},
                     'has_attempted': {'$gt': [{'$size': '$attempts'}, 0]}
                 }
@@ -2671,6 +2708,7 @@ def get_test_attempts(test_id):
             # Safely handle None values for scores
             highest_score = student.get('highest_score')
             average_score = student.get('average_score')
+            percentage = student.get('percentage')  # Get percentage for technical tests
             
             attempts_list.append({
                 'student_id': student.get('student_id', ''),
@@ -2685,6 +2723,7 @@ def get_test_attempts(test_id):
                 'correct_answers': student.get('correct_answers', 0) or 0,
                 'highest_score': round(highest_score, 2) if highest_score is not None else 0,
                 'average_score': round(average_score, 2) if average_score is not None else 0,
+                'percentage': round(percentage, 2) if percentage is not None else None,  # Include percentage for technical tests
                 'attempts_count': student.get('attempts_count', 0),
                 'latest_attempt': safe_isoformat(student.get('latest_attempt')),
                 'has_attempted': student.get('has_attempted', False)

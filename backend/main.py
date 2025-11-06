@@ -33,7 +33,7 @@ def create_app():
     app = Flask(__name__)
 
     # Configuration
-    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'versant_jwt_secret_key_2024_secure_and_unique')
+    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', ' CRT Application jwt_secret_key_2024_secure_and_unique')
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = JWT_ACCESS_TOKEN_EXPIRES
     app.config['JWT_REFRESH_TOKEN_EXPIRES'] = JWT_REFRESH_TOKEN_EXPIRES
     app.config['JWT_TOKEN_LOCATION'] = ['headers']
@@ -44,6 +44,86 @@ def create_app():
     jwt = JWTManager(app)
     bcrypt.init_app(app)
     socketio.init_app(app)
+    
+    # Initialize Swagger API Documentation
+    from flasgger import Swagger
+    swagger_config = {
+        "headers": [],
+        "specs": [
+            {
+                "endpoint": 'apispec',
+                "route": '/apispec.json',
+                "rule_filter": lambda rule: True,
+                "model_filter": lambda tag: True,
+            }
+        ],
+        "static_url_path": "/flasgger_static",
+        "swagger_ui": True,
+        "specs_route": "/api-docs",
+        "openapi": "3.0.3"  # Use OpenAPI 3.0
+    }
+    
+    swagger_template = {
+        "swagger": "3.0",
+        "info": {
+            "title": " CRT Application API Documentation",
+            "description": " CRT Application English Language Testing System API - Complete API documentation for all endpoints",
+            "version": "1.0.0",
+            "contact": {
+                "name": " CRT Application Support",
+                "email": "support@pydahsoft.in"
+            }
+        },
+        "servers": [
+            {
+                "url": os.getenv('API_BASE_URL', 'http://localhost:8000'),
+                "description": "Production Server"
+            },
+            {
+                "url": "http://localhost:8000",
+                "description": "Development Server"
+            }
+        ],
+        "components": {
+            "securitySchemes": {
+                "BearerAuth": {
+                    "type": "http",
+                    "scheme": "bearer",
+                    "bearerFormat": "JWT",
+                    "description": "JWT token obtained from /auth/login endpoint"
+                }
+            }
+        },
+        "tags": [
+            {
+                "name": "Authentication",
+                "description": "User authentication and authorization endpoints"
+            },
+            {
+                "name": "Student",
+                "description": "Student-facing endpoints for tests and progress"
+            },
+            {
+                "name": "Super Admin",
+                "description": "Super admin management endpoints"
+            },
+            {
+                "name": "Test Management",
+                "description": "Test creation, management, and submission endpoints"
+            },
+            {
+                "name": "Technical Tests",
+                "description": "Technical/Compiler test endpoints"
+            },
+            {
+                "name": "Analytics",
+                "description": "Analytics and reporting endpoints"
+            }
+        ]
+    }
+    
+    swagger = Swagger(app, config=swagger_config, template=swagger_template)
+    print("✅ Swagger API documentation initialized at /api-docs")
     
     # Initialize analytics middleware (must be done early)
     from middleware.analytics_middleware import init_analytics_middleware

@@ -544,8 +544,96 @@ def notify_technical_test_students(test_id):
 @jwt_required()
 def compile_code():
     """
-    Compile and run code using OneCompiler API
-    For testing code during test taking
+    Compile and Run Code
+    ---
+    tags:
+      - Technical Tests
+    summary: Compile and execute code using OneCompiler API
+    description: |
+      Compiles and runs code in the specified programming language.
+      Used by students during test taking to test their code against sample inputs.
+      
+      **Supported Languages:**
+      - python
+      - java
+      - cpp (C++)
+      - c
+      - javascript
+      - go
+      - rust
+      - php
+      - ruby
+      - swift
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - language
+              - code
+            properties:
+              language:
+                type: string
+                example: "python"
+                description: Programming language
+              code:
+                type: string
+                example: "print('Hello, World!')"
+                description: Source code to compile and run
+              stdin:
+                type: string
+                example: ""
+                description: Standard input for the program
+    responses:
+      200:
+        description: Code executed successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                stdout:
+                  type: string
+                  example: "Hello, World!"
+                stderr:
+                  type: string
+                  example: ""
+                execution_time:
+                  type: number
+                  format: float
+                  example: 0.123
+                  description: Execution time in seconds
+                memory_used:
+                  type: integer
+                  example: 1024
+                  description: Memory used in bytes
+      400:
+        description: Invalid request or compilation error
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: false
+                message:
+                  type: string
+                  example: "Language and code are required"
+                error:
+                  type: string
+                  example: "Compilation failed"
+      401:
+        description: Unauthorized
+      500:
+        description: Internal server error
     """
     try:
         data = request.get_json()

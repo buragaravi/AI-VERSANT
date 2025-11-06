@@ -379,27 +379,40 @@ const OnlineExamTaking = () => {
   };
 
   const handleCodeChange = (questionId, code, language) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questionId]: {
-        code,
-        language,
-        type: 'code'
-      }
-    }));
+    // Normalize questionId to string (backend expects str(_id))
+    const normalizedQuestionId = String(questionId || '');
+    
+    // Preserve existing results if they exist, but always update code
+    setAnswers(prev => {
+      const existingAnswer = prev[normalizedQuestionId];
+      return {
+        ...prev,
+        [normalizedQuestionId]: {
+          code: code || '', // Always store code, even if empty
+          language: language || 'python',
+          type: 'code',
+          // Preserve existing results if code is being updated
+          ...(existingAnswer && existingAnswer.results ? { results: existingAnswer.results } : {})
+        }
+      };
+    });
   };
 
   const handleTechnicalSubmission = (questionData) => {
     const { questionId, code, language, results } = questionData;
 
+    // Normalize questionId to string (backend expects str(_id))
+    const normalizedQuestionId = String(questionId || '');
+
     // Store the submission data with pre-calculated scores
+    // Ensure code is always stored, even if empty string
     setAnswers(prev => ({
       ...prev,
-      [questionId]: {
-        code,
-        language,
+      [normalizedQuestionId]: {
+        code: code || '', // Always store code, even if empty
+        language: language || 'python',
         type: 'code',
-        results: results,
+        results: results, // Store full results object with test_results
         submitted: true
       }
     }));
@@ -407,7 +420,7 @@ const OnlineExamTaking = () => {
     // Store test results for final submission
     setCodeTestResults(prev => ({
       ...prev,
-      [questionId]: results
+      [normalizedQuestionId]: results
     }));
   };
 
@@ -432,10 +445,15 @@ const OnlineExamTaking = () => {
   };
 
   const handleRunCode = async (questionId) => {
-    const currentQuestion = questions.find(q => (q.question_id || q._id) === questionId);
+    // Normalize questionId for comparison
+    const normalizedQuestionId = String(questionId || '');
+    const currentQuestion = questions.find(q => {
+      const qId = q.question_id || String(q._id || '');
+      return qId === normalizedQuestionId;
+    });
     if (!currentQuestion) return;
 
-    const answer = answers[questionId];
+    const answer = answers[normalizedQuestionId];
     if (!answer || !answer.code) {
       showError('Please write some code first');
       return;
@@ -450,9 +468,10 @@ const OnlineExamTaking = () => {
       });
 
       if (response.data.success) {
+        const normalizedQuestionId = String(questionId || '');
         setCodeTestResults(prev => ({
           ...prev,
-          [questionId]: response.data.data
+          [normalizedQuestionId]: response.data.data
         }));
         success('Code executed successfully!');
       } else {
@@ -655,15 +674,19 @@ const OnlineExamTaking = () => {
         }
 
         // Process answers - handle compiler questions with pre-calculated scores
+        // Ensure all keys are normalized strings to match backend expectations (str(_id))
         const processedAnswers = {};
         Object.keys(answers).forEach(key => {
+          // Normalize key to string to ensure consistency with backend
+          const normalizedKey = String(key);
           const answer = answers[key];
+          
           if (answer && typeof answer === 'object' && answer.type === 'code') {
             // For compiler questions, send the results directly
             if (answer.results) {
-              processedAnswers[key] = {
-                code: answer.code,
-                language: answer.language,
+              processedAnswers[normalizedKey] = {
+                code: answer.code || '', // Always include code field, even if empty
+                language: answer.language || 'python',
                 results: answer.results,
                 total_score: answer.results.total_score,
                 max_score: answer.results.max_score,
@@ -671,22 +694,48 @@ const OnlineExamTaking = () => {
                 failed_count: answer.results.failed_count
               };
             } else {
-              processedAnswers[key] = JSON.stringify(answer);
+              // If no results but it's a code answer, still send the structure
+              processedAnswers[normalizedKey] = {
+                code: answer.code || '',
+                language: answer.language || 'python',
+                type: 'code'
+              };
             }
           } else {
-            processedAnswers[key] = answer;
+            processedAnswers[normalizedKey] = answer;
           }
         });
 
         // Also include code test results for compiler questions
+        // Merge code and results if they exist in separate places
         Object.keys(codeTestResults).forEach(key => {
-          if (!processedAnswers[key]) {
-            processedAnswers[key] = {
-              results: codeTestResults[key],
-              total_score: codeTestResults[key].total_score,
-              max_score: codeTestResults[key].max_score,
-              passed_count: codeTestResults[key].passed_count,
-              failed_count: codeTestResults[key].failed_count
+          // Normalize key to string
+          const normalizedKey = String(key);
+          const existingAnswer = processedAnswers[normalizedKey];
+          const testResult = codeTestResults[key];
+          
+          if (existingAnswer && existingAnswer.type === 'code') {
+            // Merge: ensure code and results are both present
+            processedAnswers[normalizedKey] = {
+              code: existingAnswer.code || '', // Ensure code is always included
+              language: existingAnswer.language || 'python',
+              results: existingAnswer.results || testResult,
+              total_score: testResult?.total_score || existingAnswer.results?.total_score,
+              max_score: testResult?.max_score || existingAnswer.results?.max_score,
+              passed_count: testResult?.passed_count || existingAnswer.results?.passed_count,
+              failed_count: testResult?.failed_count || existingAnswer.results?.failed_count
+            };
+          } else if (!processedAnswers[normalizedKey]) {
+            // Create new entry with code from answers if available
+            const answerData = answers[normalizedKey];
+            processedAnswers[normalizedKey] = {
+              code: answerData?.code || '', // Always include code field
+              language: answerData?.language || 'python',
+              results: testResult,
+              total_score: testResult.total_score,
+              max_score: testResult.max_score,
+              passed_count: testResult.passed_count,
+              failed_count: testResult.failed_count
             };
           }
         });
@@ -1137,22 +1186,60 @@ const OnlineExamTaking = () => {
                         <TechnicalCodeEditor
                           testId={exam._id}
                           question={currentQuestion}
-                          onCodeChange={(code, language) => handleCodeChange(currentQuestion.question_id || currentQuestion._id, code, language)}
-                          onSubmit={(results) => handleTechnicalSubmission({
-                            questionId: currentQuestion.question_id || currentQuestion._id,
-                            code: answers[currentQuestion.question_id || currentQuestion._id]?.code || '',
-                            language: answers[currentQuestion.question_id || currentQuestion._id]?.language || currentQuestion.language || 'python',
-                            results: results
-                          })}
-                          initialCode={answers[currentQuestion.question_id || currentQuestion._id]?.code || ''}
-                          initialLanguage={answers[currentQuestion.question_id || currentQuestion._id]?.language || currentQuestion.language || 'python'}
+                          onCodeChange={(code, language) => {
+                            // Normalize question ID: use question_id if exists, otherwise convert _id to string
+                            const qId = currentQuestion.question_id || String(currentQuestion._id || '');
+                            handleCodeChange(qId, code, language);
+                          }}
+                          onSubmit={(submissionData) => {
+                            // Normalize question ID: use question_id if exists, otherwise convert _id to string
+                            const qId = currentQuestion.question_id || String(currentQuestion._id || '');
+                            // submissionData can be either:
+                            // 1. { questionId, code, language, results } (from handleValidateAllTestCases)
+                            // 2. { questionId, code, language, results } (from handleSubmitAnswer)
+                            // 3. results object directly (legacy, but we handle it)
+                            if (submissionData && submissionData.questionId) {
+                              // New format with full data
+                              handleTechnicalSubmission(submissionData);
+                            } else if (submissionData && submissionData.results) {
+                              // Legacy format - extract from submissionData
+                              handleTechnicalSubmission({
+                                questionId: qId,
+                                code: submissionData.code || answers[qId]?.code || '',
+                                language: submissionData.language || answers[qId]?.language || currentQuestion.language || 'python',
+                                results: submissionData.results || submissionData
+                              });
+                            } else {
+                              // Fallback: use results as-is and get code from answers
+                              handleTechnicalSubmission({
+                                questionId: qId,
+                                code: answers[qId]?.code || '',
+                                language: answers[qId]?.language || currentQuestion.language || 'python',
+                                results: submissionData
+                              });
+                            }
+                          }}
+                          initialCode={(() => {
+                            const qId = currentQuestion.question_id || String(currentQuestion._id || '');
+                            return answers[qId]?.code || '';
+                          })()}
+                          initialLanguage={(() => {
+                            const qId = currentQuestion.question_id || String(currentQuestion._id || '');
+                            return answers[qId]?.language || currentQuestion.language || 'python';
+                          })()}
                           showSubmit={false}
                         />
 
                         <div className="mt-4 flex gap-3">
                           <motion.button
-                            onClick={() => handleRunCode(currentQuestion.question_id || currentQuestion._id)}
-                            disabled={runningCode || !answers[currentQuestion.question_id || currentQuestion._id]?.code?.trim()}
+                            onClick={() => {
+                              const qId = currentQuestion.question_id || String(currentQuestion._id || '');
+                              handleRunCode(qId);
+                            }}
+                            disabled={(() => {
+                              const qId = currentQuestion.question_id || String(currentQuestion._id || '');
+                              return runningCode || !answers[qId]?.code?.trim();
+                            })()}
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition-all duration-300 shadow-lg flex items-center"
@@ -1564,10 +1651,11 @@ const OnlineExamTaking = () => {
                           } else {
                             // For other modules, check answers - compiler questions are handled via onSubmit callback
                             // Count compiler questions as answered when they have test results
-                            const compilerQuestionsAnswered = questions.filter(q =>
-                              (q.question_type === 'compiler' || q.question_type === 'technical' || q.test_cases?.length > 0) &&
-                              codeTestResults[q.question_id || q._id]
-                            ).length;
+                            const compilerQuestionsAnswered = questions.filter(q => {
+                              const qId = q.question_id || String(q._id || '');
+                              return (q.question_type === 'compiler' || q.question_type === 'technical' || q.test_cases?.length > 0) &&
+                                     codeTestResults[qId];
+                            }).length;
 
                             const otherQuestionsAnswered = Object.keys(answers).filter(key => {
                               const question = questions.find(q => (q.question_id || q._id) === key);

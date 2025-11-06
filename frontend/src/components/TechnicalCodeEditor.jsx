@@ -423,9 +423,14 @@ const TechnicalCodeEditor = ({
       setTestResults(finalResults);
       setTestCaseResults(results);
 
-      // Call onSubmit callback with results
+      // Call onSubmit callback with results, including code and language
       if (onSubmit) {
-        onSubmit(finalResults);
+        onSubmit({
+          questionId: questionId,
+          code: code.trim(),
+          language: selectedLanguage,
+          results: finalResults
+        });
       }
 
       toast.success(`Validation complete! ${passedCount}/${testCases.length} test cases passed`);
